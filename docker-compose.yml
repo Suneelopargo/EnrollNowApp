@@ -1,0 +1,411 @@
+services:
+  # Database Container
+  postgres:
+    image: postgres:16-alpine
+    container_name: enrollnow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: enrollnowdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: New_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - enrollnow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d enrollnowdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles: ["core", "admin", "dashboard", "study", "participant", "recruitment", "survey", "operations", "full", "shell"]
+
+  # 1. Identity Service (Port 8081)
+  identity-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-identity-service/target/enrollnow-identity-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-identity-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["core", "admin", "dashboard", "study", "participant", "recruitment", "survey", "operations", "full", "shell"]
+
+  # 2. Administration Service (Port 8082)
+  administration-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-administration-service/target/enrollnow-administration-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-administration-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["admin", "full"]
+
+  # 3. Organization Service (Port 8083)
+  organization-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-organization-service/target/enrollnow-organization-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-organization-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["core", "admin", "study", "full"]
+
+  # 4. Study Service (Port 8084)
+  study-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-study-service/target/enrollnow-study-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-study-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["study", "dashboard", "participant", "full"]
+
+  # 5. Participant Service (Port 8085)
+  participant-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-participant-service/target/enrollnow-participant-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-participant-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["participant", "dashboard", "recruitment", "survey", "full"]
+
+  # 6. Recruitment Service (Port 8086)
+  recruitment-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-recruitment-service/target/enrollnow-recruitment-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-recruitment-service
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["recruitment", "dashboard", "full"]
+
+  # 7. Survey Service (Port 8087)
+  survey-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-survey-service/target/enrollnow-survey-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-survey-service
+    restart: unless-stopped
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["survey", "full"]
+
+  # 8. Task Service (Port 8088)
+  task-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-task-service/target/enrollnow-task-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-task-service
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["operations", "participant", "full"]
+
+  # 9. Communication Service (Port 8089)
+  communication-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-communication-service/target/enrollnow-communication-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-communication-service
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["operations", "full"]
+
+  # 10. Document Service (Port 8090)
+  document-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-document-service/target/enrollnow-document-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-document-service
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["operations", "full"]
+
+  # 11. Dashboard Service (Port 8091)
+  dashboard-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-dashboard-service/target/enrollnow-dashboard-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-dashboard-service
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["dashboard", "full"]
+
+  # 12. Audit Service (Port 8092)
+  audit-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.jvm
+      args:
+        SERVICE_JAR: enrollnow-audit-service/target/enrollnow-audit-service-1.0.0-SNAPSHOT.jar
+    container_name: enrollnow-audit-service
+    restart: unless-stopped
+    ports:
+      - "8092:8092"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enrollnowdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: New_password
+      JWT_SECRET: enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["core", "admin", "full"]
+
+  # ============================================================================
+  # FRONTEND MICRO-FRONTENDS & SHELL HOST
+  # ============================================================================
+
+  # Shell Host (Port 3000)
+  shell:
+    build:
+      context: ./frontend
+      dockerfile: shell/Dockerfile
+    container_name: enrollnow-shell
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    profiles: ["shell", "core", "admin", "dashboard", "study", "participant", "recruitment", "survey", "operations", "full"]
+
+  # MFE 1: Identity (Port 3001)
+  mfe-identity:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/identity/Dockerfile
+    container_name: enrollnow-mfe-identity
+    restart: unless-stopped
+    ports:
+      - "3001:80"
+    profiles: ["shell", "core", "admin", "dashboard", "study", "participant", "recruitment", "survey", "operations", "full"]
+
+  # MFE 2: Administration (Port 3002)
+  mfe-administration:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/administration/Dockerfile
+    container_name: enrollnow-mfe-administration
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    profiles: ["admin", "full"]
+
+  # MFE 3: Dashboard (Port 3003)
+  mfe-dashboard:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/dashboard/Dockerfile
+    container_name: enrollnow-mfe-dashboard
+    restart: unless-stopped
+    ports:
+      - "3003:80"
+    profiles: ["dashboard", "full"]
+
+  # MFE 4: Organization (Port 3004)
+  mfe-organization:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/organization/Dockerfile
+    container_name: enrollnow-mfe-organization
+    restart: unless-stopped
+    ports:
+      - "3004:80"
+    profiles: ["admin", "study", "full"]
+
+  # MFE 5: Study (Port 3005)
+  mfe-study:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/study/Dockerfile
+    container_name: enrollnow-mfe-study
+    restart: unless-stopped
+    ports:
+      - "3005:80"
+    profiles: ["study", "dashboard", "participant", "full"]
+
+  # MFE 6: Participant (Port 3006)
+  mfe-participant:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/participant/Dockerfile
+    container_name: enrollnow-mfe-participant
+    restart: unless-stopped
+    ports:
+      - "3006:80"
+    profiles: ["participant", "dashboard", "recruitment", "survey", "full"]
+
+  # MFE 7: Recruitment (Port 3007)
+  mfe-recruitment:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/recruitment/Dockerfile
+    container_name: enrollnow-mfe-recruitment
+    restart: unless-stopped
+    ports:
+      - "3007:80"
+    profiles: ["recruitment", "dashboard", "full"]
+
+  # MFE 8: Survey (Port 3008)
+  mfe-survey:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/survey/Dockerfile
+    container_name: enrollnow-mfe-survey
+    restart: unless-stopped
+    ports:
+      - "3008:80"
+    profiles: ["survey", "full"]
+
+  # MFE 9: Task (Port 3009)
+  mfe-task:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/task/Dockerfile
+    container_name: enrollnow-mfe-task
+    restart: unless-stopped
+    ports:
+      - "3009:80"
+    profiles: ["operations", "participant", "full"]
+
+  # MFE 10: Communication (Port 3010)
+  mfe-communication:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/communication/Dockerfile
+    container_name: enrollnow-mfe-communication
+    restart: unless-stopped
+    ports:
+      - "3010:80"
+    profiles: ["operations", "full"]
+
+  # MFE 11: Document (Port 3011)
+  mfe-document:
+    build:
+      context: ./frontend
+      dockerfile: microfrontends/document/Dockerfile
+    container_name: enrollnow-mfe-document
+    restart: unless-stopped
+    ports:
+      - "3011:80"
+    profiles: ["operations", "full"]
+
+volumes:
+  enrollnow-db-data:

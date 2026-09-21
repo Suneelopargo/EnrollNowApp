@@ -1,0 +1,11 @@
+# Multi-service JVM container image
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+ARG SERVICE_JAR
+COPY ${SERVICE_JAR} app.jar
+
+ENV JAVA_OPTS="-Xms256m -Xmx512m"
+
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -1,0 +1,5 @@
+/* frontend/shared/design-system/styles/index.css */
+@import './variables.css';
+@import './globals.css';
+@import './layout.css';
+@import './components.css';

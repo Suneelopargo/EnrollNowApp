@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.4</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.enrollnow</groupId>
+    <artifactId>enrollnow-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>enrollnow-parent</name>
+    <description>EnrollNow Enterprise Microservices Platform - Parent Reactor</description>
+
+    <modules>
+        <module>enrollnow-common</module>
+        <module>enrollnow-identity-service</module>
+        <module>enrollnow-administration-service</module>
+        <module>enrollnow-organization-service</module>
+        <module>enrollnow-study-service</module>
+        <module>enrollnow-participant-service</module>
+        <module>enrollnow-recruitment-service</module>
+        <module>enrollnow-survey-service</module>
+        <module>enrollnow-task-service</module>
+        <module>enrollnow-communication-service</module>
+        <module>enrollnow-document-service</module>
+        <module>enrollnow-dashboard-service</module>
+        <module>enrollnow-audit-service</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <jjwt.version>0.12.6</jjwt.version>
+        <bouncycastle.version>1.78.1</bouncycastle.version>
+        <springdoc.version>2.6.0</springdoc.version>
+        <enrollnow.version>1.0.0-SNAPSHOT</enrollnow.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- EnrollNow Common Module -->
+            <dependency>
+                <groupId>com.enrollnow</groupId>
+                <artifactId>enrollnow-common</artifactId>
+                <version>${enrollnow.version}</version>
+            </dependency>
+
+            <!-- OpenAPI / Swagger Documentation -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+
+            <!-- Password Hashing (Argon2id) -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+
+            <!-- JWT Security -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

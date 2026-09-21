@@ -1,0 +1,21 @@
+{
+  "name": "enrollnow-frontend-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*",
+    "shared",
+    "shell",
+    "microfrontends/*"
+  ],
+  "scripts": {
+    "build:all": "npm run build --workspaces",
+    "test:all": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
