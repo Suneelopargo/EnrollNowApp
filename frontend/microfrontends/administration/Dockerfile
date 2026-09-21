@@ -3,6 +3,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY microfrontends/administration/package*.json ./microfrontends/administration/
 COPY shared ./shared/
+COPY packages/administrator-ui ./packages/administrator-ui/
 WORKDIR /app/microfrontends/administration
 RUN npm ci
 

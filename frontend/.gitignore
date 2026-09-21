@@ -9,6 +9,12 @@ node_modules/
 **/node_modules/
 
 # ------------------------------------------------------------
+# NPM lock files - DO NOT COMMIT
+# ------------------------------------------------------------
+package-lock.json
+**/package-lock.json
+
+# ------------------------------------------------------------
 # Build output
 # ------------------------------------------------------------
 dist/
@@ -40,10 +46,16 @@ coverage/
 # Test output
 # ------------------------------------------------------------
 test-results/
-playwright-report/
-blob-report/
-**/playwright-report/
 **/test-results/
+
+playwright-report/
+**/playwright-report/
+
+blob-report/
+**/blob-report/
+
+playwright/.cache/
+**/playwright/.cache/
 
 # ------------------------------------------------------------
 # Logs
@@ -75,7 +87,11 @@ runtime-config.*.local.json
 # IDE
 # ------------------------------------------------------------
 .idea/
+**/.idea/
+
 .vscode/
+**/.vscode/
+
 *.iml
 
 # ------------------------------------------------------------
@@ -89,8 +105,13 @@ Desktop.ini
 # Temporary files
 # ------------------------------------------------------------
 tmp/
+**/tmp/
+
 temp/
+**/temp/
+
 scratch/
+**/scratch/
 
 *.tmp
 *.temp
@@ -127,6 +148,25 @@ storybook-static/
 *.tar.gz
 
 # ------------------------------------------------------------
-# Playwright
+# Documentation - DO NOT COMMIT
 # ------------------------------------------------------------
-playwright/.cache/
+*.md
+*.mdx
+
+docs/
+**/docs/
+
+# ------------------------------------------------------------
+# Local reports - DO NOT COMMIT
+# ------------------------------------------------------------
+reports/
+**/reports/
+
+# ------------------------------------------------------------
+# Generated analysis / audit files
+# ------------------------------------------------------------
+*_REPORT.md
+*_REPORT.txt
+*_AUDIT.md
+*_ANALYSIS.md
+*_PLAN.md
