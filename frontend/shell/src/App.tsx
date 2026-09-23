@@ -6,7 +6,7 @@ import { NavigationProvider } from './navigation/NavigationContext';
 import { ShellRouter } from './routing/ShellRouter';
 import { loadRuntimeConfig } from '../../shared/runtime-config';
 import { LoadingSpinner } from '../../shared/design-system/components/LoadingSpinner';
-import '../../shared/design-system/styles/index.css';
+import '../../shared/design-system/styles/index.scss';
 
 export const App: React.FC = () => {
   const [configReady, setConfigReady] = useState(false);

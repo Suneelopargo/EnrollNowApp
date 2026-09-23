@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import IdentityModule from './remoteEntry';
-import '../../../shared/design-system/styles/index.css';
+import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
   user: null,

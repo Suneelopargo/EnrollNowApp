@@ -1,0 +1,71 @@
+// frontend/shared/design-system/styles/_globals.scss - Universal Resets & Base Styles
+@use 'variables' as *;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $text-primary;
+  background-color: $bg-app;
+  line-height: 1.5;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  color: $text-link;
+  text-decoration: none;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: $text-link-hover;
+  }
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  background: none;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+// Custom Scrollbar
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: $bg-surface-secondary;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $border-color-dark;
+  border-radius: $border-radius-full;
+
+  &:hover {
+    background: $text-muted;
+  }
+}

@@ -1,0 +1,439 @@
+// frontend/shared/design-system/styles/_auth.scss - Enterprise Clinical Login Page Styles
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// Main Authentication Page Background
+.login-screen-wrapper {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  background-color: $color-primary-dark;
+  background-image: 
+    radial-gradient(at 10% 10%, rgba(2, 132, 199, 0.28) 0px, transparent 50%),
+    radial-gradient(at 90% 15%, rgba(6, 182, 212, 0.22) 0px, transparent 50%),
+    radial-gradient(at 50% 95%, rgba(15, 39, 68, 0.95) 0px, transparent 65%),
+    linear-gradient(180deg, #09182b 0%, #060e19 100%);
+  padding: $spacing-8 $spacing-4 $spacing-10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+
+  @include mobile {
+    padding: $spacing-4 $spacing-3 $spacing-6;
+  }
+
+  // Background subtle decorative circles
+  &::before {
+    content: '';
+    position: absolute;
+    top: 10%;
+    left: 15%;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, rgba(2, 132, 199, 0.12) 0%, rgba(2, 132, 199, 0) 70%);
+    border-radius: 50%;
+    filter: blur(50px);
+    pointer-events: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 10%;
+    right: 15%;
+    width: 340px;
+    height: 340px;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, rgba(6, 182, 212, 0) 70%);
+    border-radius: 50%;
+    filter: blur(50px);
+    pointer-events: none;
+  }
+}
+
+// Center Container
+.login-card-container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 440px;
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  @include mobile {
+    max-width: 100%;
+    margin: 0;
+  }
+}
+
+// Branding Header
+.login-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: $spacing-6;
+  width: 100%;
+
+  @include mobile {
+    margin-bottom: $spacing-4;
+  }
+
+  .brand-logo-badge.login-badge {
+    width: 54px;
+    height: 54px;
+    font-size: 1.4rem;
+    font-weight: $font-weight-extrabold;
+    border-radius: $border-radius-lg;
+    background: $color-brand-gradient;
+    box-shadow: 0 0 28px rgba(2, 132, 199, 0.55), 0 4px 14px rgba(0, 0, 0, 0.35);
+    margin-bottom: $spacing-3;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    transform: perspective(400px) translateZ(0);
+    transition: transform $transition-fast;
+
+    &:hover {
+      transform: perspective(400px) scale(1.05);
+    }
+  }
+
+  h1 {
+    font-size: 1.625rem; // 26px
+    font-weight: $font-weight-bold;
+    color: #ffffff;
+    letter-spacing: -0.025em;
+    margin: 0;
+    line-height: 1.25;
+
+    @include mobile {
+      font-size: 1.35rem;
+    }
+  }
+
+  p {
+    font-size: 0.8125rem; // 13px
+    color: #94a3b8;
+    margin-top: $spacing-1;
+    font-weight: $font-weight-medium;
+    letter-spacing: 0.01em;
+
+    @include mobile {
+      font-size: 0.75rem;
+    }
+  }
+}
+
+// Auth Glass Card
+.auth-card {
+  width: 100%;
+  background-color: #ffffff;
+  border-radius: $border-radius-xl;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 
+    0 20px 45px -10px rgba(0, 0, 0, 0.35),
+    0 0 1px 1px rgba(255, 255, 255, 0.1),
+    0 8px 16px -4px rgba(2, 132, 199, 0.08);
+  overflow: hidden;
+
+  .auth-card-body {
+    padding: $spacing-8;
+
+    @include mobile {
+      padding: $spacing-5;
+    }
+  }
+
+  .auth-title-row {
+    margin-bottom: $spacing-6;
+    text-align: left;
+
+    @include mobile {
+      margin-bottom: $spacing-4;
+    }
+
+    h2 {
+      font-size: $font-size-xl;
+      font-weight: $font-weight-bold;
+      color: $text-primary;
+      margin: 0;
+      letter-spacing: -0.02em;
+
+      @include mobile {
+        font-size: $font-size-lg;
+      }
+    }
+
+    .auth-subtitle {
+      font-size: $font-size-xs;
+      color: $text-muted;
+      margin-top: $spacing-1;
+      line-height: 1.4;
+    }
+  }
+}
+
+// Error Alert Banner
+.login-error-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: $spacing-3;
+  padding: $spacing-3 $spacing-4;
+  border-radius: $border-radius-md;
+  background-color: $color-danger-bg;
+  border: 1px solid $color-danger-border;
+  color: $color-danger;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  margin-bottom: $spacing-5;
+  animation: fadeInDown 0.25s ease-out;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Form Icon Inputs
+.auth-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  margin-bottom: $spacing-4;
+
+  .form-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: $font-size-xs;
+    font-weight: $font-weight-semibold;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.input-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+
+  .input-icon-left {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $text-muted;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color $transition-fast;
+    z-index: 2;
+  }
+
+  .form-input-with-icon {
+    width: 100%;
+    height: 44px;
+    padding: 0 42px 0 42px;
+    font-size: $font-size-sm;
+    color: $text-primary;
+    background-color: #ffffff;
+    border: 1px solid $border-color-dark;
+    border-radius: $border-radius-md;
+    outline: none;
+    transition: all $transition-fast;
+
+    &::placeholder {
+      color: $text-subtle;
+      font-size: $font-size-sm;
+    }
+
+    &:focus {
+      border-color: $color-brand-accent;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.16);
+      background-color: #ffffff;
+    }
+  }
+
+  .password-toggle-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    color: $text-muted;
+    border-radius: $border-radius-sm;
+    transition: color $transition-fast, background-color $transition-fast;
+    z-index: 2;
+
+    &:hover {
+      color: $text-primary;
+      background-color: $bg-surface-secondary;
+    }
+  }
+}
+
+// Remember Me & Forgot Password Row
+.auth-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $spacing-2;
+  margin-bottom: $spacing-6;
+  font-size: $font-size-xs;
+  flex-wrap: wrap;
+  gap: $spacing-2;
+
+  .remember-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+    color: $text-secondary;
+    cursor: pointer;
+    user-select: none;
+    font-weight: $font-weight-medium;
+
+    input[type='checkbox'] {
+      width: 16px;
+      height: 16px;
+      accent-color: $color-brand-accent;
+      border-radius: $border-radius-xs;
+      cursor: pointer;
+    }
+  }
+
+  .forgot-password-link {
+    color: $color-brand-accent;
+    font-weight: $font-weight-semibold;
+    text-decoration: none;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $color-brand-accent-hover;
+      text-decoration: underline;
+    }
+  }
+}
+
+// Submit Button
+.login-submit-btn {
+  width: 100%;
+  height: 46px;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  border-radius: $border-radius-md;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+  letter-spacing: 0.01em;
+
+  svg {
+    transition: transform $transition-fast;
+  }
+
+  &:hover:not(:disabled) svg {
+    transform: translateX(3px);
+  }
+}
+
+// Demo Helper Credential Pills
+.demo-credentials-box {
+  margin-top: $spacing-5;
+  padding: $spacing-3;
+  background-color: #f8fafc;
+  border: 1px dashed $border-color-dark;
+  border-radius: $border-radius-md;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  .demo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    color: $text-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+
+    .demo-header-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+
+  .demo-pills-row {
+    display: flex;
+    gap: $spacing-2;
+    flex-wrap: wrap;
+  }
+
+  .demo-pill-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+    border-radius: $border-radius-sm;
+    background-color: #ffffff;
+    border: 1px solid $border-color;
+    color: $color-brand-accent;
+    transition: all $transition-fast;
+    cursor: pointer;
+
+    &:hover {
+      background-color: $color-brand-accent-light;
+      border-color: $color-brand-accent;
+    }
+  }
+}
+
+// Card Security Badge
+.login-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-6;
+  background-color: #f8fafc;
+  border-top: 1px solid $border-color;
+  color: $text-muted;
+  font-size: 11px;
+  font-weight: $font-weight-medium;
+  text-align: center;
+  line-height: 1.4;
+
+  @include mobile {
+    padding: $spacing-3 $spacing-4;
+    font-size: 10px;
+  }
+
+  .security-icon {
+    color: $color-success;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+}

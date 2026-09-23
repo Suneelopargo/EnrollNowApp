@@ -1,0 +1,82 @@
+// frontend/shared/design-system/styles/_mixins.scss - SCSS Mixins & Helper Functions
+@use 'sass:color';
+@use 'variables' as *;
+
+// Flexbox Center Helper
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+// Glassmorphism Card Style
+@mixin glass-panel($bg: rgba(255, 255, 255, 0.95), $blur: 16px, $border: rgba(255, 255, 255, 0.6)) {
+  background: $bg;
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+  border: 1px solid $border;
+}
+
+// Interactive Focus Glow
+@mixin focus-ring($color: $color-brand-accent, $glow-opacity: 0.2) {
+  outline: none;
+  border-color: $color;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, $glow-opacity), 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+// Gradient Button Effect
+@mixin gradient-button($start-color: #0284c7, $end-color: #0369a1) {
+  background: linear-gradient(135deg, $start-color 0%, $end-color 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, color.adjust($start-color, $lightness: 4%) 0%, color.adjust($end-color, $lightness: 4%) 100%);
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(2, 132, 199, 0.2);
+  }
+}
+
+// Text Truncate
+@mixin text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Responsive Media Queries
+@mixin mobile {
+  @media (max-width: 639px) {
+    @content;
+  }
+}
+
+@mixin tablet {
+  @media (max-width: 1023px) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: 1024px) {
+    @content;
+  }
+}

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import DashboardModule from './remoteEntry';
-import '../../../shared/design-system/styles/index.css';
+import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
   user: { id: 1, username: 'admin', email: 'admin@enrollnow.local', active: true, roles: ['ROLE_SUPER_ADMIN'], siteCodes: ['SITE-001'] },

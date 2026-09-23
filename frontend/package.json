@@ -9,12 +9,17 @@
     "microfrontends/*"
   ],
   "scripts": {
-    "build:all": "npm run build --workspaces",
-    "test:all": "npm run test --workspaces --if-present"
+    "bundle:vendors": "node scripts/bundle-vendors.js",
+    "build:all": "node scripts/bundle-vendors.js && npm run build --workspaces",
+    "test:all": "npm run test --workspaces --if-present",
+    "start:all": "concurrently --kill-others -n \"shell,identity,admin,dashboard,org,study,participant,recruitment,survey,task,comm,doc\" -c \"blue,green,yellow,magenta,cyan,red,blueBright,greenBright,yellowBright,magentaBright,cyanBright,white\" \"npm run preview --workspace=enrollnow-shell\" \"npm run preview --workspace=enrollnow-identity-mfe\" \"npm run preview --workspace=enrollnow-administration-mfe\" \"npm run preview --workspace=enrollnow-dashboard-mfe\" \"npm run preview --workspace=enrollnow-organization-mfe\" \"npm run preview --workspace=enrollnow-study-mfe\" \"npm run preview --workspace=@enrollnow/mfe-participant\" \"npm run preview --workspace=@enrollnow/mfe-recruitment\" \"npm run preview --workspace=@enrollnow/mfe-survey\" \"npm run preview --workspace=@enrollnow/mfe-task\" \"npm run preview --workspace=@enrollnow/mfe-communication\" \"npm run preview --workspace=@enrollnow/mfe-document\"",
+    "dev:all": "concurrently --kill-others -n \"shell,identity,admin,dashboard,org,study,participant,recruitment,survey,task,comm,doc\" -c \"blue,green,yellow,magenta,cyan,red,blueBright,greenBright,yellowBright,magentaBright,cyanBright,white\" \"npm run dev --workspace=enrollnow-shell\" \"npm run dev --workspace=enrollnow-identity-mfe\" \"npm run dev --workspace=enrollnow-administration-mfe\" \"npm run dev --workspace=enrollnow-dashboard-mfe\" \"npm run dev --workspace=enrollnow-organization-mfe\" \"npm run dev --workspace=enrollnow-study-mfe\" \"npm run dev --workspace=@enrollnow/mfe-participant\" \"npm run dev --workspace=@enrollnow/mfe-recruitment\" \"npm run dev --workspace=@enrollnow/mfe-survey\" \"npm run dev --workspace=@enrollnow/mfe-task\" \"npm run dev --workspace=@enrollnow/mfe-communication\" \"npm run dev --workspace=@enrollnow/mfe-document\""
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "concurrently": "^10.0.5",
+    "sass": "^1.105.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
   }

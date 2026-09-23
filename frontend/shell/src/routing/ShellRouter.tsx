@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { RemoteLoader } from '../remotes/RemoteLoader';
 import { TopNavigation } from '../navigation/TopNavigation';
+import { Footer } from '../../../shared/design-system/components/Footer';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
 
 export const ShellRouter: React.FC = () => {
@@ -23,6 +24,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="dashboard" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -35,6 +37,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="study" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -47,6 +50,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="participant" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -59,6 +63,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="recruitment" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -71,6 +76,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="survey" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -83,6 +89,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="task" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -95,6 +102,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="communication" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -107,6 +115,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="document" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -119,6 +128,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="organization" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />
@@ -131,6 +141,7 @@ export const ShellRouter: React.FC = () => {
               <main className="page-container">
                 <RemoteLoader remoteId="administration" />
               </main>
+              <Footer variant="app-shell" />
             </ProtectedRoute>
           }
         />

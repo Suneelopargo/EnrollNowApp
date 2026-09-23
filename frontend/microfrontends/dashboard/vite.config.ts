@@ -12,6 +12,9 @@ export default defineConfig({
     port: 3003,
     cors: true,
   },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
+  },
   build: {
     target: 'esnext',
     lib: {
@@ -21,7 +24,7 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: ['react', 'react-dom'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client'],
       output: {
         globals: {
           react: 'React',

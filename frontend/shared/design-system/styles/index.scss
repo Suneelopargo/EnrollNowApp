@@ -1,0 +1,8 @@
+// frontend/shared/design-system/styles/index.scss - Master Design System SCSS Entry Point
+@use 'variables' as *;
+@use 'mixins' as *;
+@use 'globals' as *;
+@use 'layout' as *;
+@use 'components' as *;
+@use 'auth' as *;
+@use 'footer' as *;

@@ -7,3 +7,4 @@ export * from './StatusBadge';
 export * from './Tabs';
 export * from './LoadingSpinner';
 export * from './ErrorBoundary';
+export * from './Footer';

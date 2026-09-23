@@ -19,7 +19,7 @@ export const RemoteLoader: React.FC<RemoteLoaderProps> = ({
   timeoutMs = 10000,
   maxRetries = 2,
 }) => {
-  const { user, token } = useAuth();
+  const { user, token, setSession } = useAuth();
   const navigate = useNavigate();
 
   const [Component, setComponent] = useState<React.ComponentType<{ context: MfeContext }> | null>(null);
@@ -121,6 +121,10 @@ export const RemoteLoader: React.FC<RemoteLoaderProps> = ({
         remoteId,
         details: { eventType, payload },
       });
+
+      if (eventType === 'LOGIN_SUCCESS' && payload?.token && payload?.user) {
+        setSession(payload.user, payload.token);
+      }
     },
   };
 

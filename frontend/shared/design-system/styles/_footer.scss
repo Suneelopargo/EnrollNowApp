@@ -1,0 +1,187 @@
+// frontend/shared/design-system/styles/_footer.scss - Global Shared Footer Styling
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// App Shell Main Footer
+.app-footer {
+  width: 100%;
+  background-color: #ffffff;
+  border-top: 1px solid $border-color;
+  padding: $spacing-4 $spacing-6;
+  margin-top: auto;
+  color: $text-secondary;
+  font-size: $font-size-xs;
+
+  .footer-container {
+    max-width: $max-content-width;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: $spacing-4;
+
+    @include mobile {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: $spacing-3;
+    }
+  }
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: $spacing-4;
+    flex-wrap: wrap;
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+    font-weight: $font-weight-bold;
+    color: $color-primary;
+
+    .footer-badge {
+      @include flex-center;
+      width: 20px;
+      height: 20px;
+      font-size: 10px;
+      border-radius: $border-radius-xs;
+      background: $color-brand-gradient;
+      color: #ffffff;
+    }
+  }
+
+  .footer-copyright {
+    color: $text-muted;
+  }
+
+  .footer-right {
+    display: flex;
+    align-items: center;
+    gap: $spacing-5;
+    flex-wrap: wrap;
+  }
+
+  .footer-links {
+    display: flex;
+    align-items: center;
+    gap: $spacing-4;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+
+    a {
+      color: $text-secondary;
+      transition: color $transition-fast;
+
+      &:hover {
+        color: $color-brand-accent;
+      }
+    }
+  }
+
+  .system-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+    padding: 3px 8px;
+    background-color: $color-success-bg;
+    border: 1px solid $color-success-border;
+    border-radius: $border-radius-full;
+    color: $color-success;
+    font-size: 11px;
+    font-weight: $font-weight-medium;
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background-color: $color-success;
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.7);
+      animation: pulseGreen 2s infinite cubic-bezier(0.66, 0, 0, 1);
+    }
+  }
+
+  .version-tag {
+    color: $text-subtle;
+    font-size: 11px;
+    font-family: $font-family-mono;
+  }
+}
+
+// Authentication / Login Specific Footer (Dark ambient variant)
+.auth-page-footer {
+  width: 100%;
+  max-width: 960px;
+  margin-top: $spacing-8;
+  padding-top: $spacing-6;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-3;
+  color: #94a3b8;
+  font-size: $font-size-xs;
+  text-align: center;
+  z-index: 10;
+
+  .auth-footer-links {
+    display: flex;
+    align-items: center;
+    gap: $spacing-4;
+    flex-wrap: wrap;
+    justify-content: center;
+
+    a {
+      color: #94a3b8;
+      transition: color $transition-fast;
+
+      &:hover {
+        color: #ffffff;
+      }
+    }
+
+    .separator {
+      color: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  .auth-footer-bottom {
+    display: flex;
+    align-items: center;
+    gap: $spacing-3;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .auth-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #34d399;
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background-color: #10b981;
+      border-radius: 50%;
+      animation: pulseGreen 2s infinite cubic-bezier(0.66, 0, 0, 1);
+    }
+  }
+}
+
+@keyframes pulseGreen {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}

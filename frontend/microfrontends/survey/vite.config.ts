@@ -7,9 +7,13 @@ export default defineConfig({
   server: {
     port: 3008,
     cors: true,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
+  },
+  preview: {
+    port: 3008,
+    cors: true,
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
   },
   build: {
     target: 'esnext',
@@ -17,12 +21,12 @@ export default defineConfig({
     cssCodeSplit: false,
     lib: {
       entry: path.resolve(__dirname, 'src/remoteEntry.tsx'),
-      name: 'enrollnow_survey',
+      name: 'EnrollNowSurvey',
       fileName: () => 'remoteEntry.js',
       formats: ['es'],
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client'],
       output: {
         globals: {
           react: 'React',

@@ -2,10 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { CommunicationModule } from './remoteEntry';
-import '../../../shared/design-system/variables.css';
-import '../../../shared/design-system/globals.css';
-import '../../../shared/design-system/layout.css';
-import '../../../shared/design-system/components.css';
+import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
   user: {

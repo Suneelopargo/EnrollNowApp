@@ -7,9 +7,13 @@ export default defineConfig({
   server: {
     port: 3011,
     cors: true,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-    },
+  },
+  preview: {
+    port: 3011,
+    cors: true,
+  },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('production'),
   },
   build: {
     target: 'esnext',
@@ -22,7 +26,7 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client'],
       output: {
         globals: {
           react: 'React',
