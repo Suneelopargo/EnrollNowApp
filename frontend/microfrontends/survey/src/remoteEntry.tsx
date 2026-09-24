@@ -1,87 +1,186 @@
 // frontend/microfrontends/survey/src/remoteEntry.tsx - Survey MFE Remote Entry
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MfeContext } from '../../../shared/contracts';
-import { PageHeader } from '../../../shared/design-system/components/PageHeader';
-import { StatCard } from '../../../shared/design-system/components/StatCard';
-import { Card } from '../../../shared/design-system/components/Card';
-import { DataTable } from '../../../shared/design-system/components/DataTable';
-import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
-import { ClipboardList, Plus, CheckCircle, FileSpreadsheet, Layers } from 'lucide-react';
-import axios from 'axios';
+import { SurveyDashboardView } from './views/SurveyDashboardView';
+import { SurveyListView } from './views/SurveyListView';
+import { SurveyBuilder } from './builder/SurveyBuilder';
+import { SurveyAssignmentsView } from './views/SurveyAssignmentsView';
+import { SurveyResponsesView } from './views/SurveyResponsesView';
+import { SurveyAnalyticsView } from './views/SurveyAnalyticsView';
+import { MySurveysView } from './views/MySurveysView';
+import {
+  LayoutDashboard,
+  ClipboardList,
+  PlusCircle,
+  UserCheck,
+  BarChart3,
+  UserCheck2,
+} from 'lucide-react';
 
 export interface SurveyModuleProps {
   context: MfeContext;
 }
 
+type TabType =
+  | 'dashboard'
+  | 'surveys'
+  | 'builder'
+  | 'assignments'
+  | 'responses'
+  | 'analytics'
+  | 'my-surveys';
+
 export const SurveyModule: React.FC<SurveyModuleProps> = ({ context }) => {
-  const [surveys, setSurveys] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [editingSurveyId, setEditingSurveyId] = useState<number | undefined>(undefined);
+  const [inspectSurveyId, setInspectSurveyId] = useState<number | undefined>(undefined);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8087';
-
-  useEffect(() => {
-    const fetchSurveys = async () => {
-      setLoading(true);
-      try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/surveys`, { headers, timeout: 8000 });
-        if (res.data?.data) {
-          setSurveys(res.data.data);
-        }
-      } catch {
-        // Fallback default survey data
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSurveys();
-  }, [apiBase, context.token]);
-
-  const data = surveys.length > 0 ? surveys : [
-    { surveyCode: 'SRV-001', title: 'Baseline Cardiovascular Health Questionnaire', studyId: 'PROTO-2026-001', version: 'v2.1', questions: 24, responses: 312, status: 'ACTIVE' },
-    { surveyCode: 'SRV-002', title: 'PSQI Sleep Quality Index & Log', studyId: 'PROTO-2026-002', version: 'v1.0', questions: 18, responses: 184, status: 'ACTIVE' },
-    { surveyCode: 'SRV-003', title: 'Pediatric Adverse Reaction Diary', studyId: 'PROTO-2026-003', version: 'v3.0', questions: 12, responses: 45, status: 'ACTIVE' },
-    { surveyCode: 'SRV-004', title: 'End-of-Study Quality of Life (SF-36)', studyId: 'PROTO-2025-009', version: 'v1.4', questions: 36, responses: 800, status: 'PUBLISHED' },
-  ];
+  const isParticipant =
+    context?.user?.roles?.includes('PARTICIPANT') ||
+    context?.user?.roles?.includes('PATIENT');
 
   return (
-    <div>
-      <PageHeader
-        title="Electronic Clinical Outcome Assessments (eCOA) & Surveys"
-        subtitle="Design, deploy, and collect patient-reported outcomes (PROs), questionnaires, and clinical surveys"
-        actions={
-          <button type="button" className="btn btn-primary">
-            <Plus size={16} />
-            <span>Design New Survey</span>
-          </button>
-        }
-      />
+    <div className="space-y-6 max-w-7xl mx-auto p-4 sm:p-6 font-sans">
+      {/* MFE Navigation Bar */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-1 overflow-x-auto">
+        {!isParticipant && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                activeTab === 'dashboard'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <LayoutDashboard size={15} />
+              <span>Dashboard</span>
+            </button>
 
-      <div className="kpi-grid">
-        <StatCard label="Active Surveys" value="4" subtext="Deployed instruments" icon={ClipboardList} variant="primary" />
-        <StatCard label="Collected Submissions" value="1,341" subtext="PRO responses captured" icon={CheckCircle} variant="success" />
-        <StatCard label="Question Library" value="90" subtext="Standardized validated items" icon={FileSpreadsheet} variant="info" />
-        <StatCard label="Average Completion" value="94.2%" subtext="Response completion rate" icon={Layers} variant="cyan" />
+            <button
+              type="button"
+              onClick={() => setActiveTab('surveys')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                activeTab === 'surveys'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <ClipboardList size={15} />
+              <span>Questionnaires</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditingSurveyId(undefined);
+                setActiveTab('builder');
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                activeTab === 'builder'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <PlusCircle size={15} />
+              <span>{editingSurveyId ? 'Edit Survey' : 'New Survey'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('assignments')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                activeTab === 'assignments'
+                  ? 'bg-blue-50 text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <UserCheck size={15} />
+              <span>Assignments</span>
+            </button>
+          </>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('my-surveys')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+            activeTab === 'my-surveys'
+              ? 'bg-blue-50 text-blue-700 shadow-sm'
+              : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <UserCheck2 size={15} />
+          <span>My Questionnaires</span>
+        </button>
       </div>
 
-      <Card
-        title="Survey Instruments & Questionnaires"
-        subtitle="Validated clinical trial questionnaires and digital data capture forms"
-      >
-        <DataTable
-          data={data}
-          keyExtractor={(s) => s.surveyCode}
-          columns={[
-            { key: 'surveyCode', header: 'Survey Code', render: (s) => <strong>{s.surveyCode}</strong> },
-            { key: 'title', header: 'Survey Instrument Title' },
-            { key: 'studyId', header: 'Protocol ID', render: (s) => <span className="badge badge-neutral">{s.studyId}</span> },
-            { key: 'version', header: 'Instrument Version', render: (s) => <code>{s.version}</code> },
-            { key: 'items', header: 'Questions', render: (s) => `${s.questions} items` },
-            { key: 'responses', header: 'Completed Submissions', render: (s) => `${s.responses} captured` },
-            { key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} /> },
-          ]}
+      {/* Main Tab Routing */}
+      {activeTab === 'dashboard' && (
+        <SurveyDashboardView
+          onCreateSurvey={() => {
+            setEditingSurveyId(undefined);
+            setActiveTab('builder');
+          }}
+          onSelectSurvey={(id) => {
+            setEditingSurveyId(id);
+            setActiveTab('builder');
+          }}
+          onViewAllSurveys={() => setActiveTab('surveys')}
+          onViewAnalytics={(id) => {
+            setInspectSurveyId(id);
+            setActiveTab('analytics');
+          }}
         />
-      </Card>
+      )}
+
+      {activeTab === 'surveys' && (
+        <SurveyListView
+          onCreateSurvey={() => {
+            setEditingSurveyId(undefined);
+            setActiveTab('builder');
+          }}
+          onEditSurvey={(id) => {
+            setEditingSurveyId(id);
+            setActiveTab('builder');
+          }}
+          onViewAnalytics={(id) => {
+            setInspectSurveyId(id);
+            setActiveTab('analytics');
+          }}
+          onViewResponses={(id) => {
+            setInspectSurveyId(id);
+            setActiveTab('responses');
+          }}
+        />
+      )}
+
+      {activeTab === 'builder' && (
+        <SurveyBuilder
+          surveyId={editingSurveyId}
+          onDone={() => setActiveTab('surveys')}
+          onCancel={() => setActiveTab('surveys')}
+        />
+      )}
+
+      {activeTab === 'assignments' && <SurveyAssignmentsView />}
+
+      {activeTab === 'responses' && (
+        <SurveyResponsesView
+          surveyId={inspectSurveyId}
+          onBack={() => setActiveTab('surveys')}
+        />
+      )}
+
+      {activeTab === 'analytics' && inspectSurveyId && (
+        <SurveyAnalyticsView
+          surveyId={inspectSurveyId}
+          onBack={() => setActiveTab('surveys')}
+        />
+      )}
+
+      {activeTab === 'my-surveys' && <MySurveysView />}
     </div>
   );
 };

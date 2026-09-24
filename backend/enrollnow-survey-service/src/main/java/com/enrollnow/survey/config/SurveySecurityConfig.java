@@ -51,7 +51,9 @@ public class SurveySecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/v3/api-docs.yaml"
+                                "/v3/api-docs.yaml",
+                                "/api/v1/surveys/public/**",
+                                "/api/surveys/public/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
