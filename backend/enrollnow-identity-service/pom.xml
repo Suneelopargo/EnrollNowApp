@@ -12,8 +12,9 @@
     </parent>
 
     <artifactId>enrollnow-identity-service</artifactId>
+    <packaging>jar</packaging>
     <name>enrollnow-identity-service</name>
-    <description>EnrollNow Identity &amp; Authentication Microservice</description>
+    <description>EnrollNow Identity &amp; Authentication Module</description>
 
     <dependencies>
         <dependency>
@@ -49,12 +50,4 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 </project>
