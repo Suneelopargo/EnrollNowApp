@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-communication-service</artifactId>
     <name>enrollnow-communication-service</name>
-    <description>EnrollNow Participant Communication &amp; Outreach Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Participant Communication &amp; Outreach module</description>
 
     <dependencies>
         <dependency>
@@ -32,12 +33,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+ 
 </project>
