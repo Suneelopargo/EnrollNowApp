@@ -47,6 +47,11 @@
 			<artifactId>enrollnow-study-service</artifactId>
 			<version>1.0.0-SNAPSHOT</version>
 		</dependency>
+		<dependency>
+    <groupId>com.enrollnow</groupId>
+    <artifactId>enrollnow-participant-service</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
 	</dependencies>
 
 </project>
