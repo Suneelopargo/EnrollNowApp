@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-survey-service</artifactId>
     <name>enrollnow-survey-service</name>
-    <description>EnrollNow Survey &amp; eConsent Studio Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Survey &amp; eConsent Studio module</description>
 
     <dependencies>
         <dependency>
@@ -58,12 +59,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    
 </project>
