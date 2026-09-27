@@ -32,6 +32,7 @@
         <module>enrollnow-document-service</module>
         <module>enrollnow-dashboard-service</module>
         <module>enrollnow-audit-service</module>
+        <module>enrollnow-app</module>
     </modules>
 
     <properties>
