@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-administration-service</artifactId>
     <name>enrollnow-administration-service</name>
-    <description>EnrollNow Administration, RBAC &amp; Navigation Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Administration, RBAC &amp; Navigation Module</description>
 
     <dependencies>
         <dependency>
@@ -49,12 +50,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    
 </project>
