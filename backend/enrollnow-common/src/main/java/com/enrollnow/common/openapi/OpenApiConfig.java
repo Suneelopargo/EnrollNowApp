@@ -19,7 +19,7 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI customOpenAPI(
             @Value("${spring.application.name:enrollnow-service}") String applicationName,
-            @Value("${app.openapi.title:EnrollNow Microservice API}") String title,
+            @Value("${app.openapi.title:EnrollNow Platform API}") String title,
             @Value("${app.openapi.description:Authoritative API Specification for EnrollNow Platform}") String description,
             @Value("${app.openapi.version:1.0.0}") String version) {
 
