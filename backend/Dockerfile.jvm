@@ -1,11 +1,12 @@
-# Multi-service JVM container image
+# EnrollNow modular monolith - JVM runtime image
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
-ARG SERVICE_JAR
-COPY ${SERVICE_JAR} app.jar
+
+COPY enrollnow-app/target/enrollnow-app-1.0.0-SNAPSHOT.jar app.jar
 
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
 
 EXPOSE 8080
+
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
