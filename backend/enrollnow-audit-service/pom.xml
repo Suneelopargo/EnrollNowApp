@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-audit-service</artifactId>
     <name>enrollnow-audit-service</name>
-    <description>EnrollNow Security &amp; Compliance Audit Ledger Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Security &amp; Compliance Audit Ledger Module</description>
 
     <dependencies>
         <dependency>
@@ -41,12 +42,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+   
 </project>
