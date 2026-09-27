@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-organization-service</artifactId>
     <name>enrollnow-organization-service</name>
-    <description>EnrollNow Organization &amp; Clinical Site Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Organization &amp; Clinical Site Module</description>
 
     <dependencies>
         <dependency>
@@ -41,12 +42,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+   
 </project>
