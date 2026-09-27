@@ -24,7 +24,7 @@ public class JwtTokenProvider implements JwtVerifier {
     public JwtTokenProvider(
             @Value("${app.jwt.secret:enrollnow-enterprise-development-secret-key-must-be-changed-in-production-12345}") String jwtSecret,
             @Value("${app.jwt.expiration-ms:3600000}") long jwtExpirationMs,
-            @Value("${app.jwt.issuer:enrollnow-auth-service}") String issuer) {
+            @Value("${app.jwt.issuer:enrollnow-identity-service}") String issuer) {
 
         byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
