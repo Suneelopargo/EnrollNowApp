@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-document-service</artifactId>
     <name>enrollnow-document-service</name>
-    <description>EnrollNow Clinical Trial &amp; Protocol Document Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Clinical Trial &amp; Protocol Document Module</description>
 
     <dependencies>
         <dependency>
@@ -32,12 +33,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    
 </project>

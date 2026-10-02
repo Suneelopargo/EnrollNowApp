@@ -1,28 +1,56 @@
-// frontend/shell/src/routing/ShellRouter.tsx - Dynamic Route Composition via RemoteLoader
+// frontend/shell/src/routing/ShellRouter.tsx - Central Route Composition via Direct Modular Imports
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
-import { RemoteLoader } from '../remotes/RemoteLoader';
 import { TopNavigation } from '../navigation/TopNavigation';
 import { Footer } from '../../../shared/design-system/components/Footer';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
+import { useAuth } from '../auth/AuthContext';
+import {
+  IdentityModule,
+  AdministrationModule,
+  DashboardModule,
+  OrganizationModule,
+  StudyModule,
+  ParticipantModule,
+  RecruitmentModule,
+  SurveyModule,
+  TaskModule,
+  CommunicationModule,
+  DocumentModule,
+} from '../modules';
+
+const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, user, loading } = useAuth();
+  if (!loading && isAuthenticated && user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+};
 
 export const ShellRouter: React.FC = () => {
   return (
     <div className="app-shell">
       <Routes>
-        {/* Public Login Route dynamically loads identity MFE */}
-        <Route path="/login" element={<RemoteLoader remoteId="identity" />} />
+        {/* Public Login Route - Direct Local Identity Module */}
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <IdentityModule />
+            </PublicOnlyRoute>
+          }
+        />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Protected Micro-Frontend Routes */}
+        {/* Protected Feature Module Routes */}
         <Route
           path="/dashboard"
           element={
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="dashboard" />
+                <DashboardModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -35,7 +63,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="study" />
+                <StudyModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -48,7 +76,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="participant" />
+                <ParticipantModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -61,7 +89,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="recruitment" />
+                <RecruitmentModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -74,7 +102,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="survey" />
+                <SurveyModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -87,7 +115,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="task" />
+                <TaskModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -100,7 +128,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="communication" />
+                <CommunicationModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -113,7 +141,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="document" />
+                <DocumentModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -126,7 +154,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="organization" />
+                <OrganizationModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>
@@ -139,7 +167,7 @@ export const ShellRouter: React.FC = () => {
             <ProtectedRoute requiredRoles={['ROLE_SUPER_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_ADMIN']}>
               <TopNavigation />
               <main className="page-container">
-                <RemoteLoader remoteId="administration" />
+                <AdministrationModule />
               </main>
               <Footer variant="app-shell" />
             </ProtectedRoute>

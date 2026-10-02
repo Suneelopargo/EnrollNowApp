@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-recruitment-service</artifactId>
     <name>enrollnow-recruitment-service</name>
-    <description>EnrollNow Participant Recruitment &amp; Screening Funnel Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Participant Recruitment &amp; Screening Funnel Module</description>
 
     <dependencies>
         <dependency>
@@ -32,12 +33,5 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+   
 </project>

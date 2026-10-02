@@ -1,7 +1,7 @@
-// frontend/shell/src/routing/ProtectedRoute.tsx - Host Route Guard
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { LoadingSpinner } from '../../../shared/design-system/components/LoadingSpinner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,10 +9,18 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles }) => {
-  const { isAuthenticated, user, hasRole } = useAuth();
+  const { isAuthenticated, user, hasRole, loading } = useAuth();
   const location = useLocation();
 
+  if (loading) {
+    return <LoadingSpinner message="Verifying session..." />;
+  }
+
+  const hasStoredToken = Boolean(localStorage.getItem('enrollnow_token'));
   if (!isAuthenticated || !user) {
+    if (hasStoredToken) {
+      return <LoadingSpinner message="Loading workspace..." />;
+    }
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

@@ -48,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setSession = useCallback((newUser: AuthUser, newToken: string) => {
     setToken(newToken);
     setUser(newUser);
+    setLoading(false);
     localStorage.setItem('enrollnow_token', newToken);
     localStorage.setItem('enrollnow_user', JSON.stringify(newUser));
   }, []);
@@ -125,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (detail?.user && detail?.token) {
         setToken(detail.token);
         setUser(detail.user);
+        setLoading(false);
       } else if (detail?.logout) {
         clearSession();
       }

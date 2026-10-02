@@ -41,7 +41,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const filtered = DEFAULT_NAVIGATION_ITEMS.filter((item) => {
       if (!item.requiredPermission) return true;
-      return hasRole(item.requiredPermission) || hasRole('ROLE_SUPER_ADMIN') || hasRole('ROLE_SITE_ADMIN');
+      return hasRole(item.requiredPermission) || hasRole('ROLE_SUPER_ADMIN') || hasRole('ROLE_SITE_ADMIN') || hasRole('ROLE_ADMIN');
     });
 
     setNavItems(filtered);

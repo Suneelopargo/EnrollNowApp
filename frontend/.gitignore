@@ -19,6 +19,9 @@ package-lock.json
 # ------------------------------------------------------------
 dist/
 **/dist/
+!packages/administrator-ui/dist/**
+!packages/administrator-ui/dist
+
 
 build/
 **/build/

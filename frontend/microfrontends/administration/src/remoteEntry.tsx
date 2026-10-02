@@ -15,9 +15,9 @@ export interface AdministrationModuleProps {
 }
 
 export const defaultAdminConfig: AdministratorConfig = {
-  title: 'EnrollNow Administration',
-  subtitle: 'Platform Security, Role Entitlement Matrices, and Clinical Site Scopes',
-  badgeText: 'EnrollNow Admin',
+  title: 'System Administration Overview',
+  subtitle: 'Authoritative management of user credentials, RBAC roles, and system security.',
+  badgeText: 'System Admin',
   features: {
     dashboard: true,
     users: true,
@@ -30,15 +30,16 @@ export const defaultAdminConfig: AdministratorConfig = {
     userRoleAssignment: true,
     locationAccess: true,
     auditTrail: true,
-    providerMapping: false,
+    providerMapping: true,
   },
   terminology: {
-    location: 'Research Site',
-    locations: 'Research Sites',
-    provider: 'Investigator',
-    providers: 'Investigators',
-    providerCode: 'Investigator ID',
+    location: 'Location Access',
+    locations: 'Active Locations',
+    provider: 'Doctor',
+    providers: 'Doctors',
+    providerCode: 'Doctor Code',
   },
+  providerRoleCodes: ['ROLE_DOCTOR', 'DOCTOR'],
 };
 
 export const AdministrationModule: React.FC<AdministrationModuleProps> = ({

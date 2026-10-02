@@ -12,10 +12,9 @@ import {
   Question,
   LogicRule,
 } from '../types/survey';
+import { getApiBaseUrl } from '../../../../shared/api-config';
 
-const DEFAULT_BASE_URL = 'http://localhost:8087';
-
-export const createSurveyApiClient = (apiBase: string = DEFAULT_BASE_URL, token?: string) => {
+export const createSurveyApiClient = (apiBase: string = getApiBaseUrl(), token?: string) => {
   const client = axios.create({
     baseURL: apiBase,
     timeout: 15000,
@@ -24,6 +23,16 @@ export const createSurveyApiClient = (apiBase: string = DEFAULT_BASE_URL, token?
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
+
+  if (client.interceptors?.request) {
+    client.interceptors.request.use((config) => {
+      const activeToken = token || localStorage.getItem('enrollnow_token');
+      if (activeToken && !config.headers.Authorization) {
+        config.headers.Authorization = `Bearer ${activeToken}`;
+      }
+      return config;
+    });
+  }
 
   return {
     // Surveys

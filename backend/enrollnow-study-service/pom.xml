@@ -13,7 +13,8 @@
 
     <artifactId>enrollnow-study-service</artifactId>
     <name>enrollnow-study-service</name>
-    <description>EnrollNow Study Management Microservice</description>
+    <packaging>jar</packaging>
+    <description>EnrollNow Study Management module</description>
 
     <dependencies>
         <dependency>
@@ -30,14 +31,8 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    
 </project>

@@ -17,6 +17,16 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  React.useEffect(() => {
+    if (context.user && context.token) {
+      if (context.navigate) {
+        context.navigate('/dashboard');
+      } else {
+        window.location.href = '/dashboard';
+      }
+    }
+  }, [context.user, context.token, context.navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -42,8 +52,14 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
         localStorage.setItem('enrollnow_token', token);
         localStorage.setItem('enrollnow_user', JSON.stringify(user));
 
+        window.dispatchEvent(
+          new CustomEvent('enrollnow_auth_change', {
+            detail: { token, user },
+          })
+        );
+
         if (context.onEvent) {
-          context.onEvent('LOGIN_SUCCESS', { username, token });
+          context.onEvent('LOGIN_SUCCESS', { user, token, username });
         }
 
         if (context.navigate) {
