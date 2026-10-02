@@ -13,7 +13,7 @@ import {
   LogicRule,
 } from '../types/survey';
 
-const DEFAULT_BASE_URL = 'http://localhost:8087';
+const DEFAULT_BASE_URL = 'http://localhost:8080';
 
 export const createSurveyApiClient = (apiBase: string = DEFAULT_BASE_URL, token?: string) => {
   const client = axios.create({

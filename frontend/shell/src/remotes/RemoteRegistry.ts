@@ -1,6 +1,7 @@
 // frontend/shell/src/remotes/RemoteRegistry.ts - Authoritative Remote Micro-Frontend Registry
 import { RemoteDefinition } from '../../../shared/contracts';
 import { getCachedRuntimeConfig } from '../../../shared/runtime-config';
+import { getApiBaseUrl, DEFAULT_API_BASE_URL } from '../../../shared/api-config';
 
 export const DEFAULT_BACKEND_URLS: Record<string, string> = {
   identity: 'http://localhost:8081',
@@ -117,10 +118,8 @@ export function getRemoteDefinition(remoteId: string): RemoteDefinition | null {
 
   return {
     ...base,
-    remoteUrl:
-      remoteConfig?.url ||
-      `http://localhost:${3000 + Object.keys(BASE_REMOTE_DEFINITIONS).indexOf(remoteId) + 1}/remoteEntry.js`,
-    apiBaseUrl: remoteConfig?.apiBaseUrl || DEFAULT_BACKEND_URLS[remoteId] || 'http://localhost:8081',
+    remoteUrl: remoteConfig?.url || `/src/microfrontends/${remoteId}`,
+    apiBaseUrl: remoteConfig?.apiBaseUrl || DEFAULT_BACKEND_URLS[remoteId] || getApiBaseUrl(),
     enabled: remoteConfig ? remoteConfig.enabled : true,
     version: remoteConfig?.version || base.version,
   };

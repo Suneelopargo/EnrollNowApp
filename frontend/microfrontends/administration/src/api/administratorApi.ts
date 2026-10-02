@@ -31,7 +31,7 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   private apiBase: string;
 
   constructor(context: MfeContext) {
-    this.apiBase = context.apiBaseUrl || 'http://localhost:8082';
+    this.apiBase = context.apiBaseUrl || 'http://localhost:8080';
     this.client = axios.create({
       baseURL: `${this.apiBase}/api/v1/administrator`,
       timeout: 10000,

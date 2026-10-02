@@ -6,6 +6,12 @@ export default defineConfig({
   server: {
     port: 3000,
     cors: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port: 3000,
@@ -17,14 +23,5 @@ export default defineConfig({
   build: {
     target: 'esnext',
     minify: true,
-    rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime', 'react-dom/client'],
-      output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
-        },
-      },
-    },
   },
 });
