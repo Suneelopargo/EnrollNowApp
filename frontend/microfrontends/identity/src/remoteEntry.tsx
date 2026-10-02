@@ -1,4 +1,6 @@
-// frontend/microfrontends/identity/src/remoteEntry.tsx - Pixel-Perfect EnrollNow Identity Module matching Image 2
+// frontend/microfrontends/identity/src/remoteEntry.tsx
+// Code-Driven EnrollNow Identity & Login Module
+
 import React, { useState, useEffect } from 'react';
 import { MfeContext } from '../../../shared/contracts';
 import {
@@ -11,66 +13,39 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
+// Reusable Code-Driven Marketing & Brand Components
+import { LoginMarketingPanel } from './components/LoginMarketingPanel';
+import { EnrollNowBrand } from './components/EnrollNowBrand';
+import { MarketingHeadline } from './components/MarketingHeadline';
+import { FeatureHighlights } from './components/FeatureHighlights';
+import { FeatureHighlightCard } from './components/FeatureHighlightCard';
+import { FloatingInfoCard } from './components/FloatingInfoCard';
+import { LoginStatistics } from './components/LoginStatistics';
+import { loginContent, defaultStatistics } from './data/loginContent';
+
+// Export components for consumers and unit testing
+export {
+  LoginMarketingPanel,
+  EnrollNowBrand,
+  MarketingHeadline,
+  FeatureHighlights,
+  FeatureHighlightCard,
+  FloatingInfoCard,
+  LoginStatistics,
+  loginContent,
+  defaultStatistics,
+};
+
 export interface IdentityModuleProps {
   context: MfeContext;
 }
 
 // ============================================================================
-// BRAND & VECTOR ASSETS (Pixel-perfect matching Image 2)
+// BRAND ICONS & SVG ASSETS
 // ============================================================================
 
-const EnrollNowCardLogo: React.FC = () => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '10px',
-    }}
-  >
-    <svg width="36" height="32" viewBox="0 0 44 40" fill="none">
-      {/* Left Figure (Golden Yellow) */}
-      <circle cx="15" cy="11" r="7" fill="#F59E0B" />
-      <path
-        d="M4 36c0-7.18 5.82-13 13-13 3.2 0 6.13 1.16 8.4 3.09-2.2 2.66-3.4 6.15-3.4 9.91H4z"
-        fill="#F59E0B"
-      />
-      {/* Right Figure (Dark Navy) */}
-      <circle cx="29" cy="13" r="6.5" fill="#0F172A" />
-      <path
-        d="M20 36c0-5.8 4.7-10.5 10.5-10.5S41 30.2 41 36H20z"
-        fill="#0F172A"
-      />
-    </svg>
-    <div style={{ textAlign: 'left' }}>
-      <div
-        style={{
-          fontSize: '21px',
-          fontWeight: 800,
-          lineHeight: 1.1,
-          letterSpacing: '-0.02em',
-        }}
-      >
-        <span style={{ color: '#0F172A' }}>Enroll</span>
-        <span style={{ color: '#F59E0B' }}>Now</span>
-      </div>
-      <div
-        style={{
-          fontSize: '9.5px',
-          fontWeight: 600,
-          color: '#64748B',
-          letterSpacing: '0.02em',
-          marginTop: '2px',
-        }}
-      >
-        Screen. Schedule. Engage.
-      </div>
-    </div>
-  </div>
-);
-
 const MicrosoftLogo: React.FC = () => (
-  <svg width="15" height="15" viewBox="0 0 21 21">
+  <svg width="15" height="15" viewBox="0 0 21 21" aria-hidden="true">
     <rect x="1" y="1" width="9" height="9" fill="#f25022" />
     <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
     <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
@@ -79,7 +54,7 @@ const MicrosoftLogo: React.FC = () => (
 );
 
 const GoogleLogo: React.FC = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24">
+  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
     <path
       fill="#4285F4"
       d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z"
@@ -100,7 +75,7 @@ const GoogleLogo: React.FC = () => (
 );
 
 // ============================================================================
-// STYLESHEET (100% Visual Match to Image 2 at 2K High Resolution)
+// STYLESHEET (Code-Driven, Pure CSS/SVG, Responsive)
 // ============================================================================
 
 const AUTH_STYLES = `
@@ -130,24 +105,201 @@ const AUTH_STYLES = `
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .enl-canvas {
   position: relative;
   width: 100%;
   height: 100%;
-  background: url('/assets/login-bg-clean-2k.png') no-repeat center center;
-  background-size: 100% 100%;
+  background: linear-gradient(135deg, #f4f9fd 0%, #edf5fc 45%, #f8fbfd 100%);
+  overflow: hidden;
 }
 
-/* Overlaid Floating Card Container (Exact Match to Image 2) */
+/* ========================================================================== */
+/* LEFT MARKETING PANEL (CODE-DRIVEN)                                         */
+/* ========================================================================== */
+.enl-marketing-panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 62.3%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+/* Ambient Glow Circles */
+.enl-ambient-glow-yellow {
+  position: absolute;
+  left: 54%;
+  top: 3%;
+  width: 290px;
+  height: 290px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(254, 240, 186, 0.75) 0%, rgba(254, 240, 186, 0) 70%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.enl-ambient-glow-blue {
+  position: absolute;
+  left: 41%;
+  top: 11%;
+  width: 270px;
+  height: 270px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(186, 224, 255, 0.85) 0%, rgba(186, 224, 255, 0) 70%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Dot Grid Accents */
+.enl-dot-grid-top {
+  position: absolute;
+  left: 63%;
+  top: 4.5%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.enl-dot-grid-bottom {
+  position: absolute;
+  right: 3%;
+  bottom: 6%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Left Marketing Copy (Brand, Headline, Features) */
+.enl-marketing-content {
+  position: absolute;
+  left: 5.5%;
+  top: 3.5%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 34%;
+  max-width: 320px;
+}
+
+.enl-marketing-brand {
+  margin-bottom: 10px;
+}
+
+.enl-marketing-headline {
+  margin-bottom: 12px;
+}
+
+.enl-marketing-features {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Center Clinical Showcase */
+.enl-showcase-wrapper {
+  position: absolute;
+  left: 39%;
+  top: 6.5%;
+  width: 60%;
+  height: 82%;
+  z-index: 4;
+}
+
+.enl-researcher-frame {
+  position: absolute;
+  right: 2%;
+  top: 0;
+  width: 68%;
+  height: 88%;
+  border-radius: 36px 36px 0 0;
+  overflow: hidden;
+  box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.08);
+}
+
+.enl-researcher-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+}
+
+/* Flow Connector Arc & Nodes */
+.enl-flow-connector {
+  position: absolute;
+  left: 6%;
+  top: 8%;
+  width: 36%;
+  height: 68%;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* Floating Cards Positioning */
+.enl-float-screening {
+  position: absolute;
+  left: 17%;
+  top: 1%;
+  z-index: 10;
+  width: 180px;
+}
+
+.enl-float-appointments {
+  position: absolute;
+  left: 3%;
+  top: 42%;
+  z-index: 10;
+  width: 170px;
+}
+
+.enl-float-engage {
+  position: absolute;
+  left: 11%;
+  top: 72%;
+  z-index: 10;
+  width: 175px;
+}
+
+/* Bottom Ocean Wave with Statistics */
+.enl-wave-container {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 18%;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.enl-wave-svg {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.enl-wave-stats-wrapper {
+  position: absolute;
+  left: 5.5%;
+  bottom: 18%;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* ========================================================================== */
+/* RIGHT LOGIN CARD (INTERACTIVE)                                            */
+/* ========================================================================== */
 .enl-card-wrapper {
   position: absolute;
   left: 62.3%;
   top: 10.07%;
   width: 35.55%;
   height: 84.72%;
-  z-index: 10;
+  z-index: 20;
 }
 
 .enl-login-card {
@@ -161,6 +313,7 @@ const AUTH_STYLES = `
   justify-content: space-between;
   box-sizing: border-box;
   text-align: center;
+  box-shadow: 0 20px 48px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.75);
 }
 
 .enl-card-title {
@@ -191,7 +344,7 @@ const AUTH_STYLES = `
   text-align: left;
 }
 
-/* Form Styles */
+/* Form Fields */
 .enl-card-form {
   display: flex;
   flex-direction: column;
@@ -264,93 +417,94 @@ const AUTH_STYLES = `
 /* Options Row */
 .enl-options-row {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin: 3px 0 2px;
+  align-items: center;
+  margin: 3px 0 4px;
+  font-size: 11px;
 }
 
 .enl-remember-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 11.5px;
+  gap: 5px;
   color: #475569;
+  cursor: pointer;
   user-select: none;
 }
-.enl-remember-label input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1.5px solid #cbd5e1;
+.enl-remember-label input {
   accent-color: #f59e0b;
   cursor: pointer;
 }
 
 .enl-forgot-link {
-  font-size: 11.5px;
   color: #0284c7;
   text-decoration: none;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 0.15s;
+  font-weight: 600;
+  transition: color 0.15s ease;
 }
 .enl-forgot-link:hover {
-  color: #0369a1;
   text-decoration: underline;
+  color: #0369a1;
 }
 
-/* Login Submit Button */
+/* Primary CTA Button */
 .enl-login-btn {
   width: 100%;
   height: 38px;
-  background: linear-gradient(180deg, #ffc000 0%, #fab005 100%);
-  border: none;
-  border-radius: 7px;
-  font-size: 13.5px;
-  font-weight: 700;
+  background-color: #f59e0b;
   color: #0f172a;
-  display: inline-flex;
+  border: none;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   cursor: pointer;
-  margin-top: 3px;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.28);
   transition: all 0.15s ease;
-  box-shadow: 0 1px 4px rgba(250, 176, 5, 0.25);
 }
-.enl-login-btn:hover:not(:disabled) {
-  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+.enl-login-btn:hover {
+  background-color: #d97706;
   color: #ffffff;
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.35);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.35);
+}
+.enl-login-btn:active {
+  transform: translateY(0);
 }
 .enl-login-btn:disabled {
-  opacity: 0.7;
+  opacity: 0.65;
   cursor: not-allowed;
+  transform: none;
 }
 
-/* Divider */
+/* Card Divider */
 .enl-card-divider {
-  display: flex;
-  align-items: center;
-  margin: 5px 0;
+  position: relative;
   text-align: center;
+  margin: 4px 0;
 }
-.enl-card-divider::before,
-.enl-card-divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #e2e8f0;
+.enl-card-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: #e2e8f0;
 }
 .enl-card-divider span {
-  padding: 0 10px;
-  font-size: 11px;
+  position: relative;
+  background-color: #ffffff;
+  padding: 0 8px;
+  font-size: 10.5px;
   color: #94a3b8;
   font-weight: 500;
 }
 
-/* SSO Grid */
+/* SSO Buttons */
 .enl-sso-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -410,13 +564,28 @@ const AUTH_STYLES = `
   margin-top: 3px;
 }
 
-/* Mobile Responsive */
-@media (max-width: 900px) {
+/* ========================================================================== */
+/* RESPONSIVE DESIGN (1920, 1440, 1024, 768, 480, 375)                       */
+/* ========================================================================== */
+@media (max-width: 1200px) {
+  .enl-marketing-content {
+    left: 5%;
+    width: 38%;
+  }
+  .enl-showcase-wrapper {
+    left: 42%;
+  }
+  .enl-wave-stats-wrapper {
+    left: 5%;
+  }
+}
+
+@media (max-width: 1023px) {
   .enl-auth-page {
     height: auto;
     min-height: 100vh;
     overflow-y: auto;
-    padding: 24px 16px;
+    padding: 32px 20px;
     background: linear-gradient(145deg, #eef6fd 0%, #f8fbfd 100%);
     align-items: center;
     justify-content: center;
@@ -424,47 +593,69 @@ const AUTH_STYLES = `
   .enl-canvas-wrapper {
     width: 100%;
     height: auto;
-    max-width: 440px;
+    max-width: 520px;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
   }
   .enl-canvas {
     width: 100%;
     height: auto;
     background: none;
-    padding: 0;
+    overflow: visible;
+  }
+  .enl-marketing-panel {
+    position: relative;
+    width: 100%;
+    height: auto;
+    margin-bottom: 24px;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
+    text-align: center;
+  }
+  .enl-showcase-wrapper,
+  .enl-wave-container,
+  .enl-ambient-glow-yellow,
+  .enl-ambient-glow-blue,
+  .enl-dot-grid-top,
+  .enl-dot-grid-bottom {
+    display: none;
+  }
+  .enl-marketing-content {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100%;
+    max-width: 440px;
+    align-items: center;
+    text-align: center;
   }
   .enl-card-wrapper {
     position: relative;
     left: auto;
     top: auto;
     width: 100%;
-    max-width: 380px;
+    max-width: 440px;
     height: auto;
     margin: 0 auto;
   }
   .enl-login-card {
     height: auto;
-    padding: 24px 18px 20px;
+    padding: 28px 24px 22px;
     box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.8);
-  }
-  .enl-sso-btn {
-    font-size: 10.5px;
-    gap: 5px;
-    padding: 0 4px;
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 480px) {
   .enl-auth-page {
     padding: 16px 12px;
   }
+  .enl-card-wrapper {
+    max-width: 390px;
+  }
   .enl-login-card {
-    padding: 20px 14px 16px;
+    padding: 22px 16px 18px;
   }
   .enl-sso-row {
     grid-template-columns: 1fr;
@@ -563,11 +754,18 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
       <style>{AUTH_STYLES}</style>
       <div className="enl-canvas-wrapper">
         <div className="enl-canvas">
-          {/* Overlaid Floating Login Card matching Image 2 */}
+          {/* =============================================================== */}
+          {/* 1. CODE-DRIVEN MARKETING PANEL (LEFT & SHOWCASE)                */}
+          {/* =============================================================== */}
+          <LoginMarketingPanel />
+
+          {/* =============================================================== */}
+          {/* 2. OVERLAID FLOATING LOGIN CARD (INTERACTIVE)                   */}
+          {/* =============================================================== */}
           <div className="enl-card-wrapper">
             <div className="enl-login-card">
               {/* Centered Brand Header */}
-              <EnrollNowCardLogo />
+              <EnrollNowBrand size="card" />
 
               {/* Title & Subtitle */}
               <div>
@@ -577,7 +775,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 </p>
               </div>
 
-              {/* Error Message */}
+              {/* Error Alert */}
               {error && (
                 <div className="enl-error-alert" role="alert">
                   <AlertCircle size={15} />
