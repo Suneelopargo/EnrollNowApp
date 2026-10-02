@@ -1,5 +1,6 @@
 // frontend/microfrontends/survey/src/remoteEntry.tsx - Survey MFE Remote Entry
 import React, { useState } from 'react';
+import './styles/survey.css';
 import { MfeContext } from '../../../shared/contracts';
 import { SurveyDashboardView } from './views/SurveyDashboardView';
 import { SurveyListView } from './views/SurveyListView';
@@ -34,6 +35,23 @@ export const SurveyModule: React.FC<SurveyModuleProps> = ({ context }) => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [editingSurveyId, setEditingSurveyId] = useState<number | undefined>(undefined);
   const [inspectSurveyId, setInspectSurveyId] = useState<number | undefined>(undefined);
+
+  React.useEffect(() => {
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('/surveys/new') || path.includes('/surveys/builder')) {
+      setActiveTab('builder');
+    } else if (path.includes('/surveys/assignments')) {
+      setActiveTab('assignments');
+    } else if (path.includes('/surveys/responses')) {
+      setActiveTab('responses');
+    } else if (path.includes('/surveys/analytics')) {
+      setActiveTab('analytics');
+    } else if (path.includes('/surveys/my-surveys')) {
+      setActiveTab('my-surveys');
+    } else if (path.includes('/surveys/list') || path.includes('/surveys/questionnaires')) {
+      setActiveTab('surveys');
+    }
+  }, []);
 
   const isParticipant =
     context?.user?.roles?.includes('PARTICIPANT') ||

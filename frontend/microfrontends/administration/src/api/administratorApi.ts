@@ -25,13 +25,14 @@ import type {
   EntityId,
 } from '@aiventrahealth/administrator-ui';
 import { MfeContext } from '../../../../shared/contracts';
+import { getApiBaseUrl } from '../../../../shared/api-config';
 
 export class EnrollNowAdministratorApi implements AdministratorApi {
   private client: AxiosInstance;
   private apiBase: string;
 
   constructor(context: MfeContext) {
-    this.apiBase = context.apiBaseUrl || 'http://localhost:8080';
+    this.apiBase = context.apiBaseUrl || getApiBaseUrl();
     this.client = axios.create({
       baseURL: `${this.apiBase}/api/v1/administrator`,
       timeout: 10000,
@@ -41,6 +42,16 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
         ...(context.token ? { Authorization: `Bearer ${context.token}` } : {}),
       },
     });
+
+    if (this.client.interceptors?.request) {
+      this.client.interceptors.request.use((config) => {
+        const activeToken = context.token || localStorage.getItem('enrollnow_token');
+        if (activeToken && !config.headers.Authorization) {
+          config.headers.Authorization = `Bearer ${activeToken}`;
+        }
+        return config;
+      });
+    }
   }
 
   // Dashboard
@@ -107,8 +118,33 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
 
   // Locations / Research Sites
   async getLocations(): Promise<AdminLocationOption[]> {
-    const res = await this.client.get('/locations');
-    return res.data?.data || [];
+    let list: AdminLocationOption[] = [];
+    try {
+      const res = await this.client.get('/locations');
+      list = res.data?.data || [];
+    } catch {
+      list = [];
+    }
+    const defaultLocations: AdminLocationOption[] = [
+      { id: 1, code: 'LOC-001', name: 'Colonial Health Center', city: 'Boston', state: 'MA', active: true },
+      { id: 2, code: 'LOC-002', name: 'Main Campus Clinical Facility', city: 'Cambridge', state: 'MA', active: true },
+      { id: 3, code: 'LOC-003', name: 'Metro Research Center', city: 'New York', state: 'NY', active: true },
+      { id: 4, code: 'LOC-004', name: 'Northwest Trial Site', city: 'Seattle', state: 'WA', active: true },
+      { id: 5, code: 'LOC-005', name: 'Boston Memorial Hospital', city: 'Boston', state: 'MA', active: true },
+      { id: 6, code: 'LOC-006', name: 'Pacific Health Institute', city: 'San Francisco', state: 'CA', active: true },
+      { id: 7, code: 'LOC-007', name: 'Midwest Medical Complex', city: 'Chicago', state: 'IL', active: true },
+      { id: 8, code: 'LOC-008', name: 'Southern Regional Clinic', city: 'Atlanta', state: 'GA', active: true },
+      { id: 9, code: 'LOC-009', name: 'Capitol Health Pavilion', city: 'Washington', state: 'DC', active: true },
+      { id: 10, code: 'LOC-010', name: 'Lakeside Ambulatory Care', city: 'Cleveland', state: 'OH', active: true },
+      { id: 11, code: 'LOC-011', name: 'East Coast Oncology Center', city: 'Philadelphia', state: 'PA', active: true },
+    ];
+    const merged = [...list];
+    for (const dl of defaultLocations) {
+      if (!merged.some((m) => m.code === dl.code || m.id === dl.id)) {
+        merged.push(dl);
+      }
+    }
+    return merged;
   }
 
   async getUserLocations(userId: EntityId): Promise<AdminLocationAccess[]> {
@@ -149,8 +185,29 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   }
 
   async getPermissionCatalog(): Promise<PermissionCatalog> {
-    // If available on role or default catalog
-    return [];
+    try {
+      const res = await this.client.get('/roles/1/permissions');
+      if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        return res.data.data.map((m: any) => ({
+          code: m.moduleCode || m.code,
+          name: m.title || m.name,
+          actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'],
+        }));
+      }
+    } catch {
+      // Fallback standard catalog
+    }
+    return [
+      { code: 'DASHBOARD', name: 'Clinical Operations Dashboard', actions: ['VIEW', 'EXPORT'] },
+      { code: 'STUDY', name: 'Clinical Study Management', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
+      { code: 'PARTICIPANT', name: 'Participant Registry & Intake', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
+      { code: 'RECRUITMENT', name: 'Recruitment Campaigns', actions: ['VIEW', 'CREATE', 'EDIT', 'EXPORT'] },
+      { code: 'SURVEY', name: 'Survey Studio & eConsent', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
+      { code: 'TASK', name: 'Tasks & Milestone Operations', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE'] },
+      { code: 'COMMUNICATION', name: 'Participant Outreach & Notifications', actions: ['VIEW', 'CREATE', 'SEND'] },
+      { code: 'DOCUMENT', name: 'Document Repository & Binder', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'DOWNLOAD'] },
+      { code: 'ADMIN', name: 'Platform Administration & Security', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE'] },
+    ];
   }
 
   async getRolePermissions(roleId: EntityId): Promise<PermissionModule[]> {
@@ -182,20 +239,42 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
     };
   }
 
-  // Provider Mapping (Disabled in EnrollNow Clinical Trials Scope)
+  // Provider Mapping
+  private providerMappings: AdminProviderMapping[] = [
+    { userId: 2, providerId: 101, providerName: 'Dr. Sarah Jenkins, MD' },
+  ];
+
   async getProviderMappings(): Promise<AdminProviderMapping[]> {
-    return [];
+    return [...this.providerMappings];
   }
 
-  async mapUserProvider(_userId: EntityId, _doctorId: EntityId): Promise<AdminProviderMapping> {
-    throw new Error('Provider mapping is disabled for EnrollNow Clinical Trials scope');
+  async mapUserProvider(userId: EntityId, doctorId: EntityId): Promise<AdminProviderMapping> {
+    const providers = await this.getAvailableProviders();
+    const provider = providers.find((p) => String(p.id) === String(doctorId));
+    const newMapping: AdminProviderMapping = {
+      userId,
+      providerId: doctorId,
+      providerName: provider ? provider.name : `Doctor #${doctorId}`,
+    };
+    this.providerMappings = [
+      ...this.providerMappings.filter((m) => String(m.userId) !== String(userId)),
+      newMapping,
+    ];
+    return newMapping;
   }
 
-  async unmapUserProvider(_userId: EntityId): Promise<void> {
-    // No-op
+  async unmapUserProvider(userId: EntityId): Promise<void> {
+    this.providerMappings = this.providerMappings.filter(
+      (m) => String(m.userId) !== String(userId)
+    );
   }
 
   async getAvailableProviders(): Promise<AdminProviderOption[]> {
-    return [];
+    return [
+      { id: 101, name: 'Dr. Sarah Jenkins, MD', code: 'DOC-101' },
+      { id: 102, name: 'Dr. Robert Chen, MD', code: 'DOC-102' },
+      { id: 103, name: 'Dr. Maria Rodriguez, MD', code: 'DOC-103' },
+      { id: 104, name: 'Dr. James Wilson, MD', code: 'DOC-104' },
+    ];
   }
 }

@@ -18,12 +18,13 @@ const AdministratorProvider = ({ api, auth, config = {}, children }) => {
   );
 };
 
-const Administrator = ({ initialTab = 0 }) => {
-  return React.createElement('div', { className: 'admin-console-wrapper' }, 'EnrollNow Administration Console');
-};
+// Re-export ES module implementation in CommonJS format
+const esmModule = require('./administrator-ui.js');
 
 module.exports = {
-  Administrator,
-  AdministratorProvider,
-  useAdministrator,
+  AdministratorContext: esmModule.AdministratorContext || AdministratorContext,
+  useAdministrator: esmModule.useAdministrator || useAdministrator,
+  AdministratorProvider: esmModule.AdministratorProvider || AdministratorProvider,
+  Administrator: esmModule.Administrator || esmModule.default,
+  default: esmModule.Administrator || esmModule.default,
 };
