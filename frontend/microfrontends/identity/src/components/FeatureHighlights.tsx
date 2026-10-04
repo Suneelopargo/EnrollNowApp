@@ -13,14 +13,7 @@ export const FeatureHighlights: React.FC<FeatureHighlightsProps> = ({
   className = '',
 }) => {
   return (
-    <div
-      className={`enl-features-stack ${className}`}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '22px',
-      }}
-    >
+    <div className={`enl-features-stack ${className}`}>
       {features.map((feature) => (
         <FeatureHighlightCard key={feature.id} feature={feature} />
       ))}

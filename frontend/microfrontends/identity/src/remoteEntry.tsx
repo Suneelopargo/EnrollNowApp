@@ -122,51 +122,90 @@ const AUTH_STYLES = `
 /* BRAND LOGO TYPOGRAPHY & SVG SCALING                                        */
 /* ========================================================================== */
 .enl-brand-marketing {
-  gap: 14px;
+  gap: 16px;
 }
 .enl-brand-marketing .enl-brand-svg {
-  width: 54px;
-  height: 48px;
+  width: 66px;
+  height: 58px;
 }
 .enl-brand-marketing .enl-brand-name {
-  font-size: 34px;
+  font-size: 40px;
 }
 .enl-brand-marketing .enl-brand-tagline {
-  font-size: 13.5px;
+  font-size: 15px;
   margin-top: 3px;
 }
 
 .enl-brand-card {
-  gap: 12px;
+  gap: 15px;
   display: inline-flex;
   justify-content: center;
   align-items: center;
 }
 .enl-brand-card .enl-brand-svg {
-  width: 44px;
-  height: 40px;
+  width: 60px;
+  height: 52px;
 }
 .enl-brand-card .enl-brand-name {
-  font-size: 26px;
+  font-size: 36px;
 }
 .enl-brand-card .enl-brand-tagline {
-  font-size: 11px;
+  font-size: 13.5px;
   margin-top: 2px;
 }
 
 .enl-brand-normal {
-  gap: 10px;
+  gap: 12px;
 }
 .enl-brand-normal .enl-brand-svg {
-  width: 44px;
-  height: 40px;
+  width: 48px;
+  height: 44px;
 }
 .enl-brand-normal .enl-brand-name {
-  font-size: 28px;
+  font-size: 30px;
 }
 .enl-brand-normal .enl-brand-tagline {
-  font-size: 11.5px;
+  font-size: 12px;
   margin-top: 2px;
+}
+
+/* ========================================================================== */
+/* TOP-RIGHT LANGUAGE SELECTOR PILL                                           */
+/* ========================================================================== */
+.enl-lang-selector {
+  position: absolute;
+  top: 24px;
+  right: 36px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.enl-lang-selector:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+.enl-lang-globe {
+  color: #0284c7;
+  display: flex;
+  align-items: center;
+}
+.enl-lang-chevron {
+  color: #64748b;
+  display: flex;
+  align-items: center;
 }
 
 /* ========================================================================== */
@@ -220,9 +259,9 @@ const AUTH_STYLES = `
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(360px, 24%) minmax(680px, 43%) minmax(460px, 33%);
+  grid-template-columns: minmax(360px, 24%) minmax(640px, 40%) minmax(540px, 36%);
   align-items: center;
-  padding: 0 2.5% 0 4.5%;
+  padding: 0 2% 0 4%;
   z-index: 10;
   box-sizing: border-box;
 }
@@ -247,7 +286,8 @@ const AUTH_STYLES = `
   margin-bottom: clamp(14px, 2.2vh, 24px);
 }
 
-.enl-marketing-features {
+.enl-marketing-features,
+.enl-features-stack {
   display: flex;
   flex-direction: column;
   gap: clamp(10px, 1.6vh, 16px);
@@ -265,14 +305,14 @@ const AUTH_STYLES = `
 
 .enl-showcase-container {
   position: relative;
-  width: 720px;
-  height: 750px;
+  width: 700px;
+  height: 740px;
   max-height: 86vh;
 }
 
 .enl-ambient-blob-cyan {
   position: absolute;
-  left: 230px;
+  left: 210px;
   top: -30px;
   width: 300px;
   height: 300px;
@@ -297,11 +337,11 @@ const AUTH_STYLES = `
 .enl-researcher-frame {
   position: absolute;
   right: 0;
-  bottom: 0;
-  width: 390px;
-  height: 680px;
+  bottom: 30px;
+  width: 380px;
+  height: 600px;
   max-height: 76vh;
-  border-radius: 40px 40px 0 0;
+  border-radius: 40px;
   overflow: hidden;
   box-shadow: 0 20px 48px -12px rgba(15, 23, 42, 0.12);
   z-index: 2;
@@ -312,7 +352,7 @@ const AUTH_STYLES = `
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 25%;
   display: block;
 }
 
@@ -330,15 +370,15 @@ const AUTH_STYLES = `
 /* Floating Cards Surrounding Researcher */
 .enl-float-screening {
   position: absolute;
-  left: 110px;
-  top: 25px;
+  left: 75px;
+  top: 55px;
   z-index: 10;
-  width: 280px;
+  width: 275px;
 }
 
 .enl-float-appointments {
   position: absolute;
-  left: 45px;
+  left: 125px;
   top: 310px;
   z-index: 10;
   width: 230px;
@@ -346,29 +386,30 @@ const AUTH_STYLES = `
 
 .enl-float-engage {
   position: absolute;
-  left: 110px;
-  top: 515px;
+  left: 145px;
+  top: 460px;
   z-index: 10;
-  width: 260px;
+  width: 245px;
 }
 
-/* 3. Login Region (Right Column) */
+/* 3. Login Region (Right Column: 34-36% Width) */
 .enl-login-region {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
+  width: 100%;
   z-index: 10;
-  padding-left: 20px;
+  padding: 0 10px;
 }
 
 .enl-login-card {
   width: 100%;
-  max-width: 530px;
-  height: clamp(620px, 86vh, 850px);
+  max-width: 630px;
+  height: clamp(620px, 82vh, 800px);
   background-color: #ffffff;
-  border-radius: 28px;
-  padding: clamp(22px, 3.2vh, 34px) clamp(26px, 2.6vw, 40px) clamp(16px, 2.2vh, 24px);
+  border-radius: 30px;
+  padding: clamp(24px, 3.2vh, 36px) clamp(28px, 2.6vw, 44px) clamp(18px, 2.2vh, 26px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -377,13 +418,20 @@ const AUTH_STYLES = `
   box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.7);
 }
 
+.enl-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
 /* Bottom Ocean Wave with Statistics */
 .enl-wave-container {
   position: absolute;
   left: 0;
   bottom: 0;
   width: 100%;
-  height: clamp(120px, 16vh, 165px);
+  height: clamp(130px, 16.5vh, 175px);
   z-index: 6;
   pointer-events: none;
 }
@@ -399,24 +447,24 @@ const AUTH_STYLES = `
 
 .enl-wave-stats-wrapper {
   position: absolute;
-  left: 5%;
-  bottom: clamp(16px, 2.5vh, 30px);
+  left: 4.5%;
+  bottom: clamp(18px, 2.6vh, 32px);
   z-index: 10;
   pointer-events: auto;
 }
 
 .enl-card-title {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.015em;
-  margin: 8px 0 2px 0;
+  margin: 0 0 4px 0;
 }
 
 .enl-card-subtitle {
-  font-size: 13.5px;
+  font-size: 14px;
   color: #64748b;
-  margin: 0 0 12px 0;
+  margin: 0;
 }
 
 .enl-error-alert {
@@ -658,39 +706,79 @@ const AUTH_STYLES = `
 }
 
 /* ========================================================================== */
-/* RESPONSIVE DESIGN BREAKPOINTS                                              */
+/* RESPONSIVE DESIGN BREAKPOINTS (NO SCALE HACKS)                             */
 /* ========================================================================== */
 
-@media (max-width: 1600px) {
+@media (max-width: 1680px) {
   .enl-three-region-layout {
-    grid-template-columns: minmax(320px, 25%) minmax(480px, 42%) minmax(360px, 33%);
-    padding: 0 2.5% 0 3.5%;
+    grid-template-columns: minmax(340px, 24%) minmax(580px, 41%) minmax(480px, 35%);
+    padding: 0 2% 0 3.5%;
   }
   .enl-showcase-container {
-    width: 560px;
-    height: 660px;
-    transform: scale(0.92);
-    transform-origin: center center;
+    width: 640px;
+    height: 700px;
+  }
+  .enl-researcher-frame {
+    width: 350px;
+    height: 560px;
+    bottom: 25px;
+  }
+  .enl-float-screening {
+    left: 60px;
+    top: 50px;
+    width: 260px;
+  }
+  .enl-float-appointments {
+    left: 100px;
+    top: 290px;
+    width: 220px;
+  }
+  .enl-float-engage {
+    left: 120px;
+    top: 430px;
+    width: 235px;
   }
 }
 
-@media (max-width: 1366px) {
+@media (max-width: 1440px) {
   .enl-three-region-layout {
-    grid-template-columns: minmax(310px, 27%) minmax(440px, 38%) minmax(350px, 35%);
-    padding: 0 2% 0 3%;
+    grid-template-columns: minmax(320px, 24%) minmax(500px, 39%) minmax(460px, 37%);
+    padding: 0 1.5% 0 3%;
+  }
+  .enl-marketing-region {
+    max-width: 330px;
   }
   .enl-showcase-container {
     width: 520px;
-    height: 620px;
-    transform: scale(0.82);
-    transform-origin: center center;
+    height: 630px;
   }
-  .enl-marketing-region {
-    max-width: 340px;
+  .enl-researcher-frame {
+    width: 300px;
+    height: 500px;
+    bottom: 20px;
+  }
+  .enl-float-screening {
+    left: 30px;
+    top: 40px;
+    width: 235px;
+  }
+  .enl-float-appointments {
+    left: 70px;
+    top: 260px;
+    width: 200px;
+  }
+  .enl-float-engage {
+    left: 90px;
+    top: 395px;
+    width: 220px;
+  }
+  .enl-login-card {
+    padding: 22px 26px 18px;
+    height: clamp(580px, 80vh, 740px);
   }
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1200px) {
   .enl-three-region-layout {
     grid-template-columns: 1fr 1fr;
     gap: 24px;
@@ -708,7 +796,7 @@ const AUTH_STYLES = `
     padding-left: 0;
   }
   .enl-login-card {
-    max-width: 460px;
+    max-width: 500px;
   }
   .enl-wave-stats-wrapper {
     left: 3%;
@@ -721,22 +809,62 @@ const AUTH_STYLES = `
   }
 }
 
+@media (max-height: 800px) and (min-width: 901px) {
+  .enl-marketing-region {
+    padding-top: 16px;
+    padding-bottom: 70px;
+  }
+  .enl-marketing-brand {
+    margin-bottom: 8px;
+  }
+  .enl-marketing-headline {
+    margin-bottom: 8px;
+  }
+  .enl-features-stack {
+    gap: 8px;
+  }
+  .enl-feature-icon-badge {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .enl-feature-title {
+    font-size: 15px !important;
+  }
+  .enl-feature-desc {
+    font-size: 12px !important;
+  }
+  .enl-wave-background {
+    height: 110px;
+  }
+  .enl-wave-stats-wrapper {
+    bottom: 14px;
+  }
+}
+
 @media (max-width: 900px) {
+  .enl-lang-selector {
+    top: 16px;
+    right: 20px;
+    padding: 5px 12px;
+    font-size: 12px;
+  }
   .enl-auth-page {
     height: auto;
     min-height: 100vh;
     overflow-y: auto;
-    padding: 32px 16px;
+    padding: 16px 16px 36px;
     background: linear-gradient(145deg, #eef6fd 0%, #f8fbfd 100%);
     align-items: flex-start;
     justify-content: center;
   }
   .enl-canvas-wrapper {
     height: auto;
-    max-width: 520px;
+    width: 100%;
+    max-width: 100%;
   }
   .enl-canvas {
     height: auto;
+    width: 100%;
     background: none;
     overflow: visible;
   }
@@ -745,6 +873,8 @@ const AUTH_STYLES = `
     flex-direction: column;
     padding: 0;
     gap: 32px;
+    max-width: 520px;
+    margin: 0 auto;
   }
   .enl-showcase-region,
   .enl-wave-container,
@@ -756,7 +886,7 @@ const AUTH_STYLES = `
   }
   .enl-marketing-region {
     height: auto;
-    padding-top: 0;
+    padding-top: 48px;
     padding-bottom: 0;
     max-width: 100%;
     align-items: center;
@@ -919,6 +1049,25 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
       <style>{AUTH_STYLES}</style>
       <div className="enl-canvas-wrapper">
         <div className="enl-canvas">
+          {/* =============================================================== */}
+          {/* 1. TOP-RIGHT CODE-DRIVEN LANGUAGE SELECTOR PILL                 */}
+          {/* =============================================================== */}
+          <div
+            className="enl-lang-selector"
+            role="button"
+            tabIndex={0}
+            aria-label="Select Language"
+            onClick={() => alert('Language selection: English (US)')}
+          >
+            <span className="enl-lang-globe">
+              <Globe size={14} />
+            </span>
+            <span>English</span>
+            <span className="enl-lang-chevron">
+              <ChevronDown size={14} />
+            </span>
+          </div>
+
           {/* Ambient Glowing Background Elements */}
           <div className="enl-ambient-glow-yellow" />
           <div className="enl-ambient-glow-blue" />
@@ -974,16 +1123,16 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
             {/* Region 3: Login Card */}
             <section className="enl-login-region">
               <div className="enl-login-card">
-              {/* Centered Brand Header */}
-              <EnrollNowBrand size="card" />
-
-              {/* Title & Subtitle */}
-              <div>
-                <h2 className="enl-card-title">Welcome Back</h2>
-                <p className="enl-card-subtitle">
-                  Sign in to your EnrollNow workspace
-                </p>
-              </div>
+                {/* Header Group: Brand Logo + Welcome Back */}
+                <div className="enl-card-header">
+                  <EnrollNowBrand size="card" />
+                  <div>
+                    <h2 className="enl-card-title">Welcome Back</h2>
+                    <p className="enl-card-subtitle">
+                      Sign in to your EnrollNow workspace
+                    </p>
+                  </div>
+                </div>
 
               {/* Error Alert */}
               {error && (

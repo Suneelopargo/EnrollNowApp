@@ -69,26 +69,26 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
           {/* Dotted Flow Connector with Circular Nodes */}
           <svg
             className="enl-flow-connector"
-            viewBox="0 0 720 750"
+            viewBox="0 0 700 760"
             fill="none"
             aria-hidden="true"
           >
             {/* Dashed Connecting Arc */}
             <path
-              d="M 125 195 C 80 230, 50 270, 50 330 C 50 400, 80 460, 125 515"
+              d="M 140 220 C 105 250, 92 280, 95 330 C 98 375, 110 415, 145 460"
               stroke="#38bdf8"
               strokeWidth="2.5"
               strokeDasharray="5 5"
               fill="none"
             />
 
-            {/* Node 1: Green Circle Ring (Between Card 1 and Card 2) */}
-            <circle cx="62" cy="280" r="8.5" fill="#ffffff" stroke="#10b981" strokeWidth="2.8" />
-            <circle cx="62" cy="280" r="3.5" fill="#10b981" />
+            {/* Node 1: Green Circle Ring (Above-left of Card 2) */}
+            <circle cx="95" cy="285" r="8.5" fill="#ffffff" stroke="#10b981" strokeWidth="2.8" />
+            <circle cx="95" cy="285" r="3.5" fill="#10b981" />
 
-            {/* Node 2: Blue Circle Ring (Between Card 2 and Card 3) */}
-            <circle cx="75" cy="460" r="8.5" fill="#ffffff" stroke="#0284c7" strokeWidth="2.8" />
-            <circle cx="75" cy="460" r="3.5" fill="#0284c7" />
+            {/* Node 2: Blue Circle Ring (Below Card 2, Above-left of Card 3) */}
+            <circle cx="112" cy="415" r="8.5" fill="#ffffff" stroke="#0284c7" strokeWidth="2.8" />
+            <circle cx="112" cy="415" r="3.5" fill="#0284c7" />
           </svg>
 
           {/* Floating Card 1: Participant Screening */}

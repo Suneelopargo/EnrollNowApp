@@ -81,7 +81,7 @@ export const FeatureHighlightCard: React.FC<FeatureHighlightCardProps> = ({
             color: '#64748B',
             lineHeight: 1.4,
             marginTop: '3px',
-            maxWidth: '280px',
+            maxWidth: '220px',
           }}
         >
           {feature.description}
