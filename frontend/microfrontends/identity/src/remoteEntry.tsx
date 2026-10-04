@@ -169,44 +169,6 @@ const AUTH_STYLES = `
   margin-top: 2px;
 }
 
-/* ========================================================================== */
-/* TOP-RIGHT LANGUAGE SELECTOR PILL                                           */
-/* ========================================================================== */
-.enl-lang-selector {
-  position: absolute;
-  top: 24px;
-  right: 36px;
-  z-index: 30;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.15s ease;
-}
-.enl-lang-selector:hover {
-  background-color: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
-}
-.enl-lang-globe {
-  color: #0284c7;
-  display: flex;
-  align-items: center;
-}
-.enl-lang-chevron {
-  color: #64748b;
-  display: flex;
-  align-items: center;
-}
 
 /* ========================================================================== */
 /* AMBIENT GLOWS & DOT GRIDS                                                  */
@@ -259,9 +221,9 @@ const AUTH_STYLES = `
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(360px, 24%) minmax(640px, 40%) minmax(540px, 36%);
+  grid-template-columns: minmax(350px, 23.5%) 1fr minmax(600px, 36%);
   align-items: center;
-  padding: 0 2% 0 4%;
+  padding: 0 24px 0 3.5%;
   z-index: 10;
   box-sizing: border-box;
 }
@@ -301,6 +263,7 @@ const AUTH_STYLES = `
   height: 100%;
   position: relative;
   z-index: 8;
+  padding: 0;
 }
 
 .enl-showcase-container {
@@ -336,14 +299,14 @@ const AUTH_STYLES = `
 
 .enl-researcher-frame {
   position: absolute;
-  right: 0;
+  right: -8px;
   bottom: 30px;
   width: 380px;
   height: 600px;
   max-height: 76vh;
-  border-radius: 40px;
+  border-radius: 40px 0 0 40px;
   overflow: hidden;
-  box-shadow: 0 20px 48px -12px rgba(15, 23, 42, 0.12);
+  box-shadow: -10px 20px 48px -12px rgba(15, 23, 42, 0.12);
   z-index: 2;
   background-color: #ffffff;
 }
@@ -364,30 +327,30 @@ const AUTH_STYLES = `
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 7;
+  z-index: 8;
 }
 
 /* Floating Cards Surrounding Researcher */
 .enl-float-screening {
   position: absolute;
-  left: 75px;
-  top: 55px;
+  left: 80px;
+  top: 35px;
   z-index: 10;
-  width: 275px;
+  width: 280px;
 }
 
 .enl-float-appointments {
   position: absolute;
-  left: 125px;
-  top: 310px;
+  left: 45px;
+  top: 285px;
   z-index: 10;
   width: 230px;
 }
 
 .enl-float-engage {
   position: absolute;
-  left: 145px;
-  top: 460px;
+  left: 80px;
+  top: 450px;
   z-index: 10;
   width: 245px;
 }
@@ -396,16 +359,16 @@ const AUTH_STYLES = `
 .enl-login-region {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   height: 100%;
   width: 100%;
   z-index: 10;
-  padding: 0 10px;
+  padding: 0;
 }
 
 .enl-login-card {
   width: 100%;
-  max-width: 630px;
+  max-width: 690px;
   height: clamp(620px, 82vh, 800px);
   background-color: #ffffff;
   border-radius: 30px;
@@ -711,39 +674,43 @@ const AUTH_STYLES = `
 
 @media (max-width: 1680px) {
   .enl-three-region-layout {
-    grid-template-columns: minmax(340px, 24%) minmax(580px, 41%) minmax(480px, 35%);
-    padding: 0 2% 0 3.5%;
+    grid-template-columns: minmax(340px, 23.5%) 1fr minmax(520px, 35.5%);
+    padding: 0 20px 0 3%;
   }
   .enl-showcase-container {
     width: 640px;
     height: 700px;
   }
   .enl-researcher-frame {
+    right: -6px;
     width: 350px;
     height: 560px;
     bottom: 25px;
   }
   .enl-float-screening {
-    left: 60px;
-    top: 50px;
+    left: 70px;
+    top: 35px;
     width: 260px;
   }
   .enl-float-appointments {
-    left: 100px;
-    top: 290px;
+    left: 40px;
+    top: 275px;
     width: 220px;
   }
   .enl-float-engage {
-    left: 120px;
-    top: 430px;
+    left: 70px;
+    top: 435px;
     width: 235px;
+  }
+  .enl-login-card {
+    max-width: 620px;
   }
 }
 
 @media (max-width: 1440px) {
   .enl-three-region-layout {
-    grid-template-columns: minmax(320px, 24%) minmax(500px, 39%) minmax(460px, 37%);
-    padding: 0 1.5% 0 3%;
+    grid-template-columns: minmax(320px, 23.5%) 1fr minmax(460px, 36.5%);
+    padding: 0 16px 0 2.5%;
   }
   .enl-marketing-region {
     max-width: 330px;
@@ -753,28 +720,30 @@ const AUTH_STYLES = `
     height: 630px;
   }
   .enl-researcher-frame {
+    right: -6px;
     width: 300px;
     height: 500px;
     bottom: 20px;
   }
   .enl-float-screening {
-    left: 30px;
-    top: 40px;
+    left: 50px;
+    top: 30px;
     width: 235px;
   }
   .enl-float-appointments {
-    left: 70px;
-    top: 260px;
+    left: 25px;
+    top: 245px;
     width: 200px;
   }
   .enl-float-engage {
-    left: 90px;
+    left: 55px;
     top: 395px;
-    width: 220px;
+    width: 215px;
   }
   .enl-login-card {
-    padding: 22px 26px 18px;
+    padding: 22px 24px 18px;
     height: clamp(580px, 80vh, 740px);
+    max-width: 560px;
   }
 }
 
@@ -842,12 +811,6 @@ const AUTH_STYLES = `
 }
 
 @media (max-width: 900px) {
-  .enl-lang-selector {
-    top: 16px;
-    right: 20px;
-    padding: 5px 12px;
-    font-size: 12px;
-  }
   .enl-auth-page {
     height: auto;
     min-height: 100vh;
@@ -1049,25 +1012,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
       <style>{AUTH_STYLES}</style>
       <div className="enl-canvas-wrapper">
         <div className="enl-canvas">
-          {/* =============================================================== */}
-          {/* 1. TOP-RIGHT CODE-DRIVEN LANGUAGE SELECTOR PILL                 */}
-          {/* =============================================================== */}
-          <div
-            className="enl-lang-selector"
-            role="button"
-            tabIndex={0}
-            aria-label="Select Language"
-            onClick={() => alert('Language selection: English (US)')}
-          >
-            <span className="enl-lang-globe">
-              <Globe size={14} />
-            </span>
-            <span>English</span>
-            <span className="enl-lang-chevron">
-              <ChevronDown size={14} />
-            </span>
-          </div>
-
           {/* Ambient Glowing Background Elements */}
           <div className="enl-ambient-glow-yellow" />
           <div className="enl-ambient-glow-blue" />

@@ -73,22 +73,31 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
             fill="none"
             aria-hidden="true"
           >
-            {/* Dashed Connecting Arc */}
+            {/* Dashed Connecting Path - Upper Segment: Card 1 (Screening) -> Node 1 -> Card 2 (Appointments) */}
             <path
-              d="M 140 220 C 105 250, 92 280, 95 330 C 98 375, 110 415, 145 460"
-              stroke="#38bdf8"
-              strokeWidth="2.5"
-              strokeDasharray="5 5"
+              d="M 80 182 C 48 196, 20 212, 22 230 C 24 250, 36 270, 45 285"
+              stroke="#0284c7"
+              strokeWidth="2.8"
+              strokeDasharray="6 5"
+              strokeLinecap="round"
               fill="none"
             />
 
-            {/* Node 1: Green Circle Ring (Above-left of Card 2) */}
-            <circle cx="95" cy="285" r="8.5" fill="#ffffff" stroke="#10b981" strokeWidth="2.8" />
-            <circle cx="95" cy="285" r="3.5" fill="#10b981" />
+            {/* Node 1: Green Ring (Upper Node between Card 1 and Card 2) */}
+            <circle cx="22" cy="230" r="9" fill="#ffffff" stroke="#10b981" strokeWidth="3.2" />
 
-            {/* Node 2: Blue Circle Ring (Below Card 2, Above-left of Card 3) */}
-            <circle cx="112" cy="415" r="8.5" fill="#ffffff" stroke="#0284c7" strokeWidth="2.8" />
-            <circle cx="112" cy="415" r="3.5" fill="#0284c7" />
+            {/* Dashed Connecting Path - Lower Segment: Card 2 (Appointments) -> Node 2 -> Card 3 (Engage) */}
+            <path
+              d="M 45 379 C 38 395, 30 405, 32 418 C 35 432, 55 442, 80 450"
+              stroke="#0284c7"
+              strokeWidth="2.8"
+              strokeDasharray="6 5"
+              strokeLinecap="round"
+              fill="none"
+            />
+
+            {/* Node 2: Blue Ring (Lower Node between Card 2 and Card 3) */}
+            <circle cx="32" cy="418" r="9" fill="#ffffff" stroke="#0284c7" strokeWidth="3.2" />
           </svg>
 
           {/* Floating Card 1: Participant Screening */}
