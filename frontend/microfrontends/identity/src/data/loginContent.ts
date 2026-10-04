@@ -124,12 +124,14 @@ export const loginContent: LoginContentConfig = {
       title: 'Schedule Appointments',
       iconName: 'calendar',
       type: 'skeleton',
+      checkItems: ['Manage appointments and enrollment'],
     },
     {
       id: 'engage',
       title: 'Engage Participants',
       iconName: 'chart',
       type: 'skeleton',
+      checkItems: ['Track progress and improve outcomes'],
     },
   ],
 };

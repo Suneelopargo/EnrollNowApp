@@ -2,7 +2,7 @@
 import React from 'react';
 
 export interface EnrollNowBrandProps {
-  size?: 'normal' | 'card';
+  size?: 'normal' | 'card' | 'marketing';
   className?: string;
 }
 
@@ -10,28 +10,24 @@ export const EnrollNowBrand: React.FC<EnrollNowBrandProps> = ({
   size = 'normal',
   className = '',
 }) => {
+  const isMarketing = size === 'marketing';
   const isCard = size === 'card';
-  const iconWidth = isCard ? 36 : 42;
-  const iconHeight = isCard ? 32 : 38;
-  const fontSize = isCard ? '21px' : '26px';
-  const subFontSize = isCard ? '9.5px' : '11px';
 
   return (
     <div
-      className={`enl-brand-container ${className}`}
+      className={`enl-brand-container ${isMarketing ? 'enl-brand-marketing' : isCard ? 'enl-brand-card' : 'enl-brand-normal'} ${className}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '10px',
         userSelect: 'none',
       }}
     >
       <svg
-        width={iconWidth}
-        height={iconHeight}
+        className="enl-brand-svg"
         viewBox="0 0 44 40"
         fill="none"
         aria-hidden="true"
+        style={{ flexShrink: 0 }}
       >
         {/* Left Figure (Golden Yellow) */}
         <circle cx="15" cy="11" r="7" fill="#F59E0B" />
@@ -46,10 +42,10 @@ export const EnrollNowBrand: React.FC<EnrollNowBrandProps> = ({
           fill="#0F172A"
         />
       </svg>
-      <div style={{ textAlign: 'left' }}>
+      <div className="enl-brand-text-col" style={{ textAlign: 'left' }}>
         <div
+          className="enl-brand-name"
           style={{
-            fontSize,
             fontWeight: 800,
             lineHeight: 1.1,
             letterSpacing: '-0.025em',
@@ -59,12 +55,11 @@ export const EnrollNowBrand: React.FC<EnrollNowBrandProps> = ({
           <span style={{ color: '#F59E0B' }}>Now</span>
         </div>
         <div
+          className="enl-brand-tagline"
           style={{
-            fontSize: subFontSize,
             fontWeight: 600,
             color: '#64748B',
             letterSpacing: '0.02em',
-            marginTop: '2px',
           }}
         >
           Screen. Schedule. Engage.

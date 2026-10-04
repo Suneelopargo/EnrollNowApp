@@ -18,7 +18,7 @@ export const FeatureHighlights: React.FC<FeatureHighlightsProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '6px',
+        gap: '22px',
       }}
     >
       {features.map((feature) => (

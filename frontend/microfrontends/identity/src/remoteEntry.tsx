@@ -10,6 +10,8 @@ import {
   EyeOff,
   ArrowRight,
   AlertCircle,
+  Globe,
+  ChevronDown,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -45,7 +47,7 @@ export interface IdentityModuleProps {
 // ============================================================================
 
 const MicrosoftLogo: React.FC = () => (
-  <svg width="15" height="15" viewBox="0 0 21 21" aria-hidden="true">
+  <svg width="17" height="17" viewBox="0 0 21 21" aria-hidden="true">
     <rect x="1" y="1" width="9" height="9" fill="#f25022" />
     <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
     <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
@@ -54,7 +56,7 @@ const MicrosoftLogo: React.FC = () => (
 );
 
 const GoogleLogo: React.FC = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+  <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
     <path
       fill="#4285F4"
       d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z"
@@ -117,105 +119,193 @@ const AUTH_STYLES = `
 }
 
 /* ========================================================================== */
-/* LEFT MARKETING PANEL (CODE-DRIVEN)                                         */
+/* BRAND LOGO TYPOGRAPHY & SVG SCALING                                        */
 /* ========================================================================== */
-.enl-marketing-panel {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 62.3%;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: auto;
+.enl-brand-marketing {
+  gap: 14px;
+}
+.enl-brand-marketing .enl-brand-svg {
+  width: 54px;
+  height: 48px;
+}
+.enl-brand-marketing .enl-brand-name {
+  font-size: 34px;
+}
+.enl-brand-marketing .enl-brand-tagline {
+  font-size: 13.5px;
+  margin-top: 3px;
 }
 
-/* Ambient Glow Circles */
+.enl-brand-card {
+  gap: 12px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+.enl-brand-card .enl-brand-svg {
+  width: 44px;
+  height: 40px;
+}
+.enl-brand-card .enl-brand-name {
+  font-size: 26px;
+}
+.enl-brand-card .enl-brand-tagline {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.enl-brand-normal {
+  gap: 10px;
+}
+.enl-brand-normal .enl-brand-svg {
+  width: 44px;
+  height: 40px;
+}
+.enl-brand-normal .enl-brand-name {
+  font-size: 28px;
+}
+.enl-brand-normal .enl-brand-tagline {
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+/* ========================================================================== */
+/* AMBIENT GLOWS & DOT GRIDS                                                  */
+/* ========================================================================== */
 .enl-ambient-glow-yellow {
   position: absolute;
-  left: 54%;
-  top: 3%;
-  width: 290px;
-  height: 290px;
+  left: 48%;
+  top: 2%;
+  width: 340px;
+  height: 340px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(254, 240, 186, 0.75) 0%, rgba(254, 240, 186, 0) 70%);
+  background: radial-gradient(circle, rgba(254, 240, 186, 0.7) 0%, rgba(254, 240, 186, 0) 70%);
   pointer-events: none;
   z-index: 1;
 }
 
 .enl-ambient-glow-blue {
   position: absolute;
-  left: 41%;
-  top: 11%;
-  width: 270px;
-  height: 270px;
+  left: 35%;
+  top: 8%;
+  width: 320px;
+  height: 320px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(186, 224, 255, 0.85) 0%, rgba(186, 224, 255, 0) 70%);
+  background: radial-gradient(circle, rgba(186, 224, 255, 0.75) 0%, rgba(186, 224, 255, 0) 70%);
   pointer-events: none;
   z-index: 1;
 }
 
-/* Dot Grid Accents */
 .enl-dot-grid-top {
   position: absolute;
-  left: 63%;
-  top: 4.5%;
+  left: 43%;
+  top: 3.5%;
   pointer-events: none;
   z-index: 2;
 }
 
 .enl-dot-grid-bottom {
   position: absolute;
-  right: 3%;
-  bottom: 6%;
+  left: 58%;
+  bottom: 8%;
   pointer-events: none;
   z-index: 2;
 }
 
-/* Left Marketing Copy (Brand, Headline, Features) */
-.enl-marketing-content {
-  position: absolute;
-  left: 5.5%;
-  top: 3.5%;
-  z-index: 5;
+/* ========================================================================== */
+/* THREE-REGION GRID LAYOUT (MARKETING | SHOWCASE | LOGIN)                     */
+/* ========================================================================== */
+.enl-three-region-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(360px, 24%) minmax(680px, 43%) minmax(460px, 33%);
+  align-items: center;
+  padding: 0 2.5% 0 4.5%;
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+/* 1. Marketing Region (Left Column) */
+.enl-marketing-region {
   display: flex;
   flex-direction: column;
-  width: 34%;
-  max-width: 320px;
+  justify-content: flex-start;
+  height: 100%;
+  padding-top: clamp(24px, 4.2vh, 46px);
+  padding-bottom: clamp(100px, 14vh, 150px);
+  max-width: 380px;
+  z-index: 10;
 }
 
 .enl-marketing-brand {
-  margin-bottom: 10px;
+  margin-bottom: clamp(12px, 2vh, 22px);
 }
 
 .enl-marketing-headline {
-  margin-bottom: 12px;
+  margin-bottom: clamp(14px, 2.2vh, 24px);
 }
 
 .enl-marketing-features {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: clamp(10px, 1.6vh, 16px);
 }
 
-/* Center Clinical Showcase */
-.enl-showcase-wrapper {
+/* 2. Showcase Region (Center Column) */
+.enl-showcase-region {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+  z-index: 8;
+}
+
+.enl-showcase-container {
+  position: relative;
+  width: 720px;
+  height: 750px;
+  max-height: 86vh;
+}
+
+.enl-ambient-blob-cyan {
   position: absolute;
-  left: 39%;
-  top: 6.5%;
-  width: 60%;
-  height: 82%;
-  z-index: 4;
+  left: 230px;
+  top: -30px;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(147, 197, 253, 0.85) 0%, rgba(186, 230, 253, 0.6) 60%, rgba(224, 242, 254, 0) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.enl-ambient-blob-yellow {
+  position: absolute;
+  right: -20px;
+  top: 20px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(254, 240, 138, 0.9) 0%, rgba(254, 249, 195, 0.7) 60%, rgba(254, 252, 232, 0) 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .enl-researcher-frame {
   position: absolute;
-  right: 2%;
-  top: 0;
-  width: 68%;
-  height: 88%;
-  border-radius: 36px 36px 0 0;
+  right: 0;
+  bottom: 0;
+  width: 390px;
+  height: 680px;
+  max-height: 76vh;
+  border-radius: 40px 40px 0 0;
   overflow: hidden;
-  box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20px 48px -12px rgba(15, 23, 42, 0.12);
+  z-index: 2;
+  background-color: #ffffff;
 }
 
 .enl-researcher-img {
@@ -226,40 +316,65 @@ const AUTH_STYLES = `
   display: block;
 }
 
-/* Flow Connector Arc & Nodes */
+/* Dashed Flow Connector SVG */
 .enl-flow-connector {
   position: absolute;
-  left: 6%;
-  top: 8%;
-  width: 36%;
-  height: 68%;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  z-index: 6;
+  z-index: 7;
 }
 
-/* Floating Cards Positioning */
+/* Floating Cards Surrounding Researcher */
 .enl-float-screening {
   position: absolute;
-  left: 17%;
-  top: 1%;
+  left: 110px;
+  top: 25px;
   z-index: 10;
-  width: 180px;
+  width: 280px;
 }
 
 .enl-float-appointments {
   position: absolute;
-  left: 3%;
-  top: 42%;
+  left: 45px;
+  top: 310px;
   z-index: 10;
-  width: 170px;
+  width: 230px;
 }
 
 .enl-float-engage {
   position: absolute;
-  left: 11%;
-  top: 72%;
+  left: 110px;
+  top: 515px;
   z-index: 10;
-  width: 175px;
+  width: 260px;
+}
+
+/* 3. Login Region (Right Column) */
+.enl-login-region {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  z-index: 10;
+  padding-left: 20px;
+}
+
+.enl-login-card {
+  width: 100%;
+  max-width: 530px;
+  height: clamp(620px, 86vh, 850px);
+  background-color: #ffffff;
+  border-radius: 28px;
+  padding: clamp(22px, 3.2vh, 34px) clamp(26px, 2.6vw, 40px) clamp(16px, 2.2vh, 24px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  text-align: center;
+  box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.7);
 }
 
 /* Bottom Ocean Wave with Statistics */
@@ -268,8 +383,8 @@ const AUTH_STYLES = `
   left: 0;
   bottom: 0;
   width: 100%;
-  height: 18%;
-  z-index: 8;
+  height: clamp(120px, 16vh, 165px);
+  z-index: 6;
   pointer-events: none;
 }
 
@@ -284,40 +399,14 @@ const AUTH_STYLES = `
 
 .enl-wave-stats-wrapper {
   position: absolute;
-  left: 5.5%;
-  bottom: 18%;
+  left: 5%;
+  bottom: clamp(16px, 2.5vh, 30px);
   z-index: 10;
   pointer-events: auto;
 }
 
-/* ========================================================================== */
-/* RIGHT LOGIN CARD (INTERACTIVE)                                            */
-/* ========================================================================== */
-.enl-card-wrapper {
-  position: absolute;
-  left: 62.3%;
-  top: 10.07%;
-  width: 35.55%;
-  height: 84.72%;
-  z-index: 20;
-}
-
-.enl-login-card {
-  width: 100%;
-  height: 100%;
-  background-color: #ffffff;
-  border-radius: 24px;
-  padding: 22px 28px 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-sizing: border-box;
-  text-align: center;
-  box-shadow: 0 20px 48px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.75);
-}
-
 .enl-card-title {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.015em;
@@ -325,22 +414,22 @@ const AUTH_STYLES = `
 }
 
 .enl-card-subtitle {
-  font-size: 12px;
+  font-size: 13.5px;
   color: #64748b;
-  margin: 0 0 10px 0;
+  margin: 0 0 12px 0;
 }
 
 .enl-error-alert {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 8px;
+  padding: 8px 12px;
   background-color: #fef2f2;
   border: 1px solid #fecdd3;
   border-radius: 8px;
   color: #b91c1c;
-  font-size: 11px;
-  margin-bottom: 6px;
+  font-size: 12px;
+  margin-bottom: 8px;
   text-align: left;
 }
 
@@ -348,18 +437,18 @@ const AUTH_STYLES = `
 .enl-card-form {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 10px;
   text-align: left;
 }
 
 .enl-field-group {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .enl-field-label {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #1e293b;
 }
@@ -372,18 +461,18 @@ const AUTH_STYLES = `
 
 .enl-field-icon {
   position: absolute;
-  left: 10px;
+  left: 12px;
   color: #64748b;
   pointer-events: none;
 }
 
 .enl-field-input {
   width: 100%;
-  height: 35px;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  padding: 0 32px 0 32px;
-  font-size: 12px;
+  height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 0 38px 0 38px;
+  font-size: 13.5px;
   color: #0f172a;
   background-color: #ffffff;
   outline: none;
@@ -391,16 +480,16 @@ const AUTH_STYLES = `
 }
 .enl-field-input:focus {
   border-color: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
 }
 .enl-field-input::placeholder {
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 .enl-toggle-eye {
   position: absolute;
-  right: 8px;
+  right: 10px;
   background: none;
   border: none;
   color: #64748b;
@@ -419,14 +508,14 @@ const AUTH_STYLES = `
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 3px 0 4px;
-  font-size: 11px;
+  margin: 4px 0 6px;
+  font-size: 12px;
 }
 
 .enl-remember-label {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   color: #475569;
   cursor: pointer;
   user-select: none;
@@ -434,6 +523,8 @@ const AUTH_STYLES = `
 .enl-remember-label input {
   accent-color: #f59e0b;
   cursor: pointer;
+  width: 14px;
+  height: 14px;
 }
 
 .enl-forgot-link {
@@ -450,25 +541,25 @@ const AUTH_STYLES = `
 /* Primary CTA Button */
 .enl-login-btn {
   width: 100%;
-  height: 38px;
+  height: 44px;
   background-color: #f59e0b;
   color: #0f172a;
   border: none;
-  border-radius: 8px;
-  font-size: 12.5px;
+  border-radius: 10px;
+  font-size: 14.5px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.28);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.28);
   transition: all 0.15s ease;
 }
 .enl-login-btn:hover {
   background-color: #d97706;
   color: #ffffff;
-  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.35);
+  box-shadow: 0 6px 18px rgba(217, 119, 6, 0.35);
   transform: translateY(-1px);
 }
 .enl-login-btn:active {
@@ -484,7 +575,7 @@ const AUTH_STYLES = `
 .enl-card-divider {
   position: relative;
   text-align: center;
-  margin: 4px 0;
+  margin: 5px 0;
 }
 .enl-card-divider::before {
   content: "";
@@ -498,43 +589,45 @@ const AUTH_STYLES = `
 .enl-card-divider span {
   position: relative;
   background-color: #ffffff;
-  padding: 0 8px;
-  font-size: 10.5px;
+  padding: 0 10px;
+  font-size: 11.5px;
   color: #94a3b8;
   font-weight: 500;
+  text-transform: uppercase;
 }
 
 /* SSO Buttons */
 .enl-sso-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
 }
 
 .enl-sso-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 35px;
+  gap: 8px;
+  height: 40px;
   background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  font-size: 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 12px;
   font-weight: 600;
   color: #1e293b;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  padding: 0 10px;
 }
 .enl-sso-btn:hover {
   background-color: #f8fafc;
-  border-color: #cbd5e1;
+  border-color: #94a3b8;
 }
 
 /* Card Footer */
 .enl-card-footer {
-  margin-top: 6px;
+  margin-top: 8px;
   text-align: center;
 }
 
@@ -542,8 +635,8 @@ const AUTH_STYLES = `
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
-  font-size: 10.5px;
+  gap: 10px;
+  font-size: 11.5px;
   color: #0284c7;
   font-weight: 500;
 }
@@ -559,62 +652,101 @@ const AUTH_STYLES = `
 }
 
 .enl-copyright {
-  font-size: 10px;
+  font-size: 10.5px;
   color: #94a3b8;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 /* ========================================================================== */
-/* RESPONSIVE DESIGN (1920, 1440, 1024, 768, 480, 375)                       */
+/* RESPONSIVE DESIGN BREAKPOINTS                                              */
 /* ========================================================================== */
-@media (max-width: 1200px) {
-  .enl-marketing-content {
-    left: 5%;
-    width: 38%;
+
+@media (max-width: 1600px) {
+  .enl-three-region-layout {
+    grid-template-columns: minmax(320px, 25%) minmax(480px, 42%) minmax(360px, 33%);
+    padding: 0 2.5% 0 3.5%;
   }
-  .enl-showcase-wrapper {
-    left: 42%;
+  .enl-showcase-container {
+    width: 560px;
+    height: 660px;
+    transform: scale(0.92);
+    transform-origin: center center;
+  }
+}
+
+@media (max-width: 1366px) {
+  .enl-three-region-layout {
+    grid-template-columns: minmax(310px, 27%) minmax(440px, 38%) minmax(350px, 35%);
+    padding: 0 2% 0 3%;
+  }
+  .enl-showcase-container {
+    width: 520px;
+    height: 620px;
+    transform: scale(0.82);
+    transform-origin: center center;
+  }
+  .enl-marketing-region {
+    max-width: 340px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .enl-three-region-layout {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    padding: 0 4%;
+  }
+  .enl-showcase-region {
+    display: none;
+  }
+  .enl-marketing-region {
+    max-width: 460px;
+    padding-bottom: 120px;
+  }
+  .enl-login-region {
+    justify-content: center;
+    padding-left: 0;
+  }
+  .enl-login-card {
+    max-width: 460px;
   }
   .enl-wave-stats-wrapper {
-    left: 5%;
+    left: 3%;
+  }
+  .enl-statistics-row {
+    gap: 16px !important;
+  }
+  .enl-stat-item {
+    gap: 8px !important;
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 900px) {
   .enl-auth-page {
     height: auto;
     min-height: 100vh;
     overflow-y: auto;
-    padding: 32px 20px;
+    padding: 32px 16px;
     background: linear-gradient(145deg, #eef6fd 0%, #f8fbfd 100%);
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
   }
   .enl-canvas-wrapper {
-    width: 100%;
     height: auto;
     max-width: 520px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
   }
   .enl-canvas {
-    width: 100%;
     height: auto;
     background: none;
     overflow: visible;
   }
-  .enl-marketing-panel {
-    position: relative;
-    width: 100%;
-    height: auto;
-    margin-bottom: 24px;
+  .enl-three-region-layout {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
+    padding: 0;
+    gap: 32px;
   }
-  .enl-showcase-wrapper,
+  .enl-showcase-region,
   .enl-wave-container,
   .enl-ambient-glow-yellow,
   .enl-ambient-glow-blue,
@@ -622,27 +754,30 @@ const AUTH_STYLES = `
   .enl-dot-grid-bottom {
     display: none;
   }
-  .enl-marketing-content {
-    position: relative;
-    left: auto;
-    top: auto;
-    width: 100%;
-    max-width: 440px;
+  .enl-marketing-region {
+    height: auto;
+    padding-top: 0;
+    padding-bottom: 0;
+    max-width: 100%;
     align-items: center;
     text-align: center;
   }
-  .enl-card-wrapper {
-    position: relative;
-    left: auto;
-    top: auto;
+  .enl-marketing-headline .enl-accent-bar {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .enl-marketing-features {
+    align-items: flex-start;
     width: 100%;
-    max-width: 440px;
+  }
+  .enl-login-region {
+    width: 100%;
     height: auto;
-    margin: 0 auto;
   }
   .enl-login-card {
     height: auto;
-    padding: 28px 24px 22px;
+    max-width: 100%;
+    padding: 28px 24px 20px;
     box-shadow: 0 16px 40px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.8);
   }
 }
@@ -651,19 +786,43 @@ const AUTH_STYLES = `
   .enl-auth-page {
     padding: 16px 12px;
   }
-  .enl-card-wrapper {
-    max-width: 390px;
+  .enl-marketing-region {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .enl-marketing-headline .enl-accent-bar {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .enl-brand-marketing {
+    gap: 10px;
+    margin-bottom: 14px;
+    align-self: flex-start;
+  }
+  .enl-brand-marketing .enl-brand-svg {
+    width: 38px;
+    height: 34px;
+  }
+  .enl-brand-marketing .enl-brand-name {
+    font-size: 24px;
+  }
+  .enl-brand-marketing .enl-brand-tagline {
+    font-size: 10.5px;
   }
   .enl-login-card {
-    padding: 22px 16px 18px;
+    padding: 20px 16px 16px;
   }
   .enl-sso-row {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: 8px;
   }
   .enl-sso-btn {
-    height: 36px;
-    font-size: 11px;
+    height: 38px;
+    font-size: 12px;
+  }
+  .enl-footer-links {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 `;
@@ -693,13 +852,19 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Exact entered credentials — NO hardcoded test fallback
+    const loginUser = username.trim();
+    const loginPass = password;
+
+    if (!loginUser || !loginPass) {
+      setError('Please enter your email and password.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Default to admin test credentials if submitted empty
-      const loginUser = username.trim() || 'admin';
-      const loginPass = password || 'EnrollNowAdmin2026!';
-
       const apiBase = context.apiBaseUrl || 'http://localhost:8081';
       const res = await axios.post(`${apiBase}/api/v1/auth/login`, {
         usernameOrEmail: loginUser,
@@ -754,16 +919,61 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
       <style>{AUTH_STYLES}</style>
       <div className="enl-canvas-wrapper">
         <div className="enl-canvas">
-          {/* =============================================================== */}
-          {/* 1. CODE-DRIVEN MARKETING PANEL (LEFT & SHOWCASE)                */}
-          {/* =============================================================== */}
-          <LoginMarketingPanel />
+          {/* Ambient Glowing Background Elements */}
+          <div className="enl-ambient-glow-yellow" />
+          <div className="enl-ambient-glow-blue" />
 
-          {/* =============================================================== */}
-          {/* 2. OVERLAID FLOATING LOGIN CARD (INTERACTIVE)                   */}
-          {/* =============================================================== */}
-          <div className="enl-card-wrapper">
-            <div className="enl-login-card">
+          {/* Top Dot Grid Pattern Accent */}
+          <svg
+            className="enl-dot-grid-top"
+            width="120"
+            height="70"
+            viewBox="0 0 120 70"
+            fill="none"
+            aria-hidden="true"
+          >
+            <pattern
+              id="enl-dots-top"
+              x="0"
+              y="0"
+              width="16"
+              height="16"
+              patternUnits="userSpaceOnUse"
+            >
+              <circle cx="3" cy="3" r="1.5" fill="#93c5fd" opacity="0.75" />
+            </pattern>
+            <rect width="120" height="70" fill="url(#enl-dots-top)" />
+          </svg>
+
+          {/* Bottom-Right Dot Grid Pattern Accent */}
+          <svg
+            className="enl-dot-grid-bottom"
+            width="100"
+            height="70"
+            viewBox="0 0 100 70"
+            fill="none"
+            aria-hidden="true"
+          >
+            <pattern
+              id="enl-dots-bottom"
+              x="0"
+              y="0"
+              width="16"
+              height="16"
+              patternUnits="userSpaceOnUse"
+            >
+              <circle cx="3" cy="3" r="1.5" fill="#93c5fd" opacity="0.75" />
+            </pattern>
+            <rect width="100" height="70" fill="url(#enl-dots-bottom)" />
+          </svg>
+
+          {/* Three-Region Grid Layout (Column 1: Marketing, Column 2: Showcase, Column 3: Login) */}
+          <div className="enl-three-region-layout">
+            <LoginMarketingPanel />
+
+            {/* Region 3: Login Card */}
+            <section className="enl-login-region">
+              <div className="enl-login-card">
               {/* Centered Brand Header */}
               <EnrollNowBrand size="card" />
 
@@ -791,7 +1001,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     Email Address
                   </label>
                   <div className="enl-field-box">
-                    <Mail size={15} className="enl-field-icon" />
+                    <Mail size={16} className="enl-field-icon" />
                     <input
                       id="email-input"
                       type="text"
@@ -799,7 +1009,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       placeholder="Enter your email address"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      autoComplete="username"
+                      autoComplete="off"
                     />
                   </div>
                 </div>
@@ -810,7 +1020,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     Password
                   </label>
                   <div className="enl-field-box">
-                    <Lock size={15} className="enl-field-icon" />
+                    <Lock size={16} className="enl-field-icon" />
                     <input
                       id="password-input"
                       type={showPassword ? 'text' : 'password'}
@@ -818,7 +1028,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="current-password"
+                      autoComplete="off"
                     />
                     <button
                       type="button"
@@ -826,7 +1036,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       onClick={() => setShowPassword((prev) => !prev)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
@@ -864,7 +1074,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                   ) : (
                     <>
                       <span>Log In</span>
-                      <ArrowRight size={15} strokeWidth={2.5} />
+                      <ArrowRight size={16} strokeWidth={2.5} />
                     </>
                   )}
                 </button>
@@ -919,10 +1129,48 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 </div>
               </div>
             </div>
+          </section>
+        </div>
+
+        {/* =============================================================== */}
+        {/* 4. BOTTOM OCEAN WAVE WITH DYNAMIC STATISTICS                    */}
+        {/* =============================================================== */}
+        <div className="enl-wave-container">
+          <svg
+            className="enl-wave-svg"
+            viewBox="0 0 1440 180"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <defs>
+              <linearGradient id="enl-wave-front" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#0284c7" />
+                <stop offset="35%" stopColor="#0369a1" />
+                <stop offset="70%" stopColor="#0284c7" />
+                <stop offset="100%" stopColor="#0ea5e9" />
+              </linearGradient>
+              <linearGradient id="enl-wave-back" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+                <stop offset="50%" stopColor="#7dd3fc" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.35" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 0 50 C 260 85, 480 25, 780 70 C 1050 110, 1260 55, 1440 115 L 1440 180 L 0 180 Z"
+              fill="url(#enl-wave-back)"
+            />
+            <path
+              d="M 0 60 C 300 110, 600 35, 900 80 C 1140 115, 1280 75, 1440 140 L 1440 180 L 0 180 Z"
+              fill="url(#enl-wave-front)"
+            />
+          </svg>
+          <div className="enl-wave-stats-wrapper">
+            <LoginStatistics statistics={defaultStatistics} />
           </div>
         </div>
       </div>
     </div>
+  </div>
   );
 };
 

@@ -19,28 +19,28 @@ export const MarketingHeadline: React.FC<MarketingHeadlineProps> = ({
       <div
         className="enl-accent-bar"
         style={{
-          width: '28px',
-          height: '3.5px',
+          width: '46px',
+          height: '4.5px',
           backgroundColor: '#F59E0B',
-          borderRadius: '2px',
-          marginBottom: '10px',
+          borderRadius: '3px',
+          marginBottom: '16px',
         }}
       />
 
-      {/* Main Headline */}
+      {/* Main Headline (Exactly 3 Lines on Desktop) */}
       <h1
         className="enl-main-heading"
         style={{
           margin: 0,
-          fontSize: '26px',
+          fontSize: 'clamp(36px, 2.6vw, 50px)',
           fontWeight: 800,
-          lineHeight: 1.15,
+          lineHeight: 1.12,
           letterSpacing: '-0.025em',
           color: '#0F172A',
         }}
       >
         <div>{headline.line1}</div>
-        <div>{headline.line2}</div>
+        <div style={{ whiteSpace: 'nowrap' }}>{headline.line2}</div>
         <div style={{ color: '#0284C7' }}>{headline.emphasis}</div>
       </h1>
 
@@ -48,11 +48,11 @@ export const MarketingHeadline: React.FC<MarketingHeadlineProps> = ({
       <p
         className="enl-heading-desc"
         style={{
-          margin: '8px 0 0 0',
-          fontSize: '11.5px',
-          lineHeight: 1.45,
+          margin: '16px 0 0 0',
+          fontSize: '15.5px',
+          lineHeight: 1.5,
           color: '#475569',
-          maxWidth: '280px',
+          maxWidth: '360px',
         }}
       >
         {description}

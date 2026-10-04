@@ -13,44 +13,43 @@ export const FeatureHighlightCard: React.FC<FeatureHighlightCardProps> = ({
   className = '',
 }) => {
   const renderIcon = () => {
-    const iconSize = 15;
+    const iconSize = 26;
     switch (feature.iconName) {
       case 'users':
-        return <Users size={iconSize} color={feature.accentColor} />;
+        return <Users size={iconSize} color={feature.accentColor} strokeWidth={2.2} />;
       case 'calendar':
-        return <Calendar size={iconSize} color={feature.accentColor} />;
+        return <Calendar size={iconSize} color={feature.accentColor} strokeWidth={2.2} />;
       case 'chart':
-        return <BarChart3 size={iconSize} color={feature.accentColor} />;
+        return <BarChart3 size={iconSize} color={feature.accentColor} strokeWidth={2.2} />;
       case 'shield':
-        return <ShieldCheck size={iconSize} color={feature.accentColor} />;
+        return <ShieldCheck size={iconSize} color={feature.accentColor} strokeWidth={2.2} />;
       default:
-        return <Users size={iconSize} color={feature.accentColor} />;
+        return <Users size={iconSize} color={feature.accentColor} strokeWidth={2.2} />;
     }
   };
 
   return (
     <div
-      className={`enl-feature-card ${className}`}
+      className={`enl-feature-item ${className}`}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '9px',
-        padding: '6px 11px',
-        backgroundColor: '#ffffff',
-        borderRadius: '12px',
-        border: '1px solid rgba(226, 232, 240, 0.85)',
-        boxShadow: '0 2px 6px -2px rgba(15, 23, 42, 0.04)',
+        gap: '16px',
+        padding: '2px 0',
+        backgroundColor: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
         boxSizing: 'border-box',
-        maxWidth: '255px',
+        maxWidth: '350px',
       }}
     >
-      {/* Icon Badge */}
+      {/* Icon Badge (52x52px) */}
       <div
         className="enl-feature-icon-badge"
         style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '8px',
+          width: '52px',
+          height: '52px',
+          borderRadius: '15px',
           backgroundColor: feature.bgColor,
           display: 'flex',
           alignItems: 'center',
@@ -64,22 +63,25 @@ export const FeatureHighlightCard: React.FC<FeatureHighlightCardProps> = ({
       {/* Texts */}
       <div style={{ textAlign: 'left', minWidth: 0 }}>
         <div
+          className="enl-feature-title"
           style={{
-            fontSize: '11px',
+            fontSize: '16.5px',
             fontWeight: 700,
             color: '#0F172A',
-            letterSpacing: '-0.01em',
-            lineHeight: 1.2,
+            letterSpacing: '-0.015em',
+            lineHeight: 1.25,
           }}
         >
           {feature.title}
         </div>
         <div
+          className="enl-feature-desc"
           style={{
-            fontSize: '9.5px',
+            fontSize: '13.5px',
             color: '#64748B',
-            lineHeight: 1.25,
-            marginTop: '1px',
+            lineHeight: 1.4,
+            marginTop: '3px',
+            maxWidth: '280px',
           }}
         >
           {feature.description}

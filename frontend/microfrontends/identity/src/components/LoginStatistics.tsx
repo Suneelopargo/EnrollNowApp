@@ -15,7 +15,7 @@ export const LoginStatistics: React.FC<LoginStatisticsProps> = ({
   style,
 }) => {
   const renderIcon = (iconName: string) => {
-    const size = 18;
+    const size = 30; // Target 28-32px
     const color = '#ffffff';
     switch (iconName) {
       case 'users':
@@ -35,7 +35,7 @@ export const LoginStatistics: React.FC<LoginStatisticsProps> = ({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '24px',
+        gap: '36px',
         userSelect: 'none',
         ...style,
       }}
@@ -47,8 +47,8 @@ export const LoginStatistics: React.FC<LoginStatisticsProps> = ({
               className="enl-stat-divider"
               style={{
                 width: '1px',
-                height: '28px',
-                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                height: '38px',
+                backgroundColor: 'rgba(255, 255, 255, 0.35)',
               }}
             />
           )}
@@ -57,10 +57,10 @@ export const LoginStatistics: React.FC<LoginStatisticsProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '14px',
             }}
           >
-            {/* Icon */}
+            {/* Icon (28-32px) */}
             <div
               style={{
                 display: 'flex',
@@ -76,7 +76,7 @@ export const LoginStatistics: React.FC<LoginStatisticsProps> = ({
             <div style={{ textAlign: 'left', lineHeight: 1.15 }}>
               <div
                 style={{
-                  fontSize: '16px',
+                  fontSize: '26px', // Target 24-28px
                   fontWeight: 800,
                   color: '#ffffff',
                   letterSpacing: '-0.02em',
@@ -86,10 +86,10 @@ export const LoginStatistics: React.FC<LoginStatisticsProps> = ({
               </div>
               <div
                 style={{
-                  fontSize: '10px',
+                  fontSize: '15px', // Target 14-16px
                   fontWeight: 500,
                   color: '#e0f2fe',
-                  marginTop: '1px',
+                  marginTop: '2px',
                 }}
               >
                 {stat.label}
