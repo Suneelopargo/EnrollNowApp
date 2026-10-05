@@ -192,8 +192,7 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({
             </div>
             <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-sky-500 to-indigo-600 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercentage}%` }}
+                className={`h-full bg-gradient-to-r from-sky-500 to-indigo-600 rounded-full transition-all duration-300 w-pct-${Math.min(100, Math.max(0, Math.round(progressPercentage)))}`}
               />
             </div>
           </div>

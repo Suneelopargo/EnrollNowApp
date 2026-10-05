@@ -16,47 +16,21 @@ export const MarketingHeadline: React.FC<MarketingHeadlineProps> = ({
   return (
     <div className={`enl-headline-block ${className}`}>
       {/* Amber Accent Bar */}
-      <div
-        className="enl-accent-bar"
-        style={{
-          width: '52px',
-          height: '5px',
-          backgroundColor: '#F59E0B',
-          borderRadius: '3px',
-          marginBottom: '16px',
-        }}
-      />
+      <div className="enl-accent-bar" />
 
       {/* Main Headline (Exactly 3 Lines on Desktop) */}
-      <h1
-        className="enl-main-heading"
-        style={{
-          margin: 0,
-          fontSize: 'clamp(42px, 2.6vw, 46px)',
-          fontWeight: 800,
-          lineHeight: 1.14,
-          letterSpacing: '-0.025em',
-          color: '#0F172A',
-        }}
-      >
+      <h1 className="enl-main-heading">
         <div>{headline.line1}</div>
-        <div style={{ whiteSpace: 'nowrap' }}>{headline.line2}</div>
-        <div style={{ color: '#0284C7' }}>{headline.emphasis}</div>
+        <div className="enl-heading-line2">{headline.line2}</div>
+        <div className="enl-heading-emphasis">{headline.emphasis}</div>
       </h1>
 
-      {/* Supporting Description (Approximately 3 lines on desktop) */}
-      <p
-        className="enl-heading-desc"
-        style={{
-          margin: '12px 0 0 0',
-          fontSize: '17px',
-          lineHeight: 1.5,
-          color: '#475569',
-          maxWidth: '350px',
-        }}
-      >
+      {/* Supporting Description */}
+      <p className="enl-heading-desc">
         {description}
       </p>
     </div>
   );
 };
+
+export default MarketingHeadline;

@@ -5,4 +5,5 @@ export * from './runtime-config';
 export * from './api-config';
 export * from './api';
 export * from './mock-api';
+export * from './toaster';
 export * from './design-system/components';

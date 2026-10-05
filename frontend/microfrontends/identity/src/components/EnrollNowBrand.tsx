@@ -16,18 +16,12 @@ export const EnrollNowBrand: React.FC<EnrollNowBrandProps> = ({
   return (
     <div
       className={`enl-brand-container ${isMarketing ? 'enl-brand-marketing' : isCard ? 'enl-brand-card' : 'enl-brand-normal'} ${className}`}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        userSelect: 'none',
-      }}
     >
       <svg
         className="enl-brand-svg"
         viewBox="0 0 44 40"
         fill="none"
         aria-hidden="true"
-        style={{ flexShrink: 0 }}
       >
         {/* Left Figure (Golden Yellow) */}
         <circle cx="15" cy="11" r="7" fill="#F59E0B" />
@@ -42,29 +36,17 @@ export const EnrollNowBrand: React.FC<EnrollNowBrandProps> = ({
           fill="#0F172A"
         />
       </svg>
-      <div className="enl-brand-text-col" style={{ textAlign: 'left' }}>
-        <div
-          className="enl-brand-name"
-          style={{
-            fontWeight: 800,
-            lineHeight: 1.1,
-            letterSpacing: '-0.025em',
-          }}
-        >
-          <span style={{ color: '#0F172A' }}>Enroll</span>
-          <span style={{ color: '#F59E0B' }}>Now</span>
+      <div className="enl-brand-text-col">
+        <div className="enl-brand-name">
+          <span className="enl-brand-part-enroll">Enroll</span>
+          <span className="enl-brand-part-now">Now</span>
         </div>
-        <div
-          className="enl-brand-tagline"
-          style={{
-            fontWeight: 600,
-            color: '#64748B',
-            letterSpacing: '0.02em',
-          }}
-        >
+        <div className="enl-brand-tagline">
           Screen. Schedule. Engage.
         </div>
       </div>
     </div>
   );
 };
+
+export default EnrollNowBrand;

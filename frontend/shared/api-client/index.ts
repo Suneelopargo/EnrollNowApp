@@ -3,6 +3,7 @@ import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosA
 import { getApiBaseUrl, getApiMode, ApiMode } from '../api-config';
 import { telemetry } from '../telemetry';
 import { mockAdapter } from '../mock-api/mockAdapter';
+import { toast } from '../toaster';
 
 export interface ApiHeaderContext {
   getToken?: () => string | null;
@@ -305,6 +306,14 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         }
       } else if (normalized.status === 403 && options.onForbidden) {
         options.onForbidden();
+      }
+
+      // Automatically dispatch global error toast (unless explicitly silenced)
+      const skipToast = (error.config as any)?.skipToast || (error.config as any)?.silent;
+      if (!skipToast && !isLoginRequest) {
+        toast.error(normalized.message, {
+          title: normalized.code || `Error (${normalized.status || 'Network'})`,
+        });
       }
 
       const apiError = new EnrollNowApiError(normalized);
