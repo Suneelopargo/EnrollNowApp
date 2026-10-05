@@ -31,9 +31,18 @@ export const FloatingInfoCard: React.FC<FloatingInfoCardProps> = ({
 
   return (
     <div className={`enl-floating-info-card ${className}`}>
+      {/* Stage Badge */}
+      {card.stageBadge && (
+        <div className="enl-float-card-top-row">
+          <span className={`enl-float-stage-pill enl-float-stage-pill--${card.stageNumber || 1}`}>
+            {card.stageBadge}
+          </span>
+        </div>
+      )}
+
       {/* Header Row */}
       <div className={`enl-float-card-header ${isChecklist ? 'enl-float-card-header--checklist' : ''}`}>
-        <div className="enl-float-card-icon-box">
+        <div className={`enl-float-card-icon-box enl-float-card-icon-box--${card.stageNumber || 1}`}>
           {renderHeaderIcon()}
         </div>
         <div className="enl-float-card-title">

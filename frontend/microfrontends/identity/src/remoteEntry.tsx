@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Globe,
   ChevronDown,
+  ShieldCheck,
 } from 'lucide-react';
 import { apiClient } from '../../../shared/api-client';
 import { authApi } from '../../../shared/api/authApi';
@@ -209,15 +210,12 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
             {/* Region 3: Login Card */}
             <section className="enl-login-region">
               <div className="enl-login-card">
-                {/* Header Group: Brand Logo + Welcome Back */}
+                {/* Header Group: Welcome Back */}
                 <div className="enl-card-header">
-                  <EnrollNowBrand size="card" />
-                  <div>
-                    <h2 className="enl-card-title">Welcome Back</h2>
-                    <p className="enl-card-subtitle">
-                      Sign in to your EnrollNow workspace
-                    </p>
-                  </div>
+                  <h2 className="enl-card-title">Welcome Back</h2>
+                  <p className="enl-card-subtitle">
+                    Sign in to your workspace
+                  </p>
                 </div>
 
               {/* Error Alert */}
@@ -279,12 +277,8 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 {/* Options Row */}
                 <div className="enl-options-row">
                   <label className="enl-remember-label">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                    />
-                    <span>Remember me</span>
+                   
+                    <span></span>
                   </label>
                   <a
                     href="#forgot-password"
@@ -315,31 +309,24 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 </button>
 
                 {/* Divider */}
-                <div className="enl-card-divider">
-                 
-               </div>
-   
-              </form>
+                <div className="enl-card-divider" />
 
-              {/* Card Footer */}
-              <div className="enl-card-footer">
-                <div className="enl-footer-links">
-                  <a href="#terms" onClick={(e) => e.preventDefault()}>
-                    Terms of Service
-                  </a>
-                  <span>|</span>
-                  <a href="#privacy" onClick={(e) => e.preventDefault()}>
-                    Privacy Policy
-                  </a>
-                  <span>|</span>
-                  <a href="#support" onClick={(e) => e.preventDefault()}>
-                    Support Center
-                  </a>
+                {/* Compliance & Activity Monitoring Warning Notice */}
+                <div className="enl-compliance-notice">
+                  <div className="enl-compliance-header">
+                    <ShieldCheck size={14} className="enl-compliance-icon" />
+                    <span className="enl-compliance-title">Authorized Access & System Monitoring</span>
+                  </div>
+                  <p className="enl-compliance-text">
+                    This system should only be accessed by authorized users. Individuals
+                    using this system are subject to having their activities on this system
+                    monitored and recorded by system administrators. If this monitoring
+                    reveals possible criminal activity or policy violation, system
+                    administrators may terminate your access privileges and may provide
+                    the evidence to law enforcement or other officials.
+                  </p>
                 </div>
-                <div className="enl-copyright">
-                  © 2016 – 2026 EnrollNow. All rights reserved.
-                </div>
-              </div>
+              </form>
             </div>
           </section>
         </div>
@@ -380,6 +367,38 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
             <LoginStatistics statistics={defaultStatistics} />
           </div>
         </div>
+
+        {/* =============================================================== */}
+        {/* 5. STRONG SYSTEM FOOTER BAR (CENTERED, CLINICAL PALETTE)        */}
+        {/* =============================================================== */}
+        <footer className="enl-login-strong-footer" role="contentinfo">
+          <div className="enl-strong-footer-container enl-strong-footer-container--center">
+            <span>© 2016 - 2027 </span>
+            <a
+              href="#enrollnow"
+              className="enl-strong-footer-link"
+              onClick={(e) => e.preventDefault()}
+            >
+              EnrollNow
+            </a>
+            <span className="enl-strong-footer-sep" aria-hidden="true">|</span>
+            <a
+              href="#terms"
+              className="enl-strong-footer-link"
+              onClick={(e) => e.preventDefault()}
+            >
+              Terms of Service
+            </a>
+            <span className="enl-strong-footer-sep" aria-hidden="true">|</span>
+            <a
+              href="#support"
+              className="enl-strong-footer-link"
+              onClick={(e) => e.preventDefault()}
+            >
+              Support Center
+            </a>
+          </div>
+        </footer>
       </div>
     </div>
   </div>

@@ -25,6 +25,8 @@ export interface StatisticItem {
 
 export interface FloatingCardItem {
   id: string;
+  stageNumber?: number;
+  stageBadge?: string;
   title: string;
   iconName: 'users' | 'calendar' | 'chart';
   type: 'checklist' | 'skeleton';
@@ -92,28 +94,12 @@ export const loginContent: LoginContentConfig = {
     },
   ],
   statistics: [
-    {
-      id: 'participants',
-      value: '50K+',
-      label: 'Participants Enrolled',
-      iconName: 'users',
-    },
-    {
-      id: 'organizations',
-      value: '200+',
-      label: 'Organizations',
-      iconName: 'building',
-    },
-    {
-      id: 'uptime',
-      value: '99.9%',
-      label: 'Uptime',
-      iconName: 'chart',
-    },
+   
   ],
   floatingCards: [
     {
       id: 'screening',
+      stageNumber: 1,      
       title: 'Participant Screening',
       iconName: 'users',
       type: 'checklist',
@@ -121,6 +107,7 @@ export const loginContent: LoginContentConfig = {
     },
     {
       id: 'appointments',
+      stageNumber: 2,      
       title: 'Schedule Appointments',
       iconName: 'calendar',
       type: 'skeleton',
@@ -128,6 +115,7 @@ export const loginContent: LoginContentConfig = {
     },
     {
       id: 'engage',
+      stageNumber: 3,    
       title: 'Engage Participants',
       iconName: 'chart',
       type: 'skeleton',

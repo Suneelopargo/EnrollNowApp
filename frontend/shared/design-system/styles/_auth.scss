@@ -384,33 +384,33 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 100%;
-  height: 100%;
+  width: 420px;
+  height: 600px;
   pointer-events: none;
   z-index: 8;
 }
 
-// Floating Cards Surrounding Researcher
+// Floating Stage Workflow Cards Surrounding Researcher
 .enl-float-screening {
   position: absolute;
-  left: 12%;
-  top: 5%;
+  left: 130px;
+  top: 16px;
   z-index: 10;
-  width: 280px;
+  width: 275px;
 }
 
 .enl-float-appointments {
   position: absolute;
-  left: 4%;
-  top: 39%;
+  left: 20px;
+  top: 230px;
   z-index: 10;
-  width: 230px;
+  width: 235px;
 }
 
 .enl-float-engage {
   position: absolute;
-  left: 12%;
-  top: 62%;
+  left: 130px;
+  top: 435px;
   z-index: 10;
   width: 245px;
 }
@@ -418,10 +418,49 @@
 .enl-floating-info-card {
   background-color: #ffffff;
   border-radius: 18px;
-  padding: 14px 18px;
+  padding: 13px 17px;
   box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.9);
   box-sizing: border-box;
   user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 42px -8px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(2, 132, 199, 0.35);
+  }
+}
+
+.enl-float-card-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 6px;
+}
+
+.enl-float-stage-pill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: inline-block;
+
+  &--1 {
+    background-color: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+  }
+  &--2 {
+    background-color: #eff6ff;
+    color: #0284c7;
+    border: 1px solid #bfdbfe;
+  }
+  &--3 {
+    background-color: #f5f3ff;
+    color: #7c3aed;
+    border: 1px solid #ddd6fe;
+  }
 }
 
 .enl-float-card-header {
@@ -534,13 +573,15 @@
 .enl-login-card {
   width: 100%;
   max-width: none;
-  height: clamp(620px, 86vh, 920px);
+  height: auto;
+  max-height: min(640px, 80vh);
   background-color: #ffffff;
   border-radius: 30px;
-  padding: clamp(24px, 3.2vh, 36px) clamp(28px, 2.6vw, 44px) clamp(18px, 2.2vh, 26px);
+  padding: clamp(32px, 4.2vh, 44px) clamp(28px, 2.6vw, 44px) clamp(28px, 3.5vh, 38px);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: clamp(14px, 1.8vh, 20px);
   box-sizing: border-box;
   text-align: center;
   box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(226, 232, 240, 0.7);
@@ -550,7 +591,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+  text-align: center;
 }
 
 .enl-card-title {
@@ -725,92 +767,51 @@
 }
 
 .enl-card-divider {
-  position: relative;
-  text-align: center;
-  margin: 5px 0;
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background-color: #e2e8f0;
-  }
-
-  span {
-    position: relative;
-    background-color: #ffffff;
-    padding: 0 10px;
-    font-size: 11.5px;
-    color: #94a3b8;
-    font-weight: 500;
-    text-transform: uppercase;
-  }
+  width: 100%;
+  height: 1px;
+  background-color: #e2e8f0;
+  margin: 12px 0 10px;
 }
 
-.enl-sso-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.enl-sso-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 40px;
-  background-color: #ffffff;
+// Compliance & Activity Monitoring Warning Notice (Below Forgot Password / After Divider)
+.enl-compliance-notice {
+  background-color: #f1f5f9;
   border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1e293b;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  padding: 0 10px;
-
-  &:hover {
-    background-color: #f8fafc;
-    border-color: #94a3b8;
-  }
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 2px;
+  box-sizing: border-box;
+  text-align: left;
+  user-select: none;
 }
 
-.enl-card-footer {
-  margin-top: 8px;
-  text-align: center;
-}
-
-.enl-footer-links {
+.enl-compliance-header {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 10px;
-  font-size: 11.5px;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+
+.enl-compliance-icon {
   color: #0284c7;
-  font-weight: 500;
-
-  a {
-    color: #0284c7;
-    text-decoration: none;
-    &:hover {
-      text-decoration: underline;
-    }
-  }
-
-  span {
-    color: #cbd5e1;
-  }
+  flex-shrink: 0;
 }
 
-.enl-copyright {
-  font-size: 10.5px;
-  color: #94a3b8;
-  margin-top: 4px;
+.enl-compliance-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0f2744;
+  letter-spacing: -0.01em;
 }
+
+.enl-compliance-text {
+  font-size: 11.5px;
+  line-height: 1.52;
+  color: #334155;
+  margin: 0;
+}
+
+
 
 // ============================================================================
 // 6. BOTTOM OCEAN WAVE WITH STATISTICS
@@ -819,9 +820,9 @@
 .enl-wave-container {
   position: absolute;
   left: 0;
-  bottom: 0;
+  bottom: 38px;
   width: 100%;
-  height: clamp(130px, 16.5vh, 175px);
+  height: clamp(120px, 15vh, 165px);
   z-index: 6;
   pointer-events: none;
 }
@@ -838,7 +839,7 @@
 .enl-wave-stats-wrapper {
   position: absolute;
   left: 4.5%;
-  bottom: clamp(18px, 2.6vh, 32px);
+  bottom: clamp(12px, 1.8vh, 22px);
   z-index: 10;
   pointer-events: auto;
 }
@@ -890,7 +891,70 @@
 }
 
 // ============================================================================
-// 7. RESPONSIVE BREAKPOINTS
+// 7. STRONG SYSTEM FOOTER BAR (MATCHING REFERENCE CLINICAL PALETTE)
+// ============================================================================
+
+.enl-login-strong-footer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 38px;
+  background-color: #034b7d; // strong clinical deep blue based on our colors
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 -2px 10px rgba(3, 75, 125, 0.25);
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.enl-strong-footer-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 clamp(16px, 3vw, 48px);
+  box-sizing: border-box;
+
+  span {
+    color: #ffffff;
+    font-size: 13px;
+  }
+
+  @include mobile {
+    font-size: 11px;
+    gap: 8px;
+
+    span {
+      font-size: 11px;
+    }
+  }
+}
+
+.enl-strong-footer-link {
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 500;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+  }
+}
+
+.enl-strong-footer-sep {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 300;
+}
+
+// ============================================================================
+// 8. RESPONSIVE BREAKPOINTS
 // ============================================================================
 
 @media (max-width: 1680px) {
@@ -909,22 +973,23 @@
     bottom: 25px;
   }
   .enl-float-screening {
-    left: 12%;
-    top: 5%;
+    left: 130px;
+    top: 16px;
     width: 260px;
   }
   .enl-float-appointments {
-    left: 4%;
-    top: 39%;
+    left: 20px;
+    top: 230px;
     width: 220px;
   }
   .enl-float-engage {
-    left: 12%;
-    top: 62%;
+    left: 130px;
+    top: 435px;
     width: 235px;
   }
   .enl-login-card {
     max-width: none;
+    height: auto;
   }
 }
 
@@ -947,23 +1012,24 @@
     bottom: 20px;
   }
   .enl-float-screening {
-    left: 10%;
-    top: 5%;
-    width: 235px;
+    left: 130px;
+    top: 16px;
+    width: 240px;
   }
   .enl-float-appointments {
-    left: 3%;
-    top: 39%;
-    width: 200px;
+    left: 20px;
+    top: 230px;
+    width: 210px;
   }
   .enl-float-engage {
-    left: 10%;
-    top: 62%;
-    width: 215px;
+    left: 130px;
+    top: 435px;
+    width: 220px;
   }
   .enl-login-card {
-    padding: 22px 24px 18px;
-    height: clamp(580px, 80vh, 740px);
+    padding: 26px 24px 22px;
+    height: auto;
+    max-height: min(640px, 80vh);
     max-width: none;
   }
 }

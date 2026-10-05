@@ -66,39 +66,63 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
             />
           </div>
 
-          {/* Dotted Flow Connector with Circular Nodes */}
+          {/* Precision Flow Connector SVG Linking Stage 1 -> Node 1 -> Stage 2 -> Node 2 -> Stage 3 */}
           <svg
             className="enl-flow-connector"
-            viewBox="0 0 700 760"
-            preserveAspectRatio="none"
+            viewBox="0 0 420 600"
             fill="none"
             aria-hidden="true"
           >
-            {/* Dashed Connecting Path - Upper Segment: Card 1 (Screening) -> Node 1 -> Card 2 (Appointments) */}
+            {/* Upper Flow Line: Card 1 (Screening) -> Node 1 -> Card 2 (Appointments) */}
             <path
-              d="M 80 182 C 48 196, 20 212, 22 230 C 24 250, 36 270, 45 285"
+              d="M 130 160 C 70 165, 35 175, 35 195 C 35 210, 20 215, 20 230"
               stroke="#0284c7"
-              strokeWidth="2.8"
-              strokeDasharray="6 5"
+              strokeWidth="2.5"
+              strokeDasharray="5 4"
               strokeLinecap="round"
               fill="none"
             />
+            {/* Anchor dot on Card 1 bottom-left */}
+            <circle cx="130" cy="160" r="3.5" fill="#0284c7" />
 
-            {/* Node 1: Green Ring (Upper Node between Card 1 and Card 2) */}
-            <circle cx="22" cy="230" r="9" fill="#ffffff" stroke="#10b981" strokeWidth="3.2" />
+            {/* Node 1: Stage 1 Completed Milestone (35, 195) */}
+            <g transform="translate(35, 195)">
+              <circle r="14" fill="rgba(16, 185, 129, 0.15)" />
+              <circle r="10" fill="#ffffff" stroke="#10b981" strokeWidth="2.4" />
+              <path
+                d="M -3.2 0 L -0.8 2.4 L 3.5 -2.2"
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </g>
 
-            {/* Dashed Connecting Path - Lower Segment: Card 2 (Appointments) -> Node 2 -> Card 3 (Engage) */}
+            {/* Anchor dot on Card 2 top-left */}
+            <circle cx="20" cy="230" r="3.5" fill="#10b981" />
+
+            {/* Lower Flow Line: Card 2 (Appointments) -> Node 2 -> Card 3 (Engage) */}
             <path
-              d="M 45 379 C 38 395, 30 405, 32 418 C 35 440, 56 458, 86 472"
+              d="M 20 335 C 20 355, 35 365, 35 385 C 35 410, 70 430, 130 435"
               stroke="#0284c7"
-              strokeWidth="2.8"
-              strokeDasharray="6 5"
+              strokeWidth="2.5"
+              strokeDasharray="5 4"
               strokeLinecap="round"
               fill="none"
             />
+            {/* Anchor dot on Card 2 bottom-left */}
+            <circle cx="20" cy="335" r="3.5" fill="#0284c7" />
 
-            {/* Node 2: Blue Ring (Lower Node between Card 2 and Card 3) */}
-            <circle cx="32" cy="418" r="9" fill="#ffffff" stroke="#0284c7" strokeWidth="3.2" />
+            {/* Node 2: Stage 2 Active Milestone (35, 385) */}
+            <g transform="translate(35, 385)">
+              <circle r="14" fill="rgba(2, 132, 199, 0.18)" />
+              <circle r="10" fill="#ffffff" stroke="#0284c7" strokeWidth="2.4" />
+              <circle r="4" fill="#0284c7" />
+            </g>
+
+            {/* Anchor dot on Card 3 top-left */}
+            <circle cx="130" cy="435" r="3.5" fill="#0284c7" />
           </svg>
 
           {/* Floating Card 1: Participant Screening */}
