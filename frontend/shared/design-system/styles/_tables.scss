@@ -1,0 +1,38 @@
+// frontend/shared/design-system/styles/_tables.scss - Data Tables System
+@use 'variables' as *;
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: $font-size-sm;
+
+  th {
+    background-color: $bg-surface-secondary;
+    color: $text-secondary;
+    font-weight: $font-weight-semibold;
+    padding: $spacing-3 $spacing-4;
+    border-bottom: 1px solid $border-color;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: $spacing-3 $spacing-4;
+    border-bottom: 1px solid $border-color;
+    color: $text-primary;
+    vertical-align: middle;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr:hover {
+    background-color: #f8fafc;
+  }
+}

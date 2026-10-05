@@ -1,0 +1,40 @@
+// frontend/shared/design-system/styles/_forms.scss - Form Controls System
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  margin-bottom: $spacing-4;
+}
+
+.form-label {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $text-primary;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: $spacing-2 $spacing-3;
+  font-size: $font-size-sm;
+  color: $text-primary;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  outline: none;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:focus {
+    @include focus-ring($color-brand-accent, 0.15);
+  }
+
+  &:disabled {
+    background-color: $bg-surface-secondary;
+    color: $text-muted;
+    cursor: not-allowed;
+  }
+}

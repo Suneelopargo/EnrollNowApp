@@ -9,7 +9,7 @@ interface NavigationContextType {
   refreshNavigation: () => Promise<void>;
 }
 
-const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
+export const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'dashboard', label: 'Clinical Operations', route: '/dashboard', icon: 'LayoutDashboard', order: 1 },
   { id: 'studies', label: 'Studies', route: '/studies', icon: 'BookOpen', order: 2 },
   { id: 'participants', label: 'Participants', route: '/participants', icon: 'Users', order: 3 },
@@ -19,7 +19,7 @@ const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'communications', label: 'Outreach', route: '/communications', icon: 'MessageSquare', order: 7 },
   { id: 'documents', label: 'Documents', route: '/documents', icon: 'FileText', order: 8 },
   { id: 'organization', label: 'Sites & Network', route: '/organization', icon: 'Building', order: 9 },
-  { id: 'admin', label: 'Administration', route: '/admin', icon: 'Settings', order: 10, requiredPermission: 'ROLE_SUPER_ADMIN' },
+  { id: 'admin', label: 'Administration', route: '/admin', icon: 'Settings', order: 10 },
 ];
 
 const NavigationContext = createContext<NavigationContextType>({
@@ -29,7 +29,7 @@ const NavigationContext = createContext<NavigationContextType>({
 });
 
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, isAdmin } = useAuth();
   const [navItems, setNavItems] = useState<NavigationItem[]>(DEFAULT_NAVIGATION_ITEMS);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -41,7 +41,15 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const filtered = DEFAULT_NAVIGATION_ITEMS.filter((item) => {
       if (!item.requiredPermission) return true;
-      return hasRole(item.requiredPermission) || hasRole('ROLE_SUPER_ADMIN') || hasRole('ROLE_SITE_ADMIN') || hasRole('ROLE_ADMIN');
+      return (
+        isAdmin ||
+        hasRole(item.requiredPermission) ||
+        hasRole('ROLE_SUPER_ADMIN') ||
+        hasRole('ROLE_SITE_ADMIN') ||
+        hasRole('ROLE_ADMIN') ||
+        hasRole('ADMIN') ||
+        Boolean(user?.roles?.some((r) => r.toUpperCase().includes('ADMIN')))
+      );
     });
 
     setNavItems(filtered);
@@ -49,7 +57,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     filterNavItems();
-  }, [user]);
+  }, [user, isAdmin]);
 
   return (
     <NavigationContext.Provider

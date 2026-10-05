@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useTabWorkspace } from './TabWorkspaceContext';
 import { LogOut, User, Shield, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const UserMenu: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
+  const { activateTab } = useTabWorkspace();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -31,6 +33,8 @@ export const UserMenu: React.FC = () => {
   const primaryRole = user.roles && user.roles.length > 0
     ? user.roles[0].replace('ROLE_', '').replace(/_/g, ' ')
     : 'User';
+
+  const isAdministrator = isAdmin || Boolean(user.roles?.some((r) => r.toUpperCase().includes('ADMIN')));
 
   return (
     <div className="user-menu-wrapper" ref={menuRef}>
@@ -61,20 +65,20 @@ export const UserMenu: React.FC = () => {
             className="user-dropdown-item"
             onClick={() => {
               setIsOpen(false);
-              navigate('/dashboard');
+              activateTab('dashboard');
             }}
           >
             <User size={16} />
             <span>My Overview</span>
           </button>
 
-          {isAdmin && (
+          {isAdministrator && (
             <button
               type="button"
               className="user-dropdown-item"
               onClick={() => {
                 setIsOpen(false);
-                navigate('/admin');
+                activateTab('admin');
               }}
             >
               <Shield size={16} />

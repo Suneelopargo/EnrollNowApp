@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { NavigationProvider } from './navigation/NavigationContext';
+import { TabWorkspaceProvider } from './navigation/TabWorkspaceContext';
 import { ShellRouter } from './routing/ShellRouter';
 import { loadRuntimeConfig } from '../../shared/runtime-config';
 import { LoadingSpinner } from '../../shared/design-system/components/LoadingSpinner';
@@ -46,9 +47,11 @@ export const App: React.FC = () => {
     <BrowserRouter>
       <AuthProvider>
         <NavigationProvider>
-          <ShellRouter />
-          <ToasterContainer />
-          <ConfirmationContainer />
+          <TabWorkspaceProvider>
+            <ShellRouter />
+            <ToasterContainer />
+            <ConfirmationContainer />
+          </TabWorkspaceProvider>
         </NavigationProvider>
       </AuthProvider>
     </BrowserRouter>
