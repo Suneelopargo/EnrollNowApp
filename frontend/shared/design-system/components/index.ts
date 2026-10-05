@@ -9,3 +9,4 @@ export * from './LoadingSpinner';
 export * from './ErrorBoundary';
 export * from './Footer';
 export * from './Skeleton';
+export * from './EnrollNowBrand';

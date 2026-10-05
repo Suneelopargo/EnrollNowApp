@@ -60,6 +60,86 @@
   }
 }
 
+// Official Brand Logo in Workspace Header
+.enl-header-brand-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.enl-header-brand-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  outline: none;
+  transition: transform 150ms ease;
+
+  &:hover {
+    transform: translateY(-1px);
+
+    .enl-header-brand-badge {
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(56, 189, 248, 0.5);
+    }
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    .enl-header-brand-badge {
+      box-shadow: 0 0 0 2px #38bdf8;
+    }
+  }
+}
+
+.enl-header-brand-badge {
+  background: #ffffff;
+  border-radius: 9px;
+  padding: 4px 10px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-sizing: border-box;
+  transition: box-shadow 150ms ease;
+
+  .enl-brand-container {
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+
+  .enl-brand-svg {
+    height: 25px;
+    width: auto;
+    aspect-ratio: 1200 / 245;
+    display: block;
+
+    .s0 {
+      fill: #ffcb05;
+    }
+    .s1 {
+      fill: #00274c;
+    }
+  }
+
+  @media (max-width: 640px) {
+    height: 32px;
+    padding: 3px 8px;
+
+    .enl-brand-svg {
+      height: 22px;
+    }
+  }
+}
+
 // Active Campus / Facility Pill Selector
 .enl-site-selector-wrap,
 .enl-campus-selector-wrap {

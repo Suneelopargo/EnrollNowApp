@@ -5,6 +5,7 @@ import { useNavigation } from './NavigationContext';
 import { useAuth } from '../auth/AuthContext';
 import { useTabWorkspace, WorkspaceTab } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
+import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
 import {
   LayoutDashboard,
   BookOpen,
@@ -101,7 +102,7 @@ export const TopNavigation: React.FC = () => {
       <header className="enl-workspace-header">
         {/* Tier 1: Campus Selector, Module Navigation, & User Controls */}
         <div className="enl-header-top-row">
-          {/* Left: Mobile Toggle & Campus Selector Pill */}
+          {/* Left: Mobile Toggle, Brand Logo & Campus Selector Pill */}
           <div className="enl-header-left">
             <button
               type="button"
@@ -111,6 +112,24 @@ export const TopNavigation: React.FC = () => {
             >
               <Menu size={20} />
             </button>
+
+            {/* Official EnrollNow Vector Brand Logo */}
+            <div className="enl-header-brand-wrap">
+              <button
+                type="button"
+                className="enl-header-brand-btn"
+                onClick={() => {
+                  activateTab('dashboard');
+                  navigate('/dashboard');
+                }}
+                title="EnrollNow Clinical Operations"
+                aria-label="EnrollNow Home"
+              >
+                <div className="enl-header-brand-badge">
+                  <EnrollNowBrand size="header" />
+                </div>
+              </button>
+            </div>
 
             {/* Campus / Facility Dropdown Pill */}
             <div className="enl-site-selector-wrap" ref={campusRef}>

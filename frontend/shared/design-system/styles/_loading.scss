@@ -83,8 +83,10 @@
       height: 42px;
     }
     .enl-loader-logo-svg {
-      width: 25px;
-      height: 23px;
+      width: 27px;
+      height: auto;
+      aspect-ratio: 212 / 134;
+      display: block;
     }
   }
 }
@@ -136,8 +138,9 @@
 }
 
 .enl-loader-logo-svg {
-  width: 34px;
-  height: 31px;
+  width: 36px;
+  height: auto;
+  aspect-ratio: 212 / 134;
   display: block;
 }
 

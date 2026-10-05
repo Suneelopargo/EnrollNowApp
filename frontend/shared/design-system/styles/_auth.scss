@@ -51,82 +51,49 @@
   display: inline-flex;
   align-items: center;
   user-select: none;
+  line-height: 0;
 }
 
 .enl-brand-marketing {
-  gap: 16px;
   .enl-brand-svg {
-    width: 66px;
-    height: 58px;
-  }
-  .enl-brand-name {
-    font-size: 40px;
-  }
-  .enl-brand-tagline {
-    font-size: 15px;
-    margin-top: 3px;
+    width: clamp(240px, 18vw, 300px);
+    height: auto;
+    aspect-ratio: 1200 / 245;
+    display: block;
   }
 }
 
 .enl-brand-card {
-  gap: 15px;
   display: inline-flex;
   justify-content: center;
   align-items: center;
   .enl-brand-svg {
-    width: 60px;
-    height: 52px;
-  }
-  .enl-brand-name {
-    font-size: 36px;
-  }
-  .enl-brand-tagline {
-    font-size: 13.5px;
-    margin-top: 2px;
+    width: 220px;
+    height: auto;
+    aspect-ratio: 1200 / 245;
+    display: block;
   }
 }
 
 .enl-brand-normal {
-  gap: 12px;
   .enl-brand-svg {
-    width: 48px;
-    height: 44px;
-  }
-  .enl-brand-name {
-    font-size: 30px;
-  }
-  .enl-brand-tagline {
-    font-size: 12px;
-    margin-top: 2px;
+    width: 180px;
+    height: auto;
+    aspect-ratio: 1200 / 245;
+    display: block;
   }
 }
 
 .enl-brand-svg {
   flex-shrink: 0;
-}
+  max-width: 100%;
 
-.enl-brand-text-col {
-  text-align: left;
-}
-
-.enl-brand-name {
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.025em;
-}
-
-.enl-brand-part-enroll {
-  color: #0f172a;
-}
-
-.enl-brand-part-now {
-  color: #f59e0b;
-}
-
-.enl-brand-tagline {
-  font-weight: 600;
-  color: #64748b;
-  letter-spacing: 0.02em;
+  .s0 {
+    fill: #ffcb05;
+  }
+  .s1 {
+    fill: #00274c;
+  }
 }
 
 // ============================================================================
@@ -1175,19 +1142,13 @@
     margin-right: 0;
   }
   .enl-brand-marketing {
-    gap: 10px;
     margin-bottom: 14px;
     align-self: flex-start;
-  }
-  .enl-brand-marketing .enl-brand-svg {
-    width: 38px;
-    height: 34px;
-  }
-  .enl-brand-marketing .enl-brand-name {
-    font-size: 24px;
-  }
-  .enl-brand-marketing .enl-brand-tagline {
-    font-size: 10.5px;
+
+    .enl-brand-svg {
+      width: clamp(180px, 45vw, 220px);
+      height: auto;
+    }
   }
   .enl-login-card {
     padding: 20px 16px 16px;

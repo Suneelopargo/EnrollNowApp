@@ -18,6 +18,44 @@ export interface LoadingSpinnerProps {
   className?: string;
 }
 
+const LoaderEmblemSvg: React.FC = () => (
+  <svg
+    className="enl-loader-logo-svg"
+    viewBox="70 12 212 134"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    {/* Center Figure (Golden Yellow) */}
+    <path
+      fill="#ffcb05"
+      d="m232.09 128.49v-0.08c-0.75-22.79-15.28-42.1-35.54-49.89-2.3 1.85-4.84 3.38-7.57 4.53-3.91 1.65-8.09 2.49-12.37 2.49-4.29 0-8.46-0.84-12.37-2.49-2.73-1.15-5.28-2.68-7.57-4.53-19.51 7.5-33.71 25.7-35.41 47.39l-0.02 0.24q-0.02 0.4-0.05 0.81l-0.22 3.23c13.07 4.09 32.2 8.49 55.58 8.58 23.33 0.07 42.47-4.19 55.56-8.17v-0.6h0.03q-0.01-0.76-0.03-1.51z"
+    />
+    <path
+      fill="#ffcb05"
+      d="m176.59 78.18c16.07 0 29.1-13.01 29.1-29.06 0-16.05-13.03-29.06-29.1-29.06-16.06 0-29.09 13.01-29.09 29.06 0 16.05 13.03 29.06 29.09 29.06z"
+    />
+    {/* Left Figure (Dark Navy) */}
+    <path
+      fill="#00274c"
+      d="m113.83 128.42c0.36-11.35 3.98-22.21 10.52-31.51q3.11-4.41 6.95-8.18-3.26 0.77-6.65 0.78c-3.91 0-7.7-0.78-11.27-2.28q-3.76-1.59-6.9-4.13c-2.96 0.89-6.2 2.36-9.28 4.72-13.19 10.19-12.39 28.73-12.23 31.39 2.37 2.16 7.06 5.85 14 7.94 6.32 1.9 11.74 1.66 14.86 1.27z"
+    />
+    <path
+      fill="#00274c"
+      d="m124.65 83.53c4.19 0 8.14-0.98 11.67-2.71q2.95-2.28 6.17-4.18c1.96-1.78 3.67-3.87 5.03-6.16q-2.96-3.57-4.79-7.86c-1.66-3.9-2.5-8.07-2.5-12.35 0-4.28 0.84-8.45 2.5-12.36q0.05-0.08 0.07-0.16c-4.73-4.44-11.12-7.17-18.13-7.17-14.64 0-26.52 11.85-26.52 26.48 0 14.63 11.87 26.48 26.52 26.48z"
+    />
+    {/* Right Figure (Dark Navy) */}
+    <path
+      fill="#00274c"
+      d="m239.37 128.42c-0.35-11.35-3.98-22.21-10.52-31.51q-3.1-4.41-6.94-8.18 3.25 0.77 6.64 0.78c3.91 0 7.71-0.78 11.27-2.28q3.76-1.59 6.89-4.13c2.97 0.89 6.21 2.36 9.29 4.72 13.19 10.17 12.4 28.71 12.23 31.36-2.38 2.17-7.06 5.86-14 7.94-6.32 1.91-11.75 1.66-14.88 1.28z"
+    />
+    <path
+      fill="#00274c"
+      d="m228.55 83.53c-4.19 0-8.14-0.98-11.67-2.71q-2.95-2.28-6.16-4.18c-1.96-1.78-3.67-3.87-5.03-6.16q2.96-3.57 4.78-7.86c1.66-3.9 2.5-8.07 2.5-12.35 0-4.28-0.84-8.45-2.5-12.36q-0.04-0.08-0.07-0.16c4.74-4.44 11.13-7.17 18.14-7.17 14.64 0 26.51 11.85 26.51 26.48 0 14.63-11.86 26.48-26.51 26.48z"
+    />
+  </svg>
+);
+
 export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   message = 'Processing Request & Syncing Data...',
   title = 'EnrollNow',
@@ -54,23 +92,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
           <div className="enl-loader-orbit-ring enl-loader-orbit-ring--outer" />
           <div className="enl-loader-orbit-ring enl-loader-orbit-ring--inner" />
           <div className="enl-loader-logo-disc">
-            <svg
-              className="enl-loader-logo-svg"
-              viewBox="0 0 44 40"
-              fill="none"
-              aria-hidden="true"
-            >
-              <circle cx="15" cy="11" r="7" fill="#F59E0B" />
-              <path
-                d="M4 36c0-7.18 5.82-13 13-13 3.2 0 6.13 1.16 8.4 3.09-2.2 2.66-3.4 6.15-3.4 9.91H4z"
-                fill="#F59E0B"
-              />
-              <circle cx="29" cy="13" r="6.5" fill="#0F172A" />
-              <path
-                d="M20 36c0-5.8 4.7-10.5 10.5-10.5S41 30.2 41 36H20z"
-                fill="#0F172A"
-              />
-            </svg>
+            <LoaderEmblemSvg />
           </div>
         </div>
         <div className="loading-spinner__message">{message}</div>
@@ -96,25 +118,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
           <div className="enl-loader-orbit-ring enl-loader-orbit-ring--outer" />
           <div className="enl-loader-orbit-ring enl-loader-orbit-ring--inner" />
           <div className="enl-loader-logo-disc">
-            <svg
-              className="enl-loader-logo-svg"
-              viewBox="0 0 44 40"
-              fill="none"
-              aria-hidden="true"
-            >
-              {/* Left Figure (Amber/Yellow) */}
-              <circle cx="15" cy="11" r="7" fill="#F59E0B" />
-              <path
-                d="M4 36c0-7.18 5.82-13 13-13 3.2 0 6.13 1.16 8.4 3.09-2.2 2.66-3.4 6.15-3.4 9.91H4z"
-                fill="#F59E0B"
-              />
-              {/* Right Figure (Dark Navy) */}
-              <circle cx="29" cy="13" r="6.5" fill="#0F172A" />
-              <path
-                d="M20 36c0-5.8 4.7-10.5 10.5-10.5S41 30.2 41 36H20z"
-                fill="#0F172A"
-              />
-            </svg>
+            <LoaderEmblemSvg />
           </div>
         </div>
 
