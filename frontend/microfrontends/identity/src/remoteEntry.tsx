@@ -13,7 +13,8 @@ import {
   Globe,
   ChevronDown,
 } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
+import { authApi } from '../../../shared/api/authApi';
 
 // Reusable Code-Driven Marketing & Brand Components
 import { LoginMarketingPanel } from './components/LoginMarketingPanel';
@@ -959,48 +960,33 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
     setLoading(true);
 
     try {
-      const apiBase = context.apiBaseUrl || 'http://localhost:8081';
-      const res = await axios.post(`${apiBase}/api/v1/auth/login`, {
-        usernameOrEmail: loginUser,
+      const { user, token } = await authApi.login({
         username: loginUser,
         password: loginPass,
       });
 
-      if (res.data?.data) {
-        const token = res.data.data.accessToken || res.data.data.token;
-        const user = res.data.data.user || {
-          id: 1,
-          username: loginUser,
-          email: `${loginUser}@enrollnow.local`,
-          roles: ['ROLE_SUPER_ADMIN'],
-        };
+      localStorage.setItem('enrollnow_token', token);
+      localStorage.setItem('enrollnow_user', JSON.stringify(user));
 
-        localStorage.setItem('enrollnow_token', token);
-        localStorage.setItem('enrollnow_user', JSON.stringify(user));
+      window.dispatchEvent(
+        new CustomEvent('enrollnow_auth_change', {
+          detail: { token, user },
+        })
+      );
 
-        window.dispatchEvent(
-          new CustomEvent('enrollnow_auth_change', {
-            detail: { token, user },
-          })
-        );
+      if (context.onEvent) {
+        context.onEvent('LOGIN_SUCCESS', { user, token, username: loginUser });
+      }
 
-        if (context.onEvent) {
-          context.onEvent('LOGIN_SUCCESS', { user, token, username: loginUser });
-        }
-
-        if (context.navigate) {
-          context.navigate('/dashboard');
-        } else {
-          window.location.href = '/dashboard';
-        }
+      if (context.navigate) {
+        context.navigate('/dashboard');
       } else {
-        throw new Error('Invalid response structure from identity service.');
+        window.location.href = '/dashboard';
       }
     } catch (err: any) {
       setError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
+        err.message ||
+          err.normalized?.message ||
           'Invalid username or password. Please verify your credentials.'
       );
     } finally {

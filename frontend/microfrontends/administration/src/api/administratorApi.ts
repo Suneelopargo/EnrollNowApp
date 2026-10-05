@@ -1,5 +1,5 @@
 // frontend/microfrontends/administration/src/api/administratorApi.ts
-import axios, { AxiosInstance } from 'axios';
+import { AxiosInstance } from 'axios';
 import type {
   AdministratorApi,
   AdminDashboard,
@@ -25,38 +25,20 @@ import type {
   EntityId,
 } from '@aiventrahealth/administrator-ui';
 import { MfeContext } from '../../../../shared/contracts';
-import { getApiBaseUrl } from '../../../../shared/api-config';
+import { apiClient } from '../../../../shared/api-client';
+
+const ADMIN_PREFIX = '/api/v1/administrator';
 
 export class EnrollNowAdministratorApi implements AdministratorApi {
   private client: AxiosInstance;
-  private apiBase: string;
 
-  constructor(context: MfeContext) {
-    this.apiBase = context.apiBaseUrl || getApiBaseUrl();
-    this.client = axios.create({
-      baseURL: `${this.apiBase}/api/v1/administrator`,
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Correlation-Id': context.correlationId || `admin-${Date.now()}`,
-        ...(context.token ? { Authorization: `Bearer ${context.token}` } : {}),
-      },
-    });
-
-    if (this.client.interceptors?.request) {
-      this.client.interceptors.request.use((config) => {
-        const activeToken = context.token || localStorage.getItem('enrollnow_token');
-        if (activeToken && !config.headers.Authorization) {
-          config.headers.Authorization = `Bearer ${activeToken}`;
-        }
-        return config;
-      });
-    }
+  constructor(_context?: MfeContext, customClient?: AxiosInstance) {
+    this.client = customClient || apiClient;
   }
 
   // Dashboard
   async getDashboard(): Promise<AdminDashboard> {
-    const res = await this.client.get('/dashboard');
+    const res = await this.client.get(`${ADMIN_PREFIX}/dashboard`);
     return res.data?.data || {
       totalUsers: 0,
       activeUsers: 0,
@@ -71,48 +53,48 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
     if (query?.search) params.search = query.search;
     if (query?.active !== undefined) params.active = query.active;
 
-    const res = await this.client.get('/users', { params });
+    const res = await this.client.get(`${ADMIN_PREFIX}/users`, { params });
     const data = res.data?.data || [];
     return data;
   }
 
   async getUser(id: EntityId): Promise<AdminUser> {
-    const res = await this.client.get(`/users/${id}`);
+    const res = await this.client.get(`${ADMIN_PREFIX}/users/${id}`);
     return res.data?.data;
   }
 
   async createUser(request: CreateUserRequest): Promise<AdminUser> {
-    const res = await this.client.post('/users', request);
+    const res = await this.client.post(`${ADMIN_PREFIX}/users`, request);
     return res.data?.data;
   }
 
   async updateUser(id: EntityId, request: UpdateUserRequest): Promise<AdminUser> {
-    const res = await this.client.put(`/users/${id}`, request);
+    const res = await this.client.put(`${ADMIN_PREFIX}/users/${id}`, request);
     return res.data?.data;
   }
 
   async activateUser(id: EntityId): Promise<void | AdminUser> {
-    const res = await this.client.post(`/users/${id}/activate`);
+    const res = await this.client.post(`${ADMIN_PREFIX}/users/${id}/activate`);
     return res.data?.data;
   }
 
   async deactivateUser(id: EntityId): Promise<void | AdminUser> {
-    const res = await this.client.post(`/users/${id}/deactivate`);
+    const res = await this.client.post(`${ADMIN_PREFIX}/users/${id}/deactivate`);
     return res.data?.data;
   }
 
   async resetPassword(id: EntityId, request: ResetPasswordRequest): Promise<void> {
-    await this.client.post(`/users/${id}/reset-password`, request);
+    await this.client.post(`${ADMIN_PREFIX}/users/${id}/reset-password`, request);
   }
 
   // Role Assignments
   async getUserRoleAssignments(userId: EntityId): Promise<UserRoleAssignment[]> {
-    const res = await this.client.get(`/users/${userId}/role-assignments`);
+    const res = await this.client.get(`${ADMIN_PREFIX}/users/${userId}/role-assignments`);
     return res.data?.data || [];
   }
 
   async saveUserRoleAssignments(userId: EntityId, assignments: UserRoleAssignment[]): Promise<void | AdminUser> {
-    const res = await this.client.put(`/users/${userId}/role-assignments`, assignments);
+    const res = await this.client.put(`${ADMIN_PREFIX}/users/${userId}/role-assignments`, assignments);
     return res.data?.data;
   }
 
@@ -120,7 +102,7 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   async getLocations(): Promise<AdminLocationOption[]> {
     let list: AdminLocationOption[] = [];
     try {
-      const res = await this.client.get('/locations');
+      const res = await this.client.get(`${ADMIN_PREFIX}/locations`);
       list = res.data?.data || [];
     } catch {
       list = [];
@@ -148,45 +130,45 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   }
 
   async getUserLocations(userId: EntityId): Promise<AdminLocationAccess[]> {
-    const res = await this.client.get(`/users/${userId}/locations`);
+    const res = await this.client.get(`${ADMIN_PREFIX}/users/${userId}/locations`);
     return res.data?.data || [];
   }
 
   async saveUserLocations(userId: EntityId, locationIds: EntityId[]): Promise<AdminLocationAccess[] | void> {
     const numericIds = locationIds.map((id) => Number(id));
-    const res = await this.client.put(`/users/${userId}/locations`, numericIds);
+    const res = await this.client.put(`${ADMIN_PREFIX}/users/${userId}/locations`, numericIds);
     return res.data?.data || [];
   }
 
   // Roles & RBAC
   async getRoles(): Promise<AdminRole[]> {
-    const res = await this.client.get('/roles');
+    const res = await this.client.get(`${ADMIN_PREFIX}/roles`);
     return res.data?.data || [];
   }
 
   async getRole(id: EntityId): Promise<AdminRole> {
-    const res = await this.client.get(`/roles/${id}`);
+    const res = await this.client.get(`${ADMIN_PREFIX}/roles/${id}`);
     return res.data?.data;
   }
 
   async createRole(request: CreateRoleRequest): Promise<AdminRole> {
-    const res = await this.client.post('/roles', request);
+    const res = await this.client.post(`${ADMIN_PREFIX}/roles`, request);
     return res.data?.data;
   }
 
   async updateRole(id: EntityId, request: UpdateRoleRequest): Promise<AdminRole> {
-    const res = await this.client.put(`/roles/${id}`, request);
+    const res = await this.client.put(`${ADMIN_PREFIX}/roles/${id}`, request);
     return res.data?.data;
   }
 
   async setRoleStatus(id: EntityId, status: string): Promise<AdminRole> {
-    const res = await this.client.patch(`/roles/${id}/status`, null, { params: { status } });
+    const res = await this.client.patch(`${ADMIN_PREFIX}/roles/${id}/status`, null, { params: { status } });
     return res.data?.data;
   }
 
   async getPermissionCatalog(): Promise<PermissionCatalog> {
     try {
-      const res = await this.client.get('/roles/1/permissions');
+      const res = await this.client.get(`${ADMIN_PREFIX}/roles/1/permissions`);
       if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
         return res.data.data.map((m: any) => ({
           code: m.moduleCode || m.code,
@@ -211,12 +193,12 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   }
 
   async getRolePermissions(roleId: EntityId): Promise<PermissionModule[]> {
-    const res = await this.client.get(`/roles/${roleId}/permissions`);
+    const res = await this.client.get(`${ADMIN_PREFIX}/roles/${roleId}/permissions`);
     return res.data?.data || [];
   }
 
   async saveRolePermissions(roleId: EntityId, permissions: RolePermission[]): Promise<void | PermissionModule[]> {
-    const res = await this.client.put(`/roles/${roleId}/permissions`, permissions);
+    const res = await this.client.put(`${ADMIN_PREFIX}/roles/${roleId}/permissions`, permissions);
     return res.data?.data || [];
   }
 
@@ -230,7 +212,7 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
     if (query?.page !== undefined) params.page = query.page;
     if (query?.size !== undefined) params.size = query.size;
 
-    const res = await this.client.get('/audit-logs', { params });
+    const res = await this.client.get(`${ADMIN_PREFIX}/audit-logs`, { params });
     const data = res.data?.data;
     return {
       content: data?.content || [],

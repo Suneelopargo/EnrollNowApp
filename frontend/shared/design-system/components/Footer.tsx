@@ -45,7 +45,7 @@ export const Footer: React.FC<FooterProps> = ({
               <span className="separator">·</span>
               <div className="auth-status-indicator">
                 <span className="status-dot" />
-                <span>Identity Gateway 8081 Active</span>
+                <span>API Gateway Active</span>
               </div>
             </>
           )}

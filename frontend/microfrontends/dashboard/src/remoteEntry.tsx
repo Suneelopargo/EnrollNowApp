@@ -18,7 +18,7 @@ import {
   FileText,
   AlertCircle,
 } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface DashboardModuleProps {
   context: MfeContext;
@@ -30,27 +30,24 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8091';
-
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/dashboard/overview`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/dashboard/overview');
         if (res.data?.data) {
           setStats(res.data.data);
           setRecentStudies(res.data.data.recentStudies || []);
         }
       } catch (err: any) {
-        setError('Clinical Operations metrics are currently unavailable from Dashboard Service (8091).');
+        setError('Clinical Operations metrics are currently unavailable from Dashboard Service.');
       } finally {
         setLoading(false);
       }
     };
     fetchDashboardData();
-  }, [apiBase, context.token]);
+  }, []);
 
   return (
     <div>

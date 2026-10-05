@@ -2,19 +2,20 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { DocumentModule } from './remoteEntry';
+import { getApiBaseUrl } from '../../../shared/api-config';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
   user: {
     id: 'user-dev-001',
-    username: 'docadmin',
-    email: 'etmf@enrollnow.local',
-    roles: ['ROLE_ADMIN', 'ROLE_COORDINATOR'],
-    firstName: 'Elena',
-    lastName: 'Rostova',
+    username: 'docspecialist',
+    email: 'documents@enrollnow.local',
+    roles: ['ROLE_REGULATORY_SPECIALIST'],
+    firstName: 'Rachel',
+    lastName: 'Greene',
   },
   token: 'mock-jwt-token',
-  apiBaseUrl: 'http://localhost:8090',
+  apiBaseUrl: getApiBaseUrl(),
   basePath: '/',
   correlationId: 'dev-correlation-id',
   navigate: (path: string) => console.log('Navigate to:', path),

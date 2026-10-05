@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { FlaskConical, Plus, Users, Calendar, CheckCircle2 } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface StudyModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
   const [studies, setStudies] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8084';
-
   useEffect(() => {
     const fetchStudies = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/studies`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/studies');
         if (res.data?.data) {
           setStudies(res.data.data);
         }
@@ -35,7 +32,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       }
     };
     fetchStudies();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = studies.length > 0 ? studies : [
     { protocolId: 'PROTO-2026-001', title: 'Phase III Trial for Cardio-Metabolic Biomarkers', phase: 'PHASE_3', targetParticipants: 450, enrolledParticipants: 312, status: 'RECRUITING', siteCount: 3 },

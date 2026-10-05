@@ -23,13 +23,13 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     const mockContext = {
       user: null,
       token: null,
-      apiBaseUrl: 'http://localhost:8081',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'test-corr-id',
       navigate: vi.fn(),
       emitEvent: vi.fn(),
       onEvent: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8081');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
     expect(typeof mockContext.navigate).toBe('function');
   });
 

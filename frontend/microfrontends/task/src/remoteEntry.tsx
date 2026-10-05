@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { CheckSquare, Plus, Clock, AlertTriangle, ListChecks } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface TaskModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ context }) => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8088';
-
   useEffect(() => {
     const fetchTasks = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/tasks`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/tasks');
         if (res.data?.data) {
           setTasks(res.data.data);
         }
@@ -35,7 +32,7 @@ export const TaskModule: React.FC<TaskModuleProps> = ({ context }) => {
       }
     };
     fetchTasks();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = tasks.length > 0 ? tasks : [
     { taskId: 'TSK-1049', title: 'Verify e-Consent Signature PT-88105', studyId: 'PROTO-2026-003', assignee: 'Sara Chen', priority: 'HIGH', dueDate: '2026-09-22', status: 'PENDING' },

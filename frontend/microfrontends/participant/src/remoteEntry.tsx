@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { UserCheck, Plus, HeartPulse, ShieldAlert, Activity } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface ParticipantModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const ParticipantModule: React.FC<ParticipantModuleProps> = ({ context })
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8085';
-
   useEffect(() => {
     const fetchParticipants = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/participants`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/participants');
         if (res.data?.data) {
           setParticipants(res.data.data);
         }
@@ -35,7 +32,7 @@ export const ParticipantModule: React.FC<ParticipantModuleProps> = ({ context })
       }
     };
     fetchParticipants();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = participants.length > 0 ? participants : [
     { participantCode: 'PT-88102', studyId: 'PROTO-2026-001', site: 'Boston Center', gender: 'Female', age: 42, consentStatus: 'CONSENTED', status: 'ACTIVE' },

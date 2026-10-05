@@ -1,9 +1,8 @@
 // frontend/shell/src/auth/AuthContext.tsx - Host-Level Authentication & Session Management
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import { AuthUser, AuthState } from '../../../shared/contracts';
-import { getCachedRuntimeConfig } from '../../../shared/runtime-config';
 import { telemetry } from '../../../shared/telemetry';
+import { authApi } from '../../../shared/api/authApi';
 
 export interface AuthContextType extends AuthState {
   loading: boolean;
@@ -82,25 +81,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        const config = getCachedRuntimeConfig();
-        const identityBase = config?.remotes?.identity?.apiBaseUrl || 'http://localhost:8081';
-        const res = await axios.get(`${identityBase}/api/v1/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${storedToken}`,
-          },
-          timeout: 5000,
-        });
+        const currentUser = await authApi.getCurrentUser();
 
-        if (res.data && res.data.data && res.data.data.username) {
+        if (currentUser && currentUser.username) {
           if (isMounted) {
-            setUser(res.data.data);
+            setUser(currentUser);
             setToken(storedToken);
-            localStorage.setItem('enrollnow_user', JSON.stringify(res.data.data));
+            localStorage.setItem('enrollnow_user', JSON.stringify(currentUser));
           }
         }
       } catch (err: any) {
         // Only clear session if server explicitly returned 401 or 403 Unauthorized
-        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        const status = err.status || err.response?.status;
+        if (status === 401 || status === 403) {
           if (isMounted) {
             clearSession();
           }
@@ -150,41 +143,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isAuthenticated, user, loading]);
 
   const login = async (username: string, password: string) => {
-    const config = getCachedRuntimeConfig();
-    const identityBase = config?.remotes?.identity?.apiBaseUrl || 'http://localhost:8081';
-    const res = await axios.post(`${identityBase}/api/v1/auth/login`, {
-      usernameOrEmail: username,
-      username,
-      password,
-    });
-    if (!res.data || !res.data.data) {
+    try {
+      const { user: authUser, token: accessToken } = await authApi.login({ username, password });
+
+      if (!accessToken || !authUser || !authUser.username || !authUser.roles) {
+        clearSession();
+        throw new Error('Authentication failed: Incomplete user profile in server response');
+      }
+
+      setToken(accessToken);
+      setUser(authUser);
+      localStorage.setItem('enrollnow_token', accessToken);
+      localStorage.setItem('enrollnow_user', JSON.stringify(authUser));
+      window.dispatchEvent(
+        new CustomEvent('enrollnow_auth_change', {
+          detail: { token: accessToken, user: authUser },
+        })
+      );
+    } catch (err) {
       clearSession();
-      throw new Error('Authentication failed: Malformed response from Identity Service');
+      throw err;
     }
-
-    const data = res.data.data;
-    const accessToken = data.accessToken || data.token;
-    const authUser: AuthUser | undefined = data.user;
-
-    if (!accessToken || !authUser || !authUser.username || !authUser.roles) {
-      clearSession();
-      throw new Error('Authentication failed: Incomplete user profile in server response');
-    }
-
-    setToken(accessToken);
-    setUser(authUser);
-    localStorage.setItem('enrollnow_token', accessToken);
-    localStorage.setItem('enrollnow_user', JSON.stringify(authUser));
-    window.dispatchEvent(
-      new CustomEvent('enrollnow_auth_change', {
-        detail: { token: accessToken, user: authUser },
-      })
-    );
   };
 
   const logout = () => {
     clearSession();
-    window.dispatchEvent(new CustomEvent('enrollnow_auth_change', { detail: { logout: true } }));
+    authApi.logout();
     window.location.href = '/login';
   };
 
@@ -193,7 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return user.roles.includes(role);
   };
 
-  const isAdmin = hasRole('ROLE_SUPER_ADMIN') || hasRole('ROLE_SITE_ADMIN') || hasRole('ROLE_ADMIN');
+  const isAdmin = hasRole('ROLE_SUPER_ADMIN') || hasRole('ROLE_SITE_ADMIN') || hasRole('ROLE_ADMIN') || hasRole('ADMIN');
 
   return (
     <AuthContext.Provider
