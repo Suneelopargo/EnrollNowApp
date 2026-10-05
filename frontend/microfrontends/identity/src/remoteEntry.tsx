@@ -221,9 +221,9 @@ const AUTH_STYLES = `
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(350px, 23.5%) 1fr minmax(600px, 36%);
+  grid-template-columns: minmax(0, 26fr) minmax(0, 35fr) minmax(0, 39fr);
   align-items: center;
-  padding: 0 24px 0 3.5%;
+  padding: 0 1.5% 0 5.5%;
   z-index: 10;
   box-sizing: border-box;
 }
@@ -234,14 +234,15 @@ const AUTH_STYLES = `
   flex-direction: column;
   justify-content: flex-start;
   height: 100%;
-  padding-top: clamp(24px, 4.2vh, 46px);
+  padding-top: clamp(32px, 5.2vh, 54px);
   padding-bottom: clamp(100px, 14vh, 150px);
-  max-width: 380px;
+  max-width: 100%;
+  min-width: 0;
   z-index: 10;
 }
 
 .enl-marketing-brand {
-  margin-bottom: clamp(12px, 2vh, 22px);
+  margin-bottom: clamp(38px, 4.5vh, 46px);
 }
 
 .enl-marketing-headline {
@@ -259,7 +260,7 @@ const AUTH_STYLES = `
 .enl-showcase-region {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   height: 100%;
   position: relative;
   z-index: 8;
@@ -268,8 +269,8 @@ const AUTH_STYLES = `
 
 .enl-showcase-container {
   position: relative;
-  width: 700px;
-  height: 740px;
+  width: 100%;
+  height: min(740px, 86vh);
   max-height: 86vh;
 }
 
@@ -299,10 +300,10 @@ const AUTH_STYLES = `
 
 .enl-researcher-frame {
   position: absolute;
-  right: -8px;
+  right: 0;
   bottom: 30px;
-  width: 380px;
-  height: 600px;
+  width: min(78%, 380px);
+  height: 680px;
   max-height: 76vh;
   border-radius: 40px 0 0 40px;
   overflow: hidden;
@@ -333,24 +334,24 @@ const AUTH_STYLES = `
 /* Floating Cards Surrounding Researcher */
 .enl-float-screening {
   position: absolute;
-  left: 80px;
-  top: 35px;
+  left: 12%;
+  top: 5%;
   z-index: 10;
   width: 280px;
 }
 
 .enl-float-appointments {
   position: absolute;
-  left: 45px;
-  top: 285px;
+  left: 4%;
+  top: 39%;
   z-index: 10;
   width: 230px;
 }
 
 .enl-float-engage {
   position: absolute;
-  left: 80px;
-  top: 450px;
+  left: 12%;
+  top: 62%;
   z-index: 10;
   width: 245px;
 }
@@ -368,8 +369,8 @@ const AUTH_STYLES = `
 
 .enl-login-card {
   width: 100%;
-  max-width: 690px;
-  height: clamp(620px, 82vh, 800px);
+  max-width: none;
+  height: clamp(620px, 86vh, 920px);
   background-color: #ffffff;
   border-radius: 30px;
   padding: clamp(24px, 3.2vh, 36px) clamp(28px, 2.6vw, 44px) clamp(18px, 2.2vh, 26px);
@@ -674,76 +675,76 @@ const AUTH_STYLES = `
 
 @media (max-width: 1680px) {
   .enl-three-region-layout {
-    grid-template-columns: minmax(340px, 23.5%) 1fr minmax(520px, 35.5%);
-    padding: 0 20px 0 3%;
+    grid-template-columns: minmax(0, 26fr) minmax(0, 35fr) minmax(0, 39fr);
+    padding: 0 1.5% 0 5.5%;
   }
   .enl-showcase-container {
-    width: 640px;
+    width: 100%;
     height: 700px;
   }
   .enl-researcher-frame {
-    right: -6px;
-    width: 350px;
+    right: 0;
+    width: min(78%, 350px);
     height: 560px;
     bottom: 25px;
   }
   .enl-float-screening {
-    left: 70px;
-    top: 35px;
+    left: 12%;
+    top: 5%;
     width: 260px;
   }
   .enl-float-appointments {
-    left: 40px;
-    top: 275px;
+    left: 4%;
+    top: 39%;
     width: 220px;
   }
   .enl-float-engage {
-    left: 70px;
-    top: 435px;
+    left: 12%;
+    top: 62%;
     width: 235px;
   }
   .enl-login-card {
-    max-width: 620px;
+    max-width: none;
   }
 }
 
 @media (max-width: 1440px) {
   .enl-three-region-layout {
-    grid-template-columns: minmax(320px, 23.5%) 1fr minmax(460px, 36.5%);
-    padding: 0 16px 0 2.5%;
+    grid-template-columns: minmax(0, 26fr) minmax(0, 35fr) minmax(0, 39fr);
+    padding: 0 1.5% 0 5.5%;
   }
   .enl-marketing-region {
-    max-width: 330px;
+    max-width: 100%;
   }
   .enl-showcase-container {
-    width: 520px;
+    width: 100%;
     height: 630px;
   }
   .enl-researcher-frame {
-    right: -6px;
-    width: 300px;
+    right: 0;
+    width: min(78%, 300px);
     height: 500px;
     bottom: 20px;
   }
   .enl-float-screening {
-    left: 50px;
-    top: 30px;
+    left: 10%;
+    top: 5%;
     width: 235px;
   }
   .enl-float-appointments {
-    left: 25px;
-    top: 245px;
+    left: 3%;
+    top: 39%;
     width: 200px;
   }
   .enl-float-engage {
-    left: 55px;
-    top: 395px;
+    left: 10%;
+    top: 62%;
     width: 215px;
   }
   .enl-login-card {
     padding: 22px 24px 18px;
     height: clamp(580px, 80vh, 740px);
-    max-width: 560px;
+    max-width: none;
   }
 }
 

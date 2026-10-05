@@ -32,7 +32,7 @@ export const MarketingHeadline: React.FC<MarketingHeadlineProps> = ({
         className="enl-main-heading"
         style={{
           margin: 0,
-          fontSize: 'clamp(42px, 2.7vw, 49px)',
+          fontSize: 'clamp(42px, 2.6vw, 46px)',
           fontWeight: 800,
           lineHeight: 1.14,
           letterSpacing: '-0.025em',
@@ -48,11 +48,11 @@ export const MarketingHeadline: React.FC<MarketingHeadlineProps> = ({
       <p
         className="enl-heading-desc"
         style={{
-          margin: '16px 0 0 0',
+          margin: '12px 0 0 0',
           fontSize: '17px',
           lineHeight: 1.5,
           color: '#475569',
-          maxWidth: '380px',
+          maxWidth: '350px',
         }}
       >
         {description}

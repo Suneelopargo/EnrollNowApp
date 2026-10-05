@@ -70,6 +70,7 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
           <svg
             className="enl-flow-connector"
             viewBox="0 0 700 760"
+            preserveAspectRatio="none"
             fill="none"
             aria-hidden="true"
           >
@@ -88,7 +89,7 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
 
             {/* Dashed Connecting Path - Lower Segment: Card 2 (Appointments) -> Node 2 -> Card 3 (Engage) */}
             <path
-              d="M 45 379 C 38 395, 30 405, 32 418 C 35 432, 55 442, 80 450"
+              d="M 45 379 C 38 395, 30 405, 32 418 C 35 440, 56 458, 86 472"
               stroke="#0284c7"
               strokeWidth="2.8"
               strokeDasharray="6 5"
