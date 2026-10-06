@@ -1,7 +1,8 @@
 // frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Plus, MessageSquare, Mail, Phone, FileText, Check, ChevronDown, User, ShieldCheck } from 'lucide-react';
-import DeleteParticipantModal from './DeleteParticipantModal';
+import { Calendar, Clock, MessageSquare, Mail, Phone, FileText, Check, Plus, User, Users, ShieldCheck } from 'lucide-react';
+import { Modal } from '../../../../shared/design-system/components/Modal';
+import { Tabs } from '../../../../shared/design-system/components/Tabs';
 import { ParticipantRecord } from '../types/participant';
 
 interface ParticipantDetailModalProps {
@@ -9,7 +10,6 @@ interface ParticipantDetailModalProps {
   onClose: () => void;
   participant: ParticipantRecord | null;
   onSave: (updatedParticipant: ParticipantRecord) => void;
-  onDelete: (participant: ParticipantRecord) => void;
 }
 
 interface CommentRecord {
@@ -25,11 +25,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   onClose,
   participant,
   onSave,
-  onDelete,
 }) => {
   const [activeTopNav, setActiveTopNav] = useState<'details' | 'contact' | 'demographics' | 'family' | 'variables'>('details');
   const [activeTab, setActiveTab] = useState<'comments' | 'email' | 'text' | 'contact' | 'consent' | 'forms'>('comments');
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   const [familyId, setFamilyId] = useState('');
   const [globalId, setGlobalId] = useState('');
@@ -109,106 +107,78 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto">
-      <div className="bg-[#f8fafc] rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-200 flex flex-col my-6 max-h-[90vh] transition-all">
-        <div className="bg-white px-6 py-3 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-4 text-xs font-medium text-[#1976d2] overflow-x-auto py-1">
-            <button
-              type="button"
-              onClick={() => setActiveTopNav('details')}
-              className={`hover:underline cursor-pointer ${activeTopNav === 'details' ? 'font-bold text-[#1565c0] underline' : ''}`}
-            >
-              Main Overview
-            </button>
-            <span className="text-gray-300">|</span>
-            <button
-              type="button"
-              onClick={() => setActiveTopNav('contact')}
-              className={`hover:underline cursor-pointer ${activeTopNav === 'contact' ? 'font-bold text-[#1565c0] underline' : ''}`}
-            >
-              Contact Methods
-            </button>
-            <span className="text-gray-300">|</span>
-            <button
-              type="button"
-              onClick={() => setActiveTopNav('demographics')}
-              className={`hover:underline cursor-pointer ${activeTopNav === 'demographics' ? 'font-bold text-[#1565c0] underline' : ''}`}
-            >
-              Demographics
-            </button>
-            <span className="text-gray-300">|</span>
-            <button
-              type="button"
-              onClick={() => setActiveTopNav('family')}
-              className={`hover:underline cursor-pointer ${activeTopNav === 'family' ? 'font-bold text-[#1565c0] underline' : ''}`}
-            >
-              Family
-            </button>
-            <span className="text-gray-300">|</span>
-            <button
-              type="button"
-              onClick={() => setActiveTopNav('variables')}
-              className={`hover:underline cursor-pointer ${activeTopNav === 'variables' ? 'font-bold text-[#1565c0] underline' : ''}`}
-            >
-              Variables
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-700 p-1.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
-              title="Close"
-            >
-              <X className="w-5 h-5 stroke-[2.5]" />
-            </button>
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Participant Details"
+      maxWidth="1200px"
+      footer={(
+        <>
+          <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button type="button" onClick={handleSaveParticipant} className="btn btn-primary">
+            <Check size={16} /> Save Changes
+          </button>
+        </>
+      )}
+    >
+      <div className="record-detail">
+        <div className="record-detail__identity">
+          <h1>{participant.name}</h1>
+          <span className="badge badge-info">Participant ID: {participant.globalId || '—'}</span>
         </div>
 
-        <div className="p-6 overflow-y-auto flex flex-col gap-6 text-sm flex-1">
-          <div className="border-b border-gray-200 pb-3 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{participant.name}</h1>
-            <span className="bg-blue-100 text-[#1976d2] px-3 py-1 rounded-full text-xs font-semibold">
-              ID: {participant.globalId || 'pxjfO-0vf3bgq5V9o'}
-            </span>
-          </div>
+        <Tabs
+          activeTab={activeTopNav}
+          onChange={(tabId) => setActiveTopNav(tabId as typeof activeTopNav)}
+          tabs={[
+            { id: 'details', label: 'Overview', icon: <User size={16} /> },
+            { id: 'contact', label: 'Contact Methods', icon: <Mail size={16} /> },
+            { id: 'demographics', label: 'Demographics', icon: <ShieldCheck size={16} /> },
+            { id: 'family', label: 'Family', icon: <Users size={16} /> },
+            { id: 'variables', label: 'Variables', icon: <FileText size={16} /> },
+          ]}
+        />
 
-          <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-2xs flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-gray-700 min-w-[70px]">Family ID:</label>
+        <div className="record-detail__sections">
+          {activeTopNav === 'details' && <div className="card record-detail__panel">
+            <div className="card-header"><h3>Participant overview</h3></div>
+            <div className="record-detail__overview-grid">
+              <div className="record-detail__field">
+                <label className="form-label" htmlFor="participant-family-id">Family ID</label>
                 <input
+                  id="participant-family-id"
                   type="text"
                   value={familyId}
                   onChange={(e) => setFamilyId(e.target.value)}
-                  className="flex-1 max-w-[200px] border border-gray-300 focus:border-[#1976d2] rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white"
+                  className="form-input"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-gray-700 min-w-[90px]">Date Created:</label>
-                <span className="text-xs text-gray-800 font-medium">
+              <div className="record-detail__field">
+                <span className="form-label">Date Created</span>
+                <span className="record-detail__readonly">
                   {participant.dateCreated || '20/03/2025, 11:45 pm'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-gray-700 min-w-[70px]">Global ID:</label>
+              <div className="record-detail__field">
+                <label className="form-label" htmlFor="participant-global-id">Global ID</label>
                 <input
+                  id="participant-global-id"
                   type="text"
                   value={globalId}
                   onChange={(e) => setGlobalId(e.target.value)}
-                  className="flex-1 max-w-[200px] border border-gray-300 focus:border-[#1976d2] rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white"
+                  className="form-input"
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-gray-700 min-w-[90px]">Timezone:</label>
+              <div className="record-detail__field">
+                <label className="form-label" htmlFor="participant-timezone">Timezone</label>
                 <select
+                  id="participant-timezone"
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
-                  className="flex-1 max-w-[220px] border border-gray-300 focus:border-[#1976d2] rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white cursor-pointer"
+                  className="form-select"
                 >
                   <option value="America/New_York (EDT)">America/New_York (EDT)</option>
                   <option value="America/Chicago (CDT)">America/Chicago (CDT)</option>
@@ -217,80 +187,75 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </select>
               </div>
 
-              <div className="flex items-center justify-between gap-2 md:col-span-2">
-                <label className="text-xs font-semibold text-gray-700 min-w-[70px]">Tags:</label>
-                <div className="flex-1 flex items-center gap-2 border border-gray-300 rounded px-2.5 py-1.5 bg-white">
-                  <input
+              <div className="record-detail__field record-detail__field--wide">
+                <label className="form-label" htmlFor="participant-tags">Tags</label>
+                <input
+                    id="participant-tags"
                     type="text"
                     value={tagsInput}
                     onChange={(e) => setTagsInput(e.target.value)}
                     placeholder="Enter tags separated by commas..."
-                    className="flex-1 outline-none text-xs text-gray-800 bg-transparent"
+                    className="form-input"
                   />
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </div>
               </div>
 
-              <div className="flex items-center gap-2.5 md:col-span-2 pt-1">
+              <div className="record-detail__field--wide record-detail__checkbox-field">
                 <input
                   type="checkbox"
                   id="futureContactCheckModal"
                   checked={contactForFuture}
                   onChange={(e) => setContactForFuture(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer accent-[#1976d2]"
                 />
-                <label htmlFor="futureContactCheckModal" className="text-xs font-medium text-gray-800 cursor-pointer">
+                <label htmlFor="futureContactCheckModal" className="form-label">
                   Contact For Future Studies?
                 </label>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 md:col-span-2 pt-1">
-                <label className="text-xs font-semibold text-gray-700">Global Date of Last Contact:</label>
-                <div className="flex items-center gap-2 border border-gray-300 rounded px-3 py-1.5 bg-white w-full sm:w-auto min-w-[260px]">
+              <div className="record-detail__field record-detail__field--wide">
+                <label className="form-label" htmlFor="participant-last-contact">Global Date of Last Contact</label>
+                <div className="record-detail__date-field">
                   <input
+                    id="participant-last-contact"
                     type="text"
                     value={dateLastContact}
                     onChange={(e) => setDateLastContact(e.target.value)}
-                    className="text-xs text-gray-800 font-mono flex-1 outline-none"
+                    className="form-input"
                   />
-                  <div className="flex items-center gap-1.5 text-gray-400">
-                    <Calendar className="w-4 h-4" />
-                    <Clock className="w-4 h-4" />
+                  <div className="record-detail__date-icons" aria-hidden="true">
+                    <Calendar size={16} />
+                    <Clock size={16} />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </div>}
 
           {activeTopNav === 'contact' && (
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 flex flex-col gap-3">
-              <h3 className="font-semibold text-xs text-blue-900 uppercase tracking-wider">Contact Methods Details</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="font-medium text-gray-700 block mb-1">Primary Email:</label>
+            <div className="card record-detail__panel">
+              <div className="card-header"><h3>Contact methods</h3><p>How this participant prefers to be reached.</p></div>
+              <div className="record-detail__panel-content record-detail__overview-grid">
+                <div className="record-detail__field"><label className="form-label">Primary email</label>
                   <input
                     type="email"
                     value={primaryEmail}
                     onChange={(e) => setPrimaryEmail(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 bg-white text-xs"
+                    className="form-input"
                   />
                 </div>
-                <div>
-                  <label className="font-medium text-gray-700 block mb-1">Phone Number:</label>
+                <div className="record-detail__field"><label className="form-label">Phone number</label>
                   <input
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 bg-white text-xs"
+                    className="form-input"
                   />
                 </div>
-                <div className="sm:col-span-2">
-                  <label className="font-medium text-gray-700 block mb-1">Address:</label>
+                <div className="record-detail__field record-detail__field--wide"><label className="form-label">Address</label>
                   <input
                     type="text"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 bg-white text-xs"
+                    className="form-input"
                   />
                 </div>
               </div>
@@ -298,77 +263,79 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           )}
 
           {activeTopNav === 'demographics' && (
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 flex flex-col gap-3">
-              <h3 className="font-semibold text-xs text-blue-900 uppercase tracking-wider">Demographics Details</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <label className="font-medium text-gray-700 block mb-1">Sex/Gender:</label>
+            <div className="card record-detail__panel">
+              <div className="card-header"><h3>Demographics</h3><p>Participant demographic information.</p></div>
+              <div className="record-detail__overview-grid">
+                <div className="record-detail__field"><label className="form-label">Sex / gender</label>
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-2.5 py-1.5 bg-white text-xs"
+                    className="form-select"
                   >
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                     <option value="Unspecified">Unspecified</option>
                   </select>
                 </div>
-                <div><span className="font-medium text-gray-900">Ethnicity:</span> {participant.demographics?.ethnicity || 'Not Disclosed'}</div>
-                <div><span className="font-medium text-gray-900">Race:</span> {participant.demographics?.race || 'Not Disclosed'}</div>
+                <div className="record-detail__field"><span className="form-label">Ethnicity</span><span>{participant.demographics?.ethnicity || 'Not disclosed'}</span></div>
+                <div className="record-detail__field"><span className="form-label">Race</span><span>{participant.demographics?.race || 'Not disclosed'}</span></div>
               </div>
             </div>
           )}
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden flex flex-col">
-            <div className="bg-gray-50 border-b border-gray-200 flex items-center gap-1 px-2 pt-2 overflow-x-auto">
-              {[
-                { id: 'comments', label: 'Comments', icon: MessageSquare },
-                { id: 'email', label: 'Email', icon: Mail },
-                { id: 'text', label: 'Text', icon: Phone },
-                { id: 'contact', label: 'Contact', icon: User },
-                { id: 'consent', label: 'Consent', icon: ShieldCheck },
-                { id: 'forms', label: 'Forms', icon: FileText },
-              ].map((t) => {
-                const IconComp = t.icon;
-                const isActive = activeTab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setActiveTab(t.id as any)}
-                    className={`px-4 py-2 text-xs font-semibold rounded-t-lg transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap border-t border-x ${
-                      isActive
-                        ? 'bg-white text-gray-900 border-gray-200 border-b-white -mb-px'
-                        : 'bg-transparent text-gray-600 hover:text-gray-900 border-transparent'
-                    }`}
-                  >
-                    <IconComp className="w-3.5 h-3.5" />
-                    <span>{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+          {activeTopNav === 'family' && (
+            <section className="card record-detail__panel">
+              <div className="card-header"><h3>Family members</h3><p>People linked to this participant.</p></div>
+              <div className="record-detail__panel-content">
+                <div className="record-detail__family-person">
+                  <span className="record-detail__avatar"><Users size={18} /></span>
+                  <div><strong>{participant.name}</strong><span>Participant · Family ID {familyId || 'Not assigned'}</span></div>
+                </div>
+                <p className="record-detail__empty">No additional family members are available.</p>
+              </div>
+            </section>
+          )}
 
-            <div className="p-5 flex flex-col gap-4">
+          {activeTopNav === 'variables' && (
+            <section className="card record-detail__panel">
+              <div className="card-header"><h3>Participant variables</h3><p>Study-specific variables associated with this record.</p></div>
+              <div className="record-detail__panel-content"><p className="record-detail__empty">No participant variables are available.</p></div>
+            </section>
+          )}
+
+          {activeTopNav === 'details' && <div className="card record-detail__panel">
+            <Tabs
+              activeTab={activeTab}
+              onChange={(tabId) => setActiveTab(tabId as typeof activeTab)}
+              tabs={[
+                { id: 'comments', label: 'Comments', icon: <MessageSquare size={16} /> },
+                { id: 'email', label: 'Email', icon: <Mail size={16} /> },
+                { id: 'text', label: 'Text', icon: <Phone size={16} /> },
+                { id: 'contact', label: 'Contact', icon: <User size={16} /> },
+                { id: 'consent', label: 'Consent', icon: <ShieldCheck size={16} /> },
+                { id: 'forms', label: 'Forms', icon: <FileText size={16} /> },
+              ]}
+            />
+
+            <div className="record-detail__panel-content">
               {activeTab === 'comments' && (
-                <form onSubmit={handleAddComment} className="flex flex-col gap-3">
+                <form onSubmit={handleAddComment} className="record-detail__comment-form">
                   <textarea
                     rows={3}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Add comment..."
-                    className="w-full border border-gray-300 rounded-lg p-3 text-xs text-gray-800 outline-none focus:border-[#1976d2] focus:ring-2 focus:ring-blue-500/10 placeholder-gray-400"
+                    className="form-textarea"
                   />
                   
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs text-gray-600 font-medium">Mark Comment As:</span>
-                      <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+                  <div className="record-detail__comment-options">
+                    <div className="record-detail__checkbox-field">
+                      <span className="form-label">Mark comment as</span>
+                      <label className="record-detail__checkbox-field">
                         <input
                           type="checkbox"
                           checked={isPinned}
                           onChange={(e) => setIsPinned(e.target.checked)}
-                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300"
                         />
                         <span>Pin Comment</span>
                       </label>
@@ -376,20 +343,20 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
                     <button
                       type="submit"
-                      className="bg-[#1976d2] hover:bg-[#1565c0] text-white px-5 py-1.5 rounded-md text-xs font-medium cursor-pointer shadow-xs transition-all"
+                      className="btn btn-primary"
                     >
                       Save Comment
                     </button>
                   </div>
 
-                  <div className="mt-3 flex flex-col gap-2.5 border-t border-gray-100 pt-3">
+                  <div className="record-detail__comments-list">
                     {comments.map((c) => (
-                      <div key={c.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
-                          <span className="text-gray-900 font-semibold">{c.author}</span>
+                      <div key={c.id} className="record-detail__comment">
+                        <div className="record-detail__comment-meta">
+                          <strong>{c.author}{c.pinned ? ' · Pinned' : ''}</strong>
                           <span>{c.date}</span>
                         </div>
-                        <p className="text-xs text-gray-800">{c.text}</p>
+                        <p>{c.text}</p>
                       </div>
                     ))}
                   </div>
@@ -451,9 +418,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
               )}
             </div>
-          </div>
+          </div>}
 
-          <div className="flex flex-col gap-6">
+          {activeTopNav === 'details' && <div className="record-detail__related">
             <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-2xs flex flex-col gap-3">
               <h3 className="text-lg font-bold text-gray-900 tracking-tight">Studies Info</h3>
               
@@ -554,39 +521,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </table>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="bg-white px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={handleSaveParticipant}
-            className="bg-[#1976d2] hover:bg-[#1565c0] text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-1.5 text-sm font-medium transition-all cursor-pointer shadow-xs hover:shadow-md active:scale-95"
-          >
-            <Check className="w-4 h-4 stroke-[3]" />
-            <span>Save Changes</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium transition-colors cursor-pointer shadow-2xs"
-          >
-            Cancel
-          </button>
+          </div>}
         </div>
       </div>
 
-      <DeleteParticipantModal
-        isOpen={isDeleteConfirmOpen}
-        onClose={() => setIsDeleteConfirmOpen(false)}
-        participantName={participant.name}
-        onConfirm={() => {
-          onDelete?.(participant);
-          setIsDeleteConfirmOpen(false);
-        }}
-      />
-    </div>
+    </Modal>
   );
 };
 

@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ParticipantModule } from './remoteEntry';
+import { ConfirmationContainer } from '../../../shared/confirmation';
 import { getApiBaseUrl } from '../../../shared/api-config';
 import '../../../shared/design-system/styles/index.scss';
 
@@ -29,6 +30,7 @@ if (rootEl) {
       <div className="shell-main-content">
         <ParticipantModule context={mockContext} />
       </div>
+      <ConfirmationContainer />
     </React.StrictMode>
   );
 }

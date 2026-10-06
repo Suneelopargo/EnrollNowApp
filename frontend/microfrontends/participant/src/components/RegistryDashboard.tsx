@@ -1,15 +1,14 @@
 // frontend/microfrontends/participant/src/components/RegistryDashboard.tsx - Participant & Registry Dashboard Root
 import React, { useState, useMemo } from 'react';
+import { toast } from '../../../../shared/toaster';
+import { requestConfirmation } from '../../../../shared/confirmation';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
-import DeleteFilterModal from './DeleteFilterModal';
-import DeleteParticipantModal from './DeleteParticipantModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import Toast from './Toast';
 import { initialParticipants } from '../mockData';
-import { ParticipantRecord, CustomFilterRule, SavedSearch, ToastNotification } from '../types/participant';
+import { ParticipantRecord, CustomFilterRule, SavedSearch } from '../types/participant';
 
 export const RegistryDashboard: React.FC = () => {
   const [participants, setParticipants] = useState<ParticipantRecord[]>(initialParticipants);
@@ -44,27 +43,12 @@ export const RegistryDashboard: React.FC = () => {
   
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
-  const [deleteModalState, setDeleteModalState] = useState<{ isOpen: boolean; targetSearch: SavedSearch | null }>({
-    isOpen: false,
-    targetSearch: null,
-  });
   const [detailModalState, setDetailModalState] = useState<{ isOpen: boolean; participant: ParticipantRecord | null }>({
     isOpen: false,
     participant: null,
   });
-  const [deleteParticipantState, setDeleteParticipantState] = useState<{ isOpen: boolean; participant: ParticipantRecord | null }>({
-    isOpen: false,
-    participant: null,
-  });
-  const [statusNotification, setStatusNotification] = useState<ToastNotification | null>(null);
-
-  const showNotification = (msg: string | ToastNotification, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
-    if (typeof msg === 'object') {
-      setStatusNotification(msg);
-    } else {
-      setStatusNotification({ message: msg, type });
-    }
-    setTimeout(() => setStatusNotification(null), 4000);
+  const showNotification = (msg: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
+    toast[type](msg);
   };
 
   const matchCustomFilter = (p: ParticipantRecord, f: CustomFilterRule): boolean => {
@@ -272,16 +256,18 @@ export const RegistryDashboard: React.FC = () => {
   };
 
   const handleOpenDeleteModal = (searchItem: SavedSearch) => {
-    setDeleteModalState({ isOpen: true, targetSearch: searchItem });
-  };
-
-  const handleConfirmDelete = () => {
-    const target = deleteModalState.targetSearch;
-    if (target) {
-      setSavedSearches((prev) => prev.filter((s) => s.id !== target.id));
-      showNotification(`Saved search "${target.name}" deleted.`, 'error');
-    }
-    setDeleteModalState({ isOpen: false, targetSearch: null });
+    void requestConfirmation({
+      entityName: searchItem.name,
+      intent: 'danger',
+      confirmText: `Delete ${searchItem.name}`,
+      loadingText: 'Deleting saved search...',
+      title: 'Delete saved search',
+      message: `Delete the saved search “${searchItem.name}”? This action cannot be undone.`,
+      onConfirm: () => {
+        setSavedSearches((prev) => prev.filter((item) => item.id !== searchItem.id));
+        showNotification(`Saved search "${searchItem.name}" deleted.`, 'success');
+      },
+    });
   };
 
   const handleSelectSavedSearch = (saved: SavedSearch) => {
@@ -306,58 +292,29 @@ export const RegistryDashboard: React.FC = () => {
     setParticipants((prev) =>
       prev.map((p) => (p.id === updatedParticipant.id ? updatedParticipant : p))
     );
-    showNotification({
-      message: `Participant "${updatedParticipant.name}" details updated successfully.`,
-      type: 'success'
-    });
-    setDetailModalState({ isOpen: false, participant: null });
-  };
-
-  const handleDeleteDetail = (participantToDelete: ParticipantRecord) => {
-    setParticipants((prev) => prev.filter((p) => p.id !== participantToDelete.id));
-    showNotification({
-      message: `Participant "${participantToDelete.name}" deleted.`,
-      type: 'error'
-    });
+    showNotification(`Participant "${updatedParticipant.name}" details updated successfully.`, 'success');
     setDetailModalState({ isOpen: false, participant: null });
   };
 
   const handleOpenDeleteParticipant = (participant: ParticipantRecord) => {
-    setDeleteParticipantState({ isOpen: true, participant });
-  };
-
-  const handleConfirmDeleteParticipant = () => {
-    const target = deleteParticipantState.participant;
-    if (target) {
-      setParticipants((prev) => prev.filter((p) => p.id !== target.id));
-      showNotification({
-        message: `Participant "${target.name}" deleted.`,
-        type: 'error'
-      });
-    }
-    setDeleteParticipantState({ isOpen: false, participant: null });
+    void requestConfirmation({
+      entityName: participant.name,
+      intent: 'danger',
+      confirmText: 'Delete participant',
+      loadingText: 'Deleting participant...',
+      title: 'Delete participant',
+      message: `Delete participant “${participant.name}”? This action cannot be undone.`,
+      confirmWord: 'DELETE',
+      onConfirm: () => {
+        setParticipants((prev) => prev.filter((item) => item.id !== participant.id));
+        showNotification(`Participant "${participant.name}" deleted.`, 'success');
+      },
+    });
   };
 
   return (
-    <div className="w-full bg-[#f4f6f8] flex flex-col font-sans text-gray-800 rounded-lg overflow-hidden registry-dashboard-wrapper">
-      <div
-        className="flex-1 p-4 lg:p-6 flex flex-row gap-5 items-start registry-main-layout"
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          gap: '20px',
-          alignItems: 'flex-start',
-          width: '100%',
-          boxSizing: 'border-box',
-          padding: '20px',
-        }}
-      >
-        <Toast
-          notification={statusNotification}
-          onClose={() => setStatusNotification(null)}
-        />
-
-        <div style={{ width: '310px', minWidth: '310px', maxWidth: '310px', flexShrink: 0 }}>
+    <div className="workspace-split-layout">
+        <div className="workspace-split-layout__sidebar">
           <LeftFilterPanel
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
@@ -379,15 +336,7 @@ export const RegistryDashboard: React.FC = () => {
           />
         </div>
 
-        <div
-          className="flex-1 w-full overflow-hidden"
-          style={{
-            flex: '1 1 0%',
-            minWidth: 0,
-            width: 'calc(100% - 330px)',
-            overflow: 'hidden',
-          }}
-        >
+        <div className="workspace-split-layout__main">
           <ParticipantGrid
             participants={filteredParticipants}
             allParticipants={participants}
@@ -417,28 +366,13 @@ export const RegistryDashboard: React.FC = () => {
           onSave={handleSaveFilterSubmit}
         />
 
-        <DeleteFilterModal
-          isOpen={deleteModalState.isOpen}
-          onClose={() => setDeleteModalState({ isOpen: false, targetSearch: null })}
-          onConfirm={handleConfirmDelete}
-          filterName={deleteModalState.targetSearch?.name}
-        />
-
         <ParticipantDetailModal
           isOpen={detailModalState.isOpen}
           onClose={() => setDetailModalState({ isOpen: false, participant: null })}
           participant={detailModalState.participant}
           onSave={handleSaveDetail}
-          onDelete={handleDeleteDetail}
         />
 
-        <DeleteParticipantModal
-          isOpen={deleteParticipantState.isOpen}
-          onClose={() => setDeleteParticipantState({ isOpen: false, participant: null })}
-          participantName={deleteParticipantState.participant?.name}
-          onConfirm={handleConfirmDeleteParticipant}
-        />
-      </div>
     </div>
   );
 };

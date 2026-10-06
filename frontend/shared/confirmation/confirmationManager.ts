@@ -252,4 +252,22 @@ class ConfirmationManager {
 }
 
 export const confirmation = new ConfirmationManager();
+
+/** Request confirmation through the application host so remote modules use its shared dialog. */
+export function requestConfirmation(options: ConfirmationOptions): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+
+  const id = `confirm-request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return new Promise<boolean>((resolve) => {
+    const handleResponse = (event: Event) => {
+      const detail = (event as CustomEvent<{ id?: string; confirmed?: boolean }>).detail;
+      if (detail?.id !== id) return;
+      window.removeEventListener('enrollnow_confirm_response', handleResponse);
+      resolve(!!detail.confirmed);
+    };
+
+    window.addEventListener('enrollnow_confirm_response', handleResponse);
+    window.dispatchEvent(new CustomEvent('enrollnow_confirm_request', { detail: { id, options } }));
+  });
+}
 export default confirmation;

@@ -42,19 +42,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
 }) => {
   return (
     <aside
-      className="w-full lg:w-[310px] shrink-0 bg-white border border-gray-200 rounded-sm p-4 flex flex-col gap-4 shadow-sm registry-left-panel"
-      style={{
-        width: '310px',
-        minWidth: '310px',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '4px',
-        padding: '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px',
-        boxSizing: 'border-box',
-      }}
+      className="card card-body participant-filter-panel"
     >
       {/* Filter 1: Participant can be contacted for future studies? */}
       <div className="flex flex-col gap-1.5" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

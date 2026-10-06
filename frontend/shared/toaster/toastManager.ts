@@ -4,6 +4,7 @@ import { ToastItem, ToastOptions, ToastType } from './types';
 type ToastListener = (toasts: ToastItem[]) => void;
 
 class ToastManager {
+  private readonly instanceId = `toast-manager-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   private toasts: ToastItem[] = [];
   private listeners: Set<ToastListener> = new Set();
   private timers: Map<string, any> = new Map();
@@ -13,7 +14,7 @@ class ToastManager {
     if (typeof window !== 'undefined') {
       window.addEventListener('enrollnow_toast_dispatch', (event: any) => {
         const detail = event.detail;
-        if (detail && detail.message && detail.type) {
+        if (detail && detail.message && detail.type && detail.sourceId !== this.instanceId) {
           this.addToast(detail.type, detail.message, detail.options, false);
         }
       });
@@ -45,6 +46,12 @@ class ToastManager {
     options: ToastOptions = {},
     dispatchGlobally = true
   ): string {
+    // Keep a single active notification. A newer message replaces the current one
+    // instead of stacking multiple toasts on top of the page.
+    this.timers.forEach((timer) => clearTimeout(timer));
+    this.timers.clear();
+    this.toasts = [];
+
     const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const duration = options.duration !== undefined ? options.duration : 4000;
 
@@ -56,12 +63,6 @@ class ToastManager {
       duration,
       timestamp: Date.now(),
     };
-
-    // Keep maximum 5 concurrent toasts to avoid cluttering screen
-    if (this.toasts.length >= 5) {
-      const oldest = this.toasts[0];
-      this.dismiss(oldest.id);
-    }
 
     this.toasts.push(item);
     this.notify();
@@ -77,7 +78,7 @@ class ToastManager {
     if (dispatchGlobally && typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('enrollnow_toast_dispatch', {
-          detail: { type, message, options },
+          detail: { type, message, options, sourceId: this.instanceId },
         })
       );
     }

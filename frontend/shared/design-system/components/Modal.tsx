@@ -16,6 +16,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   footer,
+  maxWidth,
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,6 +34,7 @@ export const Modal: React.FC<ModalProps> = ({
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-container"
+        style={maxWidth ? { maxWidth } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">

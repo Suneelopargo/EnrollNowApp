@@ -39,16 +39,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
 
   return (
     <div
-      className="bg-[#f8f9fa] border border-[#d2d6dc] rounded-md p-3 flex flex-col gap-2.5 shadow-xs transition-all animate-fade-in registry-filter-card"
-      style={{
-        backgroundColor: '#f8f9fa',
-        border: '1px solid #d2d6dc',
-        borderRadius: '6px',
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-      }}
+      className="card card-body"
     >
       <div className="flex items-center justify-between" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span className="text-xs font-medium text-gray-700" style={{ fontSize: '12px', fontWeight: 500, color: '#374151' }}>Filter</span>

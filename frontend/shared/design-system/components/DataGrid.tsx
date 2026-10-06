@@ -7,6 +7,7 @@ import 'ag-grid-community/styles/ag-theme-quartz.css';
 const DEFAULT_COLUMN_DEFINITION = {
   resizable: true,
   sortable: true,
+  unSortIcon: true,
   filter: true,
   floatingFilter: true,
 };
@@ -20,7 +21,7 @@ export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>
   modules?: Module[];
 }
 
-export type { ColDef, GridApi } from 'ag-grid-community';
+export type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 
 /** Shared AG Grid wrapper with the application-wide theme and sensible defaults. */
 export function DataGrid<TData = any>({
@@ -28,6 +29,7 @@ export function DataGrid<TData = any>({
   wrapperClassName = '',
   defaultColDef,
   modules,
+  style,
   ...gridProps
 }: DataGridProps<TData>) {
   const gridClasses = ['enl-ag-grid', 'ag-theme-quartz', className, wrapperClassName]
@@ -35,12 +37,15 @@ export function DataGrid<TData = any>({
     .join(' ');
 
   return (
-    <AgGridReact<TData>
-      {...gridProps}
-      className={gridClasses}
-      modules={modules ?? [AllCommunityModule]}
-      defaultColDef={{ ...DEFAULT_COLUMN_DEFINITION, ...defaultColDef }}
-    />
+    <div className={gridClasses} style={{ width: '100%', height: '540px', minHeight: '320px', ...style }}>
+      <AgGridReact<TData>
+        {...gridProps}
+        style={{ width: '100%', height: '100%' }}
+        theme="legacy"
+        modules={modules ?? [AllCommunityModule]}
+        defaultColDef={{ ...DEFAULT_COLUMN_DEFINITION, ...defaultColDef }}
+      />
+    </div>
   );
 }
 

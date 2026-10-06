@@ -300,6 +300,68 @@
   padding: $spacing-6;
 }
 
+.page-context-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-4;
+  min-height: 62px;
+  margin-bottom: $spacing-5;
+  padding: $spacing-3 $spacing-5;
+  border-radius: $border-radius-sm;
+  background: #06294a;
+  color: #ffffff;
+
+  h1 {
+    margin: 0;
+    color: inherit;
+    font-size: $font-size-2xl;
+    font-weight: $font-weight-normal;
+    line-height: 1.2;
+  }
+}
+
+.page-context-banner__help {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: $border-radius-full;
+  color: #06294a;
+  background: #d8e6f1;
+  text-decoration: none;
+  transition: background-color $transition-fast, transform $transition-fast;
+
+  &:hover { background: #ffffff; transform: scale(1.04); }
+  &:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+}
+
+@media (max-width: 600px) {
+  .page-context-banner { min-height: 54px; margin-bottom: $spacing-4; padding-inline: $spacing-4; }
+  .page-context-banner h1 { font-size: $font-size-xl; }
+}
+
+// Reusable responsive two-column workspace layout for filter and result pages.
+.workspace-split-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  align-items: start;
+  gap: $spacing-5;
+  width: 100%;
+}
+
+.workspace-split-layout__sidebar,
+.workspace-split-layout__main {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .workspace-split-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .page-header {
   display: flex;
   align-items: flex-start;

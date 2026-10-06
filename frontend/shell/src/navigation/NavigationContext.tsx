@@ -12,7 +12,7 @@ interface NavigationContextType {
 export const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'dashboard', label: 'Home', route: '/dashboard', icon: 'Home', order: 1 },
   { id: 'admin', label: 'Administration', route: '/admin', icon: 'Settings', order: 2 },
-  { id: 'participants', label: 'Participants', route: '/participants', icon: 'Users', order: 3 },
+  { id: 'participants', label: 'Registry', route: '/participants', icon: 'Users', order: 3 },
   { id: 'communications', label: 'Outreach', route: '/communications', icon: 'MessageSquare', order: 4 },
   { id: 'studies', label: 'Studies', route: '/studies', icon: 'BookOpen', order: 5 },
   // Temporarily hidden from the top navigation; routes and MFEs remain available.

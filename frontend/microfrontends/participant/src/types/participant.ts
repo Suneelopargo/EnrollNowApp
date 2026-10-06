@@ -88,8 +88,3 @@ export interface SavedSearch {
   selectedStudies?: string[];
   customFilters?: CustomFilterRule[];
 }
-
-export interface ToastNotification {
-  message: string;
-  type?: 'info' | 'success' | 'error' | 'warning';
-}

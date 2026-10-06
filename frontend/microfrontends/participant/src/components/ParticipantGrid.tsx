@@ -1,30 +1,22 @@
 // frontend/microfrontends/participant/src/components/ParticipantGrid.tsx - AG-Grid Participant Table & Actions Bar
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ModuleRegistry, AllCommunityModule, ColDef, ICellRendererParams } from 'ag-grid-community';
+import { createPortal } from 'react-dom';
+import ExcelJS from 'exceljs';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { DataGrid, type ColDef, type GridApi, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { 
-  List, 
   Download, 
   Users, 
-  Play, 
   Search as SearchIcon, 
   Filter as FilterIcon, 
   X, 
-  Plus, 
-  Trash2 
+  Trash2,
+  MoreHorizontal,
+  Eye,
 } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, FileText, UserPlus } from 'lucide-react';
 import { ParticipantRecord, StudyItem } from '../types/participant';
-
-ModuleRegistry.registerModules([AllCommunityModule]);
-
-const SerialNumberRenderer: React.FC<ICellRendererParams> = (params) => {
-  if (!params.node || params.node.rowIndex == null) return null;
-  return (
-    <span className="font-medium text-xs text-gray-700">
-      {params.node.rowIndex + 1}
-    </span>
-  );
-};
 
 const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
   const [isSelected, setIsSelected] = useState(params.node ? params.node.isSelected() : false);
@@ -87,82 +79,77 @@ const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
   );
 };
 
-const ExpandCollapseRenderer: React.FC<ICellRendererParams> = (params) => {
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (params.data) {
-      params.context?.onOpenDetail?.(params.data);
-    }
+const ParticipantActionsRenderer: React.FC<ICellRendererParams> = (params) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !triggerRef.current?.contains(target)) setIsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isOpen]);
+
+  const toggleMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setMenuPosition({ top: rect.bottom + 6, left: Math.max(8, rect.right - 176) });
+    setIsOpen((open) => !open);
+  };
+
+  const openDetails = () => {
+    setIsOpen(false);
+    if (params.data) params.context?.onOpenDetail?.(params.data);
+  };
+
+  const deleteParticipant = () => {
+    setIsOpen(false);
+    if (params.data) params.context?.onDeleteParticipant?.(params.data);
   };
 
   return (
-    <div
-      onClick={handleClick}
-      className="w-full h-full bg-[#8eaee8] hover:bg-[#1976d2] flex items-center justify-center cursor-pointer transition-colors group"
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#8eaee8',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-      }}
-      title="Click to view participant details"
-    >
-      <Play
-        size={14}
-        fill="#ffffff"
-        color="#ffffff"
-        style={{ fill: '#ffffff', color: '#ffffff', transform: 'translateX(1px)' }}
-        className="fill-white text-white translate-x-[1px] group-hover:scale-110 transition-transform"
-      />
-    </div>
-  );
-};
-
-const DeleteCellRenderer: React.FC<ICellRendererParams> = (params) => {
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (params.data) {
-      params.context?.onDeleteParticipant?.(params.data);
-    }
-  };
-
-  return (
-    <div
-      className="w-full h-full bg-red-50/50 hover:bg-red-100/60 flex items-center justify-center cursor-pointer transition-colors"
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(254, 242, 242, 0.5)',
-      }}
-    >
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={handleClick}
-        className="w-7 h-7 rounded-md bg-[#d9534f] hover:bg-[#c9302c] text-white flex items-center justify-center transition-all shadow-2xs hover:scale-105 cursor-pointer"
-        style={{
-          width: '28px',
-          height: '28px',
-          borderRadius: '6px',
-          backgroundColor: '#d9534f',
-          color: '#ffffff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: 'none',
-          cursor: 'pointer',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-        }}
-        title="Delete Participant"
+        onClick={toggleMenu}
+        className="participant-grid__actions-trigger"
+        title="Participant actions"
+        aria-label="Participant actions"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
-        <Trash2 size={14} color="#ffffff" />
+        <MoreHorizontal size={20} aria-hidden="true" />
       </button>
-    </div>
+      {isOpen && createPortal(
+        <div
+          ref={menuRef}
+          className="participant-grid__actions-menu"
+          role="menu"
+          style={{ top: menuPosition.top, left: menuPosition.left }}
+        >
+          <button type="button" role="menuitem" onClick={openDetails}>
+            <Eye size={16} /> View details
+          </button>
+          <button type="button" role="menuitem" onClick={deleteParticipant}>
+            <Trash2 size={16} /> Delete participant
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
   );
 };
 
@@ -203,10 +190,12 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   selectedStudies = [],
   setSelectedStudies,
 }) => {
-  const gridRef = useRef<AgGridReact>(null);
+  const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const availableStudyList = useMemo(() => {
     const list = new Set<string>();
@@ -257,6 +246,16 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const closeExportMenu = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', closeExportMenu);
+    return () => document.removeEventListener('mousedown', closeExportMenu);
+  }, []);
+
   const StudiesFilterHeader = () => {
     return (
       <div className="flex items-center justify-between w-full pr-1 relative">
@@ -286,18 +285,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   };
 
   const columnDefs = useMemo<ColDef[]>(() => [
-    {
-      headerName: 'S.No',
-      field: 'serialNumber',
-      width: 65,
-      minWidth: 55,
-      maxWidth: 75,
-      sortable: false,
-      filter: false,
-      resizable: false,
-      cellRenderer: SerialNumberRenderer,
-      cellClass: 'p-0 flex items-center justify-center',
-    },
     {
       headerName: 'Select',
       field: 'select',
@@ -361,27 +348,15 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       cellClass: 'flex items-center',
     },
     {
-      headerName: 'Expand/Collapse',
-      field: 'expand',
-      width: 130,
-      minWidth: 110,
-      maxWidth: 150,
+      headerName: 'Actions',
+      field: 'actions',
+      width: 100,
+      minWidth: 82,
+      maxWidth: 110,
       sortable: false,
       filter: false,
       resizable: false,
-      cellRenderer: ExpandCollapseRenderer,
-      cellClass: 'p-0 flex items-stretch justify-stretch overflow-hidden',
-    },
-    {
-      headerName: 'Delete',
-      field: 'deleteAction',
-      width: 80,
-      minWidth: 70,
-      maxWidth: 95,
-      sortable: false,
-      filter: false,
-      resizable: false,
-      cellRenderer: DeleteCellRenderer,
+      cellRenderer: ParticipantActionsRenderer,
       cellClass: 'p-0 flex items-center justify-center',
     }
   ], [selectedStudies]);
@@ -392,209 +367,174 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   }), []);
 
   const onSelectionChanged = useCallback(() => {
-    if (!gridRef.current || !gridRef.current.api) return;
-    const selectedRows = gridRef.current.api.getSelectedRows();
+    if (!gridApi) return;
+    const selectedRows = gridApi.getSelectedRows();
     if (selectedRows && selectedRows.length > 0) {
       onSelectParticipant?.(selectedRows[0]);
     }
-  }, [onSelectParticipant]);
+  }, [gridApi, onSelectParticipant]);
 
-  const handleExport = useCallback(() => {
-    if (gridRef.current && gridRef.current.api) {
-      gridRef.current.api.exportDataAsCsv({
-        fileName: `participants_report_${new Date().toISOString().slice(0, 10)}.csv`
+  const getExportRows = useCallback(() => {
+    const rows: ParticipantRecord[] = [];
+    if (gridApi) {
+      gridApi.forEachNodeAfterFilterAndSort((node) => {
+        if (node.data) rows.push(node.data);
       });
+      return rows;
     }
-  }, []);
+    return participants;
+  }, [gridApi, participants]);
+
+  const exportFileName = `participants-${new Date().toISOString().slice(0, 10)}`;
+  const exportCsv = () => {
+    gridApi?.exportDataAsCsv({
+      fileName: `${exportFileName}.csv`,
+      columnKeys: ['name', 'studies', 'gender', 'age', 'lastContact'],
+      processCellCallback: (params) => {
+        if (params.column.getColId() === 'studies' && Array.isArray(params.value)) {
+          return params.value.map((study: StudyItem) => study.name).join(', ');
+        }
+        return params.value ?? '';
+      },
+    });
+    setIsExportMenuOpen(false);
+  };
+
+  const exportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Participants', { views: [{ state: 'frozen', ySplit: 1 }] });
+    sheet.columns = [
+      { header: 'Name', key: 'name', width: 28 },
+      { header: 'Studies', key: 'studies', width: 48 },
+      { header: 'Sex/Gender', key: 'gender', width: 18 },
+      { header: 'Age', key: 'age', width: 12 },
+      { header: 'Last Contact', key: 'lastContact', width: 24 },
+    ];
+    getExportRows().forEach((participant) => sheet.addRow({
+      name: participant.name,
+      studies: participant.studies?.map((study) => study.name).join(', ') || '',
+      gender: participant.gender || '',
+      age: participant.age || '',
+      lastContact: participant.lastContact || '',
+    }));
+    sheet.autoFilter = { from: 'A1', to: `E${Math.max(1, sheet.rowCount)}` };
+    sheet.getRow(1).height = 25;
+    sheet.getRow(1).eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123A5A' } };
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { vertical: 'middle' };
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${exportFileName}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setIsExportMenuOpen(false);
+  };
+
+  const exportPdf = () => {
+    const rows = getExportRows();
+    const document = new jsPDF({ orientation: 'landscape' });
+    document.setFontSize(16);
+    document.setTextColor('#123A5A');
+    document.text('Participant Registry', 14, 16);
+    autoTable(document, {
+      startY: 24,
+      head: [['Name', 'Studies', 'Sex/Gender', 'Age', 'Last Contact']],
+      body: rows.map((participant) => [
+        participant.name || '',
+        participant.studies?.map((study) => study.name).join(', ') || '',
+        participant.gender || '',
+        String(participant.age || ''),
+        participant.lastContact || '',
+      ]),
+      styles: { fontSize: 8, cellPadding: 3, textColor: [36, 68, 91], lineColor: [220, 231, 238], lineWidth: 0.1 },
+      headStyles: { fillColor: [18, 58, 90], textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [241, 247, 251] },
+      margin: { left: 14, right: 14 },
+    });
+    document.save(`${exportFileName}.pdf`);
+    setIsExportMenuOpen(false);
+  };
 
   return (
-    <section
-      className="w-full bg-white border border-gray-200 rounded-lg flex flex-col shadow-sm relative registry-grid-card"
-      style={{
-        width: '100%',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '8px',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
-        position: 'relative',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-      }}
-    >
-      <div
-        className="px-5 py-3.5 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3 bg-white registry-grid-header"
-        style={{
-          padding: '14px 20px',
-          borderBottom: '1px solid #e5e7eb',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          backgroundColor: '#ffffff',
-        }}
-      >
-        <div
-          className="flex items-center flex-wrap gap-3 flex-1 min-w-[300px]"
-          style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px', flex: 1, minWidth: '300px' }}
-        >
-          <div className="flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2
-              className="text-xl font-semibold text-gray-900 tracking-tight m-0"
-              style={{ fontSize: '20px', fontWeight: 600, color: '#111827', margin: 0 }}
-            >
-              All Participants({participants.length})
-            </h2>
-            <button
-              type="button"
-              title="View Options"
-              className="text-gray-500 hover:text-gray-800 p-1 rounded transition-colors"
-              style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: '#6b7280' }}
-            >
-              <List className="w-5 h-5 cursor-pointer" />
-            </button>
-          </div>
-
-          <div
-            className="flex items-center rounded-md border border-gray-300 overflow-hidden shadow-xs focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 w-full sm:w-56 md:w-64 bg-white search-input-group"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              overflow: 'hidden',
-              backgroundColor: '#ffffff',
-              width: '250px',
-            }}
-          >
+    <section className="card">
+      <div className="card-header data-grid-toolbar">
+        <div className="data-grid-toolbar__heading">
+          <div className="data-grid-toolbar__search">
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm?.(e.target.value)}
               placeholder="Search participants..."
-              className="flex-1 px-3 py-1.5 text-xs text-gray-800 outline-none placeholder-gray-400 bg-transparent search-input-field"
-              style={{
-                flex: 1,
-                padding: '6px 10px',
-                fontSize: '12px',
-                color: '#1f2937',
-                border: 'none',
-                outline: 'none',
-                backgroundColor: 'transparent',
-              }}
+              className="form-input"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => setSearchTerm?.('')}
-                className="text-gray-400 hover:text-gray-600 px-1.5 cursor-pointer"
-                style={{ background: 'none', border: 'none', color: '#9ca3af', padding: '0 6px', cursor: 'pointer' }}
+                className="btn btn-ghost btn-sm"
                 title="Clear"
               >
-                <X className="w-3.5 h-3.5" />
+                <X size={14} />
               </button>
             )}
-            <div
-              className="bg-[#1976d2] text-white px-2.5 py-1.5 flex items-center justify-center search-icon-btn"
-              style={{
-                backgroundColor: '#1976d2',
-                color: '#ffffff',
-                padding: '6px 10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 'none',
-              }}
-            >
-              <SearchIcon size={14} color="#ffffff" strokeWidth={2.5} />
-            </div>
+            <SearchIcon size={14} aria-hidden="true" />
           </div>
 
           <button
             type="button"
             onClick={onAddParticipant}
-            className="bg-[#1976d2] hover:bg-[#1565c0] text-white text-xs font-medium py-1.5 px-3.5 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap btn-add-participant"
-            style={{
-              backgroundColor: '#1976d2',
-              color: '#ffffff',
-              fontSize: '12px',
-              fontWeight: 500,
-              padding: '6px 14px',
-              borderRadius: '6px',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
+            className="btn btn-primary participant-grid__add-button"
           >
-            <Plus size={14} color="#ffffff" strokeWidth={3} />
+            <span className="participant-grid__add-icon"><UserPlus size={17} strokeWidth={2.4} /></span>
             <span>Add Participant</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2 header-actions-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="data-grid-toolbar__actions">
           <button
             type="button"
             onClick={onRefresh}
-            className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-medium py-1.5 px-3.5 rounded-md transition-colors cursor-pointer shadow-xs btn-refresh-grid"
-            style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #d1d5db',
-              color: '#374151',
-              fontSize: '12px',
-              fontWeight: 500,
-              padding: '6px 14px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-            }}
+            className="btn btn-secondary"
           >
             Refresh
           </button>
 
-          <button
-            type="button"
-            onClick={handleExport}
-            className="bg-[#1976d2] hover:bg-[#1565c0] text-white text-xs font-medium py-1.5 px-4 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs btn-export-grid"
-            style={{
-              backgroundColor: '#1976d2',
-              color: '#ffffff',
-              fontSize: '12px',
-              fontWeight: 500,
-              padding: '6px 16px',
-              borderRadius: '6px',
-              border: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-            }}
-          >
-            <Download size={14} color="#ffffff" />
-            <span>Export</span>
-          </button>
+          <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
+            <button
+              type="button"
+              className="data-grid-export-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isExportMenuOpen}
+              onClick={() => setIsExportMenuOpen((open) => !open)}
+            >
+              <Download size={16} /> Export <ChevronDown size={15} />
+            </button>
+            {isExportMenuOpen && (
+              <div className="data-grid-export-menu" role="menu" aria-label="Choose export format">
+                <button type="button" role="menuitem" onClick={exportCsv}>
+                  <Download size={15} /><span>CSV</span><small>Comma-separated values</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportExcel()}>
+                  <FileSpreadsheet size={15} /><span>Excel</span><small>Excel workbook (.xlsx)</small>
+                </button>
+                <button type="button" role="menuitem" onClick={exportPdf}>
+                  <FileText size={15} /><span>PDF</span><small>Portable document</small>
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             type="button"
             onClick={onRefresh}
             title="All Users"
-            className="bg-[#00274c] hover:bg-[#001f3f] text-white p-2 rounded-md transition-colors cursor-pointer shadow-xs btn-users-grid"
-            style={{
-              backgroundColor: '#00274c',
-              color: '#ffffff',
-              padding: '8px',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            className="btn btn-secondary"
           >
-            <Users size={16} color="#ffffff" />
+            <Users size={16} />
           </button>
         </div>
       </div>
@@ -719,12 +659,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
         </div>
       )}
 
-      <div
-        className="w-full ag-theme-quartz-custom relative min-h-[500px]"
-        style={{ width: '100%', height: '540px', minHeight: '520px' }}
-      >
-        <AgGridReact
-          ref={gridRef}
+      <DataGrid
           rowData={participants}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
@@ -738,6 +673,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           }}
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
           onSelectionChanged={onSelectionChanged}
+          onGridReady={(event) => setGridApi(event.api)}
           rowHeight={64}
           headerHeight={44}
           pagination={true}
@@ -746,7 +682,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           animateRows={true}
           suppressCellFocus={true}
         />
-      </div>
     </section>
   );
 };
