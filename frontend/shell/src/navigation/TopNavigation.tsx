@@ -280,8 +280,8 @@ export const TopNavigation: React.FC = () => {
                                     }}
                                   >
                                     <span className="enl-study-option-icon"><BookOpen size={16} /></span>
-                                    <strong>{study.title || study.name || 'Untitled study'}</strong>
-                                    <small>{study.protocolNumber || studyId || 'Study'}</small>
+                                    <strong>{(study as any).title || (study as any).name || 'Untitled study'}</strong>
+                                    <small>{(study as any).protocolNumber || studyId || 'Study'}</small>
                                   </button>
                                 );
                               }) : <p>No studies available</p>}
