@@ -1,0 +1,60 @@
+// frontend/shared/design-system/styles/_colors.scss - Color Design Tokens
+// Primary & Brand Colors
+$color-primary: #0f2744;
+$color-primary-dark: #09182b;
+$color-primary-light: #1e3a5f;
+$color-primary-ultra-dark: #060e19;
+
+$color-brand-accent: #0284c7;
+$color-brand-accent-hover: #0369a1;
+$color-brand-accent-light: #e0f2fe;
+$color-brand-cyan: #06b6d4;
+$color-brand-cyan-light: #ecfeff;
+$color-brand-gradient: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+$color-brand-glow: 0 0 20px rgba(2, 132, 199, 0.35);
+
+$color-secondary: #475569;
+$color-secondary-light: #64748b;
+
+// Sentiment & Status Colors
+$color-success: #059669;
+$color-success-bg: #ecfdf5;
+$color-success-border: #a7f3d0;
+$color-success-glow: 0 0 10px rgba(5, 150, 105, 0.4);
+
+$color-warning: #d97706;
+$color-warning-bg: #fffbeb;
+$color-warning-border: #fde68a;
+
+$color-danger: #dc2626;
+$color-danger-bg: #fef2f2;
+$color-danger-border: #fecaca;
+$color-danger-glow: 0 0 12px rgba(220, 38, 38, 0.25);
+
+$color-info: #0284c7;
+$color-info-bg: #f0f9ff;
+$color-info-border: #bae6fd;
+
+// Surface & Background Colors
+$bg-app: #f8fafc;
+$bg-surface: #ffffff;
+$bg-surface-secondary: #f1f5f9;
+$bg-surface-tertiary: #e2e8f0;
+$bg-overlay: rgba(15, 23, 42, 0.65);
+$bg-card-glass: rgba(255, 255, 255, 0.94);
+$bg-card-glass-dark: rgba(15, 39, 68, 0.85);
+
+// Text Colors
+$text-primary: #0f172a;
+$text-secondary: #475569;
+$text-muted: #64748b;
+$text-subtle: #94a3b8;
+$text-inverse: #ffffff;
+$text-link: #0284c7;
+$text-link-hover: #0369a1;
+
+// Borders
+$border-color: #e2e8f0;
+$border-color-light: #f1f5f9;
+$border-color-dark: #cbd5e1;
+$border-color-focus: #0284c7;

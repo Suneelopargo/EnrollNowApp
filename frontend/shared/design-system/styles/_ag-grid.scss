@@ -1,0 +1,90 @@
+// Application-wide AG Grid theme. Use the shared DataGrid component to apply
+// the enl-ag-grid and ag-theme-quartz classes consistently.
+.enl-ag-grid.ag-theme-quartz {
+  --ag-background-color: #ffffff;
+  --ag-foreground-color: #24445b;
+  --ag-header-background-color: #123a5a;
+  --ag-header-foreground-color: #ffffff;
+  --ag-odd-row-background-color: #f1f6f9;
+  --ag-row-hover-color: #e7f3fa;
+  --ag-border-color: #d7e3eb;
+  --ag-accent-color: #087eb8;
+  --ag-input-focus-border-color: #087eb8;
+  --ag-font-family: Inter, 'Segoe UI', sans-serif;
+  --ag-font-size: 12px;
+  --ag-wrapper-border-radius: 10px;
+
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 280px;
+  color: #24445b;
+
+  .ag-root-wrapper {
+    overflow: hidden;
+    border: 1px solid #d7e3eb;
+    border-radius: 10px;
+  }
+
+  .ag-header,
+  .ag-header-cell,
+  .ag-header-group-cell {
+    background: #123a5a;
+    color: #ffffff;
+  }
+
+  .ag-header { border-bottom: 1px solid #0c2e49; }
+
+  .ag-header-cell-text {
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .ag-header-cell-resize::after { background: rgba(255, 255, 255, 0.24); }
+
+  .ag-floating-filter { background: #f5f9fc; }
+
+  .ag-floating-filter-input input,
+  .ag-floating-filter input {
+    min-height: 25px;
+    border: 1px solid #cedce6;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #24445b;
+    font-size: 11px;
+  }
+
+  .ag-cell {
+    display: flex;
+    align-items: center;
+    border-right: 1px solid #dce7ee;
+    color: #143550;
+    font-size: 12px;
+  }
+
+  .ag-row { border-bottom: 1px solid #dce7ee; }
+  .ag-row-even { background: #ffffff; }
+  .ag-row-odd { background: #f1f6f9; }
+  .ag-row-hover { background: #e7f3fa; }
+
+  .ag-paging-panel {
+    min-height: 42px;
+    border-top: 1px solid #dce7ee;
+    color: #52697c;
+    font-size: 11px;
+  }
+
+  .ag-paging-button,
+  .ag-picker-field-wrapper { color: #123a5a; }
+}
+
+@media (max-width: 640px) {
+  .enl-ag-grid.ag-theme-quartz {
+    --ag-font-size: 11px;
+    --ag-grid-size: 5px;
+
+    .ag-header-cell-text,
+    .ag-cell { font-size: 11px; }
+  }
+}

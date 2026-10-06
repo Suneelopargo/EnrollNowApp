@@ -8,7 +8,7 @@ describe('Organization MFE Remote Entry', () => {
     expect(typeof OrganizationModule).toBe('function');
   });
 
-  it('accepts MfeContext configured with Organization Service endpoint (:8083)', () => {
+  it('accepts MfeContext configured with backend API base URL (:8080)', () => {
     const mockContext = {
       user: {
         id: 1,
@@ -17,10 +17,10 @@ describe('Organization MFE Remote Entry', () => {
         roles: ['ROLE_SUPER_ADMIN'],
       },
       token: 'valid-token',
-      apiBaseUrl: 'http://localhost:8083',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'org-test-corr',
       navigate: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8083');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
   });
 });

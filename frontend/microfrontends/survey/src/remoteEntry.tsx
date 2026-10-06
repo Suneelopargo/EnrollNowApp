@@ -1,6 +1,6 @@
 // frontend/microfrontends/survey/src/remoteEntry.tsx - Survey MFE Remote Entry
 import React, { useState } from 'react';
-import './styles/survey.css';
+import './styles/survey.scss';
 import { MfeContext } from '../../../shared/contracts';
 import { SurveyDashboardView } from './views/SurveyDashboardView';
 import { SurveyListView } from './views/SurveyListView';
@@ -14,7 +14,6 @@ import {
   ClipboardList,
   PlusCircle,
   UserCheck,
-  BarChart3,
   UserCheck2,
 } from 'lucide-react';
 

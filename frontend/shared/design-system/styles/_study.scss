@@ -1,0 +1,253 @@
+// Shared application styles for the study MFE.
+.study-workspace { min-height: 54vh; }
+
+.study-selection-empty {
+  display: grid;
+  min-height: 52vh;
+  align-content: center;
+  justify-items: center;
+  padding: 32px 20px;
+  color: #52697c;
+  text-align: center;
+
+  h1 { margin: 14px 0 6px; color: #15344d; font-size: 23px; }
+  p { max-width: 480px; margin: 0; font-size: 13px; line-height: 1.6; }
+}
+
+.study-selection-empty__icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: #eaf5fb;
+  color: #087eb8;
+}
+
+.study-dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 0 20px;
+
+  p { margin: 0 0 5px; color: #087eb8; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; }
+  h1 { margin: 0 0 5px; color: #15344d; font-size: clamp(20px, 2.4vw, 28px); }
+  span { color: #718597; font-size: 12px; }
+}
+
+.study-recruitment-panel,
+.study-weekly-panel {
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border: 1px solid #dbe7f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(15, 45, 75, 0.05);
+}
+
+.study-recruitment-panel__heading,
+.study-weekly-panel__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+
+  h2 { margin: 0 0 4px; color: #1760c8; font-size: 18px; }
+  p { margin: 0; color: #718597; font-size: 12px; }
+  > strong { color: #15344d; font-size: 23px; }
+}
+
+.study-recruitment-scale__track {
+  height: 20px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e8edf2;
+}
+
+.study-recruitment-scale__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #168ed0, #1760c8);
+  transition: width 220ms ease;
+}
+
+.study-recruitment-scale__ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #52606a;
+  font-size: 10px;
+}
+
+.study-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.study-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+  gap: 5px 12px;
+  min-height: 105px;
+  padding: 16px;
+  border-radius: 9px;
+  color: #ffffff;
+
+  span { align-self: start; font-size: 14px; line-height: 1.4; }
+  strong { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: clamp(28px, 3vw, 42px); font-weight: 500; }
+  small { font-size: 11px; opacity: 0.9; }
+}
+
+.study-metric--recruited { background: #62a4d3; }
+.study-metric--target { background: #2460cd; }
+.study-metric--weekly { background: #0a3155; }
+
+.study-weekly-panel__heading { justify-content: flex-start; }
+
+.study-weekly-panel {
+  border-left: 4px solid #2460cd;
+  background: #f5f8fb;
+}
+
+.study-weekly-chart {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 230px;
+}
+
+.study-weekly-chart__y-label {
+  align-self: center;
+  color: #52697c;
+  font-size: 11px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.study-weekly-chart__plot {
+  position: relative;
+  min-width: 0;
+
+  > svg { display: block; width: 100%; height: 190px; overflow: visible; }
+}
+
+.study-weekly-chart__gridline { stroke: #dbe4eb; stroke-width: 0.45; }
+.study-weekly-chart__bar { fill: #2460cd; }
+
+.study-weekly-chart__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #8294a3;
+  font-size: 12px;
+  text-align: center;
+}
+
+.study-weekly-chart__labels {
+  display: flex;
+  justify-content: space-around;
+  color: #61798d;
+  font-size: 10px;
+}
+
+.study-form-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3, 31, 56, 0.82);
+}
+
+.study-form-dialog {
+  width: min(750px, 100%);
+  padding: 26px 30px 24px;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 22px 64px rgba(0, 20, 39, 0.3);
+
+  form { display: grid; gap: 18px; }
+  label { display: grid; grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1fr); align-items: center; gap: 16px; color: #38556c; font-size: 14px; }
+  label span { font-weight: 500; }
+  input,
+  select {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 12px;
+    border: 1px solid #c8d3dc;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #38556c;
+    font: inherit;
+  }
+}
+
+.study-form-dialog__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #d8e1e8;
+
+  h2 { margin: 0; color: #52697c; font-size: 19px; font-weight: 500; }
+}
+
+.study-form-dialog__close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #718597;
+  cursor: pointer;
+}
+
+.study-form-dialog__error { margin: -6px 0 0; color: #b23c42; font-size: 12px; }
+
+.study-form-dialog__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+}
+
+.study-form-dialog__import {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid #929292;
+  border-radius: 3px;
+  background: #f8f8f8;
+  color: #283c4d;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.study-form-dialog__file-input { display: none; }
+
+@media (max-width: 760px) {
+  .study-metrics-grid { grid-template-columns: minmax(0, 1fr); }
+  .study-metric { min-height: 80px; }
+}
+
+@media (max-width: 520px) {
+  .study-dashboard__header { align-items: flex-start; flex-direction: column; }
+  .study-recruitment-panel,
+  .study-weekly-panel { padding: 14px; }
+  .study-form-dialog { padding: 20px 16px; }
+  .study-form-dialog label { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+  .study-form-dialog__actions { align-items: stretch; flex-direction: column; }
+  .study-form-dialog__actions > button { justify-content: center; }
+}

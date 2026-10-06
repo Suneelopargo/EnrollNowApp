@@ -1,0 +1,104 @@
+// frontend/shared/design-system/styles/_cards.scss - Cards & Stat Cards System
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.card {
+  background-color: $bg-surface;
+  border-radius: $border-radius-lg;
+  border: 1px solid $border-color;
+  box-shadow: $shadow-sm;
+  overflow: hidden;
+}
+
+.card-header {
+  @include flex-between;
+  padding: $spacing-4 $spacing-6;
+  border-bottom: 1px solid $border-color;
+
+  h3 {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+  }
+}
+
+.card-body {
+  padding: $spacing-6;
+}
+
+.card-footer {
+  padding: $spacing-4 $spacing-6;
+  background-color: $bg-surface-secondary;
+  border-top: 1px solid $border-color;
+}
+
+// KPI & Stat Cards
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: $spacing-5;
+  margin-bottom: $spacing-6;
+}
+
+.stat-card {
+  background-color: $bg-surface;
+  border-radius: $border-radius-lg;
+  border: 1px solid $border-color;
+  padding: $spacing-5;
+  box-shadow: $shadow-sm;
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
+  }
+}
+
+.stat-icon-wrapper {
+  @include flex-center;
+  width: 48px;
+  height: 48px;
+  border-radius: $border-radius-md;
+  background-color: $color-info-bg;
+  color: $color-brand-accent;
+  flex-shrink: 0;
+
+  &.success {
+    background-color: $color-success-bg;
+    color: $color-success;
+  }
+
+  &.warning {
+    background-color: $color-warning-bg;
+    color: $color-warning;
+  }
+
+  &.cyan {
+    background-color: $color-brand-cyan-light;
+    color: #0891b2;
+  }
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-bold;
+  color: $text-primary;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}

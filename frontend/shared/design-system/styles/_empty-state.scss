@@ -1,0 +1,62 @@
+// frontend/shared/design-system/styles/_empty-state.scss - Empty State & Error Fallback Styles
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.error-fallback-card {
+  padding: $spacing-8;
+  text-align: center;
+  background-color: $bg-surface;
+  border: 1px solid $color-danger-border;
+  border-radius: $border-radius-lg;
+  margin: $spacing-6 auto;
+  max-width: 600px;
+
+  h2 {
+    color: $color-danger;
+    font-size: $font-size-xl;
+    margin-bottom: $spacing-2;
+  }
+
+  p {
+    color: $text-secondary;
+    margin-bottom: $spacing-4;
+  }
+}
+
+.error-actions-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-3;
+}
+
+.empty-state {
+  @include flex-center;
+  flex-direction: column;
+  padding: $spacing-12;
+  text-align: center;
+  background-color: $bg-surface;
+  border: 1px dashed $border-color-dark;
+  border-radius: $border-radius-lg;
+
+  &__icon {
+    width: 48px;
+    height: 48px;
+    color: $text-muted;
+    margin-bottom: $spacing-4;
+  }
+
+  &__title {
+    font-size: $font-size-base;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+    margin-bottom: $spacing-1;
+  }
+
+  &__description {
+    font-size: $font-size-sm;
+    color: $text-muted;
+    max-width: 400px;
+    margin-bottom: $spacing-6;
+  }
+}

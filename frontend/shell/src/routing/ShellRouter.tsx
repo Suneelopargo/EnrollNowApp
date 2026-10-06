@@ -1,24 +1,13 @@
-// frontend/shell/src/routing/ShellRouter.tsx - Central Route Composition via Direct Modular Imports
+// frontend/shell/src/routing/ShellRouter.tsx - Central Route Composition with Multi-Tab Keep-Alive Host
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 import { TopNavigation } from '../navigation/TopNavigation';
+import { WorkspaceScreenHost } from './WorkspaceScreenHost';
 import { Footer } from '../../../shared/design-system/components/Footer';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
+import { IdentityModule } from '../modules';
 import { useAuth } from '../auth/AuthContext';
-import {
-  IdentityModule,
-  AdministrationModule,
-  DashboardModule,
-  OrganizationModule,
-  StudyModule,
-  ParticipantModule,
-  RecruitmentModule,
-  SurveyModule,
-  TaskModule,
-  CommunicationModule,
-  DocumentModule,
-} from '../modules';
 
 const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user, loading } = useAuth();
@@ -29,6 +18,14 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 };
 
 export const ShellRouter: React.FC = () => {
+  const protectedWorkspaceElement = (
+    <ProtectedRoute>
+      <TopNavigation />
+      <WorkspaceScreenHost />
+      <Footer variant="app-shell" />
+    </ProtectedRoute>
+  );
+
   return (
     <div className="app-shell">
       <Routes>
@@ -43,136 +40,27 @@ export const ShellRouter: React.FC = () => {
         />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Protected Feature Module Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <DashboardModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/studies/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <StudyModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/participants/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <ParticipantModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/recruitment/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <RecruitmentModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/surveys/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <SurveyModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/tasks/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <TaskModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/communications/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <CommunicationModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/documents/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <DocumentModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/organization/*"
-          element={
-            <ProtectedRoute>
-              <TopNavigation />
-              <main className="page-container">
-                <OrganizationModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedRoute requiredRoles={['ROLE_SUPER_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_ADMIN']}>
-              <TopNavigation />
-              <main className="page-container">
-                <AdministrationModule />
-              </main>
-              <Footer variant="app-shell" />
-            </ProtectedRoute>
-          }
-        />
+        {/* Protected Feature Module Routes - Mapped to Keep-Alive Multi-Screen Workspace */}
+        <Route path="/dashboard" element={protectedWorkspaceElement} />
+        <Route path="/dashboard/*" element={protectedWorkspaceElement} />
+        <Route path="/studies" element={protectedWorkspaceElement} />
+        <Route path="/studies/*" element={protectedWorkspaceElement} />
+        <Route path="/participants" element={protectedWorkspaceElement} />
+        <Route path="/participants/*" element={protectedWorkspaceElement} />
+        <Route path="/recruitment" element={protectedWorkspaceElement} />
+        <Route path="/recruitment/*" element={protectedWorkspaceElement} />
+        <Route path="/surveys" element={protectedWorkspaceElement} />
+        <Route path="/surveys/*" element={protectedWorkspaceElement} />
+        <Route path="/tasks" element={protectedWorkspaceElement} />
+        <Route path="/tasks/*" element={protectedWorkspaceElement} />
+        <Route path="/communications" element={protectedWorkspaceElement} />
+        <Route path="/communications/*" element={protectedWorkspaceElement} />
+        <Route path="/documents" element={protectedWorkspaceElement} />
+        <Route path="/documents/*" element={protectedWorkspaceElement} />
+        <Route path="/organization" element={protectedWorkspaceElement} />
+        <Route path="/organization/*" element={protectedWorkspaceElement} />
+        <Route path="/admin" element={protectedWorkspaceElement} />
+        <Route path="/admin/*" element={protectedWorkspaceElement} />
 
         {/* Fallback Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

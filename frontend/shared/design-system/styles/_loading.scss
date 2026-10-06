@@ -1,0 +1,417 @@
+// frontend/shared/design-system/styles/_loading.scss - Enterprise Clinical OS Loader & Spinner System
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// ============================================================================
+// 1. FULLSCREEN & MODAL CARD LOADER (HIGH-TECH CLINICAL OS STYLE)
+// ============================================================================
+
+// Translucent Dimmed Backdrop
+.enl-loader-backdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 380px;
+  padding: 24px;
+  box-sizing: border-box;
+
+  &--page,
+  &--overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900; // Below header (z-index: 1000) so header & tabs remain crisp and visible
+    min-height: 100vh;
+    background: rgba(6, 20, 34, 0.48); // Translucent frosted dimming matching Image 3
+    backdrop-filter: blur(3.5px);
+    -webkit-backdrop-filter: blur(3.5px);
+    animation: enlLoaderFadeIn 180ms ease;
+  }
+}
+
+// Centered High-Tech Glowing Card
+.enl-loader-card {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(165deg, #0e2746 0%, #091a2e 55%, #051120 100%);
+  border-radius: 22px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  box-shadow: 0 25px 60px -12px rgba(2, 6, 23, 0.85), 0 0 40px -5px rgba(2, 132, 199, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: 36px 36px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: enlLoaderZoomIn 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  box-sizing: border-box;
+
+  @include mobile {
+    max-width: calc(100vw - 32px);
+    padding: 28px 22px 24px;
+    border-radius: 18px;
+  }
+
+  &--sm {
+    max-width: 360px;
+    padding: 24px 24px 20px;
+  }
+
+  &--lg {
+    max-width: 500px;
+    padding: 44px 44px 36px;
+  }
+}
+
+// Orbital Emblem with Neon Glowing Arcs & Central Brand Disc
+.enl-loader-emblem {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+
+  &--sm {
+    width: 64px;
+    height: 64px;
+    .enl-loader-logo-disc {
+      width: 42px;
+      height: 42px;
+    }
+    .enl-loader-logo-svg {
+      width: 27px;
+      height: auto;
+      aspect-ratio: 212 / 134;
+      display: block;
+    }
+  }
+}
+
+.enl-loader-halo {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.35) 0%, rgba(2, 132, 199, 0) 70%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.enl-loader-orbit-ring {
+  position: absolute;
+  border-radius: 50%;
+  box-sizing: border-box;
+
+  &--outer {
+    inset: 0;
+    border: 2.5px solid transparent;
+    border-top-color: #38bdf8;
+    border-right-color: #06b6d4;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8));
+    animation: enlOrbitClockwise 1.6s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+  }
+
+  &--inner {
+    inset: 6px;
+    border: 2px solid transparent;
+    border-bottom-color: #f59e0b;
+    border-left-color: #38bdf8;
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.7));
+    animation: enlOrbitCounterClockwise 2.2s linear infinite;
+  }
+}
+
+.enl-loader-logo-disc {
+  position: relative;
+  z-index: 2;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(226, 232, 240, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.enl-loader-logo-svg {
+  width: 36px;
+  height: auto;
+  aspect-ratio: 212 / 134;
+  display: block;
+}
+
+// System / Brand Header
+.enl-loader-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 16px;
+  line-height: 1.2;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+// Primary Status Message
+.enl-loader-message {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  margin-top: 7px;
+  line-height: 1.35;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+  word-break: break-word;
+}
+
+// Secondary Subtitle Hint
+.enl-loader-subtitle {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: #94a3b8;
+  margin-top: 5px;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+// Animated Glowing Laser Progress Bar Track
+.enl-loader-track {
+  width: 100%;
+  height: 5px;
+  background: rgba(8, 24, 44, 0.95);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 24px;
+  position: relative;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.enl-loader-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0) 0%, #0284c7 25%, #38bdf8 65%, #06b6d4 100%);
+  box-shadow: 0 0 14px #38bdf8, 0 0 5px #06b6d4;
+  animation: enlLaserSweep 1.8s ease-in-out infinite;
+}
+
+// ============================================================================
+// 2. INLINE & SECTION VARIANTS (FOR COMPACT CONTROLS & TABLES)
+// ============================================================================
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-3;
+  color: $text-secondary;
+  font-family: $font-family-base;
+
+  &__indicator {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(2, 132, 199, 0.18);
+    border-top-color: $color-brand-accent;
+    border-radius: 50%;
+    animation: loading-spinner-rotate 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  &__message {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $text-secondary;
+    letter-spacing: 0.01em;
+  }
+
+  &--inline {
+    display: inline-flex;
+    flex-direction: row;
+    padding: 0;
+    gap: $spacing-2;
+
+    .loading-spinner__indicator {
+      width: 16px;
+      height: 16px;
+      border-width: 2px;
+    }
+
+    .loading-spinner__message {
+      font-size: $font-size-xs;
+    }
+  }
+
+  &--section {
+    padding: $spacing-8;
+    min-height: 160px;
+    width: 100%;
+    background-color: #ffffff;
+    border-radius: $border-radius-lg;
+    border: 1px solid $border-color;
+  }
+
+  &--page {
+    padding: $spacing-12;
+    min-height: 50vh;
+    width: 100%;
+  }
+
+  &--overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    padding: $spacing-12;
+  }
+
+  &--sm {
+    .loading-spinner__indicator {
+      width: 18px;
+      height: 18px;
+      border-width: 2px;
+    }
+    .loading-spinner__message {
+      font-size: $font-size-xs;
+    }
+  }
+
+  &--md {
+    .loading-spinner__indicator {
+      width: 30px;
+      height: 30px;
+      border-width: 3px;
+    }
+    .loading-spinner__message {
+      font-size: $font-size-sm;
+    }
+  }
+
+  &--lg {
+    .loading-spinner__indicator {
+      width: 44px;
+      height: 44px;
+      border-width: 4px;
+    }
+    .loading-spinner__message {
+      font-size: $font-size-base;
+    }
+  }
+}
+
+// Legacy Backward Compatibility
+.spinner-container {
+  @include flex-center;
+  flex-direction: column;
+  padding: $spacing-12;
+  gap: $spacing-3;
+  color: $text-muted;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(2, 132, 199, 0.2);
+  border-top-color: $color-brand-accent;
+  border-radius: 50%;
+  animation: loading-spinner-rotate 0.8s linear infinite;
+
+  &.spinner-sm {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
+  }
+
+  &.spinner-white {
+    border-color: rgba(255, 255, 255, 0.25);
+    border-top-color: #ffffff;
+  }
+}
+
+// ============================================================================
+// 3. KEYFRAME ANIMATIONS
+// ============================================================================
+
+@keyframes enlOrbitClockwise {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes enlOrbitCounterClockwise {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes enlLaserSweep {
+  0% {
+    left: -38%;
+    width: 28%;
+  }
+  50% {
+    left: 36%;
+    width: 48%;
+  }
+  100% {
+    left: 104%;
+    width: 28%;
+  }
+}
+
+@keyframes enlLoaderFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes enlLoaderZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes loading-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Accessibility: Prefers Reduced Motion
+@media (prefers-reduced-motion: reduce) {
+  .enl-loader-orbit-ring--outer,
+  .enl-loader-orbit-ring--inner,
+  .loading-spinner__indicator,
+  .spinner {
+    animation-duration: 3s;
+  }
+
+  .enl-loader-bar {
+    animation-duration: 3.5s;
+  }
+}

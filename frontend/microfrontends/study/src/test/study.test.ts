@@ -8,7 +8,7 @@ describe('Study MFE Remote Entry', () => {
     expect(typeof StudyModule).toBe('function');
   });
 
-  it('accepts MfeContext configured with Study Service endpoint (:8084)', () => {
+  it('accepts MfeContext configured with backend API base URL (:8080)', () => {
     const mockContext = {
       user: {
         id: 1,
@@ -17,10 +17,10 @@ describe('Study MFE Remote Entry', () => {
         roles: ['ROLE_SUPER_ADMIN'],
       },
       token: 'valid-token',
-      apiBaseUrl: 'http://localhost:8084',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'study-test-corr',
       navigate: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8084');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
   });
 });

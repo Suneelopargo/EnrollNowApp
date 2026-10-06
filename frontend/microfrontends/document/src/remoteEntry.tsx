@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { FileText, Plus, ShieldCheck, HardDrive, FileCheck } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface DocumentModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const DocumentModule: React.FC<DocumentModuleProps> = ({ context }) => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8090';
-
   useEffect(() => {
     const fetchDocuments = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/documents`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/documents');
         if (res.data?.data) {
           setDocuments(res.data.data);
         }
@@ -35,7 +32,7 @@ export const DocumentModule: React.FC<DocumentModuleProps> = ({ context }) => {
       }
     };
     fetchDocuments();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = documents.length > 0 ? documents : [
     { documentId: 'DOC-9001', title: 'Cardio Protocol Amendment 3.1 Signoff', type: 'REGULATORY_SUBMISSION', studyId: 'PROTO-2026-001', format: 'PDF', size: '4.2 MB', uploadedAt: '2026-09-18', status: 'VERIFIED' },
