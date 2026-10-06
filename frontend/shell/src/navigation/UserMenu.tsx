@@ -2,14 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTabWorkspace } from './TabWorkspaceContext';
 import { LogOut, User, Shield, ChevronDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 export const UserMenu: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
   const { activateTab } = useTabWorkspace();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -46,8 +44,7 @@ export const UserMenu: React.FC = () => {
       >
         <div className="user-avatar-circle">{getInitials()}</div>
         <div className="user-meta-text">
-          <span className="user-name-label">{user.fullName || user.username}</span>
-          <span className="user-role-label">{primaryRole}</span>
+          <span className="user-name-label">MY ACCOUNT</span>
         </div>
         <ChevronDown size={14} />
       </button>

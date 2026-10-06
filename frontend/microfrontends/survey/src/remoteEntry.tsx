@@ -14,7 +14,6 @@ import {
   ClipboardList,
   PlusCircle,
   UserCheck,
-  BarChart3,
   UserCheck2,
 } from 'lucide-react';
 

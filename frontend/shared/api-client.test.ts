@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   createApiClient,
   setHeaderProvider,
-  getHeaderProvider,
   getAccessToken,
   normalizeApiError,
   handleSessionExpired,

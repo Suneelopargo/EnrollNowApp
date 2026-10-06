@@ -1,5 +1,5 @@
 // frontend/shell/src/navigation/TabWorkspaceContext.tsx - Multi-Tab Keep-Alive Workspace Context
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 export interface WorkspaceTab {

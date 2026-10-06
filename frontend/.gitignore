@@ -159,6 +159,10 @@ storybook-static/
 
 docs/
 **/docs/
+!docs/
+!docs/FRONTEND_ARCHITECTURE.md
+!docs/FRONTEND_DEVELOPER_GUIDE.md
+!docs/FRONTEND_CLEANUP_REPORT.md
 
 # ------------------------------------------------------------
 # Local reports - DO NOT COMMIT
@@ -174,3 +178,4 @@ reports/
 *_AUDIT.md
 *_ANALYSIS.md
 *_PLAN.md
+!docs/FRONTEND_CLEANUP_REPORT.md

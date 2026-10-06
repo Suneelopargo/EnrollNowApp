@@ -3,9 +3,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useNavigation } from './NavigationContext';
 import { useAuth } from '../auth/AuthContext';
-import { useTabWorkspace, WorkspaceTab } from './TabWorkspaceContext';
+import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
 import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
+import { MOCK_STUDIES } from '../../../shared/mock-api/mockData';
 import {
   LayoutDashboard,
   BookOpen,
@@ -21,8 +22,8 @@ import {
   Menu,
   X,
   ChevronDown,
+  Plus,
   RotateCw,
-  Bell,
   LogOut,
   Sparkles,
   Home,
@@ -46,9 +47,21 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Sparkles,
 };
 
+const CLIENT_MODULE_LABELS: Record<string, string> = {
+  admin: 'Site Admin',
+  participants: 'Registry',
+  communications: 'Support',
+};
+
+const MOCK_STUDY_ROLE_ACCESS: Record<string, string[]> = {
+  'ST-001': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_INVESTIGATOR', 'ROLE_STUDY_LEAD'],
+  'ST-002': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_INVESTIGATOR'],
+  'ST-003': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_STUDY_LEAD', 'ROLE_STUDY_COORDINATOR'],
+};
+
 export const TopNavigation: React.FC = () => {
   const { navItems } = useNavigation();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, logout } = useAuth();
   const {
     openTabs,
     activeTabId,
@@ -65,8 +78,11 @@ export const TopNavigation: React.FC = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isCampusOpen, setIsCampusOpen] = useState(false);
+  const [isStudyActionsOpen, setIsStudyActionsOpen] = useState(false);
+  const [isStudySelectOpen, setIsStudySelectOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const campusRef = useRef<HTMLDivElement>(null);
+  const studyActionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -81,12 +97,28 @@ export const TopNavigation: React.FC = () => {
       if (campusRef.current && !campusRef.current.contains(e.target as Node)) {
         setIsCampusOpen(false);
       }
+      if (studyActionsRef.current && !studyActionsRef.current.contains(e.target as Node)) {
+        setIsStudySelectOpen(false);
+        setIsStudyActionsOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (activeTabId !== 'studies') {
+      setIsStudyActionsOpen(false);
+      setIsStudySelectOpen(false);
+    }
+  }, [activeTabId]);
+
   if (!user) return null;
+
+  const userRoles = (user.roles || []).map((role) => role.toUpperCase());
+  const studyOptions = MOCK_STUDIES.filter((study) =>
+    (MOCK_STUDY_ROLE_ACCESS[String(study.id)] || []).some((role) => userRoles.includes(role))
+  );
 
   const renderIcon = (iconName?: string, size = 15) => {
     const IconComponent =
@@ -188,47 +220,108 @@ export const TopNavigation: React.FC = () => {
           {/* Middle: Horizontal Module Navigation */}
           <nav className="enl-header-modules" aria-label="Main Navigation">
             {navItems.map((item) => {
-              const isActive = activeTabId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => activateTab(item.id)}
-                  className={`enl-module-btn ${isActive ? 'enl-module-btn--active' : ''}`}
-                >
-                  <span className="enl-module-icon">{renderIcon(item.icon, 15)}</span>
-                  <span className="enl-module-label">{item.label}</span>
-                </button>
-              );
+                const isActive = activeTabId === item.id || (item.id === 'studies' && isStudyActionsOpen);
+                return (
+                  <React.Fragment key={item.id}>
+                  <div
+                    className={item.id === 'studies' ? 'enl-study-module-group' : 'enl-module-item-wrap'}
+                    ref={item.id === 'studies' ? studyActionsRef : undefined}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.id === 'studies') {
+                          setIsStudyActionsOpen((open) => !open);
+                          setIsStudySelectOpen(false);
+                        } else {
+                          activateTab(item.id);
+                          setIsStudyActionsOpen(false);
+                        }
+                      }}
+                      className={`enl-module-btn ${isActive ? 'enl-module-btn--active' : ''}`}
+                      aria-expanded={item.id === 'studies' ? isStudyActionsOpen : undefined}
+                    >
+                      <span className="enl-module-icon">{renderIcon(item.icon, 15)}</span>
+                      <span className="enl-module-label">{CLIENT_MODULE_LABELS[item.id] || item.label}</span>
+                    </button>
+                    {item.id === 'studies' && isStudyActionsOpen && (
+                      <div className="enl-study-module-menu">
+                        <div
+                          className="enl-study-module-menu-item-wrap"
+                          onMouseEnter={() => setIsStudySelectOpen(true)}
+                          onMouseLeave={() => setIsStudySelectOpen(false)}
+                        >
+                          <button
+                            type="button"
+                            className="enl-study-module-menu-item"
+                            onClick={() => setIsStudySelectOpen(true)}
+                            onFocus={() => setIsStudySelectOpen(true)}
+                            aria-expanded={isStudySelectOpen}
+                            aria-haspopup="menu"
+                          >
+                            <span>Select Study</span>
+                            <ChevronDown size={14} className="enl-study-menu-arrow" />
+                          </button>
+                          {isStudySelectOpen && (
+                            <div className="enl-study-select-menu" role="menu" aria-label="Select a study">
+                              <div className="enl-study-select-heading">Available Studies</div>
+                              {studyOptions.length > 0 ? studyOptions.map((study) => {
+                                const studyId = study.id ?? study.studyId ?? study.protocolNumber;
+                                return (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    key={studyId ?? study.title}
+                                    onClick={() => {
+                                      activateTab('studies');
+                                      navigate(`/studies?studyId=${encodeURIComponent(String(studyId))}`);
+                                      setIsStudySelectOpen(false);
+                                      setIsStudyActionsOpen(false);
+                                    }}
+                                  >
+                                    <span className="enl-study-option-icon"><BookOpen size={16} /></span>
+                                    <strong>{study.title || study.name || 'Untitled study'}</strong>
+                                    <small>{study.protocolNumber || studyId || 'Study'}</small>
+                                  </button>
+                                );
+                              }) : <p>No studies available</p>}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="enl-study-module-menu-item"
+                          onClick={() => {
+                            activateTab('studies');
+                            navigate('/studies?action=add');
+                            setIsStudyActionsOpen(false);
+                          }}
+                        >
+                          <span>Add Study</span>
+                          <Plus size={16} strokeWidth={3} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  </React.Fragment>
+                );
             })}
 
-            {/* AI Assistant Pill */}
+            {/* Temporarily hidden; keep the shortcut for a future navigation restore.
             <button
               type="button"
               className="enl-module-btn enl-module-btn--ai"
-              onClick={() => {
-                // If there's an AI module or drawer, open it, else trigger dashboard
-                activateTab('dashboard');
-              }}
+              onClick={() => activateTab('dashboard')}
             >
               <Sparkles size={14} className="enl-ai-sparkle" />
               <span>AI Assistant</span>
             </button>
+            */}
           </nav>
 
           {/* Right: Notifications, User Profile Pill, Logout */}
           <div className="enl-header-right">
             {/* Notification Bell */}
-            {/* <button
-              type="button"
-              className="enl-icon-action-btn"
-              aria-label="View notifications"
-              title="Notifications"
-            >
-              <Bell size={18} />
-              <span className="enl-notification-dot" />
-            </button> */}
-
             {/* User Profile */}
             <UserMenu />
 
@@ -240,7 +333,7 @@ export const TopNavigation: React.FC = () => {
               aria-label="Sign Out"
               title="Sign Out"
             >
-              <LogOut size={18} />
+              <LogOut size={18} strokeWidth={2.5} />
             </button>
           </div>
         </div>
@@ -393,7 +486,7 @@ export const TopNavigation: React.FC = () => {
                     className={`enl-mobile-nav-item ${isActive ? 'enl-mobile-nav-item--active' : ''}`}
                   >
                     {renderIcon(item.icon, 18)}
-                    <span>{item.label}</span>
+                    <span>{CLIENT_MODULE_LABELS[item.id] || item.label}</span>
                   </button>
                 );
               })}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SurveyResponse, AiAssessment } from '../types/survey';
 import { surveyApi } from '../api/surveyApi';
-import { Eye, Sparkles, X, AlertTriangle, CheckCircle2, User, Clock, Download } from 'lucide-react';
+import { Eye, Sparkles, X, AlertTriangle, User, Download } from 'lucide-react';
 
 interface SurveyResponsesViewProps {
   surveyId?: number;

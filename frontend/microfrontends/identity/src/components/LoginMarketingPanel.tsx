@@ -2,7 +2,6 @@
 import React from 'react';
 import {
   loginContent,
-  defaultStatistics,
   StatisticItem,
 } from '../data/loginContent';
 import { EnrollNowBrand } from './EnrollNowBrand';
@@ -16,7 +15,6 @@ export interface LoginMarketingPanelProps {
 }
 
 export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
-  statistics = defaultStatistics,
   className = '',
 }) => {
   const { headline, description, features, floatingCards } = loginContent;

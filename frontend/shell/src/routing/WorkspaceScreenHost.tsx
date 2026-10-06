@@ -16,7 +16,7 @@ import {
 } from '../modules';
 
 export const WorkspaceScreenHost: React.FC = () => {
-  const { openTabs, activeTabId, isRefreshing, refreshingTabId } = useTabWorkspace();
+  const { openTabs, activeTabId, isRefreshing } = useTabWorkspace();
 
   const renderModuleContent = (tabId: string, refreshCount: number) => {
     switch (tabId) {

@@ -10,16 +10,17 @@ interface NavigationContextType {
 }
 
 export const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
-  { id: 'dashboard', label: 'Clinical Operations', route: '/dashboard', icon: 'LayoutDashboard', order: 1 },
-  { id: 'studies', label: 'Studies', route: '/studies', icon: 'BookOpen', order: 2 },
+  { id: 'dashboard', label: 'Home', route: '/dashboard', icon: 'Home', order: 1 },
+  { id: 'admin', label: 'Administration', route: '/admin', icon: 'Settings', order: 2 },
   { id: 'participants', label: 'Participants', route: '/participants', icon: 'Users', order: 3 },
-  { id: 'recruitment', label: 'Recruitment', route: '/recruitment', icon: 'Target', order: 4 },
-  { id: 'surveys', label: 'Surveys & eConsent', route: '/surveys', icon: 'ClipboardList', order: 5 },
-  { id: 'tasks', label: 'Tasks', route: '/tasks', icon: 'CheckSquare', order: 6 },
-  { id: 'communications', label: 'Outreach', route: '/communications', icon: 'MessageSquare', order: 7 },
-  { id: 'documents', label: 'Documents', route: '/documents', icon: 'FileText', order: 8 },
-  { id: 'organization', label: 'Sites & Network', route: '/organization', icon: 'Building', order: 9 },
-  { id: 'admin', label: 'Administration', route: '/admin', icon: 'Settings', order: 10 },
+  { id: 'communications', label: 'Outreach', route: '/communications', icon: 'MessageSquare', order: 4 },
+  { id: 'studies', label: 'Studies', route: '/studies', icon: 'BookOpen', order: 5 },
+  // Temporarily hidden from the top navigation; routes and MFEs remain available.
+  // { id: 'recruitment', label: 'Recruitment', route: '/recruitment', icon: 'Target', order: 6 },
+  // { id: 'surveys', label: 'Surveys & eConsent', route: '/surveys', icon: 'ClipboardList', order: 7 },
+  // { id: 'tasks', label: 'Tasks', route: '/tasks', icon: 'CheckSquare', order: 8 },
+  // { id: 'documents', label: 'Documents', route: '/documents', icon: 'FileText', order: 9 },
+  // { id: 'organization', label: 'Sites & Network', route: '/organization', icon: 'Building', order: 10 },
 ];
 
 const NavigationContext = createContext<NavigationContextType>({
@@ -31,7 +32,7 @@ const NavigationContext = createContext<NavigationContextType>({
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, hasRole, isAdmin } = useAuth();
   const [navItems, setNavItems] = useState<NavigationItem[]>(DEFAULT_NAVIGATION_ITEMS);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading] = useState<boolean>(false);
 
   const filterNavItems = () => {
     if (!user) {

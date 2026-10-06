@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Survey } from '../types/survey';
 import { QuestionRenderer } from './QuestionRenderer';
-import { CheckCircle2, ChevronRight, ChevronLeft, Send, Sparkles, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ChevronLeft, Send, ShieldCheck } from 'lucide-react';
 
 export interface SurveyRunnerProps {
   survey: Survey;

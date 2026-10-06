@@ -2,6 +2,7 @@ export * from './Card';
 export * from './StatCard';
 export * from './PageHeader';
 export * from './DataTable';
+export * from './DataGrid';
 export * from './Modal';
 export * from './StatusBadge';
 export * from './Tabs';

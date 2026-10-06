@@ -1,6 +1,5 @@
 // frontend/shared/design-system/components/Footer.tsx - Shared Global Footer Component
 import React from 'react';
-import { ShieldCheck, ExternalLink, Activity } from 'lucide-react';
 
 export interface FooterProps {
   variant?: 'app-shell' | 'auth';
