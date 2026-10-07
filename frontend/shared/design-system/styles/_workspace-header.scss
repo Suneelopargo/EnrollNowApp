@@ -292,7 +292,7 @@
   margin: 0 8px;
   flex: 1;
   min-width: 0;
-  justify-content: flex-start;
+  justify-content: flex-end;
 
   @media (max-width: 1024px) {
     display: none;
@@ -453,7 +453,8 @@
   position: absolute;
   z-index: 1300;
   top: 0;
-  left: calc(100% - 2px);
+  left: auto;
+  right: calc(100% - 2px);
   display: grid;
   width: min(350px, calc(100vw - 24px));
   max-height: min(360px, 65vh);
@@ -551,6 +552,7 @@
   .enl-study-select-menu {
     top: calc(100% - 2px);
     left: 0;
+    right: auto;
   }
 }
 

@@ -1,49 +1,105 @@
 // Application-wide AG Grid theme. Use the shared DataGrid component to apply
 // the enl-ag-grid and ag-theme-quartz classes consistently.
+@use 'variables' as *;
+
 .enl-ag-grid.ag-theme-quartz {
   --ag-background-color: #ffffff;
   --ag-foreground-color: #24445b;
-  --ag-header-background-color: #123a5a;
-  --ag-header-foreground-color: #ffffff;
+  // AG Grid paints unused space after the last column from this variable.
+  // Keep that track neutral; actual header cells receive the shared accent below.
+  --ag-header-background-color: #f5f8fa;
+  --ag-header-foreground-color: #f5f8fa;
   --ag-odd-row-background-color: #f1f6f9;
-  --ag-row-hover-color: #e7f3fa;
+  --ag-row-hover-color: transparent;
+  --ag-column-hover-color: transparent;
+  --ag-header-cell-hover-background-color: #{$color-table-header};
   --ag-border-color: #d7e3eb;
   --ag-accent-color: #087eb8;
   --ag-input-focus-border-color: #087eb8;
+  --ag-icon-font-color: #d6e2e9;
+  --ag-icon-font-color-asc: #d6e2e9;
+  --ag-icon-font-color-desc: #d6e2e9;
+  --ag-icon-font-color-filter: #d6e2e9;
   --ag-font-family: Inter, 'Segoe UI', sans-serif;
   --ag-font-size: 12px;
   --ag-wrapper-border-radius: 10px;
 
   display: block;
   width: 100%;
+  height: clamp(440px, calc(100vh - 350px), 920px);
   min-width: 0;
-  min-height: 280px;
+  min-height: 360px;
   color: #24445b;
 
   .ag-root-wrapper {
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     border: 1px solid #d7e3eb;
     border-radius: 10px;
   }
 
-  .ag-header,
   .ag-header-cell,
   .ag-header-group-cell {
-    background: #123a5a;
-    color: #ffffff;
+    background: $color-table-header;
+    color: #f5f8fa;
   }
 
-  .ag-header { border-bottom: 1px solid #0c2e49; }
+  .ag-header-cell.ag-column-hover,
+  .ag-header-group-cell.ag-column-hover {
+    background: $color-table-header !important;
+    color: #f5f8fa !important;
+  }
+
+  // The header wrapper spans the full grid even when columns do not. Keep the
+  // unused track neutral so it never looks like an empty, colored column.
+  .ag-header { background: #f5f8fa !important; }
+
+  .ag-header { border-bottom: 1px solid $color-table-header-border; }
 
   .ag-header-cell-text {
-    color: #ffffff;
+    color: #f5f8fa;
     font-size: 12px;
     font-weight: 700;
   }
 
-  .ag-header-cell-resize::after { background: rgba(255, 255, 255, 0.24); }
+  .ag-header-cell-resize::after { background: rgba(230, 240, 246, 0.3); }
 
-  .ag-floating-filter { background: #f5f9fc; }
+  // Keep sort and filter affordances neutral against the light header.
+  .ag-header-cell-menu-button,
+  .ag-header-cell-filter-button {
+    opacity: 1 !important;
+    color: #d6e2e9 !important;
+  }
+
+  .ag-header-cell .ag-icon {
+    color: #d6e2e9 !important;
+    opacity: 1 !important;
+  }
+
+  .ag-sort-indicator-container { gap: 3px; }
+  .ag-sort-indicator-icon .ag-icon-asc,
+  .ag-sort-indicator-icon .ag-icon-desc,
+  .ag-sort-indicator-icon .ag-icon-none { opacity: 1 !important; }
+
+  .ag-header-cell-sorted-asc .ag-sort-indicator-icon .ag-icon-asc,
+  .ag-header-cell-sorted-desc .ag-sort-indicator-icon .ag-icon-desc,
+  .ag-filter-active .ag-icon-filter { color: #d6e2e9 !important; }
+
+  .ag-header-row-column-filter,
+  .ag-header-row-column-filter .ag-header-cell,
+  .ag-header-row-column-filter .ag-floating-filter,
+  .ag-header-row-column-filter .ag-header-cell-filtered,
+  .ag-floating-filter {
+    background: #f5f9fc !important;
+  }
+
+  .ag-floating-filter-button-button,
+  .ag-floating-filter-button-button .ag-icon,
+  .ag-floating-filter .ag-icon-filter {
+    color: #8193a1 !important;
+    background-color: transparent !important;
+  }
 
   .ag-floating-filter-input input,
   .ag-floating-filter input {
@@ -66,7 +122,6 @@
   .ag-row { border-bottom: 1px solid #dce7ee; }
   .ag-row-even { background: #ffffff; }
   .ag-row-odd { background: #f1f6f9; }
-  .ag-row-hover { background: #e7f3fa; }
 
   .ag-paging-panel {
     min-height: 42px;

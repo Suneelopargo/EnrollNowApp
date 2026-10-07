@@ -353,18 +353,26 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid #d5e1e9;
+  border-radius: 10px;
+  background: #f3f7fa;
 
   h2 {
     margin: 2px 0 4px;
-    color: #15344d;
-    font-size: 17px;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 
   p:not(.executive-progress-panel__eyebrow) {
     margin: 0;
-    color: #64798b;
+    color: #d6e2e9;
     font-size: 12px;
   }
+
+  .executive-progress-panel__eyebrow { color: #b5e3f6; }
 }
 
 .executive-drilldown__close {

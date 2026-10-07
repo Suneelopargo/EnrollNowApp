@@ -38,3 +38,16 @@
     cursor: not-allowed;
   }
 }
+
+.form-input[aria-invalid='true'],
+.form-select[aria-invalid='true'],
+.form-textarea[aria-invalid='true'] {
+  border-color: #d64545;
+
+  &::placeholder { color: #b42318; opacity: 1; }
+
+  &:focus {
+    border-color: #d64545;
+    box-shadow: 0 0 0 3px rgba(214, 69, 69, 0.14);
+  }
+}

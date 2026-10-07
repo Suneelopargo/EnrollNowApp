@@ -28,14 +28,14 @@ export interface TabWorkspaceContextType {
 export const ROUTE_TAB_DEFINITIONS: Record<string, Omit<WorkspaceTab, 'refreshCount' | 'createdAt'>> = {
   '/dashboard': { id: 'dashboard', title: 'Clinical Operations', route: '/dashboard', icon: 'LayoutDashboard', closable: false },
   '/studies': { id: 'studies', title: 'Studies', route: '/studies', icon: 'BookOpen', closable: true },
-  '/participants': { id: 'participants', title: 'Participants', route: '/participants', icon: 'Users', closable: true },
+  '/participants': { id: 'participants', title: 'Registry', route: '/participants', icon: 'Users', closable: true },
   '/recruitment': { id: 'recruitment', title: 'Recruitment', route: '/recruitment', icon: 'Target', closable: true },
   '/surveys': { id: 'surveys', title: 'Surveys & eConsent', route: '/surveys', icon: 'ClipboardList', closable: true },
   '/tasks': { id: 'tasks', title: 'Tasks', route: '/tasks', icon: 'CheckSquare', closable: true },
   '/communications': { id: 'communications', title: 'Outreach', route: '/communications', icon: 'MessageSquare', closable: true },
   '/documents': { id: 'documents', title: 'Documents', route: '/documents', icon: 'FileText', closable: true },
   '/organization': { id: 'organization', title: 'Sites & Network', route: '/organization', icon: 'Building', closable: true },
-  '/admin': { id: 'admin', title: 'Administration', route: '/admin', icon: 'Settings', closable: true },
+  '/admin': { id: 'admin', title: 'Site Admin', route: '/admin', icon: 'Settings', closable: true },
 };
 
 export const DEFAULT_HOME_TAB: WorkspaceTab = {

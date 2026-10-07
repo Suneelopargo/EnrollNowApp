@@ -34,12 +34,29 @@
   justify-content: space-between;
   padding: $spacing-4 $spacing-6;
   border-bottom: 1px solid $border-color;
+  background: $color-table-header;
 
   h3 {
     margin: 0;
-    font-size: $font-size-base;
-    font-weight: $font-weight-semibold;
-    color: $text-primary;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    letter-spacing: -0.01em;
+    color: #ffffff;
+  }
+}
+
+.modal-container--wide { max-width: 1200px; }
+
+.modal-title-bar {
+  background: $color-table-header !important;
+  border-bottom: 1px solid $color-table-header-border !important;
+
+  h2,
+  h3,
+  .modal-title-bar__title {
+    color: #ffffff !important;
+    font-weight: $font-weight-bold;
+    letter-spacing: -0.01em;
   }
 }
 

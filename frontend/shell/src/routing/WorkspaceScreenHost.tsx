@@ -1,7 +1,9 @@
 // frontend/shell/src/routing/WorkspaceScreenHost.tsx - Keep-Alive Multi-Screen Workspace Host
 import React from 'react';
+import { CircleHelp } from 'lucide-react';
 import { useTabWorkspace } from '../navigation/TabWorkspaceContext';
 import { LoadingSpinner } from '../../../shared/design-system/components/LoadingSpinner';
+import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
   DashboardModule,
   StudyModule,
@@ -71,6 +73,19 @@ export const WorkspaceScreenHost: React.FC = () => {
             className={`enl-screen-pane ${isActive ? 'enl-screen-pane--active' : 'enl-screen-pane--hidden'}`}
           >
             <main className="page-container">
+              <div className="page-context-banner">
+                <h1>{tab.title}</h1>
+                <a
+                  href={SUPPORT_KNOWLEDGE_BASE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="page-context-banner__help"
+                  title="Open the EnrollNow knowledge base"
+                  aria-label="Open the EnrollNow knowledge base"
+                >
+                  <CircleHelp size={27} strokeWidth={2.5} aria-hidden="true" />
+                </a>
+              </div>
               {renderModuleContent(tab.id, tab.refreshCount)}
             </main>
           </div>

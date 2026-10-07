@@ -22,9 +22,9 @@ export const SurveyPreviewModal: React.FC<SurveyPreviewModalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-slate-100 rounded-2xl w-full max-w-5xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Header */}
-        <div className="bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="modal-title-bar bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-slate-800 text-base">Survey Interactive Preview</span>
+            <span className="modal-title-bar__title font-bold text-slate-800 text-base">Survey Interactive Preview</span>
             <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">
               Test Mode
             </span>

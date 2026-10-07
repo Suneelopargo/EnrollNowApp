@@ -7,11 +7,18 @@ import 'ag-grid-community/styles/ag-theme-quartz.css';
 const DEFAULT_COLUMN_DEFINITION = {
   resizable: true,
   sortable: true,
+  unSortIcon: true,
   filter: true,
   floatingFilter: true,
 };
 
-export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>, 'defaultColDef' | 'modules'> {
+const DEFAULT_AUTO_SIZE_STRATEGY = {
+  type: 'fitGridWidth' as const,
+  defaultMinWidth: 80,
+  continuous: true,
+};
+
+export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>, 'defaultColDef' | 'modules' | 'style'> {
   /** Class applied to the shared grid frame for page-specific sizing. */
   wrapperClassName?: string;
   /** Extend or override the shared column defaults for this grid. */
@@ -20,7 +27,7 @@ export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>
   modules?: Module[];
 }
 
-export type { ColDef, GridApi } from 'ag-grid-community';
+export type { ColDef, GridApi, ICellRendererParams } from 'ag-grid-community';
 
 /** Shared AG Grid wrapper with the application-wide theme and sensible defaults. */
 export function DataGrid<TData = any>({
@@ -28,6 +35,7 @@ export function DataGrid<TData = any>({
   wrapperClassName = '',
   defaultColDef,
   modules,
+  autoSizeStrategy = DEFAULT_AUTO_SIZE_STRATEGY,
   ...gridProps
 }: DataGridProps<TData>) {
   const gridClasses = ['enl-ag-grid', 'ag-theme-quartz', className, wrapperClassName]
@@ -35,12 +43,15 @@ export function DataGrid<TData = any>({
     .join(' ');
 
   return (
-    <AgGridReact<TData>
-      {...gridProps}
-      className={gridClasses}
-      modules={modules ?? [AllCommunityModule]}
-      defaultColDef={{ ...DEFAULT_COLUMN_DEFINITION, ...defaultColDef }}
-    />
+    <div className={gridClasses}>
+      <AgGridReact<TData>
+        {...gridProps}
+        theme="legacy"
+        autoSizeStrategy={autoSizeStrategy}
+        modules={modules ?? [AllCommunityModule]}
+        defaultColDef={{ ...DEFAULT_COLUMN_DEFINITION, ...defaultColDef }}
+      />
+    </div>
   );
 }
 

@@ -36,3 +36,10 @@
     background-color: #f8fafc;
   }
 }
+
+// Keep column title bars consistent across modules and grid implementations.
+table thead th {
+  background-color: $color-table-header !important;
+  color: #f5f8fa !important;
+  border-color: $color-table-header-border !important;
+}

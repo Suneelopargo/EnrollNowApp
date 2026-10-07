@@ -160,7 +160,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
             const allStudies = studiesRes.data?.data;
             if (Array.isArray(allStudies) && allStudies.length > 0) {
               const overviewById = new Map<string, ReturnType<typeof normalizeStudy>>();
-              overviewStudies.map(normalizeStudy).forEach((study) => {
+              overviewStudies.map(normalizeStudy).forEach((study: any) => {
                 [study.id, study.studyId, study.protocolNumber].forEach((id) => {
                   if (id !== undefined && id !== null) overviewById.set(String(id), study);
                 });
@@ -553,7 +553,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
                         <span>{metric.label}</span>
                         <strong>{metric.value.toLocaleString()}</strong>
                       </div>
-                      <div className={`executive-participant-chart__bar executive-participant-chart__bar--${metric.color}`} role="img" aria-label={`${metric.label}: ${metric.value.toLocaleString()}, ${percent}%`}>
+                      <div className={`executive-participant-chart__bar executive-participant-chart__bar--${(metric as any).color || metric.key}`} role="img" aria-label={`${metric.label}: ${metric.value.toLocaleString()}, ${percent}%`}>
                         <svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
                           <rect className="executive-participant-chart__track" x="0" y="0" width="100" height="10" rx="5" />
                           <rect className="executive-participant-chart__fill" x="0" y="0" width={percent} height="10" rx="5" />
@@ -596,7 +596,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
                   if (!(event.target as Element).closest('.executive-drilldown__exports')) setExportMenuOpen(false);
                 }}
               >
-                <div className="executive-drilldown__heading">
+                <div className="executive-drilldown__heading modal-title-bar">
                   <div>
                     <p className="executive-progress-panel__eyebrow">Chart drill-down</p>
                     <h2 id="drilldown-title">{drilldownSegment.label}</h2>

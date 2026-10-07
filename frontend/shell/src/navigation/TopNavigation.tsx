@@ -7,6 +7,7 @@ import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
 import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
 import { MOCK_STUDIES } from '../../../shared/mock-api/mockData';
+import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
   LayoutDashboard,
   BookOpen,
@@ -129,6 +130,16 @@ export const TopNavigation: React.FC = () => {
   const organizationName =
     user.organizationName || 'Clinical Health Campus';
 
+  const handleModuleNavigation = (moduleId: string) => {
+    if (moduleId === 'communications') {
+      window.open(SUPPORT_KNOWLEDGE_BASE_URL, '_blank', 'noopener,noreferrer');
+      setIsStudyActionsOpen(false);
+      setIsMobileOpen(false);
+      return;
+    }
+    activateTab(moduleId);
+  };
+
   return (
     <>
       <header className="enl-workspace-header">
@@ -163,7 +174,7 @@ export const TopNavigation: React.FC = () => {
               </button>
             </div>
 
-            {/* Campus / Facility Dropdown Pill */}
+            {/* Campus / Facility Dropdown Pill — temporarily hidden.
             <div className="enl-site-selector-wrap" ref={campusRef}>
               <button
                 type="button"
@@ -215,6 +226,7 @@ export const TopNavigation: React.FC = () => {
                 </div>
               )}
             </div>
+            */}
           </div>
 
           {/* Middle: Horizontal Module Navigation */}
@@ -233,6 +245,8 @@ export const TopNavigation: React.FC = () => {
                         if (item.id === 'studies') {
                           setIsStudyActionsOpen((open) => !open);
                           setIsStudySelectOpen(false);
+                        } else if (item.id === 'communications') {
+                          handleModuleNavigation(item.id);
                         } else {
                           activateTab(item.id);
                           setIsStudyActionsOpen(false);
@@ -280,8 +294,8 @@ export const TopNavigation: React.FC = () => {
                                     }}
                                   >
                                     <span className="enl-study-option-icon"><BookOpen size={16} /></span>
-                                    <strong>{study.title || study.name || 'Untitled study'}</strong>
-                                    <small>{study.protocolNumber || studyId || 'Study'}</small>
+                                    <strong>{(study as any).title || (study as any).name || 'Untitled study'}</strong>
+                                    <small>{(study as any).protocolNumber || studyId || 'Study'}</small>
                                   </button>
                                 );
                               }) : <p>No studies available</p>}
@@ -480,8 +494,7 @@ export const TopNavigation: React.FC = () => {
                     key={item.id}
                     type="button"
                     onClick={() => {
-                      activateTab(item.id);
-                      setIsMobileOpen(false);
+                      handleModuleNavigation(item.id);
                     }}
                     className={`enl-mobile-nav-item ${isActive ? 'enl-mobile-nav-item--active' : ''}`}
                   >
