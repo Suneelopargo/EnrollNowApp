@@ -1,5 +1,6 @@
 // frontend/shell/src/auth/AuthContext.tsx - Host-Level Authentication & Session Management
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthUser, AuthState } from '../../../shared/contracts';
 import { telemetry } from '../../../shared/telemetry';
 import { authApi } from '../../../shared/api/authApi';
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const navigate = useNavigate();
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('enrollnow_token'));
   const [user, setUser] = useState<AuthUser | null>(() => {
     try {
@@ -168,8 +170,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     clearSession();
+    localStorage.clear();
+    sessionStorage.clear();
     authApi.logout();
-    window.location.href = '/login';
+    navigate('/login', { replace: true });
   };
 
   const hasRole = (role: string) => {

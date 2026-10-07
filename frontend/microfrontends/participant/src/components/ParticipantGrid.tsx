@@ -140,6 +140,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
   const [studyToAssign, setStudyToAssign] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [filterPopoverPosition, setFilterPopoverPosition] = useState<React.CSSProperties>({});
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -219,7 +220,19 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setIsDropdownOpen((prev) => !prev);
+            if (isDropdownOpen) {
+              setIsDropdownOpen(false);
+              return;
+            }
+            const bounds = e.currentTarget.getBoundingClientRect();
+            const popoverWidth = 288;
+            const popoverHeight = Math.min(480, window.innerHeight - 16);
+            const left = Math.max(8, Math.min(bounds.right - popoverWidth, window.innerWidth - popoverWidth - 8));
+            const top = bounds.bottom + popoverHeight + 8 <= window.innerHeight
+              ? bounds.bottom + 8
+              : Math.max(8, bounds.top - popoverHeight - 8);
+            setFilterPopoverPosition({ position: 'fixed', left, top, margin: 0 });
+            setIsDropdownOpen(true);
           }}
           title="Click to filter by checkbox"
           className={`p-1 rounded cursor-pointer transition-colors flex items-center gap-1 ${
@@ -570,6 +583,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       {isDropdownOpen && (
         <div
           ref={dropdownRef}
+          style={filterPopoverPosition}
           className="participant-grid__study-filter-popover bg-white rounded-lg shadow-2xl border border-gray-200 p-3 flex flex-col gap-2.5 animate-fade-in"
         >
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
@@ -672,6 +686,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           }}
           onRowClicked={(event) => {
             const target = event.event?.target as HTMLElement | null;
+            // Row action buttons have their own behavior and must not open details.
+            if (target?.closest('.participant-grid__row-actions')) return;
             // The Select cell is selection-only. A click anywhere in that column
             // must never bubble into the row detail interaction.
             if (

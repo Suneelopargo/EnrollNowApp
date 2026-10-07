@@ -159,6 +159,23 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [openTabs]);
 
+  // A logout keeps the app mounted, so reset in-memory tabs as well as storage.
+  useEffect(() => {
+    const handleAuthChange = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!detail?.logout) return;
+
+      setOpenTabs([DEFAULT_HOME_TAB]);
+      setActiveTabId('dashboard');
+      setIsRefreshing(false);
+      setRefreshingTabId(null);
+      sessionStorage.removeItem(STORAGE_KEY);
+    };
+
+    window.addEventListener('enrollnow_auth_change', handleAuthChange);
+    return () => window.removeEventListener('enrollnow_auth_change', handleAuthChange);
+  }, []);
+
   // Refresh tab data with smooth animated loader
   const refreshTab = useCallback((targetTabId?: string) => {
     const idToRefresh = targetTabId || activeTabId;
