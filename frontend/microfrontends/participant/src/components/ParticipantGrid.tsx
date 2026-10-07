@@ -56,20 +56,7 @@ const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
     <div className="flex flex-wrap items-center gap-1 leading-relaxed py-1">
       {studies.map((item, idx) => (
         <span key={idx} className="text-xs">
-          {item.isLink ? (
-            <a
-              href={`#study-${encodeURIComponent(item.name)}`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              className="text-[#1976d2] hover:underline font-normal cursor-pointer"
-            >
-              {item.name}
-            </a>
-          ) : (
-            <span className="text-gray-600">{item.name}</span>
-          )}
+          <span className="text-gray-700">{item.name}</span>
           {idx < studies.length - 1 && <span className="text-gray-500">, </span>}
         </span>
       ))}
@@ -156,6 +143,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const studyFilterButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const availableStudyList = useMemo(() => {
@@ -199,7 +187,12 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target) &&
+        !studyFilterButtonRef.current?.contains(target)
+      ) {
         setIsDropdownOpen(false);
       }
     };
@@ -222,6 +215,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       <div className="flex items-center justify-between w-full pr-1 relative">
         <span className="font-semibold text-[#334155]">Studies</span>
         <button
+          ref={studyFilterButtonRef}
           type="button"
           onClick={(e) => {
             e.stopPropagation();
@@ -576,7 +570,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       {isDropdownOpen && (
         <div
           ref={dropdownRef}
-          className="absolute left-72 top-14 w-72 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 p-3 flex flex-col gap-2.5 animate-fade-in"
+          className="participant-grid__study-filter-popover bg-white rounded-lg shadow-2xl border border-gray-200 p-3 flex flex-col gap-2.5 animate-fade-in"
         >
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div className="flex items-center gap-1.5 font-semibold text-xs text-gray-800">
@@ -678,7 +672,12 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           }}
           onRowClicked={(event) => {
             const target = event.event?.target as HTMLElement | null;
-            if (target?.closest('input[type="checkbox"]')) return;
+            // The Select cell is selection-only. A click anywhere in that column
+            // must never bubble into the row detail interaction.
+            if (
+              target?.closest('input[type="checkbox"]') ||
+              target?.closest('.ag-cell[col-id="select"]')
+            ) return;
             if (event.data) onOpenDetail?.(event.data);
           }}
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}

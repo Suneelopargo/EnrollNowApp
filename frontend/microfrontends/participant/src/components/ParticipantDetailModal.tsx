@@ -111,7 +111,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title="Participant Details"
-      maxWidth="1200px"
+      size="wide"
       footer={(
         <>
           <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>

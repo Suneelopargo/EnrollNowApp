@@ -18,7 +18,7 @@ const DEFAULT_AUTO_SIZE_STRATEGY = {
   continuous: true,
 };
 
-export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>, 'defaultColDef' | 'modules'> {
+export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>, 'defaultColDef' | 'modules' | 'style'> {
   /** Class applied to the shared grid frame for page-specific sizing. */
   wrapperClassName?: string;
   /** Extend or override the shared column defaults for this grid. */
@@ -36,7 +36,6 @@ export function DataGrid<TData = any>({
   defaultColDef,
   modules,
   autoSizeStrategy = DEFAULT_AUTO_SIZE_STRATEGY,
-  style,
   ...gridProps
 }: DataGridProps<TData>) {
   const gridClasses = ['enl-ag-grid', 'ag-theme-quartz', className, wrapperClassName]
@@ -44,10 +43,9 @@ export function DataGrid<TData = any>({
     .join(' ');
 
   return (
-    <div className={gridClasses} style={style}>
+    <div className={gridClasses}>
       <AgGridReact<TData>
         {...gridProps}
-        style={{ width: '100%', height: '100%' }}
         theme="legacy"
         autoSizeStrategy={autoSizeStrategy}
         modules={modules ?? [AllCommunityModule]}

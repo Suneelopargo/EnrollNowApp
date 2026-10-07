@@ -39,37 +39,24 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
 
   return (
     <div className="card card-body custom-filter-card">
-      <div className="flex items-center justify-between" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="text-xs font-medium text-gray-700" style={{ fontSize: '12px', fontWeight: 500, color: '#374151' }}>Filter</span>
+      <div className="filter-card-header">
+        <span className="filter-card-label">Filter</span>
         <button
           type="button"
           onClick={() => onRemove(index)}
           title="Remove Filter"
-          className="text-gray-400 hover:text-gray-700 p-0.5 rounded cursor-pointer transition-colors"
-          style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '2px' }}
+          className="filter-card-remove"
         >
           <X size={14} strokeWidth={2.5} />
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 filter-card-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
-        <div className="relative" style={{ position: 'relative' }}>
+      <div className="filter-card-fields">
+        <div className="filter-card-field-wrap">
           <select
             value={filter.field || 'age'}
             onChange={(e) => handleFieldChange(e.target.value)}
-            className="w-full appearance-none bg-white border border-blue-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-500 rounded px-2.5 py-1.5 pr-7 text-xs text-gray-800 focus:outline-none cursor-pointer shadow-xs filter-select"
-            style={{
-              width: '100%',
-              backgroundColor: '#ffffff',
-              border: '1px solid #60a5fa',
-              borderRadius: '4px',
-              padding: '6px 28px 6px 10px',
-              fontSize: '12px',
-              color: '#1f2937',
-              outline: 'none',
-              cursor: 'pointer',
-              boxSizing: 'border-box',
-            }}
+            className="filter-select filter-select--field"
           >
             {filterFieldOptions.map((f) => (
               <option key={f.id} value={f.id}>
@@ -80,27 +67,15 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           <ChevronDown
             size={14}
             color="#6b7280"
-            style={{ position: 'absolute', right: '8px', top: '10px', pointerEvents: 'none' }}
+            className="filter-card-chevron"
           />
         </div>
 
-        <div className="relative" style={{ position: 'relative' }}>
+        <div className="filter-card-field-wrap">
           <select
             value={filter.operator || 'equal to'}
             onChange={(e) => handleOperatorChange(e.target.value)}
-            className="w-full appearance-none bg-white border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-2.5 py-1.5 pr-7 text-xs text-gray-800 focus:outline-none cursor-pointer shadow-xs filter-select"
-            style={{
-              width: '100%',
-              backgroundColor: '#ffffff',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              padding: '6px 28px 6px 10px',
-              fontSize: '12px',
-              color: '#1f2937',
-              outline: 'none',
-              cursor: 'pointer',
-              boxSizing: 'border-box',
-            }}
+            className="filter-select filter-select--operator"
           >
             {operatorOptions.map((op) => (
               <option key={op} value={op}>
@@ -111,7 +86,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           <ChevronDown
             size={14}
             color="#6b7280"
-            style={{ position: 'absolute', right: '8px', top: '10px', pointerEvents: 'none' }}
+            className="filter-card-chevron"
           />
         </div>
       </div>
@@ -122,18 +97,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           value={filter.value || ''}
           onChange={(e) => handleValueChange(e.target.value)}
           placeholder={currentFieldConfig.placeholder || 'Enter value...'}
-          className="w-full border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded px-2.5 py-1.5 text-xs text-gray-800 bg-white placeholder-gray-400 outline-none shadow-xs filter-input"
-          style={{
-            width: '100%',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-            padding: '6px 10px',
-            fontSize: '12px',
-            color: '#1f2937',
-            backgroundColor: '#ffffff',
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
+          className="filter-card-value-input"
         />
       </div>
     </div>

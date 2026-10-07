@@ -56,12 +56,11 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
                   setFilterName(e.target.value);
                   if (error) setError('');
                 }}
-                placeholder={error ? error : "Enter Filter Name"}
+                placeholder={error || 'Enter Filter Name'}
                 autoFocus
                 className="form-input"
                 aria-invalid={!!error}
               />
-              {error && <span className="badge badge-danger" role="alert">{error}</span>}
           </div>
       </form>
     </Modal>

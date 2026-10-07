@@ -101,7 +101,6 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
       isOpen={isOpen}
       onClose={handleClose}
       title="Add Participant"
-      maxWidth="600px"
       footer={(
         <>
           <button type="submit" form="add-participant-form" className="btn btn-primary">
@@ -122,14 +121,11 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
                   setFirstName(e.target.value);
                   if (firstNameError) setFirstNameError('');
                 }}
-                placeholder={firstNameError ? firstNameError : "Enter First Name"}
+                placeholder={firstNameError || 'Enter First Name'}
                 autoFocus
                 className="form-input"
                 aria-invalid={!!firstNameError}
               />
-              {firstNameError && (
-                <span className="badge badge-danger" role="alert">{firstNameError}</span>
-              )}
           </div>
 
           <div className="form-group">
@@ -154,13 +150,10 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
                   setLastName(e.target.value);
                   if (lastNameError) setLastNameError('');
                 }}
-                placeholder={lastNameError ? lastNameError : "Enter Last Name"}
+                placeholder={lastNameError || 'Enter Last Name'}
                 className="form-input"
                 aria-invalid={!!lastNameError}
               />
-              {lastNameError && (
-                <span className="badge badge-danger" role="alert">{lastNameError}</span>
-              )}
           </div>
       </form>
     </Modal>

@@ -206,7 +206,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
             </div>
             <div className="study-recruitment-scale" role="img" aria-label={`${recruitedCount} of ${targetCount} participants recruited, ${recruitmentProgress}% of target`}>
               <div className="study-recruitment-scale__track">
-                <div className="study-recruitment-scale__fill" style={{ width: `${recruitmentProgress}%` }} />
+                <progress className="study-recruitment-scale__fill" value={recruitmentProgress} max={100} aria-hidden="true" />
               </div>
               <div className="study-recruitment-scale__ticks">
                 {[0, 25, 50, 75, 100].map((tick) => <span key={tick}>{tick}%</span>)}

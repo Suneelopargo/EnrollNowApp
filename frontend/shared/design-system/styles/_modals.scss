@@ -45,6 +45,8 @@
   }
 }
 
+.modal-container--wide { max-width: 1200px; }
+
 .modal-title-bar {
   background: $color-table-header !important;
   border-bottom: 1px solid $color-table-header-border !important;
