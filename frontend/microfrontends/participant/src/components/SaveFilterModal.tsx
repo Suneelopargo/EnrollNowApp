@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { validateField, validators } from '../../../../shared/design-system/validation';
 
 interface SaveFilterModalProps {
   isOpen: boolean;
@@ -17,8 +18,12 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!filterName.trim()) {
-      setError('Filter Name is required');
+    const validationError = validateField(filterName, [
+      validators.required('Filter Name'),
+      validators.text('Filter Name'),
+    ]);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     onSave(filterName.trim());
@@ -46,22 +51,25 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
       )}
     >
       <form id="save-filter-form" onSubmit={handleSubmit} noValidate>
-          <div className="form-group">
-            <label className="form-label" htmlFor="saved-filter-name">Filter Name *</label>
-              <input
-                id="saved-filter-name"
-                type="text"
-                value={filterName}
-                onChange={(e) => {
-                  setFilterName(e.target.value);
-                  if (error) setError('');
-                }}
-                placeholder={error || 'Enter Filter Name'}
-                autoFocus
-                className="form-input"
-                aria-invalid={!!error}
-              />
-          </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="saved-filter-name">
+            Filter Name <span className="form-required-marker" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="saved-filter-name"
+            type="text"
+            value={filterName}
+            onChange={(e) => {
+              setFilterName(e.target.value);
+              if (error) setError('');
+            }}
+            placeholder={error || 'Enter Filter Name'}
+            autoFocus
+            required
+            className="form-input"
+            aria-invalid={!!error}
+          />
+        </div>
       </form>
     </Modal>
   );

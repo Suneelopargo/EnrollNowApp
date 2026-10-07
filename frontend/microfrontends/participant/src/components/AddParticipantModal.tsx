@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { validateForm, validators } from '../../../../shared/design-system/validation';
 import { ParticipantRecord } from '../types/participant';
 
 interface AddParticipantModalProps {
@@ -22,19 +23,16 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    let hasError = false;
-
-    if (!firstName.trim()) {
-      setFirstNameError('First Name is required');
-      hasError = true;
-    }
-
-    if (!lastName.trim()) {
-      setLastNameError('Last Name is required');
-      hasError = true;
-    }
-
-    if (hasError) return;
+    const validationErrors = validateForm(
+      { firstName, lastName },
+      {
+        firstName: [validators.required('First Name'), validators.personName('First Name')],
+        lastName: [validators.required('Last Name'), validators.personName('Last Name')],
+      },
+    );
+    setFirstNameError(validationErrors.firstName || '');
+    setLastNameError(validationErrors.lastName || '');
+    if (Object.keys(validationErrors).length > 0) return;
 
     const fullName = `${firstName.trim()} ${middleName.trim() ? middleName.trim() + ' ' : ''}${lastName.trim()}`;
 
@@ -111,50 +109,56 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
       )}
     >
       <form id="add-participant-form" onSubmit={handleSubmit} noValidate>
-          <div className="form-group">
-            <label className="form-label" htmlFor="participant-first-name">First Name *</label>
-              <input
-                id="participant-first-name"
-                type="text"
-                value={firstName}
-                onChange={(e) => {
-                  setFirstName(e.target.value);
-                  if (firstNameError) setFirstNameError('');
-                }}
-                placeholder={firstNameError || 'Enter First Name'}
-                autoFocus
-                className="form-input"
-                aria-invalid={!!firstNameError}
-              />
-          </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="participant-first-name">
+            First Name <span className="form-required-marker" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="participant-first-name"
+            type="text"
+            value={firstName}
+            onChange={(e) => {
+              setFirstName(e.target.value);
+              if (firstNameError) setFirstNameError('');
+            }}
+            placeholder={firstNameError || 'Enter First Name'}
+            autoFocus
+            required
+            className="form-input"
+            aria-invalid={!!firstNameError}
+          />
+        </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="participant-middle-name">Middle Name</label>
-              <input
-                id="participant-middle-name"
-                type="text"
-                value={middleName}
-                onChange={(e) => setMiddleName(e.target.value)}
-                placeholder="Enter Middle Name"
-                className="form-input"
-              />
-          </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="participant-middle-name">Middle Name</label>
+          <input
+            id="participant-middle-name"
+            type="text"
+            value={middleName}
+            onChange={(e) => setMiddleName(e.target.value)}
+            placeholder="Enter Middle Name"
+            className="form-input"
+          />
+        </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="participant-last-name">Last Name *</label>
-              <input
-                id="participant-last-name"
-                type="text"
-                value={lastName}
-                onChange={(e) => {
-                  setLastName(e.target.value);
-                  if (lastNameError) setLastNameError('');
-                }}
-                placeholder={lastNameError || 'Enter Last Name'}
-                className="form-input"
-                aria-invalid={!!lastNameError}
-              />
-          </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="participant-last-name">
+            Last Name <span className="form-required-marker" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="participant-last-name"
+            type="text"
+            value={lastName}
+            onChange={(e) => {
+              setLastName(e.target.value);
+              if (lastNameError) setLastNameError('');
+            }}
+            placeholder={lastNameError || 'Enter Last Name'}
+            required
+            className="form-input"
+            aria-invalid={!!lastNameError}
+          />
+        </div>
       </form>
     </Modal>
   );

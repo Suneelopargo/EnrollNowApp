@@ -15,6 +15,8 @@
   color: $text-primary;
 }
 
+.form-required-marker { color: $color-danger; }
+
 .form-input,
 .form-select,
 .form-textarea {
@@ -42,12 +44,12 @@
 .form-input[aria-invalid='true'],
 .form-select[aria-invalid='true'],
 .form-textarea[aria-invalid='true'] {
-  border-color: #d64545;
+  border-color: $color-danger;
 
-  &::placeholder { color: #b42318; opacity: 1; }
+  &::placeholder { color: $color-danger; opacity: 1; }
 
   &:focus {
-    border-color: #d64545;
-    box-shadow: 0 0 0 3px rgba(214, 69, 69, 0.14);
+    border-color: $color-danger;
+    box-shadow: 0 0 0 3px rgba($color-danger, 0.14);
   }
 }
