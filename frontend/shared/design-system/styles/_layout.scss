@@ -297,7 +297,7 @@
   max-width: $max-content-width;
   width: 100%;
   margin: 0 auto;
-  padding: $spacing-6;
+  padding: $spacing-5;
 }
 
 .page-context-banner {
@@ -305,18 +305,20 @@
   align-items: center;
   justify-content: space-between;
   gap: $spacing-4;
-  min-height: 62px;
+  min-height: 58px;
   margin-bottom: $spacing-5;
   padding: $spacing-3 $spacing-5;
-  border-radius: $border-radius-sm;
-  background: #06294a;
-  color: #ffffff;
+  border-radius: $border-radius-md;
+  background: #0b3552;
+  border: 1px solid #174867;
+  color: #f5f8fa;
 
   h1 {
     margin: 0;
     color: inherit;
-    font-size: $font-size-2xl;
-    font-weight: $font-weight-normal;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    letter-spacing: -0.01em;
     line-height: 1.2;
   }
 }
@@ -328,26 +330,25 @@
   width: 36px;
   height: 36px;
   border-radius: $border-radius-full;
-  color: #06294a;
-  background: #d8e6f1;
+  color: #0b3552;
+  background: #d9e6ee;
   text-decoration: none;
   transition: background-color $transition-fast, transform $transition-fast;
 
   &:hover { background: #ffffff; transform: scale(1.04); }
-  &:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid #d9e6ee; outline-offset: 3px; }
 }
 
 @media (max-width: 600px) {
-  .page-context-banner { min-height: 54px; margin-bottom: $spacing-4; padding-inline: $spacing-4; }
-  .page-context-banner h1 { font-size: $font-size-xl; }
+  .page-context-banner { min-height: 52px; margin-bottom: $spacing-4; padding-inline: $spacing-4; }
 }
 
 // Reusable responsive two-column workspace layout for filter and result pages.
 .workspace-split-layout {
   display: grid;
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-  align-items: start;
-  gap: $spacing-5;
+  align-items: stretch;
+  gap: $spacing-4;
   width: 100%;
 }
 
@@ -406,7 +407,7 @@
 
 @media (max-width: 768px) {
   .page-container {
-    padding: $spacing-4;
+    padding: $spacing-3;
   }
 
   .header-top-bar {

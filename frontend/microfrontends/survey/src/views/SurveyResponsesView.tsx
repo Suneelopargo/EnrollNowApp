@@ -176,7 +176,7 @@ export const SurveyResponsesView: React.FC<SurveyResponsesViewProps> = ({ survey
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="modal-title-bar p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
                   Submission Detail #{selectedResponse.id}

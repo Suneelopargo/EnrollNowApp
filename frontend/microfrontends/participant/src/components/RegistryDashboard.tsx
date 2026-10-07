@@ -211,7 +211,17 @@ export const RegistryDashboard: React.FC = () => {
       value: '',
     };
     setCustomFilters((prev) => [...prev, newFilter]);
-    showNotification('New filter criteria added.');
+  };
+
+  const handleAssignStudyToSelected = (participantIds: string[], studyName: string) => {
+    const selectedIds = new Set(participantIds);
+    setParticipants((prev) => prev.map((participant) => {
+      if (!selectedIds.has(participant.id)) return participant;
+      const studies = participant.studies || [];
+      if (studies.some((study) => study.name === studyName)) return participant;
+      return { ...participant, studies: [...studies, { name: studyName, isLink: true }] };
+    }));
+    showNotification(`Added ${participantIds.length} participant(s) to ${studyName}.`, 'success');
   };
 
   const handleUpdateFilter = (index: number, updatedFilter: CustomFilterRule) => {
@@ -346,6 +356,7 @@ export const RegistryDashboard: React.FC = () => {
             onAddParticipant={() => setIsAddModalOpen(true)}
             onOpenDetail={handleOpenDetail}
             onDeleteParticipant={handleOpenDeleteParticipant}
+            onAssignStudyToSelected={handleAssignStudyToSelected}
             totalCount={participants.length}
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}

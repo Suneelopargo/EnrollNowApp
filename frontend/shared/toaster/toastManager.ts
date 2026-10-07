@@ -53,12 +53,18 @@ class ToastManager {
     this.toasts = [];
 
     const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const duration = options.duration !== undefined ? options.duration : 4000;
+    const duration = options.duration !== undefined ? options.duration : 6000;
+    const defaultTitles: Record<ToastType, string> = {
+      success: 'Success',
+      error: 'Error',
+      warning: 'Warning',
+      info: 'Information',
+    };
 
     const item: ToastItem = {
       id,
       type,
-      title: options.title,
+      title: options.title || defaultTitles[type],
       message,
       duration,
       timestamp: Date.now(),

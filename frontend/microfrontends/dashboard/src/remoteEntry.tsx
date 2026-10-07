@@ -596,7 +596,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
                   if (!(event.target as Element).closest('.executive-drilldown__exports')) setExportMenuOpen(false);
                 }}
               >
-                <div className="executive-drilldown__heading">
+                <div className="executive-drilldown__heading modal-title-bar">
                   <div>
                     <p className="executive-progress-panel__eyebrow">Chart drill-down</p>
                     <h2 id="drilldown-title">{drilldownSegment.label}</h2>

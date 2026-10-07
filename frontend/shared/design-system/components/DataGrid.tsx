@@ -12,6 +12,12 @@ const DEFAULT_COLUMN_DEFINITION = {
   floatingFilter: true,
 };
 
+const DEFAULT_AUTO_SIZE_STRATEGY = {
+  type: 'fitGridWidth' as const,
+  defaultMinWidth: 80,
+  continuous: true,
+};
+
 export interface DataGridProps<TData = any> extends Omit<AgGridReactProps<TData>, 'defaultColDef' | 'modules'> {
   /** Class applied to the shared grid frame for page-specific sizing. */
   wrapperClassName?: string;
@@ -29,6 +35,7 @@ export function DataGrid<TData = any>({
   wrapperClassName = '',
   defaultColDef,
   modules,
+  autoSizeStrategy = DEFAULT_AUTO_SIZE_STRATEGY,
   style,
   ...gridProps
 }: DataGridProps<TData>) {
@@ -37,11 +44,12 @@ export function DataGrid<TData = any>({
     .join(' ');
 
   return (
-    <div className={gridClasses} style={{ width: '100%', height: '540px', minHeight: '320px', ...style }}>
+    <div className={gridClasses} style={style}>
       <AgGridReact<TData>
         {...gridProps}
         style={{ width: '100%', height: '100%' }}
         theme="legacy"
+        autoSizeStrategy={autoSizeStrategy}
         modules={modules ?? [AllCommunityModule]}
         defaultColDef={{ ...DEFAULT_COLUMN_DEFINITION, ...defaultColDef }}
       />

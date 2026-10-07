@@ -38,9 +38,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
   };
 
   return (
-    <div
-      className="card card-body"
-    >
+    <div className="card card-body custom-filter-card">
       <div className="flex items-center justify-between" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span className="text-xs font-medium text-gray-700" style={{ fontSize: '12px', fontWeight: 500, color: '#374151' }}>Filter</span>
         <button
@@ -54,7 +52,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+      <div className="grid grid-cols-2 gap-2 filter-card-fields" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
         <div className="relative" style={{ position: 'relative' }}>
           <select
             value={filter.field || 'age'}
@@ -118,7 +116,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
         </div>
       </div>
 
-      <div>
+      <div className="filter-card-value">
         <input
           type="text"
           value={filter.value || ''}

@@ -1,6 +1,5 @@
 // frontend/microfrontends/participant/src/components/ParticipantGrid.tsx - AG-Grid Participant Table & Actions Bar
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -12,7 +11,6 @@ import {
   Filter as FilterIcon, 
   X, 
   Trash2,
-  MoreHorizontal,
   Eye,
 } from 'lucide-react';
 import { ChevronDown, FileSpreadsheet, FileText, UserPlus } from 'lucide-react';
@@ -80,76 +78,35 @@ const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
 };
 
 const ParticipantActionsRenderer: React.FC<ICellRendererParams> = (params) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const closeOnOutsideClick = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!menuRef.current?.contains(target) && !triggerRef.current?.contains(target)) setIsOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideClick);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [isOpen]);
-
-  const toggleMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    setMenuPosition({ top: rect.bottom + 6, left: Math.max(8, rect.right - 176) });
-    setIsOpen((open) => !open);
-  };
-
   const openDetails = () => {
-    setIsOpen(false);
     if (params.data) params.context?.onOpenDetail?.(params.data);
   };
 
   const deleteParticipant = () => {
-    setIsOpen(false);
     if (params.data) params.context?.onDeleteParticipant?.(params.data);
   };
 
   return (
-    <>
+    <div className="participant-grid__row-actions">
       <button
-        ref={triggerRef}
         type="button"
-        onClick={toggleMenu}
-        className="participant-grid__actions-trigger"
-        title="Participant actions"
-        aria-label="Participant actions"
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
+        onClick={(event) => { event.stopPropagation(); openDetails(); }}
+        className="participant-grid__row-action"
+        title="View details"
+        aria-label="View participant details"
       >
-        <MoreHorizontal size={20} aria-hidden="true" />
+        <Eye size={15} aria-hidden="true" />
       </button>
-      {isOpen && createPortal(
-        <div
-          ref={menuRef}
-          className="participant-grid__actions-menu"
-          role="menu"
-          style={{ top: menuPosition.top, left: menuPosition.left }}
-        >
-          <button type="button" role="menuitem" onClick={openDetails}>
-            <Eye size={16} /> View details
-          </button>
-          <button type="button" role="menuitem" onClick={deleteParticipant}>
-            <Trash2 size={16} /> Delete participant
-          </button>
-        </div>,
-        document.body
-      )}
-    </>
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); deleteParticipant(); }}
+        className="participant-grid__row-action participant-grid__row-action--danger"
+        title="Delete participant"
+        aria-label="Delete participant"
+      >
+        <Trash2 size={15} aria-hidden="true" />
+      </button>
+    </div>
   );
 };
 
@@ -170,6 +127,7 @@ interface ParticipantGridProps {
   onAddParticipant?: () => void;
   onOpenDetail?: (participant: ParticipantRecord) => void;
   onDeleteParticipant?: (participant: ParticipantRecord) => void;
+  onAssignStudyToSelected?: (participantIds: string[], studyName: string) => void;
   totalCount?: number;
   searchTerm?: string;
   setSearchTerm?: (term: string) => void;
@@ -185,12 +143,15 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   onAddParticipant,
   onOpenDetail,
   onDeleteParticipant,
+  onAssignStudyToSelected,
   searchTerm = '',
   setSearchTerm,
   selectedStudies = [],
   setSelectedStudies,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
+  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
+  const [studyToAssign, setStudyToAssign] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [filterSearchQuery, setFilterSearchQuery] = useState('');
@@ -288,9 +249,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Select',
       field: 'select',
-      width: 70,
-      minWidth: 60,
-      maxWidth: 80,
+      width: 72,
+      minWidth: 68,
+      maxWidth: 76,
       sortable: false,
       filter: false,
       resizable: false,
@@ -300,7 +261,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Name',
       field: 'name',
-      width: 220,
+      width: 200,
       minWidth: 160,
       sortable: true,
       filter: 'agTextColumnFilter',
@@ -320,8 +281,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Sex/Gender',
       field: 'gender',
-      width: 120,
-      minWidth: 90,
+      width: 140,
+      minWidth: 130,
       sortable: true,
       filter: true,
       cellRenderer: DefaultTextRenderer,
@@ -330,7 +291,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Age',
       field: 'age',
-      width: 150,
+      width: 130,
       minWidth: 100,
       sortable: true,
       filter: true,
@@ -340,8 +301,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Last Contact',
       field: 'lastContact',
-      width: 180,
-      minWidth: 140,
+      width: 150,
+      minWidth: 125,
       sortable: true,
       filter: 'agDateColumnFilter',
       cellRenderer: DefaultTextRenderer,
@@ -350,9 +311,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Actions',
       field: 'actions',
-      width: 100,
-      minWidth: 82,
-      maxWidth: 110,
+      width: 96,
+      minWidth: 88,
+      maxWidth: 100,
       sortable: false,
       filter: false,
       resizable: false,
@@ -369,10 +330,18 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const onSelectionChanged = useCallback(() => {
     if (!gridApi) return;
     const selectedRows = gridApi.getSelectedRows();
+    setSelectedParticipants(selectedRows);
     if (selectedRows && selectedRows.length > 0) {
       onSelectParticipant?.(selectedRows[0]);
     }
   }, [gridApi, onSelectParticipant]);
+
+  const handleBulkAction = () => {
+    if (!studyToAssign || selectedParticipants.length === 0) return;
+    onAssignStudyToSelected?.(selectedParticipants.map((participant) => participant.id), studyToAssign);
+    gridApi?.deselectAll();
+    setStudyToAssign('');
+  };
 
   const getExportRows = useCallback(() => {
     const rows: ParticipantRecord[] = [];
@@ -568,6 +537,42 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
         </div>
       )}
 
+      {selectedParticipants.length > 0 && (
+        <div className="participant-grid__selection-toolbar" role="region" aria-label="Selected participants actions">
+          <label className="participant-grid__select-all">
+            <input
+              type="checkbox"
+              checked={participants.length > 0 && selectedParticipants.length === participants.length}
+              onChange={(event) => {
+                if (!gridApi) return;
+                if (event.target.checked) gridApi.selectAll();
+                else gridApi.deselectAll();
+              }}
+            />
+            <span>Select All</span>
+          </label>
+          <span className="participant-grid__selected-count">
+            {selectedParticipants.length} selected
+          </span>
+          <select
+            value={studyToAssign}
+            onChange={(event) => setStudyToAssign(event.target.value)}
+            aria-label="Choose a study for selected participants"
+          >
+            <option value="">Choose Item</option>
+            {availableStudyList.map((study) => <option key={study} value={study}>{study}</option>)}
+          </select>
+          <button
+            type="button"
+            className="participant-grid__apply-action"
+            onClick={handleBulkAction}
+            disabled={!studyToAssign}
+          >
+            Apply
+          </button>
+        </div>
+      )}
+
       {isDropdownOpen && (
         <div
           ref={dropdownRef}
@@ -670,6 +675,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             } else if (params.column?.getColId() === 'deleteAction' && params.data) {
               onDeleteParticipant?.(params.data);
             }
+          }}
+          onRowClicked={(event) => {
+            const target = event.event?.target as HTMLElement | null;
+            if (target?.closest('input[type="checkbox"]')) return;
+            if (event.data) onOpenDetail?.(event.data);
           }}
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
           onSelectionChanged={onSelectionChanged}
