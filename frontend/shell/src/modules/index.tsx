@@ -123,7 +123,7 @@ export const ParticipantModule: React.FC<ModuleProps> = ({ context }) => {
   const defaultContext = useMfeContext('participant');
   return (
     <ErrorBoundary fallbackTitle="Participant Module Error" remoteId="participant">
-      <Suspense fallback={<LoadingSpinner message="Loading Participant Registry Module..." />}>
+      <Suspense fallback={<LoadingSpinner message="Loading Registry Module..." />}>
         <LazyParticipant context={context || defaultContext} />
       </Suspense>
     </ErrorBoundary>

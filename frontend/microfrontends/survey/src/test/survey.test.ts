@@ -10,7 +10,7 @@ describe('Survey MFE Remote Entry & Core Subsystem', () => {
     expect(typeof SurveyModule).toBe('function');
   });
 
-  it('accepts MfeContext configured with Survey Service endpoint (:8087)', () => {
+  it('accepts MfeContext configured with backend API base URL (:8080)', () => {
     const mockContext = {
       user: {
         id: 1,
@@ -19,11 +19,11 @@ describe('Survey MFE Remote Entry & Core Subsystem', () => {
         roles: ['ROLE_SUPER_ADMIN'],
       },
       token: 'valid-token',
-      apiBaseUrl: 'http://localhost:8087',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'survey-test-corr',
       navigate: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8087');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
   });
 
   it('supports all 16 clinical question types with correct configuration metadata', () => {

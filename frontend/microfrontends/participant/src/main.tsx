@@ -2,6 +2,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ParticipantModule } from './remoteEntry';
+import { ConfirmationContainer } from '../../../shared/confirmation';
+import { getApiBaseUrl } from '../../../shared/api-config';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
@@ -14,7 +16,7 @@ const mockContext = {
     lastName: 'Chen',
   },
   token: 'mock-jwt-token',
-  apiBaseUrl: 'http://localhost:8085',
+  apiBaseUrl: getApiBaseUrl(),
   basePath: '/',
   correlationId: 'dev-correlation-id',
   navigate: (path: string) => console.log('Navigate to:', path),
@@ -28,6 +30,7 @@ if (rootEl) {
       <div className="shell-main-content">
         <ParticipantModule context={mockContext} />
       </div>
+      <ConfirmationContainer />
     </React.StrictMode>
   );
 }

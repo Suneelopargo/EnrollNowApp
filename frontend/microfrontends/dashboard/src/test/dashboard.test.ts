@@ -8,7 +8,7 @@ describe('Dashboard MFE Remote Entry', () => {
     expect(typeof DashboardModule).toBe('function');
   });
 
-  it('configures default API base URL for Dashboard Service (:8091)', () => {
+  it('configures default API base URL for Dashboard Service (:8080)', () => {
     const mockContext = {
       user: {
         id: 1,
@@ -17,11 +17,11 @@ describe('Dashboard MFE Remote Entry', () => {
         roles: ['ROLE_SUPER_ADMIN'],
       },
       token: 'jwt-token-123',
-      apiBaseUrl: 'http://localhost:8091',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'dashboard-test-corr',
       navigate: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8091');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
     expect(mockContext.user.roles).toContain('ROLE_SUPER_ADMIN');
   });
 });

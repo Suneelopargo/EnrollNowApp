@@ -1,7 +1,8 @@
 // frontend/shell/src/test/AuthContext.test.ts - Shell Host Hardened Verification Suite
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DEFAULT_BACKEND_URLS, getRemoteDefinition, getAllRemoteDefinitions } from '../remotes/RemoteRegistry';
+import { getRemoteDefinition, getAllRemoteDefinitions } from '../remotes/RemoteRegistry';
 import { defaultApiClient } from '../../../shared/api-client';
+import { getApiBaseUrl } from '../../../shared/api-config';
 
 const storage: Record<string, string> = {};
 const mockLocalStorage = {
@@ -20,6 +21,10 @@ vi.mock('../../../shared/api-client', () => ({
     get: vi.fn(),
     post: vi.fn(),
   },
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+  },
 }));
 
 describe('Shell Host Hardened Infrastructure', () => {
@@ -28,43 +33,30 @@ describe('Shell Host Hardened Infrastructure', () => {
     vi.clearAllMocks();
   });
 
-  describe('RemoteRegistry Backend URL Propagation', () => {
-    it('defines explicit, non-empty backend URLs for all 11 micro-frontends', () => {
-      const expectedPorts: Record<string, number> = {
-        identity: 8081,
-        administration: 8082,
-        organization: 8083,
-        study: 8084,
-        participant: 8085,
-        recruitment: 8086,
-        survey: 8087,
-        task: 8088,
-        communication: 8089,
-        document: 8090,
-        dashboard: 8091,
-      };
-
-      for (const [mfeId, expectedPort] of Object.entries(expectedPorts)) {
-        const url = DEFAULT_BACKEND_URLS[mfeId];
-        expect(url).toBeDefined();
-        expect(url).toContain(`:${expectedPort}`);
-      }
-    });
-
-    it('populates remote definitions with correct routes, exposed modules, and apiBaseUrls', () => {
+  describe('RemoteRegistry Single Backend URL Propagation', () => {
+    it('configures the single authoritative API base URL (:8080) for all 11 micro-frontends', () => {
       const remotes = getAllRemoteDefinitions();
       expect(remotes.length).toBe(11);
 
+      const authoritativeBaseUrl = getApiBaseUrl();
+      expect(authoritativeBaseUrl).toBe('http://localhost:8080');
+
+      remotes.forEach((remote) => {
+        expect(remote.apiBaseUrl).toBe('http://localhost:8080');
+      });
+    });
+
+    it('populates remote definitions with correct routes, exposed modules, and unified apiBaseUrl', () => {
       const adminRemote = getRemoteDefinition('administration');
       expect(adminRemote).toBeDefined();
       expect(adminRemote?.route).toBe('/admin');
       expect(adminRemote?.exposedModule).toBe('AdministrationModule');
-      expect(adminRemote?.apiBaseUrl).toBe('http://localhost:8082');
+      expect(adminRemote?.apiBaseUrl).toBe('http://localhost:8080');
 
       const dashRemote = getRemoteDefinition('dashboard');
       expect(dashRemote).toBeDefined();
       expect(dashRemote?.route).toBe('/dashboard');
-      expect(dashRemote?.apiBaseUrl).toBe('http://localhost:8091');
+      expect(dashRemote?.apiBaseUrl).toBe('http://localhost:8080');
     });
   });
 
@@ -86,9 +78,7 @@ describe('Shell Host Hardened Infrastructure', () => {
 
       vi.mocked(defaultApiClient.get).mockResolvedValueOnce(mockResponse);
 
-      const res = await defaultApiClient.get('/api/v1/auth/me', {
-        headers: { Authorization: 'Bearer valid-token-xyz' },
-      });
+      const res = await defaultApiClient.get('/api/v1/auth/me');
 
       expect(res.data.success).toBe(true);
       expect(res.data.data.username).toBe('leadinvestigator');
@@ -117,9 +107,7 @@ describe('Shell Host Hardened Infrastructure', () => {
       });
 
       try {
-        await defaultApiClient.get('/api/v1/auth/me', {
-          headers: { Authorization: 'Bearer expired-token' },
-        });
+        await defaultApiClient.get('/api/v1/auth/me');
       } catch (err: any) {
         if (err.response?.status === 401) {
           localStorage.removeItem('enrollnow_token');

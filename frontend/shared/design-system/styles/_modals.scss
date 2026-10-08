@@ -1,0 +1,79 @@
+// frontend/shared/design-system/styles/_modals.scss - Modal & Dialog Styles
+@use 'variables' as *;
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: $bg-overlay;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: $spacing-4;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-container {
+  background-color: $bg-surface;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-xl;
+  max-width: 600px;
+  width: 100%;
+  overflow: hidden;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideDown 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-4 $spacing-6;
+  border-bottom: 1px solid $border-color;
+  background: $color-table-header;
+
+  h3 {
+    margin: 0;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-bold;
+    letter-spacing: -0.01em;
+    color: #ffffff;
+  }
+}
+
+.modal-container--wide { max-width: 1200px; }
+
+.modal-title-bar {
+  background: $color-table-header !important;
+  border-bottom: 1px solid $color-table-header-border !important;
+
+  h2,
+  h3,
+  .modal-title-bar__title {
+    color: #ffffff !important;
+    font-weight: $font-weight-bold;
+    letter-spacing: -0.01em;
+  }
+}
+
+.modal-body {
+  padding: $spacing-6;
+  overflow-y: auto;
+  color: $text-secondary;
+  font-size: $font-size-sm;
+  line-height: $line-height-normal;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-3;
+  padding: $spacing-4 $spacing-6;
+  border-top: 1px solid $border-color;
+  background-color: $bg-surface-secondary;
+}

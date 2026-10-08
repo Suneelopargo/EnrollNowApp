@@ -8,7 +8,7 @@ describe('Document MFE Remote Entry', () => {
     expect(typeof DocumentModule).toBe('function');
   });
 
-  it('accepts MfeContext configured with Document Service endpoint (:8090)', () => {
+  it('accepts MfeContext configured with backend API base URL (:8080)', () => {
     const mockContext = {
       user: {
         id: 1,
@@ -17,10 +17,10 @@ describe('Document MFE Remote Entry', () => {
         roles: ['ROLE_SUPER_ADMIN'],
       },
       token: 'valid-token',
-      apiBaseUrl: 'http://localhost:8090',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'doc-test-corr',
       navigate: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8090');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
   });
 });

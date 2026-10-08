@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { useTabWorkspace } from './TabWorkspaceContext';
 import { LogOut, User, Shield, ChevronDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 
 export const UserMenu: React.FC = () => {
   const { user, logout, isAdmin } = useAuth();
+  const { activateTab } = useTabWorkspace();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -32,6 +32,8 @@ export const UserMenu: React.FC = () => {
     ? user.roles[0].replace('ROLE_', '').replace(/_/g, ' ')
     : 'User';
 
+  const isAdministrator = isAdmin || Boolean(user.roles?.some((r) => r.toUpperCase().includes('ADMIN')));
+
   return (
     <div className="user-menu-wrapper" ref={menuRef}>
       <button
@@ -42,8 +44,7 @@ export const UserMenu: React.FC = () => {
       >
         <div className="user-avatar-circle">{getInitials()}</div>
         <div className="user-meta-text">
-          <span className="user-name-label">{user.fullName || user.username}</span>
-          <span className="user-role-label">{primaryRole}</span>
+          <span className="user-name-label">MY ACCOUNT</span>
         </div>
         <ChevronDown size={14} />
       </button>
@@ -61,20 +62,20 @@ export const UserMenu: React.FC = () => {
             className="user-dropdown-item"
             onClick={() => {
               setIsOpen(false);
-              navigate('/dashboard');
+              activateTab('dashboard');
             }}
           >
             <User size={16} />
             <span>My Overview</span>
           </button>
 
-          {isAdmin && (
+          {isAdministrator && (
             <button
               type="button"
               className="user-dropdown-item"
               onClick={() => {
                 setIsOpen(false);
-                navigate('/admin');
+                activateTab('admin');
               }}
             >
               <Shield size={16} />
