@@ -8,6 +8,7 @@ export interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: 'default' | 'wide';
+  className?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,6 +18,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = 'default',
+  className = '',
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,7 +35,7 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className={`modal-container ${size === 'wide' ? 'modal-container--wide' : ''}`}
+        className={`modal-container ${size === 'wide' ? 'modal-container--wide' : ''} ${className}`.trim()}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
