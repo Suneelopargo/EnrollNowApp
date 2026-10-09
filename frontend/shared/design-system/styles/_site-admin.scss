@@ -1,0 +1,726 @@
+// frontend/shared/design-system/styles/_site-admin.scss - Site Administration Global Styles
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.site-admin-container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+  min-height: 100%;
+}
+
+// ---------------------------------------------------------------------------
+// 1. Horizontal Navigation Bar (Replaces legacy vertical sidebar)
+// ---------------------------------------------------------------------------
+.site-admin-horizontal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: 0 $spacing-4;
+  box-shadow: $shadow-sm;
+  position: relative;
+  z-index: 20;
+}
+
+.site-admin-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.site-admin-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-4;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $text-secondary;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all $transition-fast;
+  position: relative;
+  top: 1px;
+
+  &:hover {
+    color: $color-brand-accent;
+    background-color: $bg-surface-secondary;
+  }
+
+  &.is-active {
+    color: $color-brand-accent;
+    font-weight: $font-weight-semibold;
+    border-bottom-color: $color-brand-accent;
+    background-color: rgba($color-brand-accent, 0.04);
+  }
+}
+
+.site-admin-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  border-radius: $border-radius-full;
+  background-color: $bg-surface-secondary;
+  color: $text-secondary;
+
+  .is-active & {
+    background-color: $color-brand-accent-light;
+    color: $color-brand-accent;
+  }
+}
+
+// Export Dropdown Tab
+.site-admin-nav-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.site-admin-nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-lg;
+  padding: $spacing-1 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.site-admin-nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-2 $spacing-4;
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover {
+    background-color: $bg-surface-secondary;
+    color: $color-brand-accent;
+  }
+}
+
+.site-admin-nav-meta {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  flex-shrink: 0;
+  padding-left: $spacing-4;
+  border-left: 1px solid $border-color;
+}
+
+.site-admin-version-badge {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: $text-muted;
+  letter-spacing: 0.02em;
+}
+
+// ---------------------------------------------------------------------------
+// 2. Users Workspace Toolbar & Action Controls
+// ---------------------------------------------------------------------------
+.site-admin-users-card {
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  padding: $spacing-5;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+}
+
+.site-admin-users-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-4;
+  padding-bottom: $spacing-2;
+}
+
+.site-admin-toolbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-4;
+}
+
+.site-admin-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: $spacing-2;
+}
+
+.site-admin-screen-title {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.site-admin-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-3;
+}
+
+.site-admin-filter-select-wrap {
+  min-width: 160px;
+}
+
+.site-admin-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 260px;
+
+  .form-input {
+    width: 100%;
+    min-height: 38px;
+    padding-left: $spacing-3;
+    padding-right: 68px;
+    border-radius: $border-radius-md 0 0 $border-radius-md;
+    border-right: none;
+  }
+
+  .site-admin-search-clear {
+    position: absolute;
+    right: 44px;
+    color: $text-muted;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+
+    &:hover {
+      color: $text-primary;
+    }
+  }
+
+  .site-admin-search-btn {
+    min-height: 38px;
+    padding: 0 $spacing-3;
+    border-radius: 0 $border-radius-md $border-radius-md 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: $color-brand-accent;
+    color: #ffffff;
+    border: 1px solid $color-brand-accent;
+    cursor: pointer;
+    transition: background-color $transition-fast;
+
+    &:hover {
+      background-color: $color-brand-accent-hover;
+      border-color: $color-brand-accent-hover;
+    }
+  }
+}
+
+// Stats & count bar
+.site-admin-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: $spacing-4;
+  padding: $spacing-2 $spacing-3;
+  background-color: $bg-surface-secondary;
+  border-radius: $border-radius-md;
+  font-size: $font-size-xs;
+  color: $text-secondary;
+}
+
+.site-admin-stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  strong {
+    color: $color-primary;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. AG Grid Specific Custom Cell Renderers (No Inline Styles!)
+// ---------------------------------------------------------------------------
+.site-admin-user-cell {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  height: 100%;
+}
+
+.site-admin-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: $border-radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  color: #ffffff;
+  background: $color-brand-gradient;
+  flex-shrink: 0;
+  box-shadow: $shadow-sm;
+}
+
+.site-admin-user-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-brand-accent;
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+  transition: color $transition-fast, text-decoration $transition-fast;
+
+  &:hover {
+    color: $color-brand-accent-hover;
+    text-decoration: underline;
+  }
+}
+
+.site-admin-email-cell {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  height: 100%;
+  font-size: $font-size-sm;
+  color: $text-secondary;
+
+  svg {
+    color: $text-muted;
+    flex-shrink: 0;
+  }
+}
+
+.site-admin-permission-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.site-admin-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: 3px 10px;
+  border-radius: $border-radius-md;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  background-color: $color-info-bg;
+  color: $color-info;
+  border: 1px solid $color-info-border;
+}
+
+.site-admin-studies-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-size: $font-size-xs;
+  color: $text-secondary;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  padding: $spacing-1 0;
+}
+
+.site-admin-status-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+// Screenshot Match: Vivid blue badge for Active status
+.site-admin-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 12px;
+  border-radius: $border-radius-md;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.02em;
+
+  &.is-active {
+    background-color: #1976d2;
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(25, 118, 210, 0.3);
+  }
+
+  &.is-inactive {
+    background-color: $bg-surface-tertiary;
+    color: $text-muted;
+    border: 1px solid $border-color-dark;
+  }
+}
+
+.site-admin-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-1;
+  height: 100%;
+}
+
+.site-admin-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: $border-radius-md;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background-color: $bg-surface-secondary;
+    color: $color-brand-accent;
+    border-color: $border-color;
+  }
+
+  &.is-danger:hover {
+    background-color: $color-danger-bg;
+    color: $color-danger;
+    border-color: $color-danger-border;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. Modal Form Layouts (Add/Edit User)
+// ---------------------------------------------------------------------------
+.site-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-4;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.site-admin-form-full {
+  grid-column: 1 / -1;
+}
+
+.site-admin-studies-selector {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  padding: $spacing-3;
+  background-color: $bg-app;
+}
+
+.site-admin-study-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  font-size: $font-size-xs;
+  color: $text-primary;
+  cursor: pointer;
+
+  input[type='checkbox'] {
+    accent-color: $color-brand-accent;
+    cursor: pointer;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. Views for Other Tabs (Studies, Import, Export, Audit, Security, Settings)
+// ---------------------------------------------------------------------------
+.site-admin-card-view {
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  padding: $spacing-6;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-5;
+}
+
+.site-admin-card-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid $border-color;
+  padding-bottom: $spacing-4;
+}
+
+.site-admin-card-view-title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  margin: 0;
+}
+
+.site-admin-card-view-subtitle {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  margin-top: $spacing-1;
+}
+
+.site-admin-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: $spacing-4;
+}
+
+.site-admin-info-tile {
+  background-color: $bg-app;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  padding: $spacing-4;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  h4 {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-primary;
+    margin: 0;
+  }
+
+  p {
+    font-size: $font-size-xs;
+    color: $text-secondary;
+    margin: 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Add User Modal (Matching Add Participant style: dark blue header, red placeholder on error)
+// ---------------------------------------------------------------------------
+.site-admin-add-user-modal {
+  max-width: 960px !important;
+  width: 92vw !important;
+
+  .modal-body {
+    padding: 24px 32px 16px !important;
+    max-height: calc(85vh - 130px) !important;
+    overflow-y: auto !important;
+  }
+
+  .modal-footer {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 12px !important;
+    padding: 16px 32px !important;
+  }
+
+  .form-input[aria-invalid='true'],
+  .form-select[aria-invalid='true'] {
+    border-color: #dc2626 !important;
+
+    &::placeholder {
+      color: #dc2626 !important;
+      opacity: 1 !important;
+    }
+
+    &:focus {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14) !important;
+    }
+  }
+}
+
+.site-admin-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.site-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 24px;
+  width: 100%;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+
+  .form-group {
+    margin-bottom: 0;
+  }
+}
+
+// Studies Table Box (left blue border line matching the screenshot)
+.site-admin-studies-frame {
+  margin-top: 18px;
+  border-left: 3px solid #3b82f6;
+  border-top: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background-color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.site-admin-studies-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.site-admin-studies-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+
+    th {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #111827;
+      white-space: nowrap;
+
+      &.site-admin-studies-th-checkbox {
+        width: 44px;
+        padding-left: 16px;
+        padding-right: 8px;
+      }
+    }
+  }
+
+  tbody {
+    tr {
+      transition: background-color $transition-fast;
+
+      &:nth-child(even) {
+        background-color: #f9fafb;
+      }
+
+      &:nth-child(odd) {
+        background-color: #ffffff;
+      }
+
+      &:hover {
+        background-color: #f0f9ff;
+      }
+
+      td {
+        padding: 10px 16px;
+        font-size: 13px;
+        color: #374151;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+      }
+    }
+  }
+}
+
+.site-admin-study-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid #d1d5db;
+  accent-color: #1976d2;
+  cursor: pointer;
+  display: block;
+}
+
+.site-admin-study-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: #374151;
+  min-width: 140px;
+  cursor: pointer;
+
+  &:focus {
+    border-color: #93c5fd;
+    outline: none;
+  }
+
+  &:disabled {
+    background-color: #f9fafb;
+    color: #9ca3af;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+// Bottom Action Button "+ Send Invitation" matching Screenshot 2
+.site-admin-btn-send-invitation {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #1976d2;
+  border: 1px solid #1976d2;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    background-color: #1565c0;
+    border-color: #1565c0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #1976d2;
+    outline-offset: 2px;
+  }
+}
