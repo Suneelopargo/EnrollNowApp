@@ -8,7 +8,7 @@ describe('Task MFE Remote Entry', () => {
     expect(typeof TaskModule).toBe('function');
   });
 
-  it('accepts MfeContext configured with Task Service endpoint (:8088)', () => {
+  it('accepts MfeContext configured with backend API base URL (:8080)', () => {
     const mockContext = {
       user: {
         id: 1,
@@ -17,10 +17,10 @@ describe('Task MFE Remote Entry', () => {
         roles: ['ROLE_SUPER_ADMIN'],
       },
       token: 'valid-token',
-      apiBaseUrl: 'http://localhost:8088',
+      apiBaseUrl: 'http://localhost:8080',
       correlationId: 'task-test-corr',
       navigate: vi.fn(),
     };
-    expect(mockContext.apiBaseUrl).toBe('http://localhost:8088');
+    expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
   });
 });

@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AdministrationModule } from './remoteEntry';
+import { getApiBaseUrl } from '../../../shared/api-config';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
@@ -17,7 +18,7 @@ const mockContext = {
     siteCodes: ['SITE-001', 'SITE-002', 'SITE-003'],
   },
   token: 'mock-admin-jwt-token',
-  apiBaseUrl: 'http://localhost:8082',
+  apiBaseUrl: getApiBaseUrl(),
   basePath: '/administrator',
   correlationId: `dev-admin-${Date.now()}`,
   navigate: (path: string) => console.log('Navigate to:', path),

@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { MessageSquare, Plus, Mail, Smartphone, Send } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface CommunicationModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const CommunicationModule: React.FC<CommunicationModuleProps> = ({ contex
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8089';
-
   useEffect(() => {
     const fetchMessages = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/communications`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/communications');
         if (res.data?.data) {
           setMessages(res.data.data);
         }
@@ -35,7 +32,7 @@ export const CommunicationModule: React.FC<CommunicationModuleProps> = ({ contex
       }
     };
     fetchMessages();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = messages.length > 0 ? messages : [
     { messageId: 'MSG-4001', recipient: 'PT-88102 (Cardio Cohort)', channel: 'SMS', subject: 'Upcoming Clinical Visit Reminder (Visit 3)', sentAt: '2026-09-21 09:30', status: 'DELIVERED' },

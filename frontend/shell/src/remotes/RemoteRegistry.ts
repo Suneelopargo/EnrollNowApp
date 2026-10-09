@@ -1,21 +1,7 @@
 // frontend/shell/src/remotes/RemoteRegistry.ts - Authoritative Remote Micro-Frontend Registry
 import { RemoteDefinition } from '../../../shared/contracts';
 import { getCachedRuntimeConfig } from '../../../shared/runtime-config';
-import { getApiBaseUrl, DEFAULT_API_BASE_URL } from '../../../shared/api-config';
-
-export const DEFAULT_BACKEND_URLS: Record<string, string> = {
-  identity: 'http://localhost:8081',
-  administration: 'http://localhost:8082',
-  organization: 'http://localhost:8083',
-  study: 'http://localhost:8084',
-  participant: 'http://localhost:8085',
-  recruitment: 'http://localhost:8086',
-  survey: 'http://localhost:8087',
-  task: 'http://localhost:8088',
-  communication: 'http://localhost:8089',
-  document: 'http://localhost:8090',
-  dashboard: 'http://localhost:8091',
-};
+import { getApiBaseUrl } from '../../../shared/api-config';
 
 export const BASE_REMOTE_DEFINITIONS: Record<string, Omit<RemoteDefinition, 'remoteUrl' | 'enabled'>> = {
   identity: {
@@ -119,7 +105,7 @@ export function getRemoteDefinition(remoteId: string): RemoteDefinition | null {
   return {
     ...base,
     remoteUrl: remoteConfig?.url || `/src/microfrontends/${remoteId}`,
-    apiBaseUrl: remoteConfig?.apiBaseUrl || DEFAULT_BACKEND_URLS[remoteId] || getApiBaseUrl(),
+    apiBaseUrl: getApiBaseUrl(),
     enabled: remoteConfig ? remoteConfig.enabled : true,
     version: remoteConfig?.version || base.version,
   };

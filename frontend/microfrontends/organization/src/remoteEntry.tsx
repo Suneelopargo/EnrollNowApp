@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { Building, Plus, MapPin, Network } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface OrganizationModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const OrganizationModule: React.FC<OrganizationModuleProps> = ({ context 
   const [sites, setSites] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8083';
-
   useEffect(() => {
     const fetchSites = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/sites`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/sites');
         if (res.data?.data) {
           setSites(res.data.data);
         }
@@ -35,7 +32,7 @@ export const OrganizationModule: React.FC<OrganizationModuleProps> = ({ context 
       }
     };
     fetchSites();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = sites.length > 0 ? sites : [
     { siteCode: 'SITE-001', name: 'Main Clinical Research Center', city: 'Boston', state: 'MA', country: 'USA', phone: '+1 617-555-0199', activeStudies: 4, status: 'ACTIVE' },

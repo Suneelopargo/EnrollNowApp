@@ -2,19 +2,20 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { TaskModule } from './remoteEntry';
+import { getApiBaseUrl } from '../../../shared/api-config';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
   user: {
     id: 'user-dev-001',
     username: 'taskmanager',
-    email: 'ops@enrollnow.local',
+    email: 'tasks@enrollnow.local',
     roles: ['ROLE_COORDINATOR'],
-    firstName: 'Elena',
-    lastName: 'Rostova',
+    firstName: 'Marcus',
+    lastName: 'Vance',
   },
   token: 'mock-jwt-token',
-  apiBaseUrl: 'http://localhost:8088',
+  apiBaseUrl: getApiBaseUrl(),
   basePath: '/',
   correlationId: 'dev-correlation-id',
   navigate: (path: string) => console.log('Navigate to:', path),

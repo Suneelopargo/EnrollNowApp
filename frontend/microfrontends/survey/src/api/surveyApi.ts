@@ -1,5 +1,6 @@
-// frontend/microfrontends/survey/src/api/surveyApi.ts
-import axios from 'axios';
+// frontend/microfrontends/survey/src/api/surveyApi.ts - Survey API Client using Shared ApiClient
+import { apiClient } from '../../../../shared/api-client';
+import { getApiBaseUrl } from '../../../../shared/api-config';
 import {
   Survey,
   SurveyListItem,
@@ -12,27 +13,9 @@ import {
   Question,
   LogicRule,
 } from '../types/survey';
-import { getApiBaseUrl } from '../../../../shared/api-config';
 
-export const createSurveyApiClient = (apiBase: string = getApiBaseUrl(), token?: string) => {
-  const client = axios.create({
-    baseURL: apiBase,
-    timeout: 15000,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-
-  if (client.interceptors?.request) {
-    client.interceptors.request.use((config) => {
-      const activeToken = token || localStorage.getItem('enrollnow_token');
-      if (activeToken && !config.headers.Authorization) {
-        config.headers.Authorization = `Bearer ${activeToken}`;
-      }
-      return config;
-    });
-  }
+export const createSurveyApiClient = (_apiBase?: string, _token?: string) => {
+  const client = apiClient;
 
   return {
     // Surveys
@@ -174,7 +157,7 @@ export const createSurveyApiClient = (apiBase: string = getApiBaseUrl(), token?:
     },
 
     exportResponsesCsvUrl: (surveyId: number) => {
-      return `${apiBase}/api/v1/surveys/${surveyId}/responses/export`;
+      return `${getApiBaseUrl()}/api/v1/surveys/${surveyId}/responses/export`;
     },
 
     // AI Endpoints

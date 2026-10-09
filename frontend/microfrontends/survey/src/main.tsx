@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { SurveyModule } from './remoteEntry';
+import { getApiBaseUrl } from '../../../shared/api-config';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
@@ -14,7 +15,7 @@ const mockContext = {
     lastName: 'Kovac',
   },
   token: 'mock-jwt-token',
-  apiBaseUrl: 'http://localhost:8087',
+  apiBaseUrl: getApiBaseUrl(),
   basePath: '/',
   correlationId: 'dev-correlation-id',
   navigate: (path: string) => console.log('Navigate to:', path),

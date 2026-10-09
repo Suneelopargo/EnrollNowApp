@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { UserPlus, Filter, TrendingUp, CheckCircle, Megaphone } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../../shared/api-client';
 
 export interface RecruitmentModuleProps {
   context: MfeContext;
@@ -17,14 +17,11 @@ export const RecruitmentModule: React.FC<RecruitmentModuleProps> = ({ context })
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const apiBase = context.apiBaseUrl || 'http://localhost:8086';
-
   useEffect(() => {
     const fetchCampaigns = async () => {
       setLoading(true);
       try {
-        const headers = context.token ? { Authorization: `Bearer ${context.token}` } : {};
-        const res = await axios.get(`${apiBase}/api/v1/recruitment/campaigns`, { headers, timeout: 8000 });
+        const res = await apiClient.get('/api/v1/recruitment/campaigns');
         if (res.data?.data) {
           setCampaigns(res.data.data);
         }
@@ -35,7 +32,7 @@ export const RecruitmentModule: React.FC<RecruitmentModuleProps> = ({ context })
       }
     };
     fetchCampaigns();
-  }, [apiBase, context.token]);
+  }, []);
 
   const data = campaigns.length > 0 ? campaigns : [
     { campaignCode: 'CMP-2026-A', name: 'Cardio Cohort Social Ad Reach', studyId: 'PROTO-2026-001', channel: 'Digital / Social', leads: 1420, screened: 580, enrolled: 312, status: 'ACTIVE' },

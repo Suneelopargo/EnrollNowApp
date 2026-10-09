@@ -1,0 +1,55 @@
+// frontend/shared/design-system/styles/_forms.scss - Form Controls System
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  margin-bottom: $spacing-4;
+}
+
+.form-label {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $text-primary;
+}
+
+.form-required-marker { color: $color-danger; }
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: $spacing-2 $spacing-3;
+  font-size: $font-size-sm;
+  color: $text-primary;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  outline: none;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:focus {
+    @include focus-ring($color-brand-accent, 0.15);
+  }
+
+  &:disabled {
+    background-color: $bg-surface-secondary;
+    color: $text-muted;
+    cursor: not-allowed;
+  }
+}
+
+.form-input[aria-invalid='true'],
+.form-select[aria-invalid='true'],
+.form-textarea[aria-invalid='true'] {
+  border-color: $color-danger;
+
+  &::placeholder { color: $color-danger; opacity: 1; }
+
+  &:focus {
+    border-color: $color-danger;
+    box-shadow: 0 0 0 3px rgba($color-danger, 0.14);
+  }
+}
