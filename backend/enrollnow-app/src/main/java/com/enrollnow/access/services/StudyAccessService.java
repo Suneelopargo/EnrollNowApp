@@ -143,4 +143,39 @@ public class StudyAccessService {
             userRoleAssignmentRepository.save(assignment);
         }
     }
+    
+    @Transactional
+    public void removeStudyAccess(
+            UUID tenantId,
+            UUID studyId,
+            UUID userId) {
+
+        userRepository
+                .findByTenantIdAndId(tenantId, userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        studyMemberRepository
+                .findByTenantIdAndIdStudyIdAndIdUserId(
+                        tenantId,
+                        studyId,
+                        userId
+                )
+                .ifPresent(member -> {
+                    member.setActive(false);
+                    studyMemberRepository.save(member);
+                });
+
+        List<UserRoleAssignment> activeAssignments =
+                userRoleAssignmentRepository
+                        .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
+                                tenantId,
+                                userId,
+                                studyId
+                        );
+
+        for (UserRoleAssignment assignment : activeAssignments) {
+            assignment.setActive(false);
+            userRoleAssignmentRepository.save(assignment);
+        }
+    }
 }

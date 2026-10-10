@@ -35,4 +35,19 @@ public class StudyAccessController {
 
         return ResponseEntity.noContent().build();
     }
+    
+    @DeleteMapping("/{userId}/access")
+    public ResponseEntity<Void> removeStudyAccess(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID studyId,
+            @PathVariable UUID userId) {
+
+        studyAccessService.removeStudyAccess(
+                tenantId,
+                studyId,
+                userId
+        );
+
+        return ResponseEntity.noContent().build();
+    }
 }
