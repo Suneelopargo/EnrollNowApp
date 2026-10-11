@@ -468,6 +468,18 @@
   &:hover { color: #ffffff; background: $color-danger; border-color: $color-danger; }
 }
 
+.participant-grid__row-action--warning {
+  color: $color-warning;
+
+  &:hover { color: #ffffff; background: $color-warning; border-color: $color-warning; }
+}
+
+.participant-grid__row-action--success {
+  color: $color-success;
+
+  &:hover { color: #ffffff; background: $color-success; border-color: $color-success; }
+}
+
 .participant-grid__actions-menu {
   position: fixed;
   z-index: 10000;

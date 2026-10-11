@@ -1,5 +1,8 @@
 // frontend/microfrontends/administration/src/components/UsersGrid.tsx - AG Grid Users Table & Toolbar
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import ExcelJS from 'exceljs';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   DataGrid,
   type ColDef,
@@ -15,9 +18,12 @@ import {
   Pencil,
   Trash2,
   CheckCircle2,
-  XCircle,
+  Ban,
   ShieldCheck,
   Download,
+  FileSpreadsheet,
+  FileText,
+  ChevronDown,
 } from 'lucide-react';
 import { SiteAdminUser, UserStatus } from '../types/admin';
 
@@ -85,7 +91,7 @@ const UserPermissionCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> =
 const UserStudiesCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (params) => {
   const studies: string[] = params.value || [];
   if (!studies || studies.length === 0) {
-    return <span className="site-admin-studies-cell">None assigned</span>;
+    return <span className="site-admin-studies-cell text-muted">None assigned</span>;
   }
 
   return (
@@ -134,39 +140,43 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
   const isUserActive = user.status === 'Active';
 
   return (
-    <div className="site-admin-actions-cell">
+    <div className="participant-grid__row-actions">
       <button
         type="button"
-        className="site-admin-row-btn"
+        className="participant-grid__row-action"
         onClick={handleEdit}
         title="Edit user details"
         aria-label={`Edit ${user.name}`}
       >
-        <Pencil size={14} aria-hidden="true" />
+        <Pencil size={15} aria-hidden="true" />
       </button>
 
       <button
         type="button"
-        className="site-admin-row-btn"
+        className={`participant-grid__row-action ${
+          isUserActive
+            ? 'participant-grid__row-action--warning'
+            : 'participant-grid__row-action--success'
+        }`}
         onClick={handleToggleStatus}
         title={isUserActive ? 'Deactivate user' : 'Activate user'}
         aria-label={isUserActive ? `Deactivate ${user.name}` : `Activate ${user.name}`}
       >
         {isUserActive ? (
-          <XCircle size={14} aria-hidden="true" />
+          <Ban size={15} aria-hidden="true" />
         ) : (
-          <CheckCircle2 size={14} aria-hidden="true" />
+          <CheckCircle2 size={15} aria-hidden="true" />
         )}
       </button>
 
       <button
         type="button"
-        className="site-admin-row-btn is-danger"
+        className="participant-grid__row-action participant-grid__row-action--danger"
         onClick={handleDelete}
         title="Delete user"
         aria-label={`Delete ${user.name}`}
       >
-        <Trash2 size={14} aria-hidden="true" />
+        <Trash2 size={15} aria-hidden="true" />
       </button>
     </div>
   );
@@ -194,30 +204,70 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<SiteAdminUser> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('Active');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Filter users based on search query and status dropdown
+  // Close export dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  // Filter users based on status dropdown
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      // Status filter
-      if (statusFilter === 'Active' && u.status !== 'Active') return false;
-      if (statusFilter === 'Inactive' && u.status !== 'Inactive') return false;
-
-      // Search term filter
-      if (!searchTerm.trim()) return true;
-      const q = searchTerm.toLowerCase();
-      const matchName = u.name.toLowerCase().includes(q);
-      const matchEmail = u.email.toLowerCase().includes(q);
-      const matchPerms = u.sitePermissions.toLowerCase().includes(q);
-      const matchStudies = u.studies.some((s) => s.toLowerCase().includes(q));
-
-      return matchName || matchEmail || matchPerms || matchStudies;
+      if (statusFilter === 'Active') return u.status === 'Active';
+      if (statusFilter === 'Inactive') return u.status === 'Inactive';
+      return true; // 'All'
     });
-  }, [users, statusFilter, searchTerm]);
+  }, [users, statusFilter]);
 
   // Counts
   const activeCount = useMemo(() => users.filter((u) => u.status === 'Active').length, [users]);
   const inactiveCount = users.length - activeCount;
+
+  // Track displayed rows (after AG Grid quick search and floating filters)
+  const [displayedCount, setDisplayedCount] = useState<number>(users.length);
+
+  const updateCounts = useCallback(() => {
+    if (gridApi) {
+      setDisplayedCount(gridApi.getDisplayedRowCount());
+    } else {
+      setDisplayedCount(filteredUsers.length);
+    }
+  }, [gridApi, filteredUsers.length]);
+
+  useEffect(() => {
+    updateCounts();
+  }, [updateCounts, filteredUsers]);
+
+  // Handle global search input change
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    gridApi?.setGridOption('quickFilterText', value);
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    gridApi?.setGridOption('quickFilterText', '');
+  };
+
+  const onGridReady = useCallback((params: { api: GridApi<SiteAdminUser> }) => {
+    setGridApi(params.api);
+    if (searchTerm) {
+      params.api.setGridOption('quickFilterText', searchTerm);
+    }
+    setDisplayedCount(params.api.getDisplayedRowCount());
+  }, [searchTerm]);
 
   // AG Grid Column Definitions
   const columnDefs = useMemo<ColDef<SiteAdminUser>[]>(
@@ -227,8 +277,8 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         field: 'name',
         sortable: true,
         sort: 'asc', // Default sorted ascending as in screenshot
-        filter: true,
-        minWidth: 220,
+        filter: 'agTextColumnFilter',
+        minWidth: 180,
         flex: 1.2,
         cellRenderer: UserNameCellRenderer,
       },
@@ -236,8 +286,8 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         headerName: 'Email',
         field: 'email',
         sortable: true,
-        filter: true,
-        minWidth: 240,
+        filter: 'agTextColumnFilter',
+        minWidth: 220,
         flex: 1.3,
         cellRenderer: UserEmailCellRenderer,
       },
@@ -245,8 +295,8 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         headerName: 'Site Permissions',
         field: 'sitePermissions',
         sortable: true,
-        filter: true,
-        minWidth: 170,
+        filter: 'agTextColumnFilter',
+        minWidth: 160,
         flex: 1,
         cellRenderer: UserPermissionCellRenderer,
       },
@@ -254,21 +304,26 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         headerName: 'Studies',
         field: 'studies',
         sortable: false,
-        filter: true,
-        minWidth: 320,
-        flex: 2,
+        filter: 'agTextColumnFilter',
+        minWidth: 280,
+        flex: 2.2,
         cellRenderer: UserStudiesCellRenderer,
         valueFormatter: (params) => {
           return Array.isArray(params.value) ? params.value.join(', ') : '';
+        },
+        filterValueGetter: (params) => {
+          return Array.isArray(params.data?.studies)
+            ? params.data.studies.join(', ')
+            : params.data?.studies || '';
         },
       },
       {
         headerName: 'Status',
         field: 'status',
         sortable: true,
-        filter: true,
-        minWidth: 120,
-        width: 130,
+        filter: 'agTextColumnFilter',
+        minWidth: 110,
+        width: 120,
         cellRenderer: UserStatusCellRenderer,
       },
       {
@@ -276,9 +331,12 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         field: 'id',
         sortable: false,
         filter: false,
-        minWidth: 110,
-        width: 120,
+        width: 130,
+        minWidth: 120,
+        maxWidth: 140,
         pinned: 'right',
+        resizable: false,
+        cellClass: 'p-0 flex items-center justify-center',
         cellRenderer: UserActionsCellRenderer,
       },
     ],
@@ -288,14 +346,32 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
   const defaultColDef = useMemo<ColDef>(
     () => ({
       resizable: true,
+      sortable: true,
+      filter: true,
+      floatingFilter: true,
       suppressMovable: false,
     }),
     []
   );
 
-  const handleExportCsv = useCallback(() => {
+  // Retrieve rows currently filtered and sorted in the grid
+  const getExportRows = useCallback(() => {
+    const rows: SiteAdminUser[] = [];
+    if (gridApi) {
+      gridApi.forEachNodeAfterFilterAndSort((node) => {
+        if (node.data) rows.push(node.data);
+      });
+      return rows;
+    }
+    return filteredUsers;
+  }, [gridApi, filteredUsers]);
+
+  const exportFileName = `site-users-${new Date().toISOString().slice(0, 10)}`;
+
+  // CSV Export
+  const exportCsv = () => {
     gridApi?.exportDataAsCsv({
-      fileName: `site-users-${new Date().toISOString().slice(0, 10)}.csv`,
+      fileName: `${exportFileName}.csv`,
       columnKeys: ['name', 'email', 'sitePermissions', 'studies', 'status'],
       processCellCallback: (params) => {
         if (params.column.getColId() === 'studies' && Array.isArray(params.value)) {
@@ -304,20 +380,117 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         return params.value ?? '';
       },
     });
-  }, [gridApi]);
+    setIsExportMenuOpen(false);
+  };
+
+  // Excel (.xlsx) Export via ExcelJS matching participant & dashboard standard
+  const exportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Site Users', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+
+    sheet.columns = [
+      { header: 'Name', key: 'name', width: 26 },
+      { header: 'Email', key: 'email', width: 32 },
+      { header: 'Site Permissions', key: 'sitePermissions', width: 20 },
+      { header: 'Studies', key: 'studies', width: 45 },
+      { header: 'Status', key: 'status', width: 14 },
+    ];
+
+    const rows = getExportRows();
+    rows.forEach((user) => {
+      sheet.addRow({
+        name: user.name,
+        email: user.email,
+        sitePermissions: user.sitePermissions,
+        studies: Array.isArray(user.studies) ? user.studies.join(', ') : (user.studies || ''),
+        status: user.status,
+      });
+    });
+
+    sheet.autoFilter = { from: 'A1', to: `E${Math.max(1, sheet.rowCount)}` };
+    sheet.getRow(1).height = 25;
+    sheet.getRow(1).eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123A5A' } };
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { vertical: 'middle' };
+    });
+
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        row.eachCell((cell) => {
+          if (rowNumber % 2 === 0) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F7FB' } };
+          }
+          cell.font = { color: { argb: 'FF24445B' } };
+          cell.border = { bottom: { style: 'hair', color: { argb: 'FFDCE7EE' } } };
+        });
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer as BlobPart], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${exportFileName}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setIsExportMenuOpen(false);
+  };
+
+  // PDF Export via jsPDF & autoTable matching participant & dashboard standard
+  const exportPdf = () => {
+    const rows = getExportRows();
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(16);
+    doc.setTextColor('#123A5A');
+    doc.text('Site Administrator Users', 14, 16);
+    doc.setFontSize(9);
+    doc.setTextColor('#61798D');
+    doc.text(`${rows.length} user ${rows.length === 1 ? 'account' : 'accounts'}`, 14, 22);
+
+    autoTable(doc, {
+      startY: 26,
+      head: [['Name', 'Email', 'Site Permissions', 'Studies', 'Status']],
+      body: rows.map((user) => [
+        user.name,
+        user.email,
+        user.sitePermissions,
+        Array.isArray(user.studies) ? user.studies.join(', ') : (user.studies || ''),
+        user.status,
+      ]),
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        textColor: [36, 68, 91],
+        lineColor: [220, 231, 238],
+        lineWidth: 0.1,
+      },
+      headStyles: {
+        fillColor: [18, 58, 90],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      alternateRowStyles: { fillColor: [241, 247, 251] },
+      margin: { left: 14, right: 14 },
+    });
+
+    doc.save(`${exportFileName}.pdf`);
+    setIsExportMenuOpen(false);
+  };
 
   return (
-    <div className="site-admin-users-card">
-      {/* Top Toolbar matching screenshot: Edit Users title + "+ Add User" on left, Filter + Search on right */}
-      <div className="site-admin-users-toolbar">
-        <div className="site-admin-toolbar-left">
-          <div className="site-admin-title-wrap">
-            <h2 className="site-admin-screen-title">Edit Users</h2>
-          </div>
-
+    <div className="card site-admin-users-card">
+      {/* Top Toolbar using shared data-grid-toolbar classes */}
+      <div className="card-header data-grid-toolbar site-admin-users-toolbar">
+        <div className="data-grid-toolbar__heading">
+          <h2 className="site-admin-screen-title">Edit Users</h2>
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary site-admin-add-user-btn"
             onClick={onAddUser}
           >
             <UserPlus size={16} aria-hidden="true" />
@@ -325,8 +498,8 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
           </button>
         </div>
 
-        <div className="site-admin-toolbar-right">
-          {/* Status Filter Dropdown matching screenshot ("Active Users") */}
+        <div className="data-grid-toolbar__actions">
+          {/* Status Filter Dropdown */}
           <div className="site-admin-filter-select-wrap">
             <select
               aria-label="Filter users by active status"
@@ -334,46 +507,39 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Active' | 'Inactive')}
             >
+              <option value="All">All Users</option>
               <option value="Active">Active Users</option>
               <option value="Inactive">Inactive Users</option>
-              <option value="All">All Users</option>
             </select>
           </div>
 
-          {/* Search Box matching screenshot */}
-          <div className="site-admin-search-wrap">
+          {/* Global Data Grid Search */}
+          <div className="data-grid-toolbar__search">
             <input
               type="text"
               placeholder="Search users..."
               className="form-input"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             {searchTerm && (
               <button
                 type="button"
-                className="site-admin-search-clear"
-                onClick={() => setSearchTerm('')}
+                className="btn btn-ghost btn-sm"
+                onClick={handleClearSearch}
                 title="Clear search"
                 aria-label="Clear search query"
               >
                 <X size={14} aria-hidden="true" />
               </button>
             )}
-            <button
-              type="button"
-              className="site-admin-search-btn"
-              title="Search"
-              aria-label="Search"
-            >
-              <Search size={15} aria-hidden="true" />
-            </button>
+            <Search size={14} aria-hidden="true" />
           </div>
 
           {/* Refresh Action */}
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary site-admin-refresh-btn"
             onClick={onRefresh}
             title="Refresh user list"
             aria-label="Refresh user list"
@@ -381,52 +547,81 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
             <RotateCw size={15} aria-hidden="true" />
           </button>
 
-          {/* Export Action */}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={handleExportCsv}
-            title="Export CSV"
-            aria-label="Export CSV"
-          >
-            <Download size={15} aria-hidden="true" />
-          </button>
+          {/* Global Data Grid Export Menu */}
+          <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
+            <button
+              type="button"
+              className="data-grid-export-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isExportMenuOpen}
+              onClick={() => setIsExportMenuOpen((open) => !open)}
+              title="Export data"
+              aria-label="Export data options"
+            >
+              <Download size={15} /> Export <ChevronDown size={14} />
+            </button>
+            {isExportMenuOpen && (
+              <div className="data-grid-export-menu" role="menu" aria-label="Choose export format">
+                <button type="button" role="menuitem" onClick={exportCsv}>
+                  <Download size={15} />
+                  <span>CSV</span>
+                  <small>Comma-separated values</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportExcel()}>
+                  <FileSpreadsheet size={15} />
+                  <span>Excel</span>
+                  <small>Excel workbook (.xlsx)</small>
+                </button>
+                <button type="button" role="menuitem" onClick={exportPdf}>
+                  <FileText size={15} />
+                  <span>PDF</span>
+                  <small>Portable document</small>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Stats counter strip */}
-      <div className="site-admin-stats-bar">
-        <span className="site-admin-stat-item">
-          Total Users: <strong>{users.length}</strong>
-        </span>
-        <span className="site-admin-stat-item">
-          Active: <strong>{activeCount}</strong>
-        </span>
-        <span className="site-admin-stat-item">
-          Inactive: <strong>{inactiveCount}</strong>
-        </span>
-        {searchTerm && (
+      <div className="site-admin-users-card-body">
+        {/* Stats counter strip */}
+        <div className="site-admin-stats-bar">
           <span className="site-admin-stat-item">
-            Filtered matches: <strong>{filteredUsers.length}</strong>
+            Total Users: <strong>{users.length}</strong>
           </span>
-        )}
-      </div>
+          <span className="site-admin-stat-item">
+            Active: <strong>{activeCount}</strong>
+          </span>
+          <span className="site-admin-stat-item">
+            Inactive: <strong>{inactiveCount}</strong>
+          </span>
+          {displayedCount !== users.length && (
+            <span className="site-admin-stat-item site-admin-stat-filtered">
+              Filtered matches: <strong>{displayedCount}</strong>
+            </span>
+          )}
+        </div>
 
-      {/* AG Grid Component with project global theme and styles */}
-      <DataGrid
-        rowData={filteredUsers}
-        columnDefs={columnDefs}
-        defaultColDef={defaultColDef}
-        context={{ onEditUser, onDeleteUser, onToggleStatus }}
-        onGridReady={(event) => setGridApi(event.api)}
-        rowHeight={56}
-        headerHeight={44}
-        pagination={true}
-        paginationPageSize={10}
-        paginationPageSizeSelector={[5, 10, 20, 50]}
-        animateRows={true}
-        suppressCellFocus={true}
-      />
+        {/* Global DataGrid */}
+        <DataGrid
+          rowData={filteredUsers}
+          columnDefs={columnDefs}
+          defaultColDef={defaultColDef}
+          context={{ onEditUser, onDeleteUser, onToggleStatus }}
+          onGridReady={onGridReady}
+          onFilterChanged={updateCounts}
+          onModelUpdated={updateCounts}
+          quickFilterText={searchTerm}
+          rowHeight={56}
+          headerHeight={44}
+          floatingFiltersHeight={38}
+          pagination={true}
+          paginationPageSize={10}
+          paginationPageSizeSelector={[5, 10, 20, 50]}
+          animateRows={true}
+          suppressCellFocus={true}
+        />
+      </div>
     </div>
   );
 };

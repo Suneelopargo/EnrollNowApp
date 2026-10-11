@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AdministrationModule } from './remoteEntry';
 import { getApiBaseUrl } from '../../../shared/api-config';
+import { ConfirmationContainer } from '../../../shared/confirmation';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
@@ -31,6 +32,7 @@ if (rootEl) {
     <React.StrictMode>
       <div className="shell-main-content">
         <AdministrationModule context={mockContext} />
+        <ConfirmationContainer />
       </div>
     </React.StrictMode>
   );

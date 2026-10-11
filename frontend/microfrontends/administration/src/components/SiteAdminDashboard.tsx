@@ -1,7 +1,7 @@
 // frontend/microfrontends/administration/src/components/SiteAdminDashboard.tsx - Site Admin Master Dashboard
 import React, { useState, useCallback } from 'react';
 import { toast } from '../../../../shared/toaster';
-import { requestConfirmation } from '../../../../shared/confirmation';
+import { requestConfirmation, ConfirmationContainer } from '../../../../shared/confirmation';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
 import { UsersGrid } from './UsersGrid';
 import { AddUserModal } from './AddUserModal';
@@ -66,12 +66,14 @@ export const SiteAdminDashboard: React.FC = () => {
   );
 
   const handleDeleteUser = useCallback((user: SiteAdminUser) => {
-    requestConfirmation({
-      title: 'Delete User Account',
-      message: `Are you sure you want to permanently delete '${user.name}' (${user.email})? This action cannot be undone.`,
-      confirmText: 'Delete User',
-      cancelText: 'Cancel',
+    void requestConfirmation({
+      entityName: user.name,
       intent: 'danger',
+      title: 'Delete user account',
+      confirmText: 'Delete User',
+      loadingText: 'Deleting user account...',
+      message: `Delete user account “${user.name}” (${user.email})? This action cannot be undone.`,
+      confirmWord: 'DELETE',
       onConfirm: () => {
         setUsers((prev) => prev.filter((u) => u.id !== user.id));
         toast.success(`User '${user.name}' has been deleted.`);
@@ -80,11 +82,38 @@ export const SiteAdminDashboard: React.FC = () => {
   }, []);
 
   const handleToggleStatus = useCallback((user: SiteAdminUser) => {
-    const nextStatus = user.status === 'Active' ? 'Inactive' : 'Active';
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
-    );
-    toast.info(`User '${user.name}' marked as ${nextStatus}.`);
+    const isCurrentlyActive = user.status === 'Active';
+    if (isCurrentlyActive) {
+      void requestConfirmation({
+        entityName: user.name,
+        intent: 'warning',
+        title: 'Deactivate user account',
+        confirmText: 'Deactivate User',
+        loadingText: 'Deactivating user account...',
+        message: `Are you sure you want to deactivate “${user.name}” (${user.email})? The user will not be able to log in until reactivated.`,
+        onConfirm: () => {
+          setUsers((prev) =>
+            prev.map((u) => (u.id === user.id ? { ...u, status: 'Inactive' } : u))
+          );
+          toast.warning(`User '${user.name}' marked as Inactive.`);
+        },
+      });
+    } else {
+      void requestConfirmation({
+        entityName: user.name,
+        intent: 'info',
+        title: 'Activate user account',
+        confirmText: 'Activate User',
+        loadingText: 'Activating user account...',
+        message: `Are you sure you want to reactivate “${user.name}” (${user.email})?`,
+        onConfirm: () => {
+          setUsers((prev) =>
+            prev.map((u) => (u.id === user.id ? { ...u, status: 'Active' } : u))
+          );
+          toast.success(`User '${user.name}' marked as Active.`);
+        },
+      });
+    }
   }, []);
 
   const handleRefresh = useCallback(() => {
@@ -153,6 +182,9 @@ export const SiteAdminDashboard: React.FC = () => {
         onSave={handleSaveUser}
         userToEdit={userToEdit}
       />
+
+      {/* Enterprise Global Confirmation Dialog Host */}
+      <ConfirmationContainer />
     </div>
   );
 };

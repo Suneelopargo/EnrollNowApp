@@ -152,32 +152,14 @@
   border: 1px solid $border-color;
   border-radius: $border-radius-lg;
   box-shadow: $shadow-sm;
-  padding: $spacing-5;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  gap: $spacing-4;
 }
 
-.site-admin-users-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: $spacing-4;
-  padding-bottom: $spacing-2;
-}
-
-.site-admin-toolbar-left {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: $spacing-4;
-}
-
-.site-admin-title-wrap {
-  display: flex;
-  align-items: baseline;
-  gap: $spacing-2;
+.site-admin-users-toolbar.card-header {
+  border-bottom: 1px solid $border-color;
+  padding: $spacing-4 $spacing-5;
 }
 
 .site-admin-screen-title {
@@ -188,78 +170,76 @@
   line-height: 1.2;
 }
 
-.site-admin-toolbar-right {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: $spacing-3;
+.site-admin-add-user-btn {
+  min-height: 44px;
+  gap: $spacing-2;
+  font-weight: $font-weight-semibold;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
 }
 
 .site-admin-filter-select-wrap {
-  min-width: 160px;
+  min-width: 140px;
+
+  .form-select {
+    min-height: 44px;
+    height: 44px;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    border-radius: $border-radius-md;
+    border-color: #cedce6;
+    background-color: #ffffff;
+    color: #24445b;
+    padding-left: $spacing-3;
+    padding-right: $spacing-8;
+    cursor: pointer;
+
+    &:hover,
+    &:focus {
+      border-color: #087eb8;
+    }
+  }
 }
 
-.site-admin-search-wrap {
-  position: relative;
-  display: flex;
+.site-admin-refresh-btn {
+  display: inline-flex;
   align-items: center;
-  width: 260px;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: $border-radius-md;
+  border: 1px solid #cedce6;
+  background-color: #ffffff;
+  color: #52697c;
+  cursor: pointer;
+  transition: all $transition-fast;
 
-  .form-input {
-    width: 100%;
-    min-height: 38px;
-    padding-left: $spacing-3;
-    padding-right: 68px;
-    border-radius: $border-radius-md 0 0 $border-radius-md;
-    border-right: none;
+  &:hover {
+    background-color: #f1f6f9;
+    color: #087eb8;
+    border-color: #087eb8;
   }
+}
 
-  .site-admin-search-clear {
-    position: absolute;
-    right: 44px;
-    color: $text-muted;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    padding: 2px;
-
-    &:hover {
-      color: $text-primary;
-    }
-  }
-
-  .site-admin-search-btn {
-    min-height: 38px;
-    padding: 0 $spacing-3;
-    border-radius: 0 $border-radius-md $border-radius-md 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background-color: $color-brand-accent;
-    color: #ffffff;
-    border: 1px solid $color-brand-accent;
-    cursor: pointer;
-    transition: background-color $transition-fast;
-
-    &:hover {
-      background-color: $color-brand-accent-hover;
-      border-color: $color-brand-accent-hover;
-    }
-  }
+.site-admin-users-card-body {
+  padding: $spacing-4 $spacing-5;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
 }
 
 // Stats & count bar
 .site-admin-stats-bar {
   display: flex;
   align-items: center;
-  gap: $spacing-4;
-  padding: $spacing-2 $spacing-3;
-  background-color: $bg-surface-secondary;
+  gap: $spacing-5;
+  padding: $spacing-2 $spacing-4;
+  background-color: #f1f6f9;
+  border: 1px solid #e1ebf2;
   border-radius: $border-radius-md;
   font-size: $font-size-xs;
-  color: $text-secondary;
+  color: #52697c;
 }
 
 .site-admin-stat-item {
@@ -268,7 +248,17 @@
   gap: $spacing-1;
 
   strong {
-    color: $color-primary;
+    color: #123a5a;
+    font-weight: 700;
+  }
+}
+
+.site-admin-stat-filtered {
+  margin-left: auto;
+  color: #087eb8;
+
+  strong {
+    color: #087eb8;
   }
 }
 
@@ -289,10 +279,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: $font-size-xs;
-  font-weight: $font-weight-semibold;
+  font-size: 11px;
+  font-weight: 700;
   color: #ffffff;
-  background: $color-brand-gradient;
+  background: #0091ca;
   flex-shrink: 0;
   box-shadow: $shadow-sm;
 }
