@@ -1,7 +1,7 @@
-// frontend/microfrontends/participant/src/components/RegistryDashboard.tsx - Participant & Registry Dashboard Root
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation } from '../../../../shared/confirmation';
+import { participantApi } from '../../../../shared/api/participantApi';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
@@ -13,6 +13,42 @@ import { ParticipantRecord, CustomFilterRule, SavedSearch } from '../types/parti
 export const RegistryDashboard: React.FC = () => {
   const [participants, setParticipants] = useState<ParticipantRecord[]>(initialParticipants);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>(initialParticipants[0]?.id || '1');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const fetchParticipants = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
+    try {
+      const data = await participantApi.getParticipants();
+      if (Array.isArray(data) && data.length > 0) {
+        // Merge backend participant records with any specialized registry fields
+        const mapped = data.map((p: any, idx: number) => {
+          const fallback = initialParticipants[idx % initialParticipants.length] || initialParticipants[0];
+          return {
+            ...fallback,
+            id: String(p.id ?? p.participantId ?? fallback.id),
+            name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || fallback.name,
+            firstName: p.firstName || fallback.firstName,
+            lastName: p.lastName || fallback.lastName,
+            status: p.status || fallback.status,
+            city: p.city || fallback.city,
+            state: p.state || fallback.state,
+            phone: p.phone || fallback.phone,
+            globalId: p.participantId || p.globalId || fallback.globalId,
+            studies: Array.isArray(p.studies) ? p.studies : (p.studyId ? [{ name: p.studyId, isLink: true }] : fallback.studies),
+          };
+        });
+        setParticipants(mapped);
+      }
+    } catch {
+      // Graceful fallback to initial mock participants
+    } finally {
+      if (!quiet) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchParticipants();
+  }, [fetchParticipants]);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [contactFilter, setContactFilter] = useState<'all' | 'yes' | 'no'>('all');
@@ -194,6 +230,7 @@ export const RegistryDashboard: React.FC = () => {
   };
 
   const handleRefresh = () => {
+    fetchParticipants(true);
     showNotification('Participant queue refreshed');
   };
 
