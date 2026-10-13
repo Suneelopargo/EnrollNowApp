@@ -248,6 +248,7 @@ describe('Mock API Layer & End-to-End Interceptor Integration', () => {
       await expect(dashboardApi.getOverview()).rejects.toMatchObject({
         code: 'NETWORK_ERROR',
       });
+      setMockErrorSimulation(null);
     });
   });
 

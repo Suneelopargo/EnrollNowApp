@@ -2,16 +2,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from './toaster/toastManager';
 import { createApiClient } from './api-client';
+import { setMockErrorSimulation } from './api-config';
 
 describe('Global Toaster & Error Notification System', () => {
   beforeEach(() => {
+    setMockErrorSimulation(null);
     toast.clear();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    setMockErrorSimulation(null);
     toast.clear();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('adds success toast with correct structure', () => {
@@ -35,14 +39,15 @@ describe('Global Toaster & Error Notification System', () => {
     expect(toasts[0].message).toBe('Failed to load dataset');
   });
 
-  it('adds warning and info toasts', () => {
+  it('adds warning and info toasts, replacing active toast', () => {
     toast.warning('Token expiring in 5 minutes');
+    expect(toast.getToasts()[0].type).toBe('warning');
+
     toast.info('Dataset downloaded');
     const toasts = toast.getToasts();
 
-    expect(toasts.length).toBe(2);
-    expect(toasts[0].type).toBe('warning');
-    expect(toasts[1].type).toBe('info');
+    expect(toasts.length).toBe(1);
+    expect(toasts[0].type).toBe('info');
   });
 
   it('notifies subscribers when toasts are added or dismissed', () => {
@@ -72,21 +77,20 @@ describe('Global Toaster & Error Notification System', () => {
     expect(toast.getToasts().length).toBe(0);
   });
 
-  it('caps concurrent toasts at maximum limit (5)', () => {
+  it('replaces active toast with latest notification', () => {
     for (let i = 1; i <= 7; i++) {
       toast.info(`Message ${i}`);
     }
     const toasts = toast.getToasts();
-    expect(toasts.length).toBe(5);
-    // Oldest messages should have been dropped
-    expect(toasts[0].message).toBe('Message 3');
-    expect(toasts[4].message).toBe('Message 7');
+    expect(toasts.length).toBe(1);
+    expect(toasts[0].message).toBe('Message 7');
   });
 
   it('clears all active toasts with clear()', () => {
     toast.success('Msg 1');
+    expect(toast.getToasts().length).toBe(1);
     toast.error('Msg 2');
-    expect(toast.getToasts().length).toBe(2);
+    expect(toast.getToasts().length).toBe(1);
 
     toast.clear();
     expect(toast.getToasts().length).toBe(0);

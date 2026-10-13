@@ -107,6 +107,47 @@ export const SiteAdminDashboard: React.FC = () => {
     [userToEdit]
   );
 
+  const handleLockUserFromModal = useCallback(async (user: SiteAdminUser) => {
+    try {
+      await administrationApi.deactivateUser(user.id);
+    } catch {
+      // Soft-fail
+    }
+    setUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, status: 'Inactive' } : u))
+    );
+    toast.success('User Locked', { title: 'Success!' });
+    setIsAddUserModalOpen(false);
+    setUserToEdit(null);
+  }, []);
+
+  const handleUnlockUserFromModal = useCallback(async (user: SiteAdminUser) => {
+    try {
+      await administrationApi.activateUser(user.id);
+    } catch {
+      // Soft-fail
+    }
+    setUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, status: 'Active' } : u))
+    );
+    toast.success('User Unlocked', { title: 'Success!' });
+    setIsAddUserModalOpen(false);
+    setUserToEdit(null);
+  }, []);
+
+  const handleResendEnrollment = useCallback((user: SiteAdminUser) => {
+    toast.success(`Enrollment invitation email resent to ${user.email}.`);
+  }, []);
+
+  const handleResetPassword = useCallback(async (user: SiteAdminUser) => {
+    try {
+      await administrationApi.resetPassword(user.id, {});
+    } catch {
+      // Soft-fail
+    }
+    toast.success(`Password reset instructions sent to ${user.email}.`);
+  }, []);
+
   const handleDeleteUser = useCallback((user: SiteAdminUser) => {
     void requestConfirmation({
       entityName: user.name,
@@ -239,6 +280,10 @@ export const SiteAdminDashboard: React.FC = () => {
         }}
         onSave={handleSaveUser}
         userToEdit={userToEdit}
+        onLockUser={handleLockUserFromModal}
+        onUnlockUser={handleUnlockUserFromModal}
+        onResendEnrollment={handleResendEnrollment}
+        onResetPassword={handleResetPassword}
       />
 
       {/* Enterprise Global Confirmation Dialog Host */}

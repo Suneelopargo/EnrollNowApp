@@ -89,9 +89,13 @@ export function getAccessToken(): string | null {
     const token = activeHeaderProvider.getToken();
     if (token && token.trim().length > 0) return token.trim();
   }
-  if (typeof localStorage !== 'undefined') {
-    const token = localStorage.getItem('enrollnow_token');
-    if (token && token.trim().length > 0) return token.trim();
+  if (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function') {
+    try {
+      const token = localStorage.getItem('enrollnow_token');
+      if (token && token.trim().length > 0) return token.trim();
+    } catch {
+      // Safe fallback
+    }
   }
   return null;
 }
@@ -199,9 +203,13 @@ export function normalizeApiError(error: any): NormalizedApiError {
  * Clears current session tokens and notifies listeners without redirect loops.
  */
 export function handleSessionExpired(): void {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('enrollnow_token');
-    localStorage.removeItem('enrollnow_user');
+  if (typeof localStorage !== 'undefined' && typeof localStorage.removeItem === 'function') {
+    try {
+      localStorage.removeItem('enrollnow_token');
+      localStorage.removeItem('enrollnow_user');
+    } catch {
+      // Safe fallback
+    }
   }
 
   unauthorizedCallbacks.forEach((cb) => {
@@ -268,6 +276,15 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         config.headers['Content-Type'] = 'application/json';
       }
 
+      if ((config as any).skipToast || (config as any).silent) {
+        (config as any).skipToast = true;
+        if (config.headers && typeof (config.headers as any).set === 'function') {
+          (config.headers as any).set('x-skip-toast', 'true');
+        } else if (config.headers) {
+          config.headers['x-skip-toast'] = 'true';
+        }
+      }
+
       return config;
     },
     (error) => Promise.reject(error)
@@ -309,7 +326,18 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
       }
 
       // Automatically dispatch global error toast (unless explicitly silenced)
-      const skipToast = (error.config as any)?.skipToast || (error.config as any)?.silent;
+      const reqHeaders = error?.config?.headers;
+      const headerSkip =
+        Boolean(reqHeaders && typeof reqHeaders.get === 'function' && reqHeaders.get('x-skip-toast') === 'true') ||
+        reqHeaders?.['x-skip-toast'] === 'true' ||
+        reqHeaders?.['X-Skip-Toast'] === 'true';
+
+      const skipToast =
+        Boolean((error?.config as any)?.skipToast) ||
+        Boolean((error?.config as any)?.silent) ||
+        Boolean((error as any)?.skipToast) ||
+        Boolean((error as any)?.config?.skipToast) ||
+        headerSkip;
       if (!skipToast && !isLoginRequest) {
         toast.error(normalized.message, {
           title: normalized.code || `Error (${normalized.status || 'Network'})`,
@@ -358,6 +386,31 @@ export function createApiClient(options: CreateApiClientOptions = {}): AxiosInst
     baseURL: options.baseURL !== undefined ? options.baseURL : getApiBaseUrl(),
     timeout: options.timeout || 15000,
     adapter: dynamicAdapter,
+  });
+
+  // Preserve custom config flags (e.g. skipToast, silent) across Axios mergeConfig
+  const methods = ['get', 'delete', 'head', 'options'] as const;
+  methods.forEach((method) => {
+    const orig = (instance as any)[method].bind(instance);
+    (instance as any)[method] = function (url: string, config?: any) {
+      if (config && (config.skipToast || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-toast'] = 'true';
+      }
+      return orig(url, config);
+    };
+  });
+
+  const bodyMethods = ['post', 'put', 'patch'] as const;
+  bodyMethods.forEach((method) => {
+    const orig = (instance as any)[method].bind(instance);
+    (instance as any)[method] = function (url: string, data?: any, config?: any) {
+      if (config && (config.skipToast || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-toast'] = 'true';
+      }
+      return orig(url, data, config);
+    };
   });
 
   attachInterceptors(instance, options);

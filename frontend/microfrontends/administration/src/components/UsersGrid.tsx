@@ -13,7 +13,6 @@ import {
   UserPlus,
   Search,
   X,
-  RotateCw,
   Mail,
   Pencil,
   Trash2,
@@ -109,10 +108,10 @@ const UserStatusCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (pa
     <div className="site-admin-status-cell">
       <span
         className={`site-admin-status-badge ${
-          isActive ? 'is-active' : 'is-inactive'
+          isActive ? 'is-active' : 'is-disabled'
         }`}
       >
-        {status}
+        {isActive ? 'Active' : 'Disabled'}
       </span>
     </div>
   );
@@ -191,7 +190,7 @@ export interface UsersGridProps {
   onEditUser: (user: SiteAdminUser) => void;
   onDeleteUser: (user: SiteAdminUser) => void;
   onToggleStatus: (user: SiteAdminUser) => void;
-  onRefresh: () => void;
+  onRefresh?: () => void;
 }
 
 export const UsersGrid: React.FC<UsersGridProps> = ({
@@ -204,7 +203,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<SiteAdminUser> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [statusFilter, setStatusFilter] = useState<'Active' | 'Disabled' | 'All'>('Active');
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
@@ -226,7 +225,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       if (statusFilter === 'Active') return u.status === 'Active';
-      if (statusFilter === 'Inactive') return u.status === 'Inactive';
+      if (statusFilter === 'Disabled') return u.status === 'Inactive';
       return true; // 'All'
     });
   }, [users, statusFilter]);
@@ -505,11 +504,11 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
               aria-label="Filter users by active status"
               className="form-select"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Active' | 'Inactive')}
+              onChange={(e) => setStatusFilter(e.target.value as 'Active' | 'Disabled' | 'All')}
             >
-              <option value="All">All Users</option>
               <option value="Active">Active Users</option>
-              <option value="Inactive">Inactive Users</option>
+              <option value="Disabled">Disabled Users</option>
+              <option value="All">All Users</option>
             </select>
           </div>
 
@@ -535,17 +534,6 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
             )}
             <Search size={14} aria-hidden="true" />
           </div>
-
-          {/* Refresh Action */}
-          <button
-            type="button"
-            className="btn btn-secondary site-admin-refresh-btn"
-            onClick={onRefresh}
-            title="Refresh user list"
-            aria-label="Refresh user list"
-          >
-            <RotateCw size={15} aria-hidden="true" />
-          </button>
 
           {/* Global Data Grid Export Menu */}
           <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>

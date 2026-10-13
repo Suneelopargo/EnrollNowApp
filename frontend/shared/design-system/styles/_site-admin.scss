@@ -160,6 +160,34 @@
 .site-admin-users-toolbar.card-header {
   border-bottom: 1px solid $border-color;
   padding: $spacing-4 $spacing-5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: $spacing-4;
+
+  .data-grid-toolbar__heading {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-3;
+    flex-wrap: nowrap;
+  }
+
+  .data-grid-toolbar__actions {
+    flex: 1 1 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $spacing-3;
+    flex-wrap: nowrap;
+  }
+
+  .data-grid-toolbar__search {
+    flex: 0 1 260px;
+    width: 260px;
+    min-width: 160px;
+  }
 }
 
 .site-admin-screen-title {
@@ -374,10 +402,14 @@
     box-shadow: 0 1px 2px rgba(25, 118, 210, 0.3);
   }
 
+  &.is-disabled,
   &.is-inactive {
-    background-color: $bg-surface-tertiary;
-    color: $text-muted;
-    border: 1px solid $border-color-dark;
+    background-color: #2e3e4f;
+    color: #ffffff;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
   }
 }
 
@@ -538,9 +570,9 @@
   .modal-footer {
     display: flex !important;
     align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 12px !important;
+    justify-content: space-between !important;
     padding: 16px 32px !important;
+    width: 100% !important;
   }
 
   .form-input[aria-invalid='true'],
@@ -609,14 +641,14 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    background-color: #ffffff;
-    border-bottom: 1px solid #e5e7eb;
+    background-color: #23506d;
+    border-bottom: 1px solid #1a3f57;
 
     th {
       padding: 12px 16px;
       font-size: 13px;
       font-weight: 700;
-      color: #111827;
+      color: #ffffff;
       white-space: nowrap;
 
       &.site-admin-studies-th-checkbox {
@@ -714,3 +746,141 @@
     outline-offset: 2px;
   }
 }
+
+// Edit Mode Footer Layout & Action Buttons (Matching Screenshot 2)
+.site-admin-modal-footer-edit {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.site-admin-modal-footer-add {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+}
+
+.site-admin-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #0b69a3;
+  border: 1px solid #0b69a3;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #085586;
+    border-color: #085586;
+  }
+}
+
+.site-admin-btn-resend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: #6d93d3;
+  border: 1px solid #6d93d3;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #597fbf;
+    border-color: #597fbf;
+  }
+}
+
+.site-admin-btn-reset-pw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: #6d93d3;
+  border: 1px solid #6d93d3;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #597fbf;
+    border-color: #597fbf;
+  }
+}
+
+.site-admin-btn-lock,
+.site-admin-btn-unlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #e54b42;
+  border: 1px solid #e54b42;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #c93d35;
+    border-color: #c93d35;
+  }
+}
+
+// Edit User Mode top info layout matching screenshot
+.site-admin-form-edit-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 8px;
+
+  .site-admin-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .site-admin-edit-label {
+    min-width: 140px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4b5563;
+  }
+
+  .site-admin-edit-value {
+    font-size: 13px;
+    color: #1f2937;
+    font-weight: 500;
+  }
+
+  .site-admin-edit-control {
+    flex: 1;
+    max-width: 260px;
+  }
+
+  .site-admin-permissions-select {
+    width: 100%;
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+}
+
