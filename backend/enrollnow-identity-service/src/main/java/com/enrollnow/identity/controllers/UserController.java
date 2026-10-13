@@ -14,15 +14,21 @@ import jakarta.validation.Valid;
 
 import java.util.List;
 import java.util.UUID;
+import com.enrollnow.identity.services.UserInvitationService;
 
 @RestController
 @RequestMapping("/api/v1/tenants/{tenantId}/users")
 public class UserController {
 
     private final UserService userService;
+    private final UserInvitationService userInvitationService;
 
-    public UserController(UserService userService) {
+    public UserController(
+            UserService userService,
+            UserInvitationService userInvitationService) {
+
         this.userService = userService;
+        this.userInvitationService = userInvitationService;
     }
 
     @GetMapping("/{userId}")
@@ -91,4 +97,24 @@ public class UserController {
                 request
         );
     }
+    
+    @PostMapping("/{userId}/send-invitation")
+    public ResponseEntity<?> sendInvitation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID userId) {
+
+        userInvitationService.sendInvitation(
+                tenantId,
+                userId
+        );
+
+        return ResponseEntity.ok(
+                java.util.Map.of(
+                        "message",
+                        "Invitation sent successfully."
+                )
+        );
+    }
+    
+    
 }

@@ -1,10 +1,12 @@
 package com.enrollnow.identity.controllers;
 
 import com.enrollnow.identity.dtos.ForgotPasswordRequest;
+import com.enrollnow.identity.dtos.ActivateAccountRequest;
 import com.enrollnow.identity.dtos.LoginRequest;
 import com.enrollnow.identity.dtos.LoginResponse;
 import com.enrollnow.identity.services.LoginService;
 import com.enrollnow.identity.services.PasswordRecoveryService;
+import com.enrollnow.identity.services.UserInvitationService;
 import com.enrollnow.identity.dtos.ResetPasswordRequest;
 
 import jakarta.validation.Valid;
@@ -20,13 +22,16 @@ public class AuthController {
 
     private final LoginService loginService;
     private final PasswordRecoveryService passwordRecoveryService;
+    private final UserInvitationService userInvitationService;
 
     public AuthController(
             LoginService loginService,
-            PasswordRecoveryService passwordRecoveryService) {
+            PasswordRecoveryService passwordRecoveryService,
+            UserInvitationService userInvitationService) {
 
         this.loginService = loginService;
         this.passwordRecoveryService = passwordRecoveryService;
+        this.userInvitationService = userInvitationService;
     }
 
     @PostMapping("/login")
@@ -98,6 +103,38 @@ public class AuthController {
                     java.util.Map.of(
                             "error",
                             "Invalid Password Reset",
+                            "message",
+                            ex.getMessage()
+                    )
+            );
+        }
+    }
+    
+    @PostMapping("/activate")
+    public ResponseEntity<?> activateAccount(
+            @PathVariable UUID tenantId,
+            @Valid @RequestBody ActivateAccountRequest request) {
+
+        try {
+
+            userInvitationService.activateAccount(
+                    tenantId,
+                    request
+            );
+
+            return ResponseEntity.ok(
+                    java.util.Map.of(
+                            "message",
+                            "Account activated successfully."
+                    )
+            );
+
+        } catch (IllegalArgumentException ex) {
+
+            return ResponseEntity.badRequest().body(
+                    java.util.Map.of(
+                            "error",
+                            "Invalid Account Activation",
                             "message",
                             ex.getMessage()
                     )

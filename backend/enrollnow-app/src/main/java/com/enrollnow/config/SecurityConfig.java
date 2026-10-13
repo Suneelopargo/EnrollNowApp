@@ -30,12 +30,12 @@ public class SecurityConfig {
                 /*
                  * Public authentication endpoints
                  */
-                .requestMatchers(
-                    "/api/v1/tenants/*/auth/login",
-                    "/api/v1/tenants/*/auth/forgot-password",
-                    "/api/v1/tenants/*/auth/reset-password"
-                ).permitAll()
-
+            		.requestMatchers(
+            			    "/api/v1/tenants/*/auth/login",
+            			    "/api/v1/tenants/*/auth/forgot-password",
+            			    "/api/v1/tenants/*/auth/reset-password",
+            			    "/api/v1/tenants/*/auth/activate"
+            			).permitAll()
                 /*
                  * Swagger / OpenAPI for development
                  */
