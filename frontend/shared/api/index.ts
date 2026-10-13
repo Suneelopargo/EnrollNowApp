@@ -10,3 +10,4 @@ export * from './taskApi';
 export * from './communicationApi';
 export * from './documentApi';
 export * from './administrationApi';
+export * from './registryApi';

@@ -1,243 +1,68 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+// frontend/microfrontends/participant/src/components/RegistryDashboard.tsx - Participant & Registry Dashboard Root
+import React, { useState, useMemo } from 'react';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation } from '../../../../shared/confirmation';
-import { participantApi } from '../../../../shared/api/participantApi';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { initialParticipants } from '../mockData';
-import { ParticipantRecord, CustomFilterRule, SavedSearch } from '../types/participant';
+import { useRegistry } from '../hooks/useRegistry';
+import { ParticipantRecord, CustomFilterRule } from '../types/participant';
+import { SavedRegistrySearchResponse } from '../../../../shared/api/registryApi';
 
 export const RegistryDashboard: React.FC = () => {
-  const [participants, setParticipants] = useState<ParticipantRecord[]>(initialParticipants);
-  const [selectedParticipantId, setSelectedParticipantId] = useState<string>(initialParticipants[0]?.id || '1');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const {
+    participants,
+    selectedParticipant,
+    loading,
+    error,
+    currentPage,
+    pageSize,
+    totalElements,
+    totalPages,
+    searchTerm,
+    setSearchTerm,
+    contactFilter,
+    setContactFilter,
+    availableFilter,
+    setAvailableFilter,
+    selectedStudies,
+    setSelectedStudies,
+    customFilters,
+    setCustomFilters,
+    duplicatesOnly,
+    setDuplicatesOnly,
+    sortField,
+    sortDirection,
+    savedSearches,
+    filterOptions,
+    handleSearch,
+    handlePageChange,
+    handlePageSizeChange,
+    handleSortChange,
+    handleClearFilters,
+    handleRefresh,
+    handleSelectParticipant,
+    handleAddParticipant: apiAddParticipant,
+    handleUpdateParticipant: apiUpdateParticipant,
+    handleDeleteParticipant: apiDeleteParticipant,
+    handleAssignStudyToSelected: apiAssignStudyToSelected,
+    handleSaveSearch: apiSaveSearch,
+    handleDeleteSavedSearch: apiDeleteSavedSearch,
+    handleApplySavedSearch,
+    handleExport,
+  } = useRegistry();
 
-  const fetchParticipants = useCallback(async (quiet = false) => {
-    if (!quiet) setIsLoading(true);
-    try {
-      const data = await participantApi.getParticipants();
-      if (Array.isArray(data) && data.length > 0) {
-        // Merge backend participant records with any specialized registry fields
-        const mapped = data.map((p: any, idx: number) => {
-          const fallback = initialParticipants[idx % initialParticipants.length] || initialParticipants[0];
-          return {
-            ...fallback,
-            id: String(p.id ?? p.participantId ?? fallback.id),
-            name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || fallback.name,
-            firstName: p.firstName || fallback.firstName,
-            lastName: p.lastName || fallback.lastName,
-            status: p.status || fallback.status,
-            city: p.city || fallback.city,
-            state: p.state || fallback.state,
-            phone: p.phone || fallback.phone,
-            globalId: p.participantId || p.globalId || fallback.globalId,
-            studies: Array.isArray(p.studies) ? p.studies : (p.studyId ? [{ name: p.studyId, isLink: true }] : fallback.studies),
-          };
-        });
-        setParticipants(mapped);
-      }
-    } catch {
-      // Graceful fallback to initial mock participants
-    } finally {
-      if (!quiet) setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchParticipants();
-  }, [fetchParticipants]);
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [contactFilter, setContactFilter] = useState<'all' | 'yes' | 'no'>('all');
-  const [availableFilter, setAvailableFilter] = useState<'all' | 'yes' | 'no'>('all');
-  const [selectedStudies, setSelectedStudies] = useState<string[]>([]);
-  const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
-  
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([
-    {
-      id: 'saved-asd',
-      name: 'asd',
-      contactFilter: 'all',
-      availableFilter: 'all',
-      searchTerm: '',
-      selectedStudies: ['Autism Study'],
-      customFilters: [],
-    },
-    {
-      id: 'saved-sireesha',
-      name: 'sireesha',
-      contactFilter: 'no',
-      availableFilter: 'all',
-      searchTerm: '',
-      selectedStudies: [],
-      customFilters: [{ id: '1', field: 'gender', operator: 'equal to', value: 'Female' }],
-    }
-  ]);
-  
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [detailModalState, setDetailModalState] = useState<{ isOpen: boolean; participant: ParticipantRecord | null }>({
     isOpen: false,
     participant: null,
   });
+
   const showNotification = (msg: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     toast[type](msg);
-  };
-
-  const matchCustomFilter = (p: ParticipantRecord, f: CustomFilterRule): boolean => {
-    if (!f.field || !f.value) return true;
-    const val = (f.value || '').toString().toLowerCase().trim();
-    if (!val) return true;
-    const op = f.operator || 'equal to';
-    
-    let targetVal: any = (p as any)[f.field];
-
-    let isGenderField = false;
-    if (f.field === 'age') {
-      targetVal = p.age || p.ageNumeric;
-    } else if (f.field === 'gender' || f.field === 'sex') {
-      isGenderField = true;
-      targetVal = (p.gender && p.gender !== '...') ? p.gender : (p.demographics?.gender || '...');
-    } else if (f.field === 'studies') {
-      targetVal = p.studies?.map((s) => s.name).join(', ');
-    } else if (f.field === 'tags') {
-      targetVal = p.tags?.join(', ');
-    } else if (f.field === 'ethnicity') {
-      targetVal = p.demographics?.ethnicity;
-    } else if (f.field === 'race') {
-      targetVal = p.demographics?.race;
-    } else if (f.field === 'firstName') {
-      targetVal = p.firstName;
-    } else if (f.field === 'lastName') {
-      targetVal = p.lastName;
-    } else if (f.field === 'birthMonth') {
-      targetVal = p.birthMonth;
-    }
-    
-    if (targetVal == null) return false;
-    const targetStr = targetVal.toString().toLowerCase().trim();
-    const targetNum = parseFloat(targetStr.replace(/[^0-9.]/g, '')) || p.ageNumeric || 0;
-    const valNum = parseFloat(val.replace(/[^0-9.]/g, ''));
-
-    if (isGenderField) {
-      if (op === 'equal to') return targetStr === val;
-      if (op === 'not equal to') return targetStr !== val;
-      if (op === 'contains') {
-        const regex = new RegExp('\\b' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-        return regex.test(targetStr);
-      }
-      if (op === 'does not contain') {
-        const regex = new RegExp('\\b' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-        return !regex.test(targetStr);
-      }
-      if (op === 'starts with') return targetStr.startsWith(val);
-      if (op === 'ends with') return targetStr === val || targetStr.endsWith(' ' + val);
-    }
-
-    switch (op) {
-      case 'equal to':
-        if (!isNaN(valNum) && f.field === 'age') {
-          return Math.floor(targetNum) === Math.floor(valNum) || targetStr.includes(val);
-        }
-        return targetStr === val;
-
-      case 'not equal to':
-        if (!isNaN(valNum) && f.field === 'age') {
-          return Math.floor(targetNum) !== Math.floor(valNum) && !targetStr.includes(val);
-        }
-        return targetStr !== val;
-
-      case 'contains':
-        return targetStr.includes(val);
-
-      case 'does not contain':
-        return !targetStr.includes(val);
-
-      case 'starts with':
-        return targetStr.startsWith(val);
-
-      case 'ends with':
-        return targetStr.endsWith(val);
-
-      case 'greater than':
-        return !isNaN(valNum) ? targetNum > valNum : targetStr > val;
-
-      case 'less than':
-        return !isNaN(valNum) ? targetNum < valNum : targetStr < val;
-
-      case 'is empty':
-        return !targetStr || targetStr === '...';
-
-      case 'is Not empty':
-      case 'is not empty':
-        return !!targetStr && targetStr !== '...';
-
-      default:
-        return targetStr.includes(val);
-    }
-  };
-
-  const filteredParticipants = useMemo(() => {
-    return participants.filter((p) => {
-      if (contactFilter === 'yes' && !p.contactForFutureStudies) return false;
-      if (contactFilter === 'no' && p.contactForFutureStudies) return false;
-
-      if (availableFilter === 'yes' && !p.availableToAddStudy) return false;
-      if (availableFilter === 'no' && p.availableToAddStudy) return false;
-
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchesName = p.name?.toLowerCase().includes(query);
-        const matchesFamily = p.familyId?.toLowerCase().includes(query);
-        const matchesGlobal = p.globalId?.toLowerCase().includes(query);
-        const matchesCity = p.city?.toLowerCase().includes(query);
-        const matchesGender = p.gender?.toLowerCase().includes(query);
-        const matchesAge = p.age?.toLowerCase().includes(query);
-        const matchesStudies = p.studies?.some((s) => s.name?.toLowerCase().includes(query));
-        
-        if (!matchesName && !matchesFamily && !matchesGlobal && !matchesCity && !matchesGender && !matchesAge && !matchesStudies) {
-          return false;
-        }
-      }
-
-      if (selectedStudies.length > 0) {
-        const hasMatchingStudy = p.studies?.some((s) => selectedStudies.includes(s.name));
-        if (!hasMatchingStudy) {
-          return false;
-        }
-      }
-
-      if (customFilters.length > 0) {
-        const matchesAllCustom = customFilters.every((f) => matchCustomFilter(p, f));
-        if (!matchesAllCustom) return false;
-      }
-
-      return true;
-    });
-  }, [participants, contactFilter, availableFilter, searchTerm, selectedStudies, customFilters]);
-
-  const selectedParticipant = useMemo(() => {
-    return participants.find((p) => p.id === selectedParticipantId) || filteredParticipants[0] || null;
-  }, [participants, selectedParticipantId, filteredParticipants]);
-
-  const handleSelectParticipant = (participant: ParticipantRecord) => {
-    if (participant && participant.id) {
-      setSelectedParticipantId(participant.id);
-    }
-  };
-
-  const handleRefresh = () => {
-    fetchParticipants(true);
-    showNotification('Participant queue refreshed');
-  };
-
-  const handleAddParticipant = (newParticipant: ParticipantRecord) => {
-    setParticipants((prev) => [newParticipant, ...prev]);
-    setSelectedParticipantId(newParticipant.id);
-    showNotification(`Participant "${newParticipant.name}" added successfully.`, 'success');
   };
 
   const handleAddFilter = () => {
@@ -248,17 +73,6 @@ export const RegistryDashboard: React.FC = () => {
       value: '',
     };
     setCustomFilters((prev) => [...prev, newFilter]);
-  };
-
-  const handleAssignStudyToSelected = (participantIds: string[], studyName: string) => {
-    const selectedIds = new Set(participantIds);
-    setParticipants((prev) => prev.map((participant) => {
-      if (!selectedIds.has(participant.id)) return participant;
-      const studies = participant.studies || [];
-      if (studies.some((study) => study.name === studyName)) return participant;
-      return { ...participant, studies: [...studies, { name: studyName, isLink: true }] };
-    }));
-    showNotification(`Added ${participantIds.length} participant(s) to ${studyName}.`, 'success');
   };
 
   const handleUpdateFilter = (index: number, updatedFilter: CustomFilterRule) => {
@@ -274,12 +88,8 @@ export const RegistryDashboard: React.FC = () => {
     showNotification('Filter removed.');
   };
 
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setContactFilter('all');
-    setAvailableFilter('all');
-    setSelectedStudies([]);
-    setCustomFilters([]);
+  const onClearFilters = async () => {
+    await handleClearFilters();
     showNotification('All filters have been reset.');
   };
 
@@ -287,22 +97,17 @@ export const RegistryDashboard: React.FC = () => {
     setIsSaveModalOpen(true);
   };
 
-  const handleSaveFilterSubmit = (filterName: string) => {
-    const newSaved: SavedSearch = {
-      id: String(Date.now()),
-      name: filterName,
-      contactFilter,
-      availableFilter,
-      searchTerm,
-      selectedStudies,
-      customFilters: [...customFilters],
-    };
-
-    setSavedSearches((prev) => [...prev, newSaved]);
-    showNotification(`Saved filter "${filterName}" added to Saved Searches.`, 'success');
+  const handleSaveFilterSubmit = async (filterName: string) => {
+    try {
+      await apiSaveSearch(filterName);
+      showNotification(`Saved filter "${filterName}" added to Saved Searches.`, 'success');
+      setIsSaveModalOpen(false);
+    } catch (err: any) {
+      showNotification(err?.message || 'Failed to save filter', 'error');
+    }
   };
 
-  const handleOpenDeleteModal = (searchItem: SavedSearch) => {
+  const handleOpenDeleteModal = (searchItem: SavedRegistrySearchResponse | any) => {
     void requestConfirmation({
       entityName: searchItem.name,
       intent: 'danger',
@@ -310,37 +115,88 @@ export const RegistryDashboard: React.FC = () => {
       loadingText: 'Deleting saved search...',
       title: 'Delete saved search',
       message: `Delete the saved search “${searchItem.name}”? This action cannot be undone.`,
-      onConfirm: () => {
-        setSavedSearches((prev) => prev.filter((item) => item.id !== searchItem.id));
-        showNotification(`Saved search "${searchItem.name}" deleted.`, 'success');
+      onConfirm: async () => {
+        try {
+          await apiDeleteSavedSearch(searchItem.id);
+          showNotification(`Saved search "${searchItem.name}" deleted.`, 'success');
+        } catch (err: any) {
+          showNotification(err?.message || 'Failed to delete saved search', 'error');
+        }
       },
     });
   };
 
-  const handleSelectSavedSearch = (saved: SavedSearch) => {
+  const handleSelectSavedSearch = async (saved: SavedRegistrySearchResponse | any) => {
     if (!saved) return;
-    setContactFilter(saved.contactFilter || 'all');
-    setAvailableFilter(saved.availableFilter || 'all');
-    setSearchTerm(saved.searchTerm || '');
-    setSelectedStudies(saved.selectedStudies || []);
-    setCustomFilters(saved.customFilters || []);
-    showNotification(`Applied saved search "${saved.name}".`);
+    try {
+      await handleApplySavedSearch(saved);
+      showNotification(`Applied saved search "${saved.name}".`);
+    } catch (err: any) {
+      showNotification(err?.message || 'Failed to apply saved search', 'error');
+    }
   };
 
-  const handleSearch = () => {
-    showNotification(`Filtered registry: ${filteredParticipants.length} participant(s) found.`);
+  const onSearchClick = async () => {
+    try {
+      await handleSearch();
+      showNotification(`Registry search executed: ${totalElements} participant(s) found.`);
+    } catch (err: any) {
+      showNotification(err?.message || 'Search failed', 'error');
+    }
+  };
+
+  const handleAddParticipant = async (newParticipant: any) => {
+    try {
+      await apiAddParticipant({
+        firstName: newParticipant.firstName || newParticipant.name?.split(' ')[0] || 'Unknown',
+        middleName: newParticipant.middleName || undefined,
+        lastName: newParticipant.lastName || newParticipant.name?.split(' ').slice(1).join(' ') || 'Participant',
+      });
+      showNotification(`Participant "${newParticipant.name || newParticipant.firstName}" added successfully.`, 'success');
+      setIsAddModalOpen(false);
+    } catch (err: any) {
+      showNotification(err?.message || 'Failed to add participant', 'error');
+    }
+  };
+
+  const handleAssignStudyToSelected = async (participantIds: string[], studyName: string) => {
+    try {
+      await apiAssignStudyToSelected(participantIds, studyName);
+      showNotification(`Added ${participantIds.length} participant(s) to ${studyName}.`, 'success');
+    } catch (err: any) {
+      showNotification(err?.message || 'Failed to assign study to participants', 'error');
+    }
   };
 
   const handleOpenDetail = (participant: ParticipantRecord) => {
     setDetailModalState({ isOpen: true, participant });
   };
 
-  const handleSaveDetail = (updatedParticipant: ParticipantRecord) => {
-    setParticipants((prev) =>
-      prev.map((p) => (p.id === updatedParticipant.id ? updatedParticipant : p))
-    );
-    showNotification(`Participant "${updatedParticipant.name}" details updated successfully.`, 'success');
-    setDetailModalState({ isOpen: false, participant: null });
+  const handleSaveDetail = async (updatedParticipant: ParticipantRecord) => {
+    try {
+      const names = (updatedParticipant.name || '').trim().split(' ');
+      const firstName = updatedParticipant.firstName || names[0] || '';
+      const lastName = updatedParticipant.lastName || names.slice(1).join(' ') || '';
+
+      await apiUpdateParticipant(updatedParticipant.id, {
+        firstName,
+        lastName,
+        globalId: updatedParticipant.globalId,
+        sex: updatedParticipant.gender !== '...' ? updatedParticipant.gender : undefined,
+        familyId: updatedParticipant.familyId,
+        timezone: updatedParticipant.timezone,
+        contactForFutureStudies: updatedParticipant.contactForFutureStudies,
+        tags: updatedParticipant.tags,
+        city: updatedParticipant.city,
+        state: updatedParticipant.state,
+        zipcode: updatedParticipant.zipcode,
+        phone: updatedParticipant.phone || updatedParticipant.contactMethods?.phone,
+      });
+      showNotification(`Participant "${updatedParticipant.name}" details updated successfully.`, 'success');
+      setDetailModalState({ isOpen: false, participant: null });
+    } catch (err: any) {
+      showNotification(err?.message || 'Failed to update participant details', 'error');
+    }
   };
 
   const handleOpenDeleteParticipant = (participant: ParticipantRecord) => {
@@ -352,75 +208,92 @@ export const RegistryDashboard: React.FC = () => {
       title: 'Delete participant',
       message: `Delete participant “${participant.name}”? This action cannot be undone.`,
       confirmWord: 'DELETE',
-      onConfirm: () => {
-        setParticipants((prev) => prev.filter((item) => item.id !== participant.id));
-        showNotification(`Participant "${participant.name}" deleted.`, 'success');
+      onConfirm: async () => {
+        try {
+          await apiDeleteParticipant(participant.id);
+          showNotification(`Participant "${participant.name}" deleted.`, 'success');
+        } catch (err: any) {
+          showNotification(err?.message || 'Failed to delete participant', 'error');
+        }
       },
     });
   };
 
+  const availableStudyOptions = useMemo(() => {
+    return filterOptions?.studies?.map((s) => s.name) || [];
+  }, [filterOptions]);
+
   return (
     <div className="workspace-split-layout">
-        <div className="workspace-split-layout__sidebar">
-          <LeftFilterPanel
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            contactFilter={contactFilter}
-            setContactFilter={setContactFilter}
-            availableFilter={availableFilter}
-            setAvailableFilter={setAvailableFilter}
-            customFilters={customFilters}
-            onAddFilter={handleAddFilter}
-            onUpdateFilter={handleUpdateFilter}
-            onRemoveFilter={handleRemoveFilter}
-            onAddParticipant={() => setIsAddModalOpen(true)}
-            onClearFilters={handleClearFilters}
-            onSaveFilter={handleOpenSaveModal}
-            onSearch={handleSearch}
-            savedSearches={savedSearches}
-            onSelectSavedSearch={handleSelectSavedSearch}
-            onDeleteRequest={handleOpenDeleteModal}
-          />
-        </div>
-
-        <div className="workspace-split-layout__main">
-          <ParticipantGrid
-            participants={filteredParticipants}
-            allParticipants={participants}
-            selectedParticipant={selectedParticipant}
-            onSelectParticipant={handleSelectParticipant}
-            onRefresh={handleRefresh}
-            onAddParticipant={() => setIsAddModalOpen(true)}
-            onOpenDetail={handleOpenDetail}
-            onDeleteParticipant={handleOpenDeleteParticipant}
-            onAssignStudyToSelected={handleAssignStudyToSelected}
-            totalCount={participants.length}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            selectedStudies={selectedStudies}
-            setSelectedStudies={setSelectedStudies}
-          />
-        </div>
-
-        <AddParticipantModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
-          onAdd={handleAddParticipant}
+      <div className="workspace-split-layout__sidebar">
+        <LeftFilterPanel
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          contactFilter={contactFilter}
+          setContactFilter={setContactFilter}
+          availableFilter={availableFilter}
+          setAvailableFilter={setAvailableFilter}
+          customFilters={customFilters}
+          onAddFilter={handleAddFilter}
+          onUpdateFilter={handleUpdateFilter}
+          onRemoveFilter={handleRemoveFilter}
+          onAddParticipant={() => setIsAddModalOpen(true)}
+          onClearFilters={onClearFilters}
+          onSaveFilter={handleOpenSaveModal}
+          onSearch={onSearchClick}
+          savedSearches={savedSearches}
+          onSelectSavedSearch={handleSelectSavedSearch}
+          onDeleteRequest={handleOpenDeleteModal}
         />
+      </div>
 
-        <SaveFilterModal
-          isOpen={isSaveModalOpen}
-          onClose={() => setIsSaveModalOpen(false)}
-          onSave={handleSaveFilterSubmit}
+      <div className="workspace-split-layout__main">
+        <ParticipantGrid
+          participants={participants}
+          allParticipants={participants}
+          selectedParticipant={selectedParticipant}
+          onSelectParticipant={handleSelectParticipant}
+          onRefresh={handleRefresh}
+          onAddParticipant={() => setIsAddModalOpen(true)}
+          onOpenDetail={handleOpenDetail}
+          onDeleteParticipant={handleOpenDeleteParticipant}
+          onAssignStudyToSelected={handleAssignStudyToSelected}
+          totalCount={totalElements}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          selectedStudies={selectedStudies}
+          setSelectedStudies={setSelectedStudies}
+          loading={loading}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalElements={totalElements}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          onSortChange={handleSortChange}
+          onExport={handleExport}
+          availableStudyOptions={availableStudyOptions}
         />
+      </div>
 
-        <ParticipantDetailModal
-          isOpen={detailModalState.isOpen}
-          onClose={() => setDetailModalState({ isOpen: false, participant: null })}
-          participant={detailModalState.participant}
-          onSave={handleSaveDetail}
-        />
+      <AddParticipantModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onAdd={handleAddParticipant}
+      />
 
+      <SaveFilterModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={handleSaveFilterSubmit}
+      />
+
+      <ParticipantDetailModal
+        isOpen={detailModalState.isOpen}
+        onClose={() => setDetailModalState({ isOpen: false, participant: null })}
+        participant={detailModalState.participant}
+        onSave={handleSaveDetail}
+      />
     </div>
   );
 };

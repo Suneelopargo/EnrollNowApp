@@ -59,6 +59,31 @@ export const authApi = {
   },
 
   /**
+   * Performs user login against the Sprint 1 Identity Service tenant login endpoint.
+   * POST /api/v1/tenants/{tenantId}/auth/login
+   */
+  async loginTenant(
+    tenantId: string = '11111111-1111-1111-1111-111111111111',
+    credentials: { email: string; password: string }
+  ): Promise<{ user: AuthUser; token: string }> {
+    const res = await apiClient.post<any>(`/api/v1/tenants/${tenantId}/auth/login`, credentials);
+    const data = res.data?.data || res.data;
+    const token = data?.accessToken || data?.token;
+    if (!token) {
+      throw new Error('Authentication failed: Missing access token in server response');
+    }
+    const user: AuthUser = {
+      id: data.userId || 1,
+      username: data.email ? data.email.split('@')[0] : 'admin',
+      email: data.email || credentials.email,
+      firstName: data.firstName || 'System',
+      lastName: data.lastName || 'Administrator',
+      roles: ['ROLE_SUPER_ADMIN', 'ADMIN'],
+    };
+    return { user, token };
+  },
+
+  /**
    * Retrieves current authenticated user details from session endpoint.
    * Authorization header is injected automatically by the shared request interceptor.
    */

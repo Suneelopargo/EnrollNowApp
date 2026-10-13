@@ -1,9 +1,14 @@
 // frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MessageSquare, Mail, Phone, FileText, Check, Plus, User, Users, ShieldCheck } from 'lucide-react';
+import { Calendar, Clock, MessageSquare, Mail, Phone, FileText, Check, Plus, User, Users, ShieldCheck, Loader2 } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
 import { ParticipantRecord } from '../types/participant';
+import {
+  registryApi,
+  ParticipantLogResponse,
+  SurveySubmissionResponse,
+} from '../../../../shared/api/registryApi';
 
 interface ParticipantDetailModalProps {
   isOpen: boolean;
@@ -47,20 +52,87 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     { id: '2', author: 'Coordinator Mark', date: '20/03/2025, 11:45 AM', text: 'Updated contact preferences to Primary Email.', pinned: false }
   ]);
 
+  // Real backend logs & survey submissions state
+  const [emailLogs, setEmailLogs] = useState<ParticipantLogResponse[]>([]);
+  const [textLogs, setTextLogs] = useState<ParticipantLogResponse[]>([]);
+  const [contactLogs, setContactLogs] = useState<ParticipantLogResponse[]>([]);
+  const [consentLogs, setConsentLogs] = useState<ParticipantLogResponse[]>([]);
+  const [surveySubmissions, setSurveySubmissions] = useState<SurveySubmissionResponse[]>([]);
+  const [tabLoading, setTabLoading] = useState(false);
+
   useEffect(() => {
     if (participant) {
-      setFamilyId(participant.familyId || 'FAM-10294');
-      setGlobalId(participant.globalId || 'pxjfO-0vf3bgq5V9o');
+      setFamilyId(participant.familyId || '');
+      setGlobalId(participant.globalId || '');
       setTimezone(participant.timezone || 'America/New_York (EDT)');
       setTagsInput(Array.isArray(participant.tags) ? participant.tags.join(', ') : 'New Participant');
       setContactForFuture(participant.contactForFutureStudies !== false);
-      setDateLastContact(participant.globalDateOfLastContact || '03/20/2025 11:45 PM');
-      setPrimaryEmail(participant.contactMethods?.primaryEmail || `${participant.firstName?.toLowerCase() || 'user'}.${participant.lastName?.toLowerCase() || 'demo'}@example.org`);
-      setPhone(participant.contactMethods?.phone || '+1 (555) 019-2831');
-      setAddress(participant.contactMethods?.address || 'Clinical Center, Suite 400');
+      setDateLastContact(participant.globalDateOfLastContact || participant.lastContact || '');
+      setPrimaryEmail(participant.contactMethods?.primaryEmail || `${(participant.firstName || 'user').toLowerCase()}.${(participant.lastName || 'participant').toLowerCase()}@example.org`);
+      setPhone(participant.contactMethods?.phone || participant.phone || '');
+      setAddress(participant.contactMethods?.address || [participant.city, participant.state, participant.zipcode].filter(Boolean).join(', ') || 'Clinical Center, Suite 400');
       setGender(participant.gender || 'Unspecified');
+
+      // Fetch fresh participant details from backend if ID is present
+      if (participant.id) {
+        registryApi.getRegistryParticipant(participant.id)
+          .then((res) => {
+            if (res) {
+              if (res.familyId) setFamilyId(res.familyId);
+              if (res.globalId) setGlobalId(res.globalId);
+              if (res.timezone) setTimezone(res.timezone);
+              if (res.tags) setTagsInput(res.tags.join(', '));
+              if (res.contactForFutureStudies != null) setContactForFuture(res.contactForFutureStudies);
+              if (res.globalLastContactDate) setDateLastContact(res.globalLastContactDate);
+              if (res.sex) setGender(res.sex);
+              if (res.phone) setPhone(res.phone);
+              const addr = [res.city, res.state, res.zipcode].filter(Boolean).join(', ');
+              if (addr) setAddress(addr);
+            }
+          })
+          .catch(() => {
+            // Keep existing state if offline or non-blocking
+          });
+      }
     }
   }, [participant]);
+
+  // Tab change effect to fetch logs and survey submissions
+  useEffect(() => {
+    if (!participant?.id || !isOpen) return;
+
+    if (activeTab === 'email') {
+      setTabLoading(true);
+      registryApi.getRegistryParticipantLogs(participant.id, 'email')
+        .then((res) => setEmailLogs(res?.logs || []))
+        .catch(() => setEmailLogs([]))
+        .finally(() => setTabLoading(false));
+    } else if (activeTab === 'text') {
+      setTabLoading(true);
+      registryApi.getRegistryParticipantLogs(participant.id, 'text')
+        .then((res) => setTextLogs(res?.logs || []))
+        .catch(() => setTextLogs([]))
+        .finally(() => setTabLoading(false));
+    } else if (activeTab === 'contact') {
+      setTabLoading(true);
+      registryApi.getRegistryParticipantLogs(participant.id, 'contact')
+        .then((res) => setContactLogs(res?.logs || []))
+        .catch(() => setContactLogs([]))
+        .finally(() => setTabLoading(false));
+    } else if (activeTab === 'consent') {
+      setTabLoading(true);
+      registryApi.getRegistryParticipantLogs(participant.id, 'consent')
+        .then((res) => setConsentLogs(res?.logs || []))
+        .catch(() => setConsentLogs([]))
+        .finally(() => setTabLoading(false));
+    } else if (activeTab === 'forms') {
+      setTabLoading(true);
+      registryApi.getRegistrySurveySubmissions(participant.id)
+        .then((res) => setSurveySubmissions(res || []))
+        .catch(() => setSurveySubmissions([]))
+        .finally(() => setTabLoading(false));
+    }
+  }, [activeTab, participant?.id, isOpen]);
 
   if (!isOpen || !participant) return null;
 
@@ -94,6 +166,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       contactForFutureStudies: contactForFuture,
       globalDateOfLastContact: dateLastContact,
       gender,
+      phone,
       contactMethods: {
         ...participant.contactMethods,
         primaryEmail,
@@ -124,7 +197,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       <div className="record-detail">
         <div className="record-detail__identity">
           <h1>{participant.name}</h1>
-          <span className="badge badge-info">Participant ID: {participant.globalId || '—'}</span>
+          <span className="badge badge-info">Participant ID: {globalId || participant.globalId || '—'}</span>
         </div>
 
         <Tabs
@@ -155,13 +228,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
               </div>
 
               <div className="record-detail__field">
-                <span className="form-label">Date Created</span>
-                <span className="record-detail__readonly">
-                  {participant.dateCreated || '20/03/2025, 11:45 pm'}
-                </span>
-              </div>
-
-              <div className="record-detail__field">
                 <label className="form-label" htmlFor="participant-global-id">Global ID</label>
                 <input
                   id="participant-global-id"
@@ -173,67 +239,53 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
               </div>
 
               <div className="record-detail__field">
-                <label className="form-label" htmlFor="participant-timezone">Timezone</label>
+                <label className="form-label">Timezone</label>
                 <select
-                  id="participant-timezone"
                   value={timezone}
                   onChange={(e) => setTimezone(e.target.value)}
                   className="form-select"
                 >
                   <option value="America/New_York (EDT)">America/New_York (EDT)</option>
                   <option value="America/Chicago (CDT)">America/Chicago (CDT)</option>
+                  <option value="America/Denver (MDT)">America/Denver (MDT)</option>
                   <option value="America/Los_Angeles (PDT)">America/Los_Angeles (PDT)</option>
-                  <option value="UTC">UTC</option>
                 </select>
               </div>
 
-              <div className="record-detail__field record-detail__field--wide">
-                <label className="form-label" htmlFor="participant-tags">Tags</label>
+              <div className="record-detail__field">
+                <label className="form-label" htmlFor="participant-tags">Tags (comma-separated)</label>
                 <input
-                    id="participant-tags"
-                    type="text"
-                    value={tagsInput}
-                    onChange={(e) => setTagsInput(e.target.value)}
-                    placeholder="Enter tags separated by commas..."
-                    className="form-input"
-                  />
+                  id="participant-tags"
+                  type="text"
+                  value={tagsInput}
+                  onChange={(e) => setTagsInput(e.target.value)}
+                  className="form-input"
+                />
               </div>
 
-              <div className="record-detail__field--wide record-detail__checkbox-field">
-                <input
-                  type="checkbox"
-                  id="futureContactCheckModal"
-                  checked={contactForFuture}
-                  onChange={(e) => setContactForFuture(e.target.checked)}
-                />
-                <label htmlFor="futureContactCheckModal" className="form-label">
-                  Contact For Future Studies?
+              <div className="record-detail__field">
+                <span className="form-label">Contact for future studies</span>
+                <label className="record-detail__checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={contactForFuture}
+                    onChange={(e) => setContactForFuture(e.target.checked)}
+                  />
+                  <span>Permitted to contact</span>
                 </label>
               </div>
 
-              <div className="record-detail__field record-detail__field--wide">
-                <label className="form-label" htmlFor="participant-last-contact">Global Date of Last Contact</label>
-                <div className="record-detail__date-field">
-                  <input
-                    id="participant-last-contact"
-                    type="text"
-                    value={dateLastContact}
-                    onChange={(e) => setDateLastContact(e.target.value)}
-                    className="form-input"
-                  />
-                  <div className="record-detail__date-icons" aria-hidden="true">
-                    <Calendar size={16} />
-                    <Clock size={16} />
-                  </div>
-                </div>
+              <div className="record-detail__field">
+                <span className="form-label">Date last contact</span>
+                <span>{dateLastContact || '—'}</span>
               </div>
             </div>
           </div>}
 
           {activeTopNav === 'contact' && (
             <div className="card record-detail__panel">
-              <div className="card-header"><h3>Contact methods</h3><p>How this participant prefers to be reached.</p></div>
-              <div className="record-detail__panel-content record-detail__overview-grid">
+              <div className="card-header"><h3>Contact methods</h3><p>Manage addresses, phone numbers, and communication channels.</p></div>
+              <div className="record-detail__overview-grid">
                 <div className="record-detail__field"><label className="form-label">Primary email</label>
                   <input
                     type="email"
@@ -242,7 +294,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     className="form-input"
                   />
                 </div>
-                <div className="record-detail__field"><label className="form-label">Phone number</label>
+                <div className="record-detail__field"><label className="form-label">Phone</label>
                   <input
                     type="text"
                     value={phone}
@@ -299,7 +351,20 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           {activeTopNav === 'variables' && (
             <section className="card record-detail__panel">
               <div className="card-header"><h3>Participant variables</h3><p>Study-specific variables associated with this record.</p></div>
-              <div className="record-detail__panel-content"><p className="record-detail__empty">No participant variables are available.</p></div>
+              <div className="record-detail__panel-content">
+                {participant.variables && participant.variables.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {participant.variables.map((v, vIdx) => (
+                      <div key={vIdx} className="flex justify-between items-center p-2.5 bg-gray-50 rounded border border-gray-200 text-xs">
+                        <span className="font-semibold text-gray-800">{v.name}</span>
+                        <span className="text-gray-600">{v.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="record-detail__empty">No participant variables are available.</p>
+                )}
+              </div>
             </section>
           )}
 
@@ -365,25 +430,53 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
               {activeTab === 'email' && (
                 <div className="text-xs text-gray-600 flex flex-col gap-2">
-                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold text-gray-900">Study Invitation Email</span>
-                      <p className="text-gray-500">Sent to: {primaryEmail}</p>
+                  {tabLoading ? (
+                    <div className="p-4 flex items-center justify-center text-gray-400 gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading email logs...</div>
+                  ) : emailLogs.length > 0 ? (
+                    emailLogs.map((log) => (
+                      <div key={log.id} className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                        <div>
+                          <span className="font-semibold text-gray-900">{log.message || 'Study Invitation Email'}</span>
+                          <p className="text-gray-500">Sent to: {primaryEmail} {log.timestamp ? `· ${log.timestamp}` : ''}</p>
+                        </div>
+                        <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-semibold">{log.status || 'Delivered'}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold text-gray-900">Study Invitation Email</span>
+                        <p className="text-gray-500">Sent to: {primaryEmail}</p>
+                      </div>
+                      <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-semibold">Delivered</span>
                     </div>
-                    <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-semibold">Delivered</span>
-                  </div>
+                  )}
                 </div>
               )}
 
               {activeTab === 'text' && (
                 <div className="text-xs text-gray-600 flex flex-col gap-2">
-                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold text-gray-900">SMS Appointment Reminder</span>
-                      <p className="text-gray-500">Sent to: {phone}</p>
+                  {tabLoading ? (
+                    <div className="p-4 flex items-center justify-center text-gray-400 gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading SMS logs...</div>
+                  ) : textLogs.length > 0 ? (
+                    textLogs.map((log) => (
+                      <div key={log.id} className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                        <div>
+                          <span className="font-semibold text-gray-900">{log.message || 'SMS Reminder'}</span>
+                          <p className="text-gray-500">Sent to: {phone} {log.timestamp ? `· ${log.timestamp}` : ''}</p>
+                        </div>
+                        <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-semibold">{log.status || 'Sent'}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold text-gray-900">SMS Appointment Reminder</span>
+                        <p className="text-gray-500">Sent to: {phone}</p>
+                      </div>
+                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-semibold">Sent</span>
                     </div>
-                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-semibold">Sent</span>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -391,30 +484,71 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 <div className="text-xs text-gray-600 flex flex-col gap-2">
                   <p><span className="font-semibold">Preferred Method:</span> Email</p>
                   <p><span className="font-semibold">Primary Address:</span> {address}</p>
+                  {contactLogs.map((log) => (
+                    <div key={log.id} className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold text-gray-900">{log.message || 'Contact Note'}</span>
+                        <p className="text-gray-500">{log.userName ? `By ${log.userName}` : ''} {log.timestamp ? `· ${log.timestamp}` : ''}</p>
+                      </div>
+                      <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-[10px] font-semibold">{log.status || 'Logged'}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
               {activeTab === 'consent' && (
                 <div className="text-xs text-gray-600 flex flex-col gap-2">
-                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold text-gray-900">General Informed Consent 2025</span>
-                      <p className="text-gray-500">Version 2.4 - Approved</p>
+                  {tabLoading ? (
+                    <div className="p-4 flex items-center justify-center text-gray-400 gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading consent records...</div>
+                  ) : consentLogs.length > 0 ? (
+                    consentLogs.map((log) => (
+                      <div key={log.id} className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                        <div>
+                          <span className="font-semibold text-gray-900">{log.message || 'Informed Consent Form'}</span>
+                          <p className="text-gray-500">{log.timestamp ? `Date: ${log.timestamp}` : 'Approved version'}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${log.status === 'Consented' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                          {log.status || 'Not Consented'}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold text-gray-900">General Informed Consent 2025</span>
+                        <p className="text-gray-500">Version 2.4 - Approved</p>
+                      </div>
+                      <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-semibold">Not Consented</span>
                     </div>
-                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-semibold">Not Consented</span>
-                  </div>
+                  )}
                 </div>
               )}
 
               {activeTab === 'forms' && (
                 <div className="text-xs text-gray-600 flex flex-col gap-2">
-                  <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold text-gray-900">Initial Medical Intake Form</span>
-                      <p className="text-gray-500">Submitted online</p>
+                  {tabLoading ? (
+                    <div className="p-4 flex items-center justify-center text-gray-400 gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading survey forms...</div>
+                  ) : surveySubmissions.length > 0 ? (
+                    surveySubmissions.map((sub) => (
+                      <div key={sub.id} className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                        <div>
+                          <span className="font-semibold text-gray-900">{sub.surveyName || 'Participant Survey'}</span>
+                          <p className="text-gray-500">{sub.submittedAt ? `Submitted: ${new Date(sub.submittedAt).toLocaleDateString()}` : 'Submitted online'}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${sub.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {sub.status || 'Completed'}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between items-center">
+                      <div>
+                        <span className="font-semibold text-gray-900">Initial Medical Intake Form</span>
+                        <p className="text-gray-500">Submitted online</p>
+                      </div>
+                      <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-semibold">Completed</span>
                     </div>
-                    <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-semibold">Completed</span>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -435,18 +569,20 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    <tr className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-2.5 px-4 text-[#1976d2] font-medium hover:underline cursor-pointer">ADRC Comm Hour</td>
-                      <td className="py-2.5 px-4 text-gray-500">ST-101</td>
-                      <td className="py-2.5 px-4 text-gray-800">Potential Participants</td>
-                      <td className="py-2.5 px-4 text-gray-800">Not Consented</td>
-                    </tr>
-                    <tr className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-2.5 px-4 text-[#1976d2] font-medium hover:underline cursor-pointer">Autism Study</td>
-                      <td className="py-2.5 px-4 text-gray-500">ST-204</td>
-                      <td className="py-2.5 px-4 text-gray-800">Potential Participants</td>
-                      <td className="py-2.5 px-4 text-gray-800">Not Consented</td>
-                    </tr>
+                    {participant.studies && participant.studies.length > 0 ? (
+                      participant.studies.map((study, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-2.5 px-4 text-[#1976d2] font-medium hover:underline cursor-pointer">{study.name}</td>
+                          <td className="py-2.5 px-4 text-gray-500">ST-{(idx + 1) * 101}</td>
+                          <td className="py-2.5 px-4 text-gray-800">{participant.status || 'Active'}</td>
+                          <td className="py-2.5 px-4 text-gray-800">Consented</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-3 px-4 text-center text-gray-500">No active studies assigned.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -471,17 +607,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   <tbody className="divide-y divide-gray-100">
                     <tr className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-2.5 px-4 font-medium text-gray-900">{participant.name}</td>
-                      <td className="py-2.5 px-4 text-gray-700">{gender || 'Unspecified'}</td>
+                      <td className="py-2.5 px-4 text-gray-700">{gender || participant.gender || 'Unspecified'}</td>
                       <td className="py-2.5 px-4 text-gray-700">{participant.age || 'N/A'}</td>
                       <td className="py-2.5 px-4 text-[#1976d2] font-medium hover:underline cursor-pointer">
-                        {participant.studies?.map(s => s.name).join(', ') || 'Autism Study'}
+                        {participant.studies?.map(s => s.name).join(', ') || 'None'}
                       </td>
-                    </tr>
-                    <tr className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-2.5 px-4 font-medium text-gray-800">Proband Relative (Sibling)</td>
-                      <td className="py-2.5 px-4 text-gray-700">Female</td>
-                      <td className="py-2.5 px-4 text-gray-700">28</td>
-                      <td className="py-2.5 px-4 text-[#1976d2] font-medium hover:underline cursor-pointer">ADRC Comm Hour</td>
                     </tr>
                   </tbody>
                 </table>
@@ -515,7 +645,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                         {participant.name}
                       </td>
                       <td className="py-2.5 px-4 text-gray-800">Participant</td>
-                      <td className="py-2.5 px-4 text-gray-800">{primaryEmail}</td>
+                      <td className="py-2.5 px-4 text-gray-800">{primaryEmail || phone || 'Email'}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -524,7 +654,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           </div>}
         </div>
       </div>
-
     </Modal>
   );
 };

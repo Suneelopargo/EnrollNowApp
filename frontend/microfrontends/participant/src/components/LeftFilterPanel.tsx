@@ -3,6 +3,7 @@ import React from 'react';
 import { Trash2 } from 'lucide-react';
 import FilterCard from './FilterCard';
 import { CustomFilterRule, SavedSearch } from '../types/participant';
+import { SavedRegistrySearchResponse } from '../../../../shared/api/registryApi';
 
 interface LeftFilterPanelProps {
   searchTerm: string;
@@ -19,9 +20,9 @@ interface LeftFilterPanelProps {
   onClearFilters: () => void;
   onSaveFilter: () => void;
   onSearch: () => void;
-  savedSearches?: SavedSearch[];
-  onSelectSavedSearch?: (search: SavedSearch) => void;
-  onDeleteRequest?: (search: SavedSearch) => void;
+  savedSearches?: (SavedSearch | SavedRegistrySearchResponse)[];
+  onSelectSavedSearch?: (search: any) => void;
+  onDeleteRequest?: (search: any) => void;
 }
 
 export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({

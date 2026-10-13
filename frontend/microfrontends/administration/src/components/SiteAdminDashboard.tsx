@@ -30,8 +30,8 @@ export const SiteAdminDashboard: React.FC = () => {
         const mappedUsers: SiteAdminUser[] = data.map((u: any) => ({
           id: String(u.id ?? u.userId ?? `usr-${Math.random().toString(36).slice(2, 7)}`),
           name: u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username || 'User',
-          email: u.email || `${u.username || 'user'}@enrollnow.local`,
-          sitePermissions: u.sitePermissions || u.role || (u.roles && u.roles[0]?.roleName) || 'Site Admin',
+          email: u.email || u.primaryEmail || `${u.username || 'user'}@enrollnow.local`,
+          sitePermissions: u.sitePermissions || u.role || (u.roles && u.roles[0]?.roleName) || u.title || 'Site Admin',
           studies: Array.isArray(u.studies) ? u.studies : (u.assignedStudies || ['AD MCIData']),
           status: (u.status === 'Inactive' || u.active === false) ? 'Inactive' : 'Active',
           title: u.title || 'Team Member',

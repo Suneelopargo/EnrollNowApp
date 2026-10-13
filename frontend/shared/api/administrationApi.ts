@@ -8,6 +8,18 @@ export const administrationApi = {
   },
 
   async getUsers(query?: Record<string, any>): Promise<any> {
+    try {
+      const tenantId = '11111111-1111-1111-1111-111111111111';
+      const tenantRes = await apiClient.get(`/api/v1/tenants/${tenantId}/users`);
+      if (tenantRes.data && Array.isArray(tenantRes.data)) {
+        return tenantRes.data;
+      }
+      if (tenantRes.data?.data && Array.isArray(tenantRes.data.data)) {
+        return tenantRes.data.data;
+      }
+    } catch {
+      // Fallback to administrator mock endpoint
+    }
     const res = await apiClient.get('/api/v1/administrator/users', { params: query });
     return res.data?.data;
   },

@@ -94,6 +94,28 @@ export const mockAuthApi = {
 
     const userRecord = mockStore.findUserByToken(token);
     if (!userRecord) {
+      const isRealJwt = Boolean(token && (token.startsWith('ey') || token.split('.').length === 3));
+      if (isRealJwt) {
+        let cachedUser = null;
+        try {
+          if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem('enrollnow_user');
+            if (raw) cachedUser = JSON.parse(raw);
+          }
+        } catch {
+          // ignore
+        }
+        const user = cachedUser || {
+          id: 1,
+          username: 'admin',
+          firstName: 'System',
+          lastName: 'Administrator',
+          email: 'admin@enrollnow.local',
+          roles: ['ROLE_SUPER_ADMIN', 'ADMIN'],
+        };
+        return createMockSuccessResponse(config, user, 200, 'User profile retrieved');
+      }
+
       return createMockErrorResponse(
         config,
         401,

@@ -12,8 +12,15 @@ import {
   X, 
   Trash2,
   Eye,
+  ChevronDown, 
+  FileSpreadsheet, 
+  FileText, 
+  UserPlus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
-import { ChevronDown, FileSpreadsheet, FileText, UserPlus } from 'lucide-react';
 import { ParticipantRecord, StudyItem } from '../types/participant';
 
 const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
@@ -105,7 +112,7 @@ const DefaultTextRenderer: React.FC<ICellRendererParams> = (params) => {
   return <span className="text-gray-800 text-xs font-normal">{val}</span>;
 };
 
-interface ParticipantGridProps {
+export interface ParticipantGridProps {
   participants: ParticipantRecord[];
   allParticipants?: ParticipantRecord[];
   selectedParticipant?: ParticipantRecord | null;
@@ -120,6 +127,17 @@ interface ParticipantGridProps {
   setSearchTerm?: (term: string) => void;
   selectedStudies?: string[];
   setSelectedStudies?: React.Dispatch<React.SetStateAction<string[]>>;
+  // Server-side pagination & sorting props
+  loading?: boolean;
+  currentPage?: number;
+  pageSize?: number;
+  totalElements?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
+  onSortChange?: (field: string, direction: 'ASC' | 'DESC') => void;
+  onExport?: (format: string) => void;
+  availableStudyOptions?: string[];
 }
 
 export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
@@ -135,6 +153,15 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   setSearchTerm,
   selectedStudies = [],
   setSelectedStudies,
+  currentPage = 1,
+  pageSize = 10,
+  totalElements = 0,
+  totalPages = 1,
+  onPageChange,
+  onPageSizeChange,
+  onSortChange,
+  onExport,
+  availableStudyOptions,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
@@ -148,6 +175,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const availableStudyList = useMemo(() => {
+    if (availableStudyOptions && availableStudyOptions.length > 0) {
+      return [...availableStudyOptions].sort();
+    }
     const list = new Set<string>();
     const source = allParticipants.length > 0 ? allParticipants : participants;
     source.forEach((p) => {
@@ -158,7 +188,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       }
     });
     return Array.from(list).sort();
-  }, [allParticipants, participants]);
+  }, [availableStudyOptions, allParticipants, participants]);
 
   const filteredStudyOptions = useMemo(() => {
     if (!filterSearchQuery.trim()) return availableStudyList;
@@ -350,6 +380,27 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     setStudyToAssign('');
   };
 
+  const onSortChanged = useCallback(
+    (event: { api: GridApi<ParticipantRecord> }) => {
+      const colState = event.api.getColumnState();
+      const sortedCol = colState.find((c) => c.sort != null);
+      if (sortedCol) {
+        let field = 'name';
+        if (sortedCol.colId === 'name') field = 'name';
+        else if (sortedCol.colId === 'gender') field = 'gender';
+        else if (sortedCol.colId === 'age') field = 'age';
+        else if (sortedCol.colId === 'lastContact') field = 'lastcontact';
+        else field = sortedCol.colId;
+
+        const direction = sortedCol.sort?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        onSortChange?.(field, direction);
+      } else {
+        onSortChange?.('name', 'ASC');
+      }
+    },
+    [onSortChange]
+  );
+
   const getExportRows = useCallback(() => {
     const rows: ParticipantRecord[] = [];
     if (gridApi) {
@@ -362,7 +413,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   }, [gridApi, participants]);
 
   const exportFileName = `participants-${new Date().toISOString().slice(0, 10)}`;
+
   const exportCsv = () => {
+    onExport?.('CSV');
     gridApi?.exportDataAsCsv({
       fileName: `${exportFileName}.csv`,
       columnKeys: ['name', 'studies', 'gender', 'age', 'lastContact'],
@@ -377,6 +430,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   };
 
   const exportExcel = async () => {
+    onExport?.('EXCEL');
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Participants', { views: [{ state: 'frozen', ySplit: 1 }] });
     sheet.columns = [
@@ -411,6 +465,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   };
 
   const exportPdf = () => {
+    onExport?.('PDF');
     const rows = getExportRows();
     const document = new jsPDF({ orientation: 'landscape' });
     document.setFontSize(16);
@@ -434,6 +489,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     document.save(`${exportFileName}.pdf`);
     setIsExportMenuOpen(false);
   };
+
+  const fromRowIndex = totalElements === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const toRowIndex = totalElements === 0 ? 0 : Math.min(currentPage * pageSize, totalElements);
 
   return (
     <section className="card">
@@ -673,40 +731,108 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       )}
 
       <DataGrid
-          rowData={participants}
-          columnDefs={columnDefs}
-          defaultColDef={defaultColDef}
-          context={{ onOpenDetail, onDeleteParticipant }}
-          onCellClicked={(params) => {
-            if (params.column?.getColId() === 'expand' && params.data) {
-              onOpenDetail?.(params.data);
-            } else if (params.column?.getColId() === 'deleteAction' && params.data) {
-              onDeleteParticipant?.(params.data);
-            }
-          }}
-          onRowClicked={(event) => {
-            const target = event.event?.target as HTMLElement | null;
-            // Row action buttons have their own behavior and must not open details.
-            if (target?.closest('.participant-grid__row-actions')) return;
-            // The Select cell is selection-only. A click anywhere in that column
-            // must never bubble into the row detail interaction.
-            if (
-              target?.closest('input[type="checkbox"]') ||
-              target?.closest('.ag-cell[col-id="select"]')
-            ) return;
-            if (event.data) onOpenDetail?.(event.data);
-          }}
-          rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
-          onSelectionChanged={onSelectionChanged}
-          onGridReady={(event) => setGridApi(event.api)}
-          rowHeight={64}
-          headerHeight={44}
-          pagination={true}
-          paginationPageSize={10}
-          paginationPageSizeSelector={[5, 10, 20, 50]}
-          animateRows={true}
-          suppressCellFocus={true}
-        />
+        rowData={participants}
+        columnDefs={columnDefs}
+        defaultColDef={defaultColDef}
+        context={{ onOpenDetail, onDeleteParticipant }}
+        onCellClicked={(params) => {
+          if (params.column?.getColId() === 'expand' && params.data) {
+            onOpenDetail?.(params.data);
+          } else if (params.column?.getColId() === 'deleteAction' && params.data) {
+            onDeleteParticipant?.(params.data);
+          }
+        }}
+        onRowClicked={(event) => {
+          const target = event.event?.target as HTMLElement | null;
+          if (target?.closest('.participant-grid__row-actions')) return;
+          if (
+            target?.closest('input[type="checkbox"]') ||
+            target?.closest('.ag-cell[col-id="select"]')
+          ) return;
+          if (event.data) onOpenDetail?.(event.data);
+        }}
+        rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
+        onSelectionChanged={onSelectionChanged}
+        onSortChanged={onSortChanged}
+        onGridReady={(event) => setGridApi(event.api)}
+        rowHeight={64}
+        headerHeight={44}
+        pagination={false}
+        suppressPaginationPanel={true}
+        animateRows={true}
+        suppressCellFocus={true}
+      />
+
+      {/* Server-Side Pagination Bar */}
+      <div className="ag-paging-panel flex items-center justify-between px-4 py-2 border-t border-[#dce7ee] text-xs text-[#52697c]">
+        <div className="flex items-center gap-2">
+          <span>Page Size:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
+            className="border border-[#cedce6] rounded px-2 py-0.5 text-xs text-[#123a5a] bg-white focus:outline-none focus:border-[#087eb8] cursor-pointer"
+            aria-label="Page Size"
+          >
+            {[5, 10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <span>
+            {totalElements === 0 ? '0 to 0 of 0' : `${fromRowIndex} to ${toRowIndex} of ${totalElements}`}
+          </span>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="ag-paging-button p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-[#123a5a]"
+              onClick={() => onPageChange?.(1)}
+              disabled={currentPage <= 1}
+              aria-label="First Page"
+              title="First Page"
+            >
+              <ChevronsLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="ag-paging-button p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-[#123a5a]"
+              onClick={() => onPageChange?.(currentPage - 1)}
+              disabled={currentPage <= 1}
+              aria-label="Previous Page"
+              title="Previous Page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-2 text-xs font-medium text-[#24445b]">
+              Page {currentPage} of {Math.max(1, totalPages)}
+            </span>
+            <button
+              type="button"
+              className="ag-paging-button p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-[#123a5a]"
+              onClick={() => onPageChange?.(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              aria-label="Next Page"
+              title="Next Page"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              type="button"
+              className="ag-paging-button p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-[#123a5a]"
+              onClick={() => onPageChange?.(totalPages)}
+              disabled={currentPage >= totalPages}
+              aria-label="Last Page"
+              title="Last Page"
+            >
+              <ChevronsRight size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
   );
 };

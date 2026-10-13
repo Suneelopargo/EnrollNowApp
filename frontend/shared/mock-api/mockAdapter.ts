@@ -1,5 +1,5 @@
 // frontend/shared/mock-api/mockAdapter.ts - Centralized Axios Adapter for Mock API
-import { AxiosAdapter, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosAdapter, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { getMockErrorSimulation } from '../api-config';
 import { mockAuthApi, extractBearerToken } from './mockAuthApi';
 import { mockStore } from './mockStore';
@@ -43,7 +43,18 @@ function parsePayload(data: unknown): any {
 export const mockAdapter: AxiosAdapter = async (
   config: InternalAxiosRequestConfig
 ): Promise<AxiosResponse> => {
-  // 1. Check for simulated errors (e.g. VITE_API_MOCK_ERROR=500, 401, network)
+  const method = (config.method || 'GET').toUpperCase();
+  const path = normalizePath(config.url);
+
+  // Live Spring Boot backend delegation (Registry and Identity Tenants)
+  if (path.startsWith('/api/v1/registry') || path.startsWith('/api/v1/tenants')) {
+    const realAdapter = (axios as any).getAdapter
+      ? (axios as any).getAdapter(axios.defaults.adapter)
+      : axios.defaults.adapter;
+    return realAdapter(config);
+  }
+
+  // 1. Check for simulated errors for mock endpoints (e.g. VITE_API_MOCK_ERROR=500, 401, network)
   const simulatedError = getMockErrorSimulation();
   if (simulatedError) {
     if (simulatedError.toLowerCase() === 'network') {
@@ -59,9 +70,6 @@ export const mockAdapter: AxiosAdapter = async (
       );
     }
   }
-
-  const method = (config.method || 'GET').toUpperCase();
-  const path = normalizePath(config.url);
 
   // 2. Authentication Endpoints (Login is unauthenticated)
   if (path === '/api/v1/auth/login' && method === 'POST') {
@@ -110,12 +118,16 @@ export const mockAdapter: AxiosAdapter = async (
 
   const authenticatedUser = mockStore.findUserByToken(token);
   if (!authenticatedUser) {
-    throw createMockErrorResponse(
-      config,
-      401,
-      'Invalid session: Unrecognized or invalid authentication token.',
-      'INVALID_TOKEN'
-    );
+    // If token is a genuine JWT (from Spring Boot Identity service), allow access to mock endpoints
+    const isRealJwt = Boolean(token && (token.startsWith('ey') || token.split('.').length === 3));
+    if (!isRealJwt) {
+      throw createMockErrorResponse(
+        config,
+        401,
+        'Invalid session: Unrecognized or invalid authentication token.',
+        'INVALID_TOKEN'
+      );
+    }
   }
 
   // 4. Protected Domain Endpoints Routing

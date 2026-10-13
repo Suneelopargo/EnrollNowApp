@@ -64,6 +64,24 @@ export function getApiBaseUrl(): string {
     }
   }
 
+  // When running in a browser on Vite dev server (e.g. localhost:3000) and targeting local backend (localhost:8080),
+  // return empty string to route via Vite reverse proxy ('/api' -> http://localhost:8080) and eliminate browser CORS preflight errors.
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+    const isDifferentPort = window.location.port !== `${DEFAULT_BACKEND_PORT}`;
+    const targetsLocalBackend =
+      !envBaseUrl ||
+      envBaseUrl === DEFAULT_API_BASE_URL ||
+      envBaseUrl === 'http://127.0.0.1:8080' ||
+      envBaseUrl === 'http://localhost:8080/' ||
+      envBaseUrl === 'http://127.0.0.1:8080/';
+
+    if (isLocalhost && isDifferentPort && targetsLocalBackend) {
+      return '';
+    }
+  }
+
   if (envBaseUrl && isValidUrl(envBaseUrl)) {
     return normalizeUrl(envBaseUrl);
   }
