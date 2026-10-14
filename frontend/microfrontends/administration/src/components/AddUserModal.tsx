@@ -10,6 +10,7 @@ import {
 import { SiteAdminUser } from '../types/admin';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { toast } from '../../../../shared/toaster';
+import { toStudyPermissionLabel } from '../../../../shared/api/administrationApi';
 
 export interface AvailableStudy {
   id: string;
@@ -46,6 +47,7 @@ export interface AddUserModalProps {
   onClose: () => void;
   onSave: (user: UserFormData) => Promise<void> | void;
   userToEdit?: SiteAdminUser | null;
+  availableStudies?: AvailableStudy[];
   onLockUser?: (user: SiteAdminUser) => Promise<void> | void;
   onUnlockUser?: (user: SiteAdminUser) => Promise<void> | void;
   onResendEnrollment?: (user: SiteAdminUser) => Promise<void> | void;
@@ -70,6 +72,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   onClose,
   onSave,
   userToEdit,
+  availableStudies,
   onLockUser,
   onUnlockUser,
   onResendEnrollment,
@@ -97,6 +100,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   }>({});
 
   useEffect(() => {
+    const studyList = (availableStudies && availableStudies.length > 0) ? availableStudies : BACKEND_STUDIES;
+
     if (userToEdit) {
       const parts = (userToEdit.name || '').trim().split(/\s+/);
       setFirstName(parts[0] || userToEdit.firstName || '');
@@ -105,14 +110,29 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       setTitle(userToEdit.title || 'Study Coordinator');
       setSitePermissions(userToEdit.sitePermissions || 'None');
 
-      const assignedStudies = new Set(userToEdit.studies || []);
+      const assignmentsByStudyId = new Map<string, { role?: string | null; permission?: string | null }>();
+      const assignmentsByStudyName = new Map<string, { role?: string | null; permission?: string | null }>();
+      if (userToEdit.studyAssignments) {
+        for (const sa of userToEdit.studyAssignments) {
+          assignmentsByStudyId.set(sa.id, { role: sa.studyRole, permission: sa.studyPermission });
+          assignmentsByStudyName.set(sa.name, { role: sa.studyRole, permission: sa.studyPermission });
+        }
+      }
+      const assignedNameSet = new Set(userToEdit.studies || []);
+
       setStudyRows(
-        BACKEND_STUDIES.map((study) => ({
-          studyId: study.id,
-          studyName: study.name,
-          assigned: assignedStudies.has(study.name),
-          permissions: assignedStudies.has(study.name) ? 'Admin' : 'Admin',
-        }))
+        studyList.map((study) => {
+          const match = assignmentsByStudyId.get(study.id) || assignmentsByStudyName.get(study.name);
+          const isAssigned = !!match || assignedNameSet.has(study.name);
+          const rawPerm = match?.permission;
+          const uiPerm = rawPerm ? toStudyPermissionLabel(rawPerm) : 'Admin';
+          return {
+            studyId: study.id,
+            studyName: study.name,
+            assigned: isAssigned,
+            permissions: uiPerm,
+          };
+        })
       );
     } else {
       setFirstName('');
@@ -121,7 +141,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       setTitle('Study Coordinator');
       setSitePermissions('None');
       setStudyRows(
-        BACKEND_STUDIES.map((study) => ({
+        studyList.map((study) => ({
           studyId: study.id,
           studyName: study.name,
           assigned: false,
@@ -131,7 +151,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     }
     setErrors({});
     setTouched({});
-  }, [userToEdit, isOpen]);
+  }, [userToEdit, isOpen, availableStudies]);
 
   // Field-level validation on blur
   const handleBlur = useCallback(

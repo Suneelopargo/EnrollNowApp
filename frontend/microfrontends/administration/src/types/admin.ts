@@ -10,6 +10,12 @@ export interface SiteAdminUser {
   email: string;
   sitePermissions: string;
   studies: string[];
+  studyAssignments?: Array<{
+    id: string;
+    name: string;
+    studyRole?: string | null;
+    studyPermission?: string | null;
+  }>;
   status: UserStatus;
   avatarColor?: string;
   phone?: string;

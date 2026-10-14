@@ -55,6 +55,44 @@ export interface GrantStudyAccessPayload {
   studyPermission: string;
 }
 
+export const STUDY_PERMISSION_TO_ROLE_CODE: Record<string, string> = {
+  'Admin': 'STUDY_ADMIN',
+  'Leader': 'STUDY_LEADER',
+  'RA': 'STUDY_RA',
+  'Read Only': 'STUDY_READ_ONLY',
+  'ReadOnly': 'STUDY_READ_ONLY',
+  'STUDY_ADMIN': 'STUDY_ADMIN',
+  'STUDY_LEADER': 'STUDY_LEADER',
+  'STUDY_RA': 'STUDY_RA',
+  'STUDY_READ_ONLY': 'STUDY_READ_ONLY',
+};
+
+export const ROLE_CODE_TO_STUDY_PERMISSION: Record<string, string> = {
+  'STUDY_ADMIN': 'Admin',
+  'STUDY_LEADER': 'Leader',
+  'STUDY_RA': 'RA',
+  'STUDY_READ_ONLY': 'Read Only',
+};
+
+export function normalizeStudyPermission(perm?: string | null): string {
+  if (!perm) return 'STUDY_ADMIN';
+  const trimmed = perm.trim();
+  if (STUDY_PERMISSION_TO_ROLE_CODE[trimmed]) {
+    return STUDY_PERMISSION_TO_ROLE_CODE[trimmed];
+  }
+  const clean = trimmed.toUpperCase();
+  if (clean === 'ADMIN' || clean === 'STUDY_ADMIN') return 'STUDY_ADMIN';
+  if (clean === 'LEADER' || clean === 'STUDY_LEADER') return 'STUDY_LEADER';
+  if (clean === 'RA' || clean === 'STUDY_RA') return 'STUDY_RA';
+  if (clean === 'READ ONLY' || clean === 'READONLY' || clean === 'STUDY_READ_ONLY') return 'STUDY_READ_ONLY';
+  return clean;
+}
+
+export function toStudyPermissionLabel(roleCode?: string | null): string {
+  if (!roleCode) return 'Admin';
+  return ROLE_CODE_TO_STUDY_PERMISSION[roleCode] || roleCode;
+}
+
 function resolveTenantId(tenantId?: string): string {
   const tid = (tenantId || getTenantId())?.trim();
   if (!tid) {
@@ -167,7 +205,15 @@ export const administrationApi = {
     tenantId?: string
   ): Promise<void> {
     const tid = resolveTenantId(tenantId);
-    await apiClient.post(`/api/v1/tenants/${tid}/studies/${studyId}/users/${userId}/access`, payload);
+    const cleanStudyId = String(studyId).trim().replace(/^\/+|\/+$/g, '');
+    const cleanUserId = String(userId).trim().replace(/^\/+|\/+$/g, '');
+    const permissionCode = normalizeStudyPermission(payload.studyPermission);
+    const roleMetadata = payload.studyRole?.trim() || 'Study Coordinator';
+
+    await apiClient.post(`/api/v1/tenants/${tid}/studies/${cleanStudyId}/users/${cleanUserId}/access`, {
+      studyRole: roleMetadata,
+      studyPermission: permissionCode,
+    });
   },
 
   /**
@@ -176,7 +222,9 @@ export const administrationApi = {
    */
   async removeStudyAccess(studyId: string, userId: string | number, tenantId?: string): Promise<void> {
     const tid = resolveTenantId(tenantId);
-    await apiClient.delete(`/api/v1/tenants/${tid}/studies/${studyId}/users/${userId}/access`);
+    const cleanStudyId = String(studyId).trim().replace(/^\/+|\/+$/g, '');
+    const cleanUserId = String(userId).trim().replace(/^\/+|\/+$/g, '');
+    await apiClient.delete(`/api/v1/tenants/${tid}/studies/${cleanStudyId}/users/${cleanUserId}/access`);
   },
 
   /**

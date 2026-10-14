@@ -4,7 +4,7 @@ import { requestConfirmation, ConfirmationContainer } from '../../../../shared/c
 import { administrationApi } from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
 import { UsersGrid } from './UsersGrid';
-import { AddUserModal, UserFormData } from './AddUserModal';
+import { AddUserModal, UserFormData, AvailableStudy, BACKEND_STUDIES } from './AddUserModal';
 import {
   StudiesView,
   ImportView,
@@ -19,6 +19,7 @@ export const SiteAdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTabId>('users');
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
   const [users, setUsers] = useState<SiteAdminUser[]>([]);
+  const [availableStudies, setAvailableStudies] = useState<AvailableStudy[]>(BACKEND_STUDIES);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
@@ -28,6 +29,11 @@ export const SiteAdminDashboard: React.FC = () => {
     try {
       const data = await administrationApi.getDetailedUsers();
       if (Array.isArray(data)) {
+        const studiesMap = new Map<string, AvailableStudy>();
+        for (const s of BACKEND_STUDIES) {
+          studiesMap.set(s.id, s);
+        }
+
         const mappedUsers: SiteAdminUser[] = data.map((u) => {
           const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
           const studyNames = Array.isArray(u.studies)
@@ -35,6 +41,14 @@ export const SiteAdminDashboard: React.FC = () => {
                 .map((s) => (typeof s === 'string' ? s : s?.name))
                 .filter(Boolean) as string[]
             : [];
+
+          if (Array.isArray(u.studies)) {
+            for (const s of u.studies) {
+              if (s && s.id && s.name) {
+                studiesMap.set(s.id, { id: s.id, name: s.name });
+              }
+            }
+          }
 
           return {
             id: String(u.id),
@@ -44,11 +58,14 @@ export const SiteAdminDashboard: React.FC = () => {
             email: u.primaryEmail || '',
             sitePermissions: u.sitePermission || '',
             studies: studyNames,
+            studyAssignments: Array.isArray(u.studies) ? u.studies : [],
             status: u.status === 'ACTIVE' ? 'Active' : 'Inactive',
             title: u.title || '',
           };
         });
+
         setUsers(mappedUsers);
+        setAvailableStudies(Array.from(studiesMap.values()));
       } else {
         setUsers([]);
       }
@@ -98,10 +115,16 @@ export const SiteAdminDashboard: React.FC = () => {
           // Sync study access assignments
           if (formData.assignedStudies && formData.assignedStudies.length > 0) {
             for (const s of formData.assignedStudies) {
-              await administrationApi.grantStudyAccess(s.studyId, userToEdit.id, {
-                studyRole: s.permission || 'Admin',
-                studyPermission: s.permission || 'Admin',
-              });
+              try {
+                await administrationApi.grantStudyAccess(s.studyId, userToEdit.id, {
+                  studyRole: formData.title || 'Study Coordinator',
+                  studyPermission: s.permission,
+                });
+              } catch (studyErr: any) {
+                console.error(`Failed to assign study ${s.studyName}:`, studyErr);
+                const sMsg = studyErr?.response?.data?.message || studyErr?.message || 'Access error';
+                toast.warning(`Study access to '${s.studyName}' could not be granted: ${sMsg}`);
+              }
             }
           }
 
@@ -132,10 +155,16 @@ export const SiteAdminDashboard: React.FC = () => {
           // If study assignments were selected, grant access
           if (created?.id && formData.assignedStudies && formData.assignedStudies.length > 0) {
             for (const s of formData.assignedStudies) {
-              await administrationApi.grantStudyAccess(s.studyId, created.id, {
-                studyRole: s.permission || 'Admin',
-                studyPermission: s.permission || 'Admin',
-              });
+              try {
+                await administrationApi.grantStudyAccess(s.studyId, created.id, {
+                  studyRole: formData.title || 'Study Coordinator',
+                  studyPermission: s.permission,
+                });
+              } catch (studyErr: any) {
+                console.error(`Failed to assign study ${s.studyName}:`, studyErr);
+                const sMsg = studyErr?.response?.data?.message || studyErr?.message || 'Access error';
+                toast.warning(`User created, but study access to '${s.studyName}' could not be granted: ${sMsg}`);
+              }
             }
           }
 
@@ -335,6 +364,7 @@ export const SiteAdminDashboard: React.FC = () => {
         }}
         onSave={handleSaveUser}
         userToEdit={userToEdit}
+        availableStudies={availableStudies}
         onLockUser={handleLockUserFromModal}
         onUnlockUser={handleUnlockUserFromModal}
         onResendEnrollment={handleResendEnrollment}
