@@ -181,8 +181,25 @@ export const SiteAdminDashboard: React.FC = () => {
             }
           }
 
+          // Send invitation email to the newly registered email address
+          let invitationSent = false;
+          if (created?.id) {
+            try {
+              await administrationApi.sendUserInvitation(created.id);
+              invitationSent = true;
+            } catch (invErr: any) {
+              console.error('Failed to send invitation email:', invErr);
+              const invMsg = invErr?.response?.data?.message || invErr?.message || 'Email delivery failed.';
+              toast.warning(`User created, but invitation email could not be sent: ${invMsg}`);
+            }
+          }
+
           await fetchUsers(true);
-          toast.success(`User '${formData.firstName} ${formData.lastName}' created successfully.`);
+          if (invitationSent) {
+            toast.success(`User '${formData.firstName} ${formData.lastName}' created and invitation sent to ${formData.email}.`);
+          } else {
+            toast.success(`User '${formData.firstName} ${formData.lastName}' created successfully.`);
+          }
           setIsAddUserModalOpen(false);
           setUserToEdit(null);
         } catch (err: any) {

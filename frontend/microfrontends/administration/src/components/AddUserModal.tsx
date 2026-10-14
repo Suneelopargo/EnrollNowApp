@@ -99,7 +99,10 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     email?: boolean;
   }>({});
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   useEffect(() => {
+    setIsSubmitting(false);
     const studyList = (availableStudies && availableStudies.length > 0) ? availableStudies : BACKEND_STUDIES;
 
     if (userToEdit) {
@@ -205,8 +208,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!isEditMode) {
       // Mark all as touched on submit
@@ -239,16 +243,21 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         studyName: r.studyName,
       }));
 
-    void onSave({
-      ...(userToEdit ? { id: userToEdit.id } : {}),
-      firstName: (firstName || userToEdit?.firstName || '').trim(),
-      lastName: (lastName || userToEdit?.lastName || '').trim(),
-      email: (email || userToEdit?.email || '').trim(),
-      title: title.trim(),
-      sitePermissions,
-      assignedStudies: assigned,
-      unassignedStudies: unassigned,
-    });
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        ...(userToEdit ? { id: userToEdit.id } : {}),
+        firstName: (firstName || userToEdit?.firstName || '').trim(),
+        lastName: (lastName || userToEdit?.lastName || '').trim(),
+        email: (email || userToEdit?.email || '').trim(),
+        title: title.trim(),
+        sitePermissions,
+        assignedStudies: assigned,
+        unassignedStudies: unassigned,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const allAssigned = studyRows.length > 0 && studyRows.every((r) => r.assigned);
@@ -312,15 +321,17 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         type="button"
         className="btn site-admin-btn-save"
         onClick={handleSubmit}
+        disabled={isSubmitting}
       >
         <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
-        <span>Save</span>
+        <span>{isSubmitting ? 'Saving...' : 'Save'}</span>
       </button>
 
       <button
         type="button"
         className="btn site-admin-btn-resend"
         onClick={handleResendEnrollment}
+        disabled={isSubmitting}
       >
         <Send size={15} aria-hidden="true" />
         <span>Resend Enrollment Email</span>
@@ -330,6 +341,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         type="button"
         className="btn site-admin-btn-reset-pw"
         onClick={handleResetPassword}
+        disabled={isSubmitting}
       >
         <KeyRound size={15} aria-hidden="true" />
         <span>Reset Password</span>
@@ -340,6 +352,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           type="button"
           className="btn site-admin-btn-unlock"
           onClick={handleUnlockAccount}
+          disabled={isSubmitting}
         >
           <Lock size={15} aria-hidden="true" />
           <span>Unlock Account</span>
@@ -349,6 +362,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           type="button"
           className="btn site-admin-btn-lock"
           onClick={handleLockAccount}
+          disabled={isSubmitting}
         >
           <Lock size={15} aria-hidden="true" />
           <span>Lock Account</span>
@@ -361,14 +375,16 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         type="button"
         className="btn btn-primary site-admin-btn-send-invitation"
         onClick={handleSubmit}
+        disabled={isSubmitting}
       >
         <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
-        <span>Send Invitation</span>
+        <span>{isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}</span>
       </button>
       <button
         type="button"
         className="btn btn-secondary"
         onClick={onClose}
+        disabled={isSubmitting}
       >
         <span>Cancel</span>
       </button>
