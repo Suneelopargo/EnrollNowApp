@@ -208,18 +208,20 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Mark all as touched on submit
-    setTouched({ firstName: true, lastName: true, email: true });
+    if (!isEditMode) {
+      // Mark all as touched on submit
+      setTouched({ firstName: true, lastName: true, email: true });
 
-    // Validate form against schema
-    const validationErrors = validateForm(
-      { firstName, lastName, email },
-      FORM_VALIDATION_SCHEMA
-    );
+      // Validate form against schema
+      const validationErrors = validateForm(
+        { firstName, lastName, email },
+        FORM_VALIDATION_SCHEMA
+      );
 
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        return;
+      }
     }
 
     const assigned = studyRows
@@ -239,9 +241,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
     void onSave({
       ...(userToEdit ? { id: userToEdit.id } : {}),
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim(),
+      firstName: (firstName || userToEdit?.firstName || '').trim(),
+      lastName: (lastName || userToEdit?.lastName || '').trim(),
+      email: (email || userToEdit?.email || '').trim(),
       title: title.trim(),
       sitePermissions,
       assignedStudies: assigned,
@@ -283,11 +285,22 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     }
   };
 
-  const handleResetPassword = async () => {
+  const handleResetPassword = () => {
     if (!userToEdit) return;
-    if (onResetPassword) {
-      await onResetPassword(userToEdit);
-    }
+    void requestConfirmation({
+      title: `Reset Password for: ${userToEdit.name}`,
+      intent: 'danger',
+      confirmText: 'Reset Password',
+      cancelText: 'Cancel',
+      loadingText: 'Resetting password...',
+      message:
+        "The user's current password will expire immediately. The user will receive an email with a link to reset his or her password. Are you sure you want to proceed?",
+      onConfirm: async () => {
+        if (onResetPassword) {
+          await onResetPassword(userToEdit);
+        }
+      },
+    });
   };
 
   const isEditMode = !!userToEdit;
@@ -374,38 +387,6 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         {isEditMode ? (
           /* Edit User Mode Field Layout */
           <div className="site-admin-form-grid">
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-first-name">
-                First Name <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-first-name"
-                type="text"
-                placeholder={errors.firstName || 'Enter First Name'}
-                className="form-input"
-                value={firstName}
-                onChange={(e) => handleChange('firstName', e.target.value, setFirstName)}
-                onBlur={() => handleBlur('firstName')}
-                aria-invalid={!!errors.firstName}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-last-name">
-                Last Name <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-last-name"
-                type="text"
-                placeholder={errors.lastName || 'Enter Last Name'}
-                className="form-input"
-                value={lastName}
-                onChange={(e) => handleChange('lastName', e.target.value, setLastName)}
-                onBlur={() => handleBlur('lastName')}
-                aria-invalid={!!errors.lastName}
-              />
-            </div>
-
             <div className="form-group">
               <label className="form-label" htmlFor="site-admin-email-static">
                 Email <small className="text-muted">(Immutable per contract)</small>

@@ -15,7 +15,6 @@ import {
   X,
   Mail,
   Pencil,
-  Trash2,
   CheckCircle2,
   Ban,
   ShieldCheck,
@@ -134,11 +133,6 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
     params.context?.onToggleStatus?.(user);
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    params.context?.onDeleteUser?.(user);
-  };
-
   const isUserActive = user.status === 'Active';
 
   return (
@@ -169,16 +163,6 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
         ) : (
           <CheckCircle2 size={15} aria-hidden="true" />
         )}
-      </button>
-
-      <button
-        type="button"
-        className="participant-grid__row-action participant-grid__row-action--danger"
-        onClick={handleDelete}
-        title="Delete user"
-        aria-label={`Delete ${user.name}`}
-      >
-        <Trash2 size={15} aria-hidden="true" />
       </button>
     </div>
   );

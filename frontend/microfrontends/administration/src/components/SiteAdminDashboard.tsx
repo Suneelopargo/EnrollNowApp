@@ -139,8 +139,21 @@ export const SiteAdminDashboard: React.FC = () => {
           setIsAddUserModalOpen(false);
           setUserToEdit(null);
         } catch (err: any) {
-          const msg = err?.response?.data?.message || err?.message || 'Failed to update user.';
-          toast.error(msg, { title: 'Update Failed' });
+          const status = err?.response?.status;
+          const rawMsg = err?.response?.data?.message || err?.message || '';
+          const isEmailConflict =
+            status === 409 ||
+            rawMsg.toLowerCase().includes('already exist') ||
+            rawMsg.toLowerCase().includes('email already exists');
+
+          if (isEmailConflict) {
+            toast.error(
+              'A user with this email address already exists. Use the Reset Password or Resend Enrollment options if they cannot access the system.'
+            );
+          } else {
+            const msg = rawMsg || 'Failed to update user.';
+            toast.error(msg, { title: 'Update Failed' });
+          }
         }
       } else {
         // Create new user
@@ -173,8 +186,21 @@ export const SiteAdminDashboard: React.FC = () => {
           setIsAddUserModalOpen(false);
           setUserToEdit(null);
         } catch (err: any) {
-          const msg = err?.response?.data?.message || err?.message || 'Failed to create user.';
-          toast.error(msg, { title: 'Creation Failed' });
+          const status = err?.response?.status;
+          const rawMsg = err?.response?.data?.message || err?.message || '';
+          const isEmailConflict =
+            status === 409 ||
+            rawMsg.toLowerCase().includes('already exist') ||
+            rawMsg.toLowerCase().includes('email already exists');
+
+          if (isEmailConflict) {
+            toast.error(
+              'A user with this email address already exists. Use the Reset Password or Resend Enrollment options if they cannot access the system.'
+            );
+          } else {
+            const msg = rawMsg || 'Failed to create user.';
+            toast.error(msg, { title: 'Creation Failed' });
+          }
         }
       }
     },
