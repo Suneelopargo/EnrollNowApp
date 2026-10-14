@@ -185,6 +185,26 @@ describe('Central Axios API Client & Interceptors', () => {
       // Content-Type should be removed so Axios/browser sets boundary
       expect(result.headers['Content-Type']).toBeUndefined();
     });
+
+    it('normalizes relative /api URLs and prevents duplicate /api/api prefixes', async () => {
+      const client = createApiClient({ baseURL: '/api' });
+      const requestInterceptor = (client.interceptors.request as any).handlers[0].fulfilled;
+
+      // Passing '/api/v1/studies' with baseURL '/api'
+      const config1 = { baseURL: '/api', url: '/api/v1/studies', headers: {} };
+      const res1 = await requestInterceptor(config1);
+      expect(res1.url).toBe('/v1/studies'); // Axios combines /api + /v1/studies -> /api/v1/studies
+
+      // Passing '/v1/studies' with baseURL '/api'
+      const config2 = { baseURL: '/api', url: '/v1/studies', headers: {} };
+      const res2 = await requestInterceptor(config2);
+      expect(res2.url).toBe('/v1/studies');
+
+      // Strips accidental localhost:8080 backend origin
+      const config3 = { baseURL: '/api', url: 'http://localhost:8080/api/v1/studies', headers: {} };
+      const res3 = await requestInterceptor(config3);
+      expect(res3.url).toBe('/v1/studies');
+    });
   });
 
   describe('Response Interceptor & 401 Session Handling', () => {

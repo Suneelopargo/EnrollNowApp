@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { authApi } from './api/authApi';
 import { apiClient } from './api-client';
+import { setApiMode } from './api-config';
 
 // Node.js environment storage & event mocking
 const storage: Record<string, string> = {};
@@ -68,7 +69,8 @@ describe('authApi Service Contract', () => {
   });
 
   describe('login', () => {
-    it('executes POST /api/v1/auth/login without requiring existing token', async () => {
+    it('executes POST /api/v1/auth/login in mock mode', async () => {
+      setApiMode('mock');
       const mockResponse = {
         data: {
           success: true,
@@ -100,12 +102,41 @@ describe('authApi Service Contract', () => {
       expect(result.user.username).toBe('coordinator1');
     });
 
-    it('rejects malformed response without token', async () => {
-      vi.mocked(apiClient.post).mockResolvedValueOnce({
+    it('executes POST /api/v1/tenants/{tenantId}/auth/login in real mode', async () => {
+      setApiMode('real');
+      const mockResponse = {
         data: {
-          success: true,
-          data: {},
+          token: 'jwt-fresh-real-token-888',
+          userId: 'user-uuid-123',
+          email: 'admin@enrollnow.local',
+          firstName: 'Admin',
+          lastName: 'User',
+          tenantId: '11111111-1111-1111-1111-111111111111',
         },
+      };
+
+      vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse);
+
+      const result = await authApi.login({
+        username: 'admin@enrollnow.local',
+        password: 'Password123!',
+      });
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/v1/tenants/11111111-1111-1111-1111-111111111111/auth/login',
+        {
+          email: 'admin@enrollnow.local',
+          password: 'Password123!',
+        }
+      );
+      expect(result.token).toBe('jwt-fresh-real-token-888');
+      expect(result.user.email).toBe('admin@enrollnow.local');
+    });
+
+    it('rejects malformed response without token', async () => {
+      setApiMode('real');
+      vi.mocked(apiClient.post).mockResolvedValueOnce({
+        data: {},
       });
 
       await expect(

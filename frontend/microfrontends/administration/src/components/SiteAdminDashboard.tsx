@@ -4,7 +4,7 @@ import { requestConfirmation, ConfirmationContainer } from '../../../../shared/c
 import { administrationApi } from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
 import { UsersGrid } from './UsersGrid';
-import { AddUserModal } from './AddUserModal';
+import { AddUserModal, UserFormData } from './AddUserModal';
 import {
   StudiesView,
   ImportView,
@@ -14,33 +14,52 @@ import {
   GeneralSettingsView,
 } from './SiteAdminViews';
 import { SiteAdminUser, AdminTabId, ExportSubOption } from '../types/admin';
-import { INITIAL_SITE_USERS } from '../mockData';
 
 export const SiteAdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTabId>('users');
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
-  const [users, setUsers] = useState<SiteAdminUser[]>(INITIAL_SITE_USERS);
+  const [users, setUsers] = useState<SiteAdminUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async (quiet = false) => {
     if (!quiet) setLoadingUsers(true);
+    setUsersError(null);
     try {
-      const data = await administrationApi.getUsers();
-      if (Array.isArray(data) && data.length > 0) {
-        const mappedUsers: SiteAdminUser[] = data.map((u: any) => ({
-          id: String(u.id ?? u.userId ?? `usr-${Math.random().toString(36).slice(2, 7)}`),
-          name: u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username || 'User',
-          email: u.email || `${u.username || 'user'}@enrollnow.local`,
-          sitePermissions: u.sitePermissions || u.role || (u.roles && u.roles[0]?.roleName) || 'Site Admin',
-          studies: Array.isArray(u.studies) ? u.studies : (u.assignedStudies || ['AD MCIData']),
-          status: (u.status === 'Inactive' || u.active === false) ? 'Inactive' : 'Active',
-          title: u.title || 'Team Member',
-          createdAt: u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : '2026-01-10',
-        }));
+      const data = await administrationApi.getDetailedUsers();
+      if (Array.isArray(data)) {
+        const mappedUsers: SiteAdminUser[] = data.map((u) => {
+          const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
+          const studyNames = Array.isArray(u.studies)
+            ? u.studies
+                .map((s) => (typeof s === 'string' ? s : s?.name))
+                .filter(Boolean) as string[]
+            : [];
+
+          return {
+            id: String(u.id),
+            name: fullName,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            email: u.primaryEmail || '',
+            sitePermissions: u.sitePermission || '',
+            studies: studyNames,
+            status: u.status === 'ACTIVE' ? 'Active' : 'Inactive',
+            title: u.title || '',
+          };
+        });
         setUsers(mappedUsers);
+      } else {
+        setUsers([]);
       }
-    } catch {
-      // Retain current or fallback users if API is unavailable
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to load user directory from backend.';
+      setUsersError(msg);
+      setUsers([]);
+      toast.error(msg, { title: 'User Directory Error' });
     } finally {
       if (!quiet) setLoadingUsers(false);
     }
@@ -66,153 +85,183 @@ export const SiteAdminDashboard: React.FC = () => {
   }, []);
 
   const handleSaveUser = useCallback(
-    async (userData: Partial<SiteAdminUser>) => {
+    async (formData: UserFormData) => {
       if (userToEdit) {
-        // Edit existing
+        // Edit existing user
         try {
-          await administrationApi.updateUser(userToEdit.id, userData);
-        } catch {
-          // Soft-fail: local state is updated below
-        }
-        setUsers((prev) =>
-          prev.map((u) => (u.id === userToEdit.id ? ({ ...u, ...userData } as SiteAdminUser) : u))
-        );
-        toast.success(`User '${userData.name}' updated successfully.`);
-      } else {
-        // Create new
-        const newUser: SiteAdminUser = {
-          id: `usr-${Date.now()}`,
-          name: userData.name || '',
-          email: userData.email || '',
-          sitePermissions: userData.sitePermissions || 'None',
-          studies: userData.studies || [],
-          status: userData.status || 'Active',
-          title: userData.title,
-          createdAt: new Date().toISOString().slice(0, 10),
-        };
-        try {
-          const created = await administrationApi.createUser(newUser);
-          if (created?.id) {
-            newUser.id = String(created.id);
+          await administrationApi.updateUser(userToEdit.id, {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            title: formData.title,
+          });
+
+          // Sync study access assignments
+          if (formData.assignedStudies && formData.assignedStudies.length > 0) {
+            for (const s of formData.assignedStudies) {
+              await administrationApi.grantStudyAccess(s.studyId, userToEdit.id, {
+                studyRole: s.permission || 'Admin',
+                studyPermission: s.permission || 'Admin',
+              });
+            }
           }
-        } catch {
-          // Soft-fail: local state is updated below
+
+          if (formData.unassignedStudies && formData.unassignedStudies.length > 0) {
+            for (const s of formData.unassignedStudies) {
+              await administrationApi.removeStudyAccess(s.studyId, userToEdit.id).catch(() => {});
+            }
+          }
+
+          await fetchUsers(true);
+          toast.success(`User '${formData.firstName} ${formData.lastName}' updated successfully.`);
+          setIsAddUserModalOpen(false);
+          setUserToEdit(null);
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || 'Failed to update user.';
+          toast.error(msg, { title: 'Update Failed' });
         }
-        setUsers((prev) => [newUser, ...prev]);
-        toast.success(`Invitation sent to ${newUser.name} (${newUser.email}) successfully.`);
+      } else {
+        // Create new user
+        try {
+          const created = await administrationApi.createUser({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email,
+            title: formData.title,
+          });
+
+          // If study assignments were selected, grant access
+          if (created?.id && formData.assignedStudies && formData.assignedStudies.length > 0) {
+            for (const s of formData.assignedStudies) {
+              await administrationApi.grantStudyAccess(s.studyId, created.id, {
+                studyRole: s.permission || 'Admin',
+                studyPermission: s.permission || 'Admin',
+              });
+            }
+          }
+
+          await fetchUsers(true);
+          toast.success(`User '${formData.firstName} ${formData.lastName}' created successfully.`);
+          setIsAddUserModalOpen(false);
+          setUserToEdit(null);
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || 'Failed to create user.';
+          toast.error(msg, { title: 'Creation Failed' });
+        }
       }
-      setIsAddUserModalOpen(false);
-      setUserToEdit(null);
     },
-    [userToEdit]
+    [userToEdit, fetchUsers]
   );
 
-  const handleLockUserFromModal = useCallback(async (user: SiteAdminUser) => {
-    try {
-      await administrationApi.deactivateUser(user.id);
-    } catch {
-      // Soft-fail
-    }
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: 'Inactive' } : u))
-    );
-    toast.success('User Locked', { title: 'Success!' });
+  const handleLockUserFromModal = useCallback(
+    async (user: SiteAdminUser) => {
+      try {
+        await administrationApi.deactivateUser(user.id);
+        await fetchUsers(true);
+        toast.warning(`User account for '${user.name}' has been locked (deactivated).`);
+        setIsAddUserModalOpen(false);
+        setUserToEdit(null);
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || 'Failed to deactivate user.';
+        toast.error(msg, { title: 'Lock Failed' });
+      }
+    },
+    [fetchUsers]
+  );
+
+  const handleUnlockUserFromModal = useCallback(async () => {
+    toast.info('User reactivation is not supported by the Sprint 1 backend API.', {
+      title: 'Action Unsupported',
+    });
     setIsAddUserModalOpen(false);
     setUserToEdit(null);
   }, []);
 
-  const handleUnlockUserFromModal = useCallback(async (user: SiteAdminUser) => {
+  const handleResendEnrollment = useCallback(async (user: SiteAdminUser) => {
     try {
-      await administrationApi.activateUser(user.id);
-    } catch {
-      // Soft-fail
+      await administrationApi.sendUserInvitation(user.id);
+      toast.success(`Enrollment invitation sent to ${user.email}.`);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to send enrollment invitation.';
+      toast.error(msg, { title: 'Invitation Failed' });
     }
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: 'Active' } : u))
-    );
-    toast.success('User Unlocked', { title: 'Success!' });
-    setIsAddUserModalOpen(false);
-    setUserToEdit(null);
-  }, []);
-
-  const handleResendEnrollment = useCallback((user: SiteAdminUser) => {
-    toast.success(`Enrollment invitation email resent to ${user.email}.`);
   }, []);
 
   const handleResetPassword = useCallback(async (user: SiteAdminUser) => {
     try {
-      await administrationApi.resetPassword(user.id, {});
-    } catch {
-      // Soft-fail
+      await administrationApi.requestPasswordReset(user.email);
+      toast.success(`Password reset instructions sent to ${user.email}.`);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to send password reset request.';
+      toast.error(msg, { title: 'Reset Failed' });
     }
-    toast.success(`Password reset instructions sent to ${user.email}.`);
   }, []);
 
-  const handleDeleteUser = useCallback((user: SiteAdminUser) => {
-    void requestConfirmation({
-      entityName: user.name,
-      intent: 'danger',
-      title: 'Delete user account',
-      confirmText: 'Delete User',
-      loadingText: 'Deleting user account...',
-      message: `Delete user account “${user.name}” (${user.email})? This action cannot be undone.`,
-      confirmWord: 'DELETE',
-      onConfirm: async () => {
-        try {
-          await administrationApi.deactivateUser(user.id);
-        } catch {
-          // Soft-fail: local deletion persists
-        }
-        setUsers((prev) => prev.filter((u) => u.id !== user.id));
-        toast.success(`User '${user.name}' has been deleted.`);
-      },
-    });
-  }, []);
-
-  const handleToggleStatus = useCallback((user: SiteAdminUser) => {
-    const isCurrentlyActive = user.status === 'Active';
-    if (isCurrentlyActive) {
+  const handleDeleteUser = useCallback(
+    (user: SiteAdminUser) => {
       void requestConfirmation({
         entityName: user.name,
         intent: 'warning',
         title: 'Deactivate user account',
         confirmText: 'Deactivate User',
         loadingText: 'Deactivating user account...',
-        message: `Are you sure you want to deactivate “${user.name}” (${user.email})? The user will not be able to log in until reactivated.`,
+        message: `The backend does not support physical user deletion. Deactivate user account “${user.name}” (${user.email}) instead?`,
         onConfirm: async () => {
           try {
             await administrationApi.deactivateUser(user.id);
-          } catch {
-            // Soft-fail
+            await fetchUsers(true);
+            toast.warning(`User '${user.name}' deactivated (status: Disabled).`);
+          } catch (err: any) {
+            const msg =
+              err?.response?.data?.message ||
+              err?.message ||
+              'Failed to deactivate user.';
+            toast.error(msg, { title: 'Deactivation Failed' });
           }
-          setUsers((prev) =>
-            prev.map((u) => (u.id === user.id ? { ...u, status: 'Inactive' } : u))
-          );
-          toast.warning(`User '${user.name}' marked as Inactive.`);
         },
       });
-    } else {
-      void requestConfirmation({
-        entityName: user.name,
-        intent: 'info',
-        title: 'Activate user account',
-        confirmText: 'Activate User',
-        loadingText: 'Activating user account...',
-        message: `Are you sure you want to reactivate “${user.name}” (${user.email})?`,
-        onConfirm: async () => {
-          try {
-            await administrationApi.activateUser(user.id);
-          } catch {
-            // Soft-fail
-          }
-          setUsers((prev) =>
-            prev.map((u) => (u.id === user.id ? { ...u, status: 'Active' } : u))
-          );
-          toast.success(`User '${user.name}' marked as Active.`);
-        },
-      });
-    }
-  }, []);
+    },
+    [fetchUsers]
+  );
+
+  const handleToggleStatus = useCallback(
+    (user: SiteAdminUser) => {
+      const isCurrentlyActive = user.status === 'Active';
+      if (isCurrentlyActive) {
+        void requestConfirmation({
+          entityName: user.name,
+          intent: 'warning',
+          title: 'Deactivate user account',
+          confirmText: 'Deactivate User',
+          loadingText: 'Deactivating user account...',
+          message: `Are you sure you want to deactivate “${user.name}” (${user.email})? The user will not be able to log in until reactivated.`,
+          onConfirm: async () => {
+            try {
+              await administrationApi.deactivateUser(user.id);
+              await fetchUsers(true);
+              toast.warning(`User '${user.name}' deactivated (status: Disabled).`);
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message ||
+                err?.message ||
+                'Failed to deactivate user.';
+              toast.error(msg, { title: 'Deactivation Failed' });
+            }
+          },
+        });
+      } else {
+        toast.info('User reactivation is not supported by the Sprint 1 backend API.', {
+          title: 'Action Unsupported',
+        });
+      }
+    },
+    [fetchUsers]
+  );
 
   const handleRefresh = useCallback(() => {
     fetchUsers(true);
@@ -225,11 +274,14 @@ export const SiteAdminDashboard: React.FC = () => {
         return (
           <UsersGrid
             users={users}
+            loading={loadingUsers}
+            error={usersError}
             onAddUser={handleOpenAddUser}
             onEditUser={handleOpenEditUser}
             onDeleteUser={handleDeleteUser}
             onToggleStatus={handleToggleStatus}
             onRefresh={handleRefresh}
+            onRetry={() => fetchUsers(false)}
           />
         );
       case 'studies':
@@ -248,11 +300,14 @@ export const SiteAdminDashboard: React.FC = () => {
         return (
           <UsersGrid
             users={users}
+            loading={loadingUsers}
+            error={usersError}
             onAddUser={handleOpenAddUser}
             onEditUser={handleOpenEditUser}
             onDeleteUser={handleDeleteUser}
             onToggleStatus={handleToggleStatus}
             onRefresh={handleRefresh}
+            onRetry={() => fetchUsers(false)}
           />
         );
     }

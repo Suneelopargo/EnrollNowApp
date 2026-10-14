@@ -2,7 +2,7 @@
 import { getCachedRuntimeConfig } from './runtime-config';
 
 export const DEFAULT_BACKEND_PORT = 8080;
-export const DEFAULT_API_BASE_URL = `http://localhost:${DEFAULT_BACKEND_PORT}`;
+export const DEFAULT_API_BASE_URL = '/api';
 
 /**
  * Normalizes a URL by removing trailing slashes and trimming surrounding whitespace.
@@ -86,7 +86,7 @@ export function getApiBaseUrl(): string {
     // runtime config resolution fallback
   }
 
-  // 4. Default fallback: http://localhost:8080
+  // 4. Default fallback: /api (proxied in dev, reverse-proxied in prod)
   return DEFAULT_API_BASE_URL;
 }
 
@@ -141,7 +141,99 @@ export function getApiMode(): ApiMode {
     }
   }
 
-  return 'mock';
+  return 'real';
+}
+
+export const DEFAULT_VERIFICATION_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+
+let activeTenantId: string | null = null;
+
+/**
+ * Programmatically set or override the active tenant ID.
+ */
+export function setTenantId(tenantId: string | null): void {
+  activeTenantId = tenantId ? tenantId.trim() : null;
+}
+
+/**
+ * Resolves the authenticated tenant ID.
+ * Prioritizes authenticated context (localStorage user profile, JWT payload claims, stored tenant),
+ * and falls back to isolated development verification ID only in development mode.
+ */
+export function getTenantId(): string | null {
+  if (activeTenantId) {
+    return activeTenantId;
+  }
+
+  // 1. Authenticated user profile in localStorage
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const userRaw = localStorage.getItem('enrollnow_user');
+      if (userRaw) {
+        const parsed = JSON.parse(userRaw);
+        if (parsed?.tenantId && typeof parsed.tenantId === 'string' && parsed.tenantId.trim().length > 0) {
+          return parsed.tenantId.trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stored = localStorage.getItem('enrollnow_tenant_id') || sessionStorage?.getItem('enrollnow_tenant_id');
+      if (stored && stored.trim().length > 0) {
+        return stored.trim();
+      }
+    } catch {
+      // ignore
+    }
+
+    // Decode JWT in localStorage to extract tenantId claim
+    try {
+      const token = localStorage.getItem('enrollnow_token');
+      if (token && token.includes('.')) {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          if (payload?.tenantId && typeof payload.tenantId === 'string' && payload.tenantId.trim().length > 0) {
+            return payload.tenantId.trim();
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Check environment variable VITE_DEFAULT_TENANT_ID
+  let envTenant: string | undefined;
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_DEFAULT_TENANT_ID) {
+      envTenant = (import.meta as any).env.VITE_DEFAULT_TENANT_ID;
+    }
+  } catch {}
+
+  if (!envTenant) {
+    try {
+      if (typeof process !== 'undefined' && process.env?.VITE_DEFAULT_TENANT_ID) {
+        envTenant = process.env.VITE_DEFAULT_TENANT_ID;
+      }
+    } catch {}
+  }
+
+  if (envTenant && envTenant.trim().length > 0) {
+    return envTenant.trim();
+  }
+
+  // 3. Isolated development-only verification tenant fallback
+  const isDev =
+    (typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.DEV)) ||
+    (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production');
+  if (isDev) {
+    return DEFAULT_VERIFICATION_TENANT_ID;
+  }
+
+  return null;
 }
 
 /**

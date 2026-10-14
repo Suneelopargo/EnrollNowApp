@@ -11,6 +11,7 @@ export interface AuthUser {
   roles: string[];
   siteCodes?: string[];
   organizationName?: string;
+  tenantId?: string;
 }
 
 export interface AuthState {

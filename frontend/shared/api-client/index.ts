@@ -1,6 +1,6 @@
 // frontend/shared/api-client/index.ts - Authoritative Centralized API Client & Interceptors
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosAdapter } from 'axios';
-import { getApiBaseUrl, getApiMode, ApiMode } from '../api-config';
+import { getApiBaseUrl, getApiMode, getTenantId, ApiMode } from '../api-config';
 import { telemetry } from '../telemetry';
 import { mockAdapter } from '../mock-api/mockAdapter';
 import { toast } from '../toaster';
@@ -236,6 +236,36 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
   // REQUEST INTERCEPTOR
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
+      // 0. URL Normalization: Enforce relative /api architecture and prevent duplicate prefixes
+      if (config.url) {
+        let url = config.url.trim();
+
+        // If a request accidentally included the localhost backend origin, strip it
+        // so it routes through the centralized proxy
+        if (url.startsWith('http://localhost:8080') || url.startsWith('http://127.0.0.1:8080')) {
+          url = url.replace(/^http:\/\/(localhost|127\.0\.0\.1):8080/, '');
+        }
+
+        const base = (config.baseURL || '').trim().replace(/\/+$/, '');
+
+        // If baseURL is '/api' (or ends with '/api') and the url also begins with '/api/',
+        // strip the leading '/api' so Axios doesn't generate '/api/api/...'
+        if (base === '/api' || base.endsWith('/api')) {
+          if (url.startsWith('/api/')) {
+            url = url.substring(4); // e.g. '/api/v1/studies' -> '/v1/studies'
+          } else if (url === '/api') {
+            url = '';
+          }
+        } else if (!base && !url.startsWith('http://') && !url.startsWith('https://')) {
+          // If no baseURL is configured, guarantee the URL starts with /api
+          if (!url.startsWith('/api/') && url !== '/api') {
+            url = `/api${url.startsWith('/') ? '' : '/'}${url}`;
+          }
+        }
+
+        config.url = url;
+      }
+
       // 1. Common Accept header
       if (!config.headers.Accept) {
         config.headers.Accept = 'application/json';
@@ -252,7 +282,7 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
       }
 
       // 3. Dynamic context headers (Tenant, Org, etc.)
-      const tenantId = activeHeaderProvider.getTenantId ? activeHeaderProvider.getTenantId() : null;
+      const tenantId = activeHeaderProvider.getTenantId ? activeHeaderProvider.getTenantId() : getTenantId();
       if (tenantId && !config.headers['X-Tenant-Id']) {
         config.headers['X-Tenant-Id'] = tenantId;
       }
@@ -296,7 +326,7 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
     async (error) => {
       const normalized = normalizeApiError(error);
       const url = error.config?.url || '';
-      const isLoginRequest = url.includes('/api/v1/auth/login');
+      const isLoginRequest = url.includes('/auth/login');
 
       // Telemetry error tracking
       telemetry.track({

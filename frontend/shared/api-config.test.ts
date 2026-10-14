@@ -65,11 +65,11 @@ describe('Centralized API Configuration', () => {
   });
 
   describe('getApiBaseUrl', () => {
-    it('defaults to http://localhost:8080 when no environment variable is set', () => {
-      expect(DEFAULT_BACKEND_PORT).toBe(8080);
-      expect(DEFAULT_API_BASE_URL).toBe('http://localhost:8080');
+    it('defaults to /api when no environment variable is set', () => {
+      delete process.env.VITE_API_BASE_URL;
+      expect(DEFAULT_API_BASE_URL).toBe('/api');
       const url = getApiBaseUrl();
-      expect(url).toBe('http://localhost:8080');
+      expect(url).toBe('/api');
     });
 
     it('reads VITE_API_BASE_URL and normalizes trailing slashes', () => {
@@ -95,10 +95,10 @@ describe('Centralized API Configuration', () => {
   });
 
   describe('ApiMode & Error Simulation Config', () => {
-    it('defaults to mock mode when VITE_API_MODE is unset', () => {
+    it('defaults to real mode when VITE_API_MODE is unset', () => {
       setApiMode(null);
       delete process.env.VITE_API_MODE;
-      expect(getApiMode()).toBe('mock');
+      expect(getApiMode()).toBe('real');
     });
 
     it('reads VITE_API_MODE=real from environment', () => {

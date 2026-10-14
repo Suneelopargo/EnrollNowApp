@@ -75,7 +75,10 @@ const UserEmailCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (par
 };
 
 const UserPermissionCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (params) => {
-  const permission = params.value || 'Viewer';
+  const permission = params.value;
+  if (!permission) {
+    return <span className="site-admin-permission-none">—</span>;
+  }
 
   return (
     <div className="site-admin-permission-cell">
@@ -186,24 +189,30 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
 // ---------------------------------------------------------------------------
 export interface UsersGridProps {
   users: SiteAdminUser[];
+  loading?: boolean;
+  error?: string | null;
   onAddUser: () => void;
   onEditUser: (user: SiteAdminUser) => void;
   onDeleteUser: (user: SiteAdminUser) => void;
   onToggleStatus: (user: SiteAdminUser) => void;
   onRefresh?: () => void;
+  onRetry?: () => void;
 }
 
 export const UsersGrid: React.FC<UsersGridProps> = ({
   users,
+  loading = false,
+  error = null,
   onAddUser,
   onEditUser,
   onDeleteUser,
   onToggleStatus,
   onRefresh,
+  onRetry,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<SiteAdminUser> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'Active' | 'Disabled' | 'All'>('Active');
+  const [statusFilter, setStatusFilter] = useState<'Active' | 'Disabled' | 'All'>('All');
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
@@ -572,6 +581,20 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
       </div>
 
       <div className="site-admin-users-card-body">
+        {error && (
+          <div className="site-admin-error-banner" role="alert">
+            <div className="site-admin-error-msg">
+              <strong>Backend Integration Error:</strong>
+              <span>{error}</span>
+            </div>
+            {onRetry && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Stats counter strip */}
         <div className="site-admin-stats-bar">
           <span className="site-admin-stat-item">
@@ -592,6 +615,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
 
         {/* Global DataGrid */}
         <DataGrid
+          loading={loading}
           rowData={filteredUsers}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}

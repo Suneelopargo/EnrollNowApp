@@ -34,15 +34,15 @@ describe('Shell Host Hardened Infrastructure', () => {
   });
 
   describe('RemoteRegistry Single Backend URL Propagation', () => {
-    it('configures the single authoritative API base URL (:8080) for all 11 micro-frontends', () => {
+    it('configures the single authoritative API base URL (/api) for all 11 micro-frontends', () => {
       const remotes = getAllRemoteDefinitions();
       expect(remotes.length).toBe(11);
 
       const authoritativeBaseUrl = getApiBaseUrl();
-      expect(authoritativeBaseUrl).toBe('http://localhost:8080');
+      expect(authoritativeBaseUrl).toBe('/api');
 
       remotes.forEach((remote) => {
-        expect(remote.apiBaseUrl).toBe('http://localhost:8080');
+        expect(remote.apiBaseUrl).toBe('/api');
       });
     });
 
@@ -51,12 +51,12 @@ describe('Shell Host Hardened Infrastructure', () => {
       expect(adminRemote).toBeDefined();
       expect(adminRemote?.route).toBe('/admin');
       expect(adminRemote?.exposedModule).toBe('AdministrationModule');
-      expect(adminRemote?.apiBaseUrl).toBe('http://localhost:8080');
+      expect(adminRemote?.apiBaseUrl).toBe('/api');
 
       const dashRemote = getRemoteDefinition('dashboard');
       expect(dashRemote).toBeDefined();
       expect(dashRemote?.route).toBe('/dashboard');
-      expect(dashRemote?.apiBaseUrl).toBe('http://localhost:8080');
+      expect(dashRemote?.apiBaseUrl).toBe('/api');
     });
   });
 

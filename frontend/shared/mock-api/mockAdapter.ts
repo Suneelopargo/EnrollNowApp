@@ -14,15 +14,22 @@ import {
  * Extracts normalized pathname from request URL.
  */
 function normalizePath(url: string = ''): string {
+  let path = '';
   try {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       const parsed = new URL(url);
-      return parsed.pathname;
+      path = parsed.pathname;
     }
   } catch {
     // fallback to regex or string split
   }
-  return url.split('?')[0];
+  if (!path) {
+    path = url.split('?')[0];
+  }
+  if (path && !path.startsWith('/api') && path.startsWith('/')) {
+    path = `/api${path}`;
+  }
+  return path;
 }
 
 /**

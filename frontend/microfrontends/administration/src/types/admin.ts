@@ -5,6 +5,8 @@ export type UserStatus = 'Active' | 'Inactive';
 export interface SiteAdminUser {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   sitePermissions: string;
   studies: string[];
