@@ -65,8 +65,16 @@ public class InvitationEmailService {
 
         String body =
                 "Hello " + recipientName + ", welcome to EnrollNow!<br><br>"
-                + "A new EnrollNow account has been created for you. Please use the URL below to activate your account. This link will expire in 14 days.<br><br>"
-                + "<a href=\"" + activationUrl + "\">" + activationUrl + "</a><br><br>"
+                + "A new EnrollNow account has been created for you. Please click the button below to activate your account. This link will expire in 14 days.<br><br>"
+                + "<table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" style=\"margin: 20px 0;\">"
+                + "<tr>"
+                + "<td align=\"center\" style=\"border-radius: 4px; background-color: #004b87;\">"
+                + "<a href=\"" + activationUrl + "\" target=\"_blank\" style=\"font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; border-radius: 4px; padding: 12px 28px; border: 1px solid #004b87; display: inline-block; font-weight: 600;\">"
+                + "Activate Account"
+                + "</a>"
+                + "</td>"
+                + "</tr>"
+                + "</table>"
                 + "Thank you,<br>"
                 + "EnrollNow";
 
@@ -94,8 +102,16 @@ public class InvitationEmailService {
         String body =
                 "Hello " + recipientName + ",<br><br>"
                 + "We received a request to reset your password for your EnrollNow account.<br><br>"
-                + "Please use the URL below to reset your password. This link will expire in 30 minutes.<br><br>"
-                + "<a href=\"" + resetUrl + "\">" + resetUrl + "</a><br><br>"
+                + "Please click the button below to reset your password. This link will expire in 30 minutes.<br><br>"
+                + "<table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" style=\"margin: 20px 0;\">"
+                + "<tr>"
+                + "<td align=\"center\" style=\"border-radius: 4px; background-color: #004b87;\">"
+                + "<a href=\"" + resetUrl + "\" target=\"_blank\" style=\"font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; border-radius: 4px; padding: 12px 28px; border: 1px solid #004b87; display: inline-block; font-weight: 600;\">"
+                + "Reset Password"
+                + "</a>"
+                + "</td>"
+                + "</tr>"
+                + "</table>"
                 + "If you did not request a password reset, please ignore this email or contact support.<br><br>"
                 + "Thank you,<br>"
                 + "EnrollNow";

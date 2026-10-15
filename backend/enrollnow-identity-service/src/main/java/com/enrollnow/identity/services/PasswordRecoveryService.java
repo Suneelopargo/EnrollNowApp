@@ -225,9 +225,11 @@ public class PasswordRecoveryService {
                         )
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
-                                        "User not found"
+                                         "User not found"
                                 )
                         );
+
+        validatePasswordPolicy(request.getNewPassword());
 
         /*
          * Encode using our existing Argon2 PasswordEncoder bean.
@@ -272,5 +274,20 @@ public class PasswordRecoveryService {
         resetToken.setUsedAt(now);
 
         userActionTokenRepository.save(resetToken);
+    }
+
+    private void validatePasswordPolicy(String password) {
+        if (password == null || password.length() < 10) {
+            throw new IllegalArgumentException("Password must be at least 10 characters long");
+        }
+        if (!password.matches(".*[0-9].*")) {
+            throw new IllegalArgumentException("Password must contain at least one digit");
+        }
+        if (!password.matches(".*[^0-9A-Za-z].*")) {
+            throw new IllegalArgumentException("Password must contain at least one special character");
+        }
+        if (!password.matches(".*[a-z].*") || !password.matches(".*[A-Z].*")) {
+            throw new IllegalArgumentException("Password must contain mixed upper and lower case characters");
+        }
     }
 }

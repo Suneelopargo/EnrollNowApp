@@ -84,6 +84,9 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
   const test2Passed = meetsMinChars && meetsRequireNumber && meetsRequireSymbol && meetsMixCase;
   const test1Passed = strengthResult.score >= 3; // Moderate or better
   const overallPassed = test1Passed && test2Passed;
+  const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
+  const isFormValid = Boolean(token) && overallPassed && passwordsMatch;
+  const isButtonDisabled = loading || Boolean(successMessage) || !isFormValid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +109,10 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
 
     if (!overallPassed) {
       setErrorMessage('Password does not match all strength and complexity requirements.');
+      return;
+    }
+
+    if (!isFormValid) {
       return;
     }
 
@@ -213,10 +220,12 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
               </div>
 
               <div className="enl-activation-crack-time">
-                It would take {strengthResult.crackTime} to crack this password.
+                {password
+                  ? `It would take ${strengthResult.crackTime} to crack this password.`
+                  : 'Time required to crack: —'}
               </div>
 
-              {strengthResult.suggestions.length > 0 && (
+              {password && strengthResult.suggestions.length > 0 && (
                 <div className="enl-activation-suggestions">
                   <div className="enl-activation-suggestions-label">Suggestions for a better password:</div>
                   <ul>
@@ -229,7 +238,7 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
 
               <div className="enl-activation-strength-status">
                 Your password must be Moderate strength or better. Your strength is:{' '}
-                <strong>{SCORE_DESCRIPTIONS[strengthResult.score]}.</strong>
+                <strong>{password ? `${SCORE_DESCRIPTIONS[strengthResult.score]}.` : '—'}</strong>
               </div>
             </div>
 
@@ -256,6 +265,13 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
             </div>
           </div>
 
+          {/* Password Mismatch Warning */}
+          {confirmPassword && !passwordsMatch && !errorMessage && !successMessage && (
+            <div className="enl-activation-alert is-error" role="alert">
+              Passwords do not match.
+            </div>
+          )}
+
           {/* Missing Token Alert */}
           {!token && !errorMessage && !successMessage && (
             <div className="enl-activation-alert is-error" role="alert">
@@ -278,12 +294,12 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
           )}
         </form>
 
-        {/* Set Password Submit Button */}
+        {/* Set Password Submit Button (Disabled until all validations match) */}
         <button
           type="button"
           className="enl-activation-submit-btn"
           onClick={handleSubmit}
-          disabled={loading || !token || Boolean(successMessage)}
+          disabled={isButtonDisabled}
         >
           {loading ? 'Setting Password...' : 'Set Password'}
         </button>

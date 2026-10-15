@@ -84,6 +84,9 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
   const test2Passed = meetsMinChars && meetsRequireNumber && meetsRequireSymbol && meetsMixCase;
   const test1Passed = strengthResult.score >= 3; // Moderate or better
   const overallPassed = test1Passed && test2Passed;
+  const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
+  const isFormValid = Boolean(token) && overallPassed && passwordsMatch;
+  const isButtonDisabled = loading || Boolean(successMessage) || !isFormValid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +114,10 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
 
     if (!overallPassed) {
       setErrorMessage('Please ensure your password meets all requirements and achieves Moderate or Strong rating.');
+      return;
+    }
+
+    if (!isFormValid) {
       return;
     }
 
@@ -200,16 +207,18 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
                 <div className="enl-activation-meter-bg">
                   <div
                     className={`enl-activation-meter-fill score-${strengthResult.score}`}
-                    style={{ width: `${((strengthResult.score + 1) / 5) * 100}%` }}
+                    style={{
+                      width: password ? `${Math.max((strengthResult.score / 4) * 100, 10)}%` : '0%',
+                    }}
                   />
                 </div>
               </div>
 
               <div className="enl-activation-crack-time">
-                Time required to crack: <strong>{strengthResult.crackTime}</strong>
+                Time required to crack: <strong>{password ? strengthResult.crackTime : '—'}</strong>
               </div>
 
-              {strengthResult.suggestions.length > 0 && (
+              {password && strengthResult.suggestions.length > 0 && (
                 <div className="enl-activation-suggestions">
                   <div className="enl-activation-suggestions-label">Suggestions:</div>
                   <ul>
@@ -221,7 +230,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
               )}
 
               <div className="enl-activation-strength-status">
-                Current: <strong>{SCORE_DESCRIPTIONS[strengthResult.score]}</strong> (requires Moderate or Strong)
+                Current: <strong>{password ? SCORE_DESCRIPTIONS[strengthResult.score] : '—'}</strong> (requires Moderate or Strong)
               </div>
 
               {/* Test #2: Password Requirements */}
@@ -250,6 +259,13 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
               </div>
             )}
 
+            {/* Password Mismatch Warning */}
+            {confirmPassword && !passwordsMatch && !errorMessage && !successMessage && (
+              <div className="enl-activation-alert is-error" role="alert">
+                Passwords do not match.
+              </div>
+            )}
+
             {/* Error Banner */}
             {errorMessage && (
               <div className="enl-activation-alert is-error" role="alert">
@@ -266,12 +282,12 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
           </form>
         </div>
 
-        {/* Reset Password Submit Button */}
+        {/* Reset Password Submit Button (Disabled until all validations match) */}
         <button
           type="button"
           className="enl-activation-submit-btn"
           onClick={handleSubmit}
-          disabled={loading || !token || Boolean(successMessage)}
+          disabled={isButtonDisabled}
         >
           {loading ? 'Resetting Password...' : 'Reset Password'}
         </button>
