@@ -4,6 +4,7 @@ import { getApiBaseUrl, getApiMode, getTenantId, ApiMode } from '../api-config';
 import { telemetry } from '../telemetry';
 import { mockAdapter } from '../mock-api/mockAdapter';
 import { toast } from '../toaster';
+import { loader } from '../loader';
 
 export interface ApiHeaderContext {
   getToken?: () => string | null;
@@ -306,6 +307,22 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         config.headers['Content-Type'] = 'application/json';
       }
 
+      // 6. Enterprise Global Loader: Automatically show loader for in-flight requests unless silenced
+      const skipLoader =
+        Boolean((config as any).skipLoader) ||
+        Boolean((config as any).silent) ||
+        Boolean(config.headers?.['x-skip-loader'] === 'true') ||
+        Boolean((config.headers as any)?.get?.('x-skip-loader') === 'true');
+
+      if (!skipLoader) {
+        (config as any).__hasActiveLoader = true;
+        const loaderMsg = (config as any).loaderMessage || 'Processing Request & Syncing Data...';
+        loader.show(loaderMsg, {
+          title: (config as any).loaderTitle || 'EnrollNow',
+          subtitle: (config as any).loaderSubtitle || 'Please wait while the server responds',
+        });
+      }
+
       if ((config as any).skipToast || (config as any).silent) {
         (config as any).skipToast = true;
         if (config.headers && typeof (config.headers as any).set === 'function') {
@@ -317,13 +334,29 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
 
       return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+      if ((error?.config as any)?.__hasActiveLoader) {
+        (error.config as any).__hasActiveLoader = false;
+        loader.hide();
+      }
+      return Promise.reject(error);
+    }
   );
 
   // RESPONSE INTERCEPTOR
   instance.interceptors.response.use(
-    (response: AxiosResponse) => response,
+    (response: AxiosResponse) => {
+      if ((response.config as any)?.__hasActiveLoader) {
+        (response.config as any).__hasActiveLoader = false;
+        loader.hide();
+      }
+      return response;
+    },
     async (error) => {
+      if ((error?.config as any)?.__hasActiveLoader) {
+        (error.config as any).__hasActiveLoader = false;
+        loader.hide();
+      }
       const normalized = normalizeApiError(error);
       const url = error.config?.url || '';
       const isLoginRequest = url.includes('/auth/login');
@@ -418,7 +451,7 @@ export function createApiClient(options: CreateApiClientOptions = {}): AxiosInst
     adapter: dynamicAdapter,
   });
 
-  // Preserve custom config flags (e.g. skipToast, silent) across Axios mergeConfig
+  // Preserve custom config flags (e.g. skipToast, skipLoader, silent) across Axios mergeConfig
   const methods = ['get', 'delete', 'head', 'options'] as const;
   methods.forEach((method) => {
     const orig = (instance as any)[method].bind(instance);
@@ -426,6 +459,10 @@ export function createApiClient(options: CreateApiClientOptions = {}): AxiosInst
       if (config && (config.skipToast || config.silent)) {
         if (!config.headers) config.headers = {};
         config.headers['x-skip-toast'] = 'true';
+      }
+      if (config && (config.skipLoader || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-loader'] = 'true';
       }
       return orig(url, config);
     };
@@ -438,6 +475,10 @@ export function createApiClient(options: CreateApiClientOptions = {}): AxiosInst
       if (config && (config.skipToast || config.silent)) {
         if (!config.headers) config.headers = {};
         config.headers['x-skip-toast'] = 'true';
+      }
+      if (config && (config.skipLoader || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-loader'] = 'true';
       }
       return orig(url, data, config);
     };

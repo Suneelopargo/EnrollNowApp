@@ -4,6 +4,8 @@ import ReactDOM from 'react-dom/client';
 import { AdministrationModule } from './remoteEntry';
 import { getApiBaseUrl } from '../../../shared/api-config';
 import { ConfirmationContainer } from '../../../shared/confirmation';
+import { LoaderContainer } from '../../../shared/loader';
+import { ToasterContainer } from '../../../shared/toaster';
 import '../../../shared/design-system/styles/index.scss';
 
 const mockContext = {
@@ -33,6 +35,8 @@ if (rootEl) {
       <div className="shell-main-content">
         <AdministrationModule context={mockContext} />
         <ConfirmationContainer />
+        <LoaderContainer />
+        <ToasterContainer />
       </div>
     </React.StrictMode>
   );

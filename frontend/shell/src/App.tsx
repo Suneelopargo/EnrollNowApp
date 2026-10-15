@@ -9,6 +9,7 @@ import { loadRuntimeConfig } from '../../shared/runtime-config';
 import { LoadingSpinner } from '../../shared/design-system/components/LoadingSpinner';
 import { ToasterContainer, toast } from '../../shared/toaster';
 import { ConfirmationContainer } from '../../shared/confirmation';
+import { LoaderContainer } from '../../shared/loader';
 import '../../shared/design-system/styles/index.scss';
 
 export const App: React.FC = () => {
@@ -51,6 +52,7 @@ export const App: React.FC = () => {
             <ShellRouter />
             <ToasterContainer />
             <ConfirmationContainer />
+            <LoaderContainer />
           </TabWorkspaceProvider>
         </NavigationProvider>
       </AuthProvider>
