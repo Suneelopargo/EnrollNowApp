@@ -26,6 +26,8 @@ import { LoginStatistics } from './components/LoginStatistics';
 import { loginContent, defaultStatistics } from './data/loginContent';
 
 import { ActivateAccountPage } from './components/ActivateAccountPage';
+import { RecoverPasswordPage } from './components/RecoverPasswordPage';
+import { ResetPasswordPage } from './components/ResetPasswordPage';
 
 // Export components for consumers and unit testing
 export {
@@ -39,6 +41,8 @@ export {
   loginContent,
   defaultStatistics,
   ActivateAccountPage,
+  RecoverPasswordPage,
+  ResetPasswordPage,
 };
 
 export interface IdentityModuleProps {
@@ -246,11 +250,15 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     <span></span>
                   </label>
                   <a
-                    href="#forgot-password"
+                    href="/recover-password"
                     className="enl-forgot-link"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert('Password reset instructions routed to your administrator.');
+                      if (context.navigate) {
+                        context.navigate('/recover-password');
+                      } else {
+                        window.location.href = '/recover-password';
+                      }
                     }}
                   >
                     Forgot password?

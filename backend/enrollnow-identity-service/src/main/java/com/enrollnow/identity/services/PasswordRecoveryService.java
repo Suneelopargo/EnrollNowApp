@@ -12,6 +12,8 @@ import com.enrollnow.identity.models.UserSecurityState;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import org.springframework.stereotype.Service;
@@ -30,7 +32,8 @@ import java.util.UUID;
 @Service
 public class PasswordRecoveryService {
 
-	private static final String TOKEN_TYPE = "PASSWORD_RESET";
+    private static final Logger log = LoggerFactory.getLogger(PasswordRecoveryService.class);
+    private static final String TOKEN_TYPE = "PASSWORD_RESET";
     private static final int TOKEN_EXPIRY_MINUTES = 30;
 
     private final UserEmailRepository userEmailRepository;
@@ -39,19 +42,22 @@ public class PasswordRecoveryService {
     private final UserRepository userRepository;
     private final UserSecurityStateRepository userSecurityStateRepository;
     private final PasswordEncoder passwordEncoder;
+    private final InvitationEmailService invitationEmailService;
 
     public PasswordRecoveryService(
             UserEmailRepository userEmailRepository,
             UserActionTokenRepository userActionTokenRepository,
             UserRepository userRepository,
             UserSecurityStateRepository userSecurityStateRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            InvitationEmailService invitationEmailService) {
 
         this.userEmailRepository = userEmailRepository;
         this.userActionTokenRepository = userActionTokenRepository;
         this.userRepository = userRepository;
         this.userSecurityStateRepository = userSecurityStateRepository;
         this.passwordEncoder = passwordEncoder;
+        this.invitationEmailService = invitationEmailService;
     }
 
     @Transactional
@@ -110,11 +116,25 @@ public class PasswordRecoveryService {
 
         userActionTokenRepository.save(token);
 
-        /*
-         * Temporary for backend development testing.
-         * Later this raw token should be sent by email,
-         * not returned to the FE.
-         */
+        User user = userRepository
+                .findByTenantIdAndId(tenantId, userEmail.getUserId())
+                .orElse(null);
+
+        String recipientName = (user != null && user.getFirstName() != null)
+                ? (user.getFirstName() + " " + (user.getLastName() != null ? user.getLastName() : "")).trim()
+                : "EnrollNow User";
+
+        try {
+            invitationEmailService.sendPasswordReset(
+                    userEmail.getEmail(),
+                    recipientName,
+                    tenantId.toString(),
+                    rawToken
+            );
+        } catch (Exception ex) {
+            log.error("Failed to send password reset email to {}: {}", userEmail.getEmail(), ex.getMessage(), ex);
+        }
+
         return rawToken;
     }
 

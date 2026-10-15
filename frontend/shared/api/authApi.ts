@@ -35,6 +35,26 @@ export interface ActivateAccountResponse {
   error?: string;
 }
 
+export interface ForgotPasswordRequest {
+  tenantId?: string;
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  message?: string;
+  resetToken?: string;
+}
+
+export interface ResetPasswordRequest {
+  tenantId?: string;
+  token: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  message?: string;
+}
+
 export const authApi = {
   /**
    * Performs user login using credentials.
@@ -171,6 +191,41 @@ export const authApi = {
     };
     const res = await apiClient.post<ActivateAccountResponse>(
       `/api/v1/tenants/${tenantId}/auth/activate`,
+      body,
+      { skipToast: true } as any
+    );
+    return res.data;
+  },
+
+  /**
+   * Requests password reset email instructions for an account.
+   * Calls POST /api/v1/tenants/{tenantId}/auth/forgot-password
+   */
+  async forgotPassword(payload: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
+    const tenantId = payload.tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
+    const body = {
+      email: payload.email.trim(),
+    };
+    const res = await apiClient.post<ForgotPasswordResponse>(
+      `/api/v1/tenants/${tenantId}/auth/forgot-password`,
+      body,
+      { skipToast: true } as any
+    );
+    return res.data;
+  },
+
+  /**
+   * Resets password using token received via email.
+   * Calls POST /api/v1/tenants/{tenantId}/auth/reset-password
+   */
+  async resetPassword(payload: ResetPasswordRequest): Promise<ResetPasswordResponse> {
+    const tenantId = payload.tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
+    const body = {
+      token: payload.token,
+      newPassword: payload.newPassword,
+    };
+    const res = await apiClient.post<ResetPasswordResponse>(
+      `/api/v1/tenants/${tenantId}/auth/reset-password`,
       body,
       { skipToast: true } as any
     );

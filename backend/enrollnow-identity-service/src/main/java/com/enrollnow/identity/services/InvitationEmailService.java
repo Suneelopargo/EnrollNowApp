@@ -20,6 +20,7 @@ public class InvitationEmailService {
     private final String clientSecret;
     private final String mailbox;
     private final String activationBaseUrl;
+    private final String passwordResetBaseUrl;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -29,13 +30,15 @@ public class InvitationEmailService {
             @Value("${app.graph.client-id}") String clientId,
             @Value("${app.graph.client-secret}") String clientSecret,
             @Value("${app.graph.mailbox}") String mailbox,
-            @Value("${app.frontend.activation-url}") String activationBaseUrl) {
+            @Value("${app.frontend.activation-url}") String activationBaseUrl,
+            @Value("${app.frontend.password-reset-url:http://localhost:3000/reset-password}") String passwordResetBaseUrl) {
 
         this.tenantId = tenantId;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.mailbox = mailbox;
         this.activationBaseUrl = activationBaseUrl;
+        this.passwordResetBaseUrl = passwordResetBaseUrl;
 
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
@@ -58,17 +61,53 @@ public class InvitationEmailService {
                         .toUriString();
 
         String subject =
-                "Welcome to EnrollNow - Set up your account";
+                "Welcome to EnrollNow - Activate your account";
+
+        String body =
+                "Hello " + recipientName + ", welcome to EnrollNow!<br><br>"
+                + "A new EnrollNow account has been created for you. Please use the URL below to activate your account. This link will expire in 14 days.<br><br>"
+                + "<a href=\"" + activationUrl + "\">" + activationUrl + "</a><br><br>"
+                + "Thank you,<br>"
+                + "EnrollNow";
+
+        sendEmail(recipientEmail, subject, body, accessToken);
+    }
+
+    public void sendPasswordReset(
+            String recipientEmail,
+            String recipientName,
+            String tenantIdValue,
+            String rawToken) {
+
+        String accessToken = getGraphAccessToken();
+
+        String resetUrl =
+                UriComponentsBuilder
+                        .fromUriString(passwordResetBaseUrl)
+                        .queryParam("tenantId", tenantIdValue)
+                        .queryParam("token", rawToken)
+                        .build()
+                        .toUriString();
+
+        String subject = "EnrollNow - Reset Your Password";
 
         String body =
                 "Hello " + recipientName + ",<br><br>"
-                + "You have been invited to EnrollNow.<br><br>"
-                + "Please use the link below to set up your password:<br><br>"
-                + "<a href=\"" + activationUrl + "\">Set Your Password</a><br><br>"
-                + "This invitation link expires in 14 days.<br><br>"
-                + "If you were not expecting this invitation, "
-                + "please contact your EnrollNow administrator.<br><br>"
+                + "We received a request to reset your password for your EnrollNow account.<br><br>"
+                + "Please use the URL below to reset your password. This link will expire in 30 minutes.<br><br>"
+                + "<a href=\"" + resetUrl + "\">" + resetUrl + "</a><br><br>"
+                + "If you did not request a password reset, please ignore this email or contact support.<br><br>"
+                + "Thank you,<br>"
                 + "EnrollNow";
+
+        sendEmail(recipientEmail, subject, body, accessToken);
+    }
+
+    private void sendEmail(
+            String recipientEmail,
+            String subject,
+            String body,
+            String accessToken) {
 
         Map<String, Object> emailAddress =
                 Map.of(
@@ -135,7 +174,7 @@ public class InvitationEmailService {
 
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new IllegalStateException(
-                    "Failed to send invitation email"
+                    "Failed to send email via Microsoft Graph"
             );
         }
     }
