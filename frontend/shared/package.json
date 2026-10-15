@@ -10,12 +10,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@types/zxcvbn": "^4.4.5",
     "ag-grid-community": "^36.2.0",
     "ag-grid-react": "^36.2.0",
+    "axios": "^1.7.9",
+    "lucide-react": "^1.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^1.16.0",
-    "axios": "^1.7.9"
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

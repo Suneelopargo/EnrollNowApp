@@ -23,6 +23,18 @@ export interface AuthApiResponse<T = any> {
   correlationId?: string;
 }
 
+export interface ActivateAccountRequest {
+  tenantId?: string;
+  token: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface ActivateAccountResponse {
+  message?: string;
+  error?: string;
+}
+
 export const authApi = {
   /**
    * Performs user login using credentials.
@@ -144,6 +156,25 @@ export const authApi = {
       timeout: 8000,
     });
     return res.data?.data;
+  },
+
+  /**
+   * Activates a new user account with initial password.
+   * Calls POST /api/v1/tenants/{tenantId}/auth/activate
+   */
+  async activateAccount(payload: ActivateAccountRequest): Promise<ActivateAccountResponse> {
+    const tenantId = payload.tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
+    const body = {
+      token: payload.token,
+      password: payload.password,
+      confirmPassword: payload.confirmPassword,
+    };
+    const res = await apiClient.post<ActivateAccountResponse>(
+      `/api/v1/tenants/${tenantId}/auth/activate`,
+      body,
+      { skipToast: true } as any
+    );
+    return res.data;
   },
 
   /**

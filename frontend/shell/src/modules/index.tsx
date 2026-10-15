@@ -49,6 +49,11 @@ export function useMfeContext(moduleName: string): MfeContext {
 
 // Local dynamic imports for code splitting within single-app Vite runtime
 const LazyIdentity = React.lazy(() => import('../../../microfrontends/identity/src/remoteEntry'));
+const LazyActivateAccount = React.lazy(() =>
+  import('../../../microfrontends/identity/src/remoteEntry').then((m) => ({
+    default: m.ActivateAccountPage,
+  }))
+);
 const LazyAdministration = React.lazy(() => import('../../../microfrontends/administration/src/remoteEntry'));
 const LazyDashboard = React.lazy(() => import('../../../microfrontends/dashboard/src/remoteEntry'));
 const LazyOrganization = React.lazy(() => import('../../../microfrontends/organization/src/remoteEntry'));
@@ -70,6 +75,16 @@ export const IdentityModule: React.FC<ModuleProps> = ({ context }) => {
     <ErrorBoundary fallbackTitle="Identity Module Error" remoteId="identity">
       <Suspense fallback={<LoadingSpinner message="Loading Identity & Authentication Module..." />}>
         <LazyIdentity context={context || defaultContext} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+};
+
+export const ActivateAccountModule: React.FC = () => {
+  return (
+    <ErrorBoundary fallbackTitle="Account Activation Error" remoteId="identity">
+      <Suspense fallback={<LoadingSpinner message="Loading Account Activation..." />}>
+        <LazyActivateAccount />
       </Suspense>
     </ErrorBoundary>
   );

@@ -6,7 +6,7 @@ import { TopNavigation } from '../navigation/TopNavigation';
 import { WorkspaceScreenHost } from './WorkspaceScreenHost';
 import { Footer } from '../../../shared/design-system/components/Footer';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
-import { IdentityModule } from '../modules';
+import { IdentityModule, ActivateAccountModule } from '../modules';
 import { useAuth } from '../auth/AuthContext';
 
 const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -38,6 +38,9 @@ export const ShellRouter: React.FC = () => {
             </PublicOnlyRoute>
           }
         />
+        {/* Public Account Activation Routes - Always accessible without redirecting to dashboard */}
+        <Route path="/activate-account" element={<ActivateAccountModule />} />
+        <Route path="/activate" element={<ActivateAccountModule />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
         {/* Protected Feature Module Routes - Mapped to Keep-Alive Multi-Screen Workspace */}

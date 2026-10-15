@@ -167,6 +167,36 @@ describe('authApi Service Contract', () => {
     });
   });
 
+  describe('activateAccount', () => {
+    it('executes POST /api/v1/tenants/{tenantId}/auth/activate with payload', async () => {
+      const mockResponse = {
+        data: {
+          message: 'Account activated successfully.',
+        },
+      };
+
+      vi.mocked(apiClient.post).mockResolvedValueOnce(mockResponse);
+
+      const result = await authApi.activateAccount({
+        tenantId: '11111111-1111-1111-1111-111111111111',
+        token: 'test-raw-activation-token-999',
+        password: 'Password123!',
+        confirmPassword: 'Password123!',
+      });
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/v1/tenants/11111111-1111-1111-1111-111111111111/auth/activate',
+        {
+          token: 'test-raw-activation-token-999',
+          password: 'Password123!',
+          confirmPassword: 'Password123!',
+        },
+        expect.objectContaining({ skipToast: true })
+      );
+      expect(result.message).toBe('Account activated successfully.');
+    });
+  });
+
   describe('logout', () => {
     it('clears localStorage and dispatches enrollnow_auth_change logout event', () => {
       localStorage.setItem('enrollnow_token', 'token-to-delete');

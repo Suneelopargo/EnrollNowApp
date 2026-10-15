@@ -11,6 +11,7 @@ import {
   LoginStatistics,
   loginContent,
   defaultStatistics,
+  ActivateAccountPage,
 } from '../remoteEntry';
 
 describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
@@ -71,5 +72,10 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
 
     expect(defaultStatistics).toBeDefined();
     expect(Array.isArray(defaultStatistics)).toBe(true);
+  });
+
+  it('exports ActivateAccountPage as a valid React component', () => {
+    expect(ActivateAccountPage).toBeDefined();
+    expect(typeof ActivateAccountPage).toBe('function');
   });
 });

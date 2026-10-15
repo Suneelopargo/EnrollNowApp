@@ -25,6 +25,8 @@ import { FloatingInfoCard } from './components/FloatingInfoCard';
 import { LoginStatistics } from './components/LoginStatistics';
 import { loginContent, defaultStatistics } from './data/loginContent';
 
+import { ActivateAccountPage } from './components/ActivateAccountPage';
+
 // Export components for consumers and unit testing
 export {
   LoginMarketingPanel,
@@ -36,6 +38,7 @@ export {
   LoginStatistics,
   loginContent,
   defaultStatistics,
+  ActivateAccountPage,
 };
 
 export interface IdentityModuleProps {
