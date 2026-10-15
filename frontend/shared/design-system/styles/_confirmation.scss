@@ -44,9 +44,9 @@ body.enl-body-freeze {
 // Dialog Header
 .enl-confirm-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
-  padding: 22px 24px 16px;
+  padding: 20px 24px;
   background: $color-table-header;
   border-bottom: 1px solid $color-table-header-border;
 }
@@ -54,7 +54,6 @@ body.enl-body-freeze {
 .enl-confirm-title-area {
   flex: 1;
   min-width: 0;
-  padding-top: 3px;
 }
 
 .enl-confirm-title {
@@ -62,7 +61,8 @@ body.enl-body-freeze {
   font-size: 18px;
   font-weight: 700;
   color: #ffffff;
-  line-height: 1.3;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 // Intent Icon Badges
@@ -127,18 +127,19 @@ body.enl-body-freeze {
 
 // Dialog Body
 .enl-confirm-body {
-  padding: 0 24px 20px;
-  font-size: 14px;
+  padding: 24px 24px 20px;
+  font-size: 14.5px;
   color: #475569;
-  line-height: 1.55;
+  line-height: 1.6;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .enl-confirm-message {
   color: #334155;
   font-size: 14.5px;
+  line-height: 1.6;
   word-break: break-word;
 }
 

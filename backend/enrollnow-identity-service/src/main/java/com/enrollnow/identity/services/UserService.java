@@ -166,6 +166,22 @@ public class UserService {
 
 	    return toSummary(user);
 	}
+
+	@Transactional
+	public UserSummaryResponse activateUser(
+	        UUID tenantId,
+	        UUID userId
+	) {
+
+	    User user = userRepository.findByTenantIdAndId(tenantId, userId)
+	            .orElseThrow(() -> new UserNotFoundException(userId));
+
+	    user.setStatus("ACTIVE");
+
+	    userRepository.save(user);
+
+	    return toSummary(user);
+	}
 	
 	@Transactional
 	public UserRoleAssignment assignRole(

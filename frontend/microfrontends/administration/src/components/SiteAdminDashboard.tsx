@@ -240,13 +240,21 @@ export const SiteAdminDashboard: React.FC = () => {
     [fetchUsers]
   );
 
-  const handleUnlockUserFromModal = useCallback(async () => {
-    toast.info('User reactivation is not supported by the Sprint 1 backend API.', {
-      title: 'Action Unsupported',
-    });
-    setIsAddUserModalOpen(false);
-    setUserToEdit(null);
-  }, []);
+  const handleUnlockUserFromModal = useCallback(
+    async (user: SiteAdminUser) => {
+      try {
+        await administrationApi.activateUser(user.id);
+        await fetchUsers(true);
+        toast.success(`User '${user.name}' has been unlocked.`);
+        setIsAddUserModalOpen(false);
+        setUserToEdit(null);
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || 'Failed to unlock user.';
+        toast.error(msg, { title: 'Unlock Failed' });
+      }
+    },
+    [fetchUsers]
+  );
 
   const handleResendEnrollment = useCallback(async (user: SiteAdminUser) => {
     try {
@@ -306,29 +314,49 @@ export const SiteAdminDashboard: React.FC = () => {
       const isCurrentlyActive = user.status === 'Active';
       if (isCurrentlyActive) {
         void requestConfirmation({
-          entityName: user.name,
-          intent: 'warning',
-          title: 'Deactivate user account',
-          confirmText: 'Deactivate User',
-          loadingText: 'Deactivating user account...',
-          message: `Are you sure you want to deactivate “${user.name}” (${user.email})? The user will not be able to log in until reactivated.`,
+          intent: 'danger',
+          title: `Temporarily Lock User: ${user.name}`,
+          confirmText: 'Lock User',
+          cancelText: 'Cancel',
+          loadingText: 'Locking user...',
+          message:
+            "A locked account won't be able to log in until it is manually unlocked. Only an admin will be able to unlock the user later. Are you sure you want to proceed?",
           onConfirm: async () => {
             try {
               await administrationApi.deactivateUser(user.id);
               await fetchUsers(true);
-              toast.warning(`User '${user.name}' deactivated (status: Disabled).`);
+              toast.warning(`User account for '${user.name}' has been locked.`);
             } catch (err: any) {
               const msg =
                 err?.response?.data?.message ||
                 err?.message ||
-                'Failed to deactivate user.';
-              toast.error(msg, { title: 'Deactivation Failed' });
+                'Failed to lock user.';
+              toast.error(msg, { title: 'Lock Failed' });
             }
           },
         });
       } else {
-        toast.info('User reactivation is not supported by the Sprint 1 backend API.', {
-          title: 'Action Unsupported',
+        void requestConfirmation({
+          intent: 'danger',
+          title: `Unlock User: ${user.name}`,
+          confirmText: 'Unlock User',
+          cancelText: 'Cancel',
+          loadingText: 'Unlocking user...',
+          message:
+            'The user will be able to login again. Are you sure you want to proceed?',
+          onConfirm: async () => {
+            try {
+              await administrationApi.activateUser(user.id);
+              await fetchUsers(true);
+              toast.success(`User '${user.name}' has been unlocked.`);
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message ||
+                err?.message ||
+                'Failed to unlock user.';
+              toast.error(msg, { title: 'Unlock Failed' });
+            }
+          },
         });
       }
     },

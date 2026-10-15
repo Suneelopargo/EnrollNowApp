@@ -84,6 +84,14 @@ public class UserController {
     ) {
         return userService.deactivateUser(tenantId, userId);
     }
+
+    @PutMapping("/{userId}/activate")
+    public UserSummaryResponse activateUser(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID userId
+    ) {
+        return userService.activateUser(tenantId, userId);
+    }
     
     @PostMapping("/{userId}/roles")
     public UserRoleAssignment assignRole(

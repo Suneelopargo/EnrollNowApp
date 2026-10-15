@@ -265,13 +265,13 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const handleLockAccount = () => {
     if (!userToEdit) return;
     void requestConfirmation({
-      entityName: userToEdit.name,
       intent: 'danger',
-      title: 'Lock User Account',
-      confirmText: 'Lock Account',
+      title: `Temporarily Lock User: ${userToEdit.name}`,
+      confirmText: 'Lock User',
       cancelText: 'Cancel',
-      loadingText: 'Locking user account...',
-      message: `Are you sure you want to lock the account for “${userToEdit.name}” (${userToEdit.email})? The user will immediately be disabled and will not be able to log in.`,
+      loadingText: 'Locking user...',
+      message:
+        "A locked account won't be able to log in until it is manually unlocked. Only an admin will be able to unlock the user later. Are you sure you want to proceed?",
       onConfirm: async () => {
         if (onLockUser) {
           await onLockUser(userToEdit);
@@ -282,9 +282,20 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
   const handleUnlockAccount = () => {
     if (!userToEdit) return;
-    if (onUnlockUser) {
-      void onUnlockUser(userToEdit);
-    }
+    void requestConfirmation({
+      intent: 'danger',
+      title: `Unlock User: ${userToEdit.name}`,
+      confirmText: 'Unlock User',
+      cancelText: 'Cancel',
+      loadingText: 'Unlocking user...',
+      message:
+        'The user will be able to login again. Are you sure you want to proceed?',
+      onConfirm: async () => {
+        if (onUnlockUser) {
+          await onUnlockUser(userToEdit);
+        }
+      },
+    });
   };
 
   const handleResendEnrollment = async () => {

@@ -175,6 +175,16 @@ export const administrationApi = {
   },
 
   /**
+   * PUT /api/v1/tenants/{tenantId}/users/{userId}/activate
+   * Reactivates / unlocks a user; sets status to ACTIVE.
+   */
+  async activateUser(userId: string | number, tenantId?: string): Promise<UserSummaryResponse> {
+    const tid = resolveTenantId(tenantId);
+    const res = await apiClient.put<UserSummaryResponse>(`/api/v1/tenants/${tid}/users/${userId}/activate`);
+    return res.data;
+  },
+
+  /**
    * POST /api/v1/tenants/{tenantId}/users/{userId}/roles
    * Assigns a scoped role to a user.
    */

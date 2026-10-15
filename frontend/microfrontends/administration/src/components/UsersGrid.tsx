@@ -15,8 +15,8 @@ import {
   X,
   Mail,
   Pencil,
-  CheckCircle2,
-  Ban,
+  Lock,
+  Unlock,
   ShieldCheck,
   Download,
   FileSpreadsheet,
@@ -155,13 +155,13 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
             : 'participant-grid__row-action--success'
         }`}
         onClick={handleToggleStatus}
-        title={isUserActive ? 'Deactivate user' : 'Activate user'}
-        aria-label={isUserActive ? `Deactivate ${user.name}` : `Activate ${user.name}`}
+        title={isUserActive ? 'Lock user' : 'Unlock user'}
+        aria-label={isUserActive ? `Lock ${user.name}` : `Unlock ${user.name}`}
       >
         {isUserActive ? (
-          <Ban size={15} aria-hidden="true" />
+          <Lock size={15} aria-hidden="true" />
         ) : (
-          <CheckCircle2 size={15} aria-hidden="true" />
+          <Unlock size={15} aria-hidden="true" />
         )}
       </button>
     </div>
@@ -196,7 +196,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<SiteAdminUser> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'Active' | 'Disabled' | 'All'>('All');
+  const [statusFilter, setStatusFilter] = useState<'Active' | 'Disabled' | 'All'>('Active');
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
@@ -228,7 +228,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
   const inactiveCount = users.length - activeCount;
 
   // Track displayed rows (after AG Grid quick search and floating filters)
-  const [displayedCount, setDisplayedCount] = useState<number>(users.length);
+  const [displayedCount, setDisplayedCount] = useState<number>(() => users.filter((u) => u.status === 'Active').length);
 
   const updateCounts = useCallback(() => {
     if (gridApi) {
