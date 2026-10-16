@@ -64,19 +64,13 @@ public class InvitationEmailService {
                 "Welcome to EnrollNow - Activate your account";
 
         String body =
-                "Hello " + recipientName + ", welcome to EnrollNow!<br><br>"
-                + "A new EnrollNow account has been created for you. Please click the button below to activate your account. This link will expire in 14 days.<br><br>"
-                + "<table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" style=\"margin: 20px 0;\">"
-                + "<tr>"
-                + "<td align=\"center\" style=\"border-radius: 4px; background-color: #004b87;\">"
-                + "<a href=\"" + activationUrl + "\" target=\"_blank\" style=\"font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; border-radius: 4px; padding: 12px 28px; border: 1px solid #004b87; display: inline-block; font-weight: 600;\">"
-                + "Activate Account"
-                + "</a>"
-                + "</td>"
-                + "</tr>"
-                + "</table>"
-                + "Thank you,<br>"
-                + "EnrollNow";
+                buildEmailBody(
+                        "Hello " + recipientName + ", welcome to EnrollNow!",
+                        "A new EnrollNow account has been created for you. Please click the button below to activate your account. This link will expire in 14 days.",
+                        "Activate Account",
+                        activationUrl,
+                        null
+                );
 
         sendEmail(recipientEmail, subject, body, accessToken);
     }
@@ -100,23 +94,73 @@ public class InvitationEmailService {
         String subject = "EnrollNow - Reset Your Password";
 
         String body =
-                "Hello " + recipientName + ",<br><br>"
-                + "We received a request to reset your password for your EnrollNow account.<br><br>"
-                + "Please click the button below to reset your password. This link will expire in 30 minutes.<br><br>"
-                + "<table cellspacing=\"0\" cellpadding=\"0\" border=\"0\" style=\"margin: 20px 0;\">"
-                + "<tr>"
-                + "<td align=\"center\" style=\"border-radius: 4px; background-color: #004b87;\">"
-                + "<a href=\"" + resetUrl + "\" target=\"_blank\" style=\"font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; border-radius: 4px; padding: 12px 28px; border: 1px solid #004b87; display: inline-block; font-weight: 600;\">"
-                + "Reset Password"
-                + "</a>"
-                + "</td>"
-                + "</tr>"
-                + "</table>"
-                + "If you did not request a password reset, please ignore this email or contact support.<br><br>"
-                + "Thank you,<br>"
-                + "EnrollNow";
+                buildEmailBody(
+                        "Hello " + recipientName + ",",
+                        "We received a request to reset your password for your EnrollNow account. Please click the button below to reset your password. This link will expire in 30 minutes.",
+                        "Reset Password",
+                        resetUrl,
+                        "If you did not request a password reset, please ignore this email or contact support."
+                );
 
         sendEmail(recipientEmail, subject, body, accessToken);
+    }
+
+    private String buildEmailBody(
+            String greeting,
+            String introText,
+            String buttonText,
+            String actionUrl,
+            String footerNote) {
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>");
+        sb.append("<body style=\"margin: 0; padding: 24px 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.6;\">");
+        sb.append("<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width: 600px; margin: 0 auto; padding: 0 20px;\">");
+
+        // Centered EnrollNow Logo
+        sb.append("<tr><td align=\"center\" style=\"padding: 10px 0 28px 0;\">");
+        sb.append("<img src=\"cid:").append(EnrollNowEmailAssets.LOGO_CONTENT_ID).append("\" alt=\"EnrollNow\" width=\"300\" style=\"display: inline-block; width: 300px; max-width: 100%; height: auto; border: 0; outline: none; text-decoration: none;\" />");
+        sb.append("</td></tr>");
+
+        // Greeting
+        sb.append("<tr><td style=\"font-size: 15px; color: #1e293b; padding-bottom: 16px;\">");
+        sb.append(greeting);
+        sb.append("</td></tr>");
+
+        // Intro message
+        sb.append("<tr><td style=\"font-size: 15px; color: #1e293b; padding-bottom: 24px;\">");
+        sb.append(introText);
+        sb.append("</td></tr>");
+
+        // Action Button
+        sb.append("<tr><td align=\"center\" style=\"padding-bottom: 24px;\">");
+        sb.append("<table cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tr><td align=\"center\" style=\"border-radius: 4px; background-color: #004b87;\">");
+        sb.append("<a href=\"").append(actionUrl).append("\" target=\"_blank\" style=\"font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff; text-decoration: none; border-radius: 4px; padding: 12px 32px; border: 1px solid #004b87; display: inline-block; font-weight: 600;\">");
+        sb.append(buttonText);
+        sb.append("</a></td></tr></table>");
+        sb.append("</td></tr>");
+
+        // URL Fallback
+        sb.append("<tr><td style=\"font-size: 13px; color: #64748b; padding-bottom: 24px; word-break: break-all;\">");
+        sb.append("If the button does not work, please use the URL below:<br>");
+        sb.append("<a href=\"").append(actionUrl).append("\" target=\"_blank\" style=\"color: #004b87; text-decoration: underline;\">");
+        sb.append(actionUrl);
+        sb.append("</a></td></tr>");
+
+        // Optional footer note
+        if (footerNote != null && !footerNote.trim().isEmpty()) {
+            sb.append("<tr><td style=\"font-size: 13px; color: #64748b; padding-bottom: 20px;\">");
+            sb.append(footerNote);
+            sb.append("</td></tr>");
+        }
+
+        // Sign-off
+        sb.append("<tr><td style=\"font-size: 15px; color: #1e293b; border-top: 1px solid #e2e8f0; padding-top: 20px;\">");
+        sb.append("Thank you,<br><strong>EnrollNow</strong>");
+        sb.append("</td></tr>");
+
+        sb.append("</table></body></html>");
+        return sb.toString();
     }
 
     private void sendEmail(
@@ -137,6 +181,15 @@ public class InvitationEmailService {
                         emailAddress
                 );
 
+        Map<String, Object> logoAttachment =
+                new HashMap<>();
+        logoAttachment.put("@odata.type", "#microsoft.graph.fileAttachment");
+        logoAttachment.put("name", EnrollNowEmailAssets.LOGO_FILENAME);
+        logoAttachment.put("contentType", EnrollNowEmailAssets.LOGO_CONTENT_TYPE);
+        logoAttachment.put("contentBytes", EnrollNowEmailAssets.getLogoBase64());
+        logoAttachment.put("contentId", EnrollNowEmailAssets.LOGO_CONTENT_ID);
+        logoAttachment.put("isInline", true);
+
         Map<String, Object> message =
                 new HashMap<>();
 
@@ -153,6 +206,11 @@ public class InvitationEmailService {
         message.put(
                 "toRecipients",
                 List.of(recipient)
+        );
+
+        message.put(
+                "attachments",
+                List.of(logoAttachment)
         );
 
         Map<String, Object> requestBody =
