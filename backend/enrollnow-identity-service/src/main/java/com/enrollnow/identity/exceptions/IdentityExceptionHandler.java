@@ -149,4 +149,19 @@ public class IdentityExceptionHandler {
                 .status(HttpStatus.LOCKED)
                 .body(body);
     }
+
+    @ExceptionHandler(AlreadyEnrolledException.class)
+    public ResponseEntity<Map<String, Object>> handleAlreadyEnrolled(
+            AlreadyEnrolledException ex) {
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", OffsetDateTime.now());
+        body.put("status", HttpStatus.CONFLICT.value());
+        body.put("error", ex.getErrorCode());
+        body.put("message", ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(body);
+    }
 }

@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 import com.enrollnow.identity.models.UserActionToken;
 import com.enrollnow.identity.dtos.ActivateAccountRequest;
 import com.enrollnow.identity.models.User;
@@ -248,14 +249,15 @@ public class UserInvitationService {
         }
 
         if (activationToken.getUsedAt() != null) {
-            throw new IllegalArgumentException(
-                    "Activation token has already been used"
+            throw new AlreadyEnrolledException(
+                    "Already enrolled! Please login"
             );
         }
 
         if (activationToken.getExpiresAt().isBefore(now)) {
-            throw new IllegalArgumentException(
-                    "Activation token has expired"
+            throw new AlreadyEnrolledException(
+                    "TOKEN_EXPIRED",
+                    "Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent"
             );
         }
 
@@ -329,6 +331,56 @@ public class UserInvitationService {
         }
         if (!password.matches(".*[a-z].*") || !password.matches(".*[A-Z].*")) {
             throw new IllegalArgumentException("Password must contain mixed upper and lower case characters");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public void validateActivationToken(
+            UUID tenantId,
+            String token) {
+
+        if (token == null || token.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Activation token is required"
+            );
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+
+        String tokenHash = hashToken(token.trim());
+
+        UserActionToken activationToken =
+                userActionTokenRepository
+                        .findByTokenHash(tokenHash)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Invalid or expired activation token"
+                                )
+                        );
+
+        if (tenantId != null && !activationToken.getTenantId().equals(tenantId)) {
+            throw new IllegalArgumentException(
+                    "Invalid or expired activation token"
+            );
+        }
+
+        if (!TOKEN_TYPE.equals(activationToken.getTokenType())) {
+            throw new IllegalArgumentException(
+                    "Invalid or expired activation token"
+            );
+        }
+
+        if (activationToken.getUsedAt() != null) {
+            throw new AlreadyEnrolledException(
+                    "Already enrolled! Please login"
+            );
+        }
+
+        if (activationToken.getExpiresAt().isBefore(now)) {
+            throw new AlreadyEnrolledException(
+                    "TOKEN_EXPIRED",
+                    "Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent"
+            );
         }
     }
 }

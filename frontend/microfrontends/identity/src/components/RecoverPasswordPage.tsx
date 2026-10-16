@@ -2,7 +2,6 @@
 // Central Code-Driven Recover Password Component matching EnrollNow design system
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check } from 'lucide-react';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
@@ -87,16 +86,6 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
 
   return (
     <div className="enl-activation-page">
-      {/* Top Green Notification Toaster Banner matching exact screenshot */}
-      {successMessage && (
-        <div className="enl-top-toaster-banner" role="status" aria-live="polite">
-          <div className="enl-top-toaster-badge">
-            <Check size={16} strokeWidth={3} aria-hidden="true" />
-          </div>
-          <span className="enl-top-toaster-text">{successMessage}</span>
-        </div>
-      )}
-
       <div className="enl-activation-card">
         {/* Top White Brand Header */}
         <header className="enl-activation-header">

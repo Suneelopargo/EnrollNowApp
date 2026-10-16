@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { authApi } from '../../../shared/api/authApi';
+import { toast } from '../../../shared/toaster';
 import '../../../shared/design-system/styles/index.scss';
 
 // Reusable Code-Driven Marketing & Brand Components
@@ -59,6 +60,21 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let warningMsg: string | null = null;
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      warningMsg = urlParams.get('warning');
+    }
+    if (!warningMsg && typeof history !== 'undefined' && (history.state as any)?.usr?.warning) {
+      warningMsg = (history.state as any).usr.warning;
+    }
+
+    if (warningMsg) {
+      toast.warning(warningMsg);
+    }
+  }, []);
 
   useEffect(() => {
     if (context.user && context.token) {

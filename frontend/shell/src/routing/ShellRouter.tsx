@@ -46,9 +46,12 @@ export const ShellRouter: React.FC = () => {
         {/* Public Account Activation Routes - Always accessible without redirecting to dashboard */}
         <Route path="/activate-account" element={<ActivateAccountModule />} />
         <Route path="/activate" element={<ActivateAccountModule />} />
+        <Route path="/enroll/:token" element={<ActivateAccountModule />} />
+        <Route path="/enroll" element={<ActivateAccountModule />} />
         {/* Public Password Recovery & Reset Routes */}
         <Route path="/recover-password" element={<RecoverPasswordModule />} />
         <Route path="/forgot-password" element={<RecoverPasswordModule />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordModule />} />
         <Route path="/reset-password" element={<ResetPasswordModule />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 

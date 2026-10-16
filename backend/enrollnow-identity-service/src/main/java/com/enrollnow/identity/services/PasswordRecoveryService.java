@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 import com.enrollnow.identity.dtos.ForgotPasswordRequest;
 import com.enrollnow.identity.models.UserActionToken;
 import com.enrollnow.identity.models.UserEmail;
@@ -199,6 +200,26 @@ public class PasswordRecoveryService {
             );
         }
 
+        // Handle case where an ENROLLMENT token is passed to reset password
+        if ("ENROLLMENT".equals(resetToken.getTokenType())) {
+            if (resetToken.getExpiresAt().isBefore(now)) {
+                throw new AlreadyEnrolledException(
+                        "TOKEN_EXPIRED",
+                        "Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent"
+                );
+            }
+            if (resetToken.getUsedAt() != null) {
+                throw new AlreadyEnrolledException(
+                        "ALREADY_ENROLLED",
+                        "Already enrolled! Please login"
+                );
+            }
+            throw new AlreadyEnrolledException(
+                    "ENROLLMENT_REQUIRED",
+                    "Must complete enrollment before attempting to reset password. Please contact your site admin for an enrollment link"
+            );
+        }
+
         if (!TOKEN_TYPE.equals(resetToken.getTokenType())) {
             throw new IllegalArgumentException(
                     "Invalid or expired password reset token"
@@ -206,14 +227,16 @@ public class PasswordRecoveryService {
         }
 
         if (resetToken.getUsedAt() != null) {
-            throw new IllegalArgumentException(
-                    "Password reset token has already been used"
+            throw new AlreadyEnrolledException(
+                    "RESET_TOKEN_USED",
+                    "Reset Token Already Used! Please Contact Your Administrator"
             );
         }
 
         if (resetToken.getExpiresAt().isBefore(now)) {
-            throw new IllegalArgumentException(
-                    "Password reset token has expired"
+            throw new AlreadyEnrolledException(
+                    "TOKEN_EXPIRED",
+                    "Password Reset Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent"
             );
         }
 

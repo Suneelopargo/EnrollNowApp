@@ -237,7 +237,7 @@ class UserInvitationServiceTest {
                 );
 
         assertEquals(
-                "Activation token has already been used",
+                "Already enrolled! Please login",
                 ex.getMessage()
         );
 
@@ -290,7 +290,7 @@ class UserInvitationServiceTest {
                 );
 
         assertEquals(
-                "Activation token has expired",
+                "Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent",
                 ex.getMessage()
         );
 

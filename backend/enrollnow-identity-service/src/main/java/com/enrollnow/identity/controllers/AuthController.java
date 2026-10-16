@@ -8,6 +8,7 @@ import com.enrollnow.identity.services.LoginService;
 import com.enrollnow.identity.services.PasswordRecoveryService;
 import com.enrollnow.identity.services.UserInvitationService;
 import com.enrollnow.identity.dtos.ResetPasswordRequest;
+import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 
 import jakarta.validation.Valid;
 
@@ -97,6 +98,17 @@ public class AuthController {
                     )
             );
 
+        } catch (AlreadyEnrolledException ex) {
+
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT).body(
+                    java.util.Map.of(
+                            "error",
+                            ex.getErrorCode(),
+                            "message",
+                            ex.getMessage()
+                    )
+            );
+
         } catch (IllegalArgumentException ex) {
 
             return ResponseEntity.badRequest().body(
@@ -129,12 +141,66 @@ public class AuthController {
                     )
             );
 
+        } catch (AlreadyEnrolledException ex) {
+
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT).body(
+                    java.util.Map.of(
+                            "error",
+                            ex.getErrorCode(),
+                            "message",
+                            ex.getMessage()
+                    )
+            );
+
         } catch (IllegalArgumentException ex) {
 
             return ResponseEntity.badRequest().body(
                     java.util.Map.of(
                             "error",
                             "Invalid Account Activation",
+                            "message",
+                            ex.getMessage()
+                    )
+            );
+        }
+    }
+
+    @GetMapping("/activate/validate")
+    public ResponseEntity<?> validateActivationToken(
+            @PathVariable UUID tenantId,
+            @RequestParam String token) {
+
+        try {
+
+            userInvitationService.validateActivationToken(
+                    tenantId,
+                    token
+            );
+
+            return ResponseEntity.ok(
+                    java.util.Map.of(
+                            "valid",
+                            true
+                    )
+            );
+
+        } catch (AlreadyEnrolledException ex) {
+
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT).body(
+                    java.util.Map.of(
+                            "error",
+                            ex.getErrorCode(),
+                            "message",
+                            ex.getMessage()
+                    )
+            );
+
+        } catch (IllegalArgumentException ex) {
+
+            return ResponseEntity.badRequest().body(
+                    java.util.Map.of(
+                            "error",
+                            "INVALID_TOKEN",
                             "message",
                             ex.getMessage()
                     )

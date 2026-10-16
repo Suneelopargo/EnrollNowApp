@@ -90,4 +90,19 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     expect(ResetPasswordPage).toBeDefined();
     expect(typeof ResetPasswordPage).toBe('function');
   });
+
+  it('triggers warning in toaster for Already enrolled! Please login', async () => {
+    const { toast } = await import('../../../../shared/toaster');
+    const warningSpy = vi.spyOn(toast, 'warning');
+    toast.warning('Already enrolled! Please login');
+    expect(warningSpy).toHaveBeenCalledWith('Already enrolled! Please login');
+    const activeToasts = toast.getToasts();
+    expect(activeToasts.some((t) => t.message === 'Already enrolled! Please login' && t.type === 'warning')).toBe(true);
+    warningSpy.mockRestore();
+  });
+
+  it('provides validateActivationToken method on authApi', async () => {
+    const { authApi } = await import('../../../../shared/api/authApi');
+    expect(typeof authApi.validateActivationToken).toBe('function');
+  });
 });

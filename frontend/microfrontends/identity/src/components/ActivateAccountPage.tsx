@@ -1,7 +1,5 @@
-// frontend/microfrontends/identity/src/components/ActivateAccountPage.tsx
-// Central Code-Driven Account Activation & Password Setup Component
-import React, { useState, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import zxcvbn from 'zxcvbn';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { authApi } from '../../../../shared/api/authApi';
@@ -35,17 +33,62 @@ function formatCrackDuration(seconds: number): string {
 }
 
 export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSuccess }) => {
+  const { token: routeToken } = useParams<{ token?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const tenantId = searchParams.get('tenantId') || '';
-  const token = searchParams.get('token') || '';
+  const token = searchParams.get('token') || routeToken || '';
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Validate activation token on mount; if already used, redirect to /login with warning
+  useEffect(() => {
+    if (!token) return;
+
+    let isMounted = true;
+    authApi
+      .validateActivationToken({ tenantId, token })
+      .catch((err: any) => {
+        if (!isMounted) return;
+        const errData = err.response?.data;
+        const errMsg = errData?.message || err.message || '';
+        const errCode = errData?.error || '';
+        const isAlreadyEnrolled =
+          errCode === 'ALREADY_ENROLLED' ||
+          err.response?.status === 409 ||
+          errMsg.toLowerCase().includes('already enrolled') ||
+          errMsg.toLowerCase().includes('already been used');
+
+        const isExpired =
+          errCode === 'TOKEN_EXPIRED' ||
+          errMsg.toLowerCase().includes('expired') ||
+          errMsg.toLowerCase().includes('contact your site admin');
+
+        if (isAlreadyEnrolled) {
+          const warning = 'Already enrolled! Please login';
+          toast.warning(warning);
+          navigate(`/login?warning=${encodeURIComponent(warning)}`, {
+            replace: true,
+            state: { warning },
+          });
+          return;
+        }
+
+        if (isExpired) {
+          toast.warning(errMsg);
+          return;
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId, token, navigate]);
 
   // Test #1: Password Strength via zxcvbn
   const strengthResult = useMemo(() => {
@@ -141,11 +184,39 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
         navigate('/login', { replace: true });
       }, 2000);
     } catch (err: any) {
+      const errData = err.response?.data;
       const serverMessage =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
+        errData?.message ||
+        errData?.error ||
         err.message ||
         'Unable to activate account. The link may have expired or already been used.';
+
+      const isAlreadyEnrolled =
+        errData?.error === 'ALREADY_ENROLLED' ||
+        err.response?.status === 409 ||
+        serverMessage.toLowerCase().includes('already enrolled') ||
+        serverMessage.toLowerCase().includes('already been used');
+
+      const isExpired =
+        errData?.error === 'TOKEN_EXPIRED' ||
+        serverMessage.toLowerCase().includes('expired') ||
+        serverMessage.toLowerCase().includes('contact your site admin');
+
+      if (isAlreadyEnrolled) {
+        const warning = 'Already enrolled! Please login';
+        toast.warning(warning);
+        navigate(`/login?warning=${encodeURIComponent(warning)}`, {
+          replace: true,
+          state: { warning },
+        });
+        return;
+      }
+
+      if (isExpired) {
+        toast.warning(serverMessage);
+        return;
+      }
+
       setErrorMessage(serverMessage);
       toast.error(serverMessage, { title: 'Activation Failed' });
     } finally {

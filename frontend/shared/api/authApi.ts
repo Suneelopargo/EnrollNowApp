@@ -198,6 +198,22 @@ export const authApi = {
   },
 
   /**
+   * Validates an activation token before showing setup form.
+   * Calls GET /api/v1/tenants/{tenantId}/auth/activate/validate
+   */
+  async validateActivationToken(payload: { tenantId?: string; token: string }): Promise<{ valid: boolean }> {
+    const tenantId = payload.tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
+    const res = await apiClient.get<{ valid: boolean }>(
+      `/api/v1/tenants/${tenantId}/auth/activate/validate`,
+      {
+        params: { token: payload.token },
+        skipToast: true,
+      } as any
+    );
+    return res.data;
+  },
+
+  /**
    * Requests password reset email instructions for an account.
    * Calls POST /api/v1/tenants/{tenantId}/auth/forgot-password
    */

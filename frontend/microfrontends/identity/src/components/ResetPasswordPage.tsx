@@ -1,7 +1,5 @@
-// frontend/microfrontends/identity/src/components/ResetPasswordPage.tsx
-// Central Code-Driven Password Reset Component
 import React, { useState, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import zxcvbn from 'zxcvbn';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { authApi } from '../../../../shared/api/authApi';
@@ -35,11 +33,12 @@ function formatCrackDuration(seconds: number): string {
 }
 
 export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess }) => {
+  const { token: routeToken } = useParams<{ token?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const tenantId = searchParams.get('tenantId') || '';
-  const token = searchParams.get('token') || '';
+  const token = searchParams.get('token') || routeToken || '';
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -139,10 +138,28 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
         navigate('/login');
       }, 2000);
     } catch (err: any) {
+      const errData = err?.response?.data;
       const msg =
-        err?.response?.data?.message ||
+        errData?.message ||
         err?.message ||
         'Unable to reset password. The link may have expired or already been used.';
+
+      const isWarning =
+        errData?.error === 'TOKEN_EXPIRED' ||
+        errData?.error === 'ALREADY_ENROLLED' ||
+        errData?.error === 'RESET_TOKEN_USED' ||
+        errData?.error === 'ENROLLMENT_REQUIRED' ||
+        err?.response?.status === 409 ||
+        msg.toLowerCase().includes('expired') ||
+        msg.toLowerCase().includes('already enrolled') ||
+        msg.toLowerCase().includes('already used') ||
+        msg.toLowerCase().includes('contact your site admin');
+
+      if (isWarning) {
+        toast.warning(msg);
+        return;
+      }
+
       setErrorMessage(msg);
       toast.error(msg, { title: 'Password Reset Failed' });
     } finally {

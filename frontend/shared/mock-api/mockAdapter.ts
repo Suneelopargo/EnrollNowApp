@@ -113,6 +113,119 @@ export const mockAdapter: AxiosAdapter = async (
     );
   }
 
+  // Public unauthenticated activate/validate endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/activate\/validate$/) ||
+      path === '/api/v1/auth/activate/validate') &&
+    method === 'GET'
+  ) {
+    const rawToken = config.params?.token || '';
+    if (
+      rawToken === 'expired-token' ||
+      rawToken.toLowerCase().includes('expired')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent',
+        'TOKEN_EXPIRED'
+      );
+    }
+    if (
+      rawToken === 'already-enrolled' ||
+      rawToken === 'used-token' ||
+      rawToken.toLowerCase().includes('already') ||
+      rawToken.toLowerCase().includes('enrolled')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Already enrolled! Please login',
+        'ALREADY_ENROLLED'
+      );
+    }
+    return createMockSuccessResponse(config, { valid: true });
+  }
+
+  // Public unauthenticated activate endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/activate$/) ||
+      path === '/api/v1/auth/activate') &&
+    method === 'POST'
+  ) {
+    const activatePayload = parsePayload(config.data);
+    const tokenVal = activatePayload?.token || '';
+    if (
+      tokenVal === 'expired-token' ||
+      tokenVal.toLowerCase().includes('expired')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent',
+        'TOKEN_EXPIRED'
+      );
+    }
+    if (
+      tokenVal === 'already-enrolled' ||
+      tokenVal === 'used-token' ||
+      tokenVal.toLowerCase().includes('already') ||
+      tokenVal.toLowerCase().includes('enrolled')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Already enrolled! Please login',
+        'ALREADY_ENROLLED'
+      );
+    }
+    return createMockSuccessResponse(
+      config,
+      { message: 'Account activated successfully.' },
+      200,
+      'Account activated successfully.'
+    );
+  }
+
+  // Public unauthenticated reset-password endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/reset-password$/) ||
+      path === '/api/v1/auth/reset-password') &&
+    method === 'POST'
+  ) {
+    const resetPayload = parsePayload(config.data);
+    const tokenVal = resetPayload?.token || '';
+    if (
+      tokenVal === 'expired-token' ||
+      tokenVal.toLowerCase().includes('expired')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent',
+        'TOKEN_EXPIRED'
+      );
+    }
+    if (
+      tokenVal === 'already-enrolled' ||
+      tokenVal === 'used-token' ||
+      tokenVal.toLowerCase().includes('already')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Already enrolled! Please login',
+        'ALREADY_ENROLLED'
+      );
+    }
+    return createMockSuccessResponse(
+      config,
+      { message: 'Password reset successfully.' },
+      200,
+      'Password reset successfully.'
+    );
+  }
+
   // 3. For ALL other endpoints, enforce token authentication check
   const token = extractBearerToken(config);
   if (!token) {
