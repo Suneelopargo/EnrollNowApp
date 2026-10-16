@@ -26,7 +26,19 @@ export interface UserListItemResponse {
   primaryEmail: string;
   status: 'ACTIVE' | 'DISABLED' | string;
   sitePermission: string | null;
+  siteId?: string | null;
   studies: UserStudyAccessResponse[];
+  createdAt?: string;
+}
+
+export interface RoleResponse {
+  id: string;
+  code: string;
+  name: string;
+  scopeType: string;
+  description?: string | null;
+  systemRole: boolean;
+  active: boolean;
 }
 
 export interface CreateUserPayload {
@@ -91,6 +103,28 @@ export function normalizeStudyPermission(perm?: string | null): string {
 export function toStudyPermissionLabel(roleCode?: string | null): string {
   if (!roleCode) return 'Admin';
   return ROLE_CODE_TO_STUDY_PERMISSION[roleCode] || roleCode;
+}
+
+export const SITE_PERMISSION_TO_ROLE_CODE: Record<string, string> = {
+  'None': 'NONE',
+  'NONE': 'NONE',
+  'Registry Access': 'SITE_REGISTRY',
+  'SITE_REGISTRY': 'SITE_REGISTRY',
+  'Site Manager': 'SITE_MANAGER',
+  'SITE_MANAGER': 'SITE_MANAGER',
+  'Site Admin': 'SITE_ADMIN',
+  'SITE_ADMIN': 'SITE_ADMIN',
+};
+
+export const ROLE_CODE_TO_SITE_PERMISSION: Record<string, string> = {
+  'SITE_REGISTRY': 'Registry Access',
+  'SITE_MANAGER': 'Site Manager',
+  'SITE_ADMIN': 'Site Admin',
+};
+
+export function toSitePermissionLabel(val?: string | null): string {
+  if (!val || val === 'NONE' || val === 'None') return 'None';
+  return ROLE_CODE_TO_SITE_PERMISSION[val] || val;
 }
 
 function resolveTenantId(tenantId?: string): string {
@@ -269,6 +303,15 @@ export const administrationApi = {
     return res.data;
   },
 
+  /**
+   * DELETE /api/v1/tenants/{tenantId}/users/{userId}/roles/site
+   * Deactivates any active site-scoped role assignment for this user.
+   */
+  async removeSiteRole(userId: string | number, tenantId?: string): Promise<void> {
+    const tid = resolveTenantId(tenantId);
+    await apiClient.delete(`/api/v1/tenants/${tid}/users/${userId}/roles/site`);
+  },
+
   // Supporting views compatibility methods
   async getDashboard(): Promise<any> {
     try {
@@ -288,13 +331,14 @@ export const administrationApi = {
     }
   },
 
-  async getRoles(): Promise<any[]> {
-    try {
-      const res = await apiClient.get('/api/v1/administrator/roles');
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+  /**
+   * GET /api/v1/roles?scope={scope}
+   * Retrieves active roles, optionally filtered by scope (e.g. SITE, STUDY).
+   */
+  async getRoles(scope?: string): Promise<RoleResponse[]> {
+    const params = scope ? { scope: scope.toUpperCase() } : {};
+    const res = await apiClient.get<RoleResponse[]>('/api/v1/roles', { params });
+    return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
   async getAuditLogs(query?: Record<string, any>): Promise<any[]> {

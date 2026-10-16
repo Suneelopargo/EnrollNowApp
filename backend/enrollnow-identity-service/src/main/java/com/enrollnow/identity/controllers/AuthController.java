@@ -63,7 +63,7 @@ public class AuthController {
             return ResponseEntity.ok(
                     java.util.Map.of(
                             "message",
-                            "If the email exists, password reset instructions have been sent."
+                            "If the e-mail you provided is in our system, you will receive a reset link shortly"
                     )
             );
         }
@@ -71,7 +71,7 @@ public class AuthController {
         return ResponseEntity.ok(
                 java.util.Map.of(
                         "message",
-                        "If the email exists, password reset instructions have been sent.",
+                        "If the e-mail you provided is in our system, you will receive a reset link shortly",
                         "resetToken",
                         resetToken
                 )

@@ -1,5 +1,5 @@
 // frontend/microfrontends/administration/src/components/SiteAdminHorizontalNav.tsx - Horizontal Navigation Bar
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   BookOpen,
   Users,
@@ -9,6 +9,8 @@ import {
   Shield,
   Settings,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileSpreadsheet,
   FolderGit2,
   Share2,
@@ -30,6 +32,46 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
 }) => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
+  const navTabsRef = useRef<HTMLDivElement>(null);
+  const activeTabRef = useRef<HTMLButtonElement | null>(null);
+
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Check scroll bounds
+  const checkScroll = useCallback(() => {
+    const el = navTabsRef.current;
+    if (el) {
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    const el = navTabsRef.current;
+    if (el) {
+      el.addEventListener('scroll', checkScroll, { passive: true });
+      window.addEventListener('resize', checkScroll);
+      return () => {
+        el.removeEventListener('scroll', checkScroll);
+        window.removeEventListener('resize', checkScroll);
+      };
+    }
+  }, [checkScroll]);
+
+  // Auto-scroll active tab into view when activeTab changes
+  useEffect(() => {
+    if (activeTabRef.current) {
+      activeTabRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+    const timer = setTimeout(checkScroll, 350);
+    return () => clearTimeout(timer);
+  }, [activeTab, checkScroll]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -51,11 +93,56 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
     onSelectExportOption?.(option);
   };
 
+  const scrollNav = (direction: 'left' | 'right') => {
+    if (navTabsRef.current) {
+      const offset = direction === 'left' ? -160 : 160;
+      navTabsRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
   return (
     <nav className="site-admin-horizontal-nav" aria-label="Site Admin Sections">
-      <div className="site-admin-nav-tabs" role="tablist">
+      {/* Mobile Section Dropdown: guarantees 100% visibility of all tabs on small screens */}
+      <div className="site-admin-mobile-nav-select-wrap">
+        <label htmlFor="site-admin-mobile-tabs" className="site-admin-mobile-nav-label">
+          Section:
+        </label>
+        <div className="site-admin-mobile-select-box">
+          <select
+            id="site-admin-mobile-tabs"
+            value={activeTab}
+            onChange={(e) => onTabChange(e.target.value as AdminTabId)}
+            className="form-select site-admin-mobile-select"
+            aria-label="Select administrative section"
+          >
+            <option value="studies">Studies</option>
+            <option value="users">Users ({usersCount})</option>
+            <option value="import">Import</option>
+            <option value="export">Export</option>
+            <option value="audit">Audit Log</option>
+            <option value="security">Security</option>
+            <option value="settings">General Settings</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="site-admin-nav-tabs-wrapper">
+        {canScrollLeft && (
+          <button
+            type="button"
+            className="site-admin-nav-scroll-btn site-admin-nav-scroll-left"
+            onClick={() => scrollNav('left')}
+            aria-label="Scroll tabs left"
+            title="Scroll left"
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
+
+        <div className="site-admin-nav-tabs" role="tablist" ref={navTabsRef}>
         {/* Studies */}
         <button
+          ref={activeTab === 'studies' ? activeTabRef : null}
           type="button"
           role="tab"
           aria-selected={activeTab === 'studies'}
@@ -68,6 +155,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
 
         {/* Users (Primary) */}
         <button
+          ref={activeTab === 'users' ? activeTabRef : null}
           type="button"
           role="tab"
           aria-selected={activeTab === 'users'}
@@ -83,6 +171,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
 
         {/* Import */}
         <button
+          ref={activeTab === 'import' ? activeTabRef : null}
           type="button"
           role="tab"
           aria-selected={activeTab === 'import'}
@@ -96,6 +185,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
         {/* Export with Dropdown */}
         <div className="site-admin-nav-dropdown-wrap" ref={exportDropdownRef}>
           <button
+            ref={activeTab === 'export' ? activeTabRef : null}
             type="button"
             role="tab"
             aria-selected={activeTab === 'export'}
@@ -147,6 +237,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
 
         {/* Audit Log */}
         <button
+          ref={activeTab === 'audit' ? activeTabRef : null}
           type="button"
           role="tab"
           aria-selected={activeTab === 'audit'}
@@ -159,6 +250,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
 
         {/* Security */}
         <button
+          ref={activeTab === 'security' ? activeTabRef : null}
           type="button"
           role="tab"
           aria-selected={activeTab === 'security'}
@@ -171,6 +263,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
 
         {/* General Settings */}
         <button
+          ref={activeTab === 'settings' ? activeTabRef : null}
           type="button"
           role="tab"
           aria-selected={activeTab === 'settings'}
@@ -182,9 +275,20 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
         </button>
       </div>
 
-      <div className="site-admin-nav-meta">
-        <span className="site-admin-version-badge">Version: 2.1.9-1</span>
-      </div>
+      {canScrollRight && (
+        <button
+          type="button"
+          className="site-admin-nav-scroll-btn site-admin-nav-scroll-right"
+          onClick={() => scrollNav('right')}
+          aria-label="Scroll tabs right"
+          title="Scroll right"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
+    </div>
+
+  
     </nav>
   );
 };

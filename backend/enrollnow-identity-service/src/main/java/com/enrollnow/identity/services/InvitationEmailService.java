@@ -140,12 +140,6 @@ public class InvitationEmailService {
         sb.append("</a></td></tr></table>");
         sb.append("</td></tr>");
 
-        // URL Fallback
-        sb.append("<tr><td style=\"font-size: 13px; color: #64748b; padding-bottom: 24px; word-break: break-all;\">");
-        sb.append("If the button does not work, please use the URL below:<br>");
-        sb.append("<a href=\"").append(actionUrl).append("\" target=\"_blank\" style=\"color: #004b87; text-decoration: underline;\">");
-        sb.append(actionUrl);
-        sb.append("</a></td></tr>");
 
         // Optional footer note
         if (footerNote != null && !footerNote.trim().isEmpty()) {

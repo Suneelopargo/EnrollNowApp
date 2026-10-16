@@ -124,5 +124,12 @@ public class UserController {
         );
     }
     
-    
+    @DeleteMapping("/{userId}/roles/site")
+    public ResponseEntity<Void> removeSiteRole(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID userId
+    ) {
+        userService.removeSiteRole(tenantId, userId);
+        return ResponseEntity.noContent().build();
+    }
 }

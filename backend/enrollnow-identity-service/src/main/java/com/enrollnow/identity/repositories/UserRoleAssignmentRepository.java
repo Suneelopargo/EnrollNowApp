@@ -87,6 +87,9 @@ public interface UserRoleAssignmentRepository
             UUID tenantId,
             UUID userId
     );
-    
- 
+
+    List<UserRoleAssignment>
+    findByTenantIdAndSiteIdIsNotNullAndActiveTrue(
+            UUID tenantId
+    );
 }

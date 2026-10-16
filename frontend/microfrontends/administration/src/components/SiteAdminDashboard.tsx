@@ -1,7 +1,12 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation, ConfirmationContainer } from '../../../../shared/confirmation';
-import { administrationApi } from '../../../../shared/api/administrationApi';
+import {
+  administrationApi,
+  RoleResponse,
+  toSitePermissionLabel,
+  SITE_PERMISSION_TO_ROLE_CODE,
+} from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
 import { UsersGrid } from './UsersGrid';
 import { AddUserModal, UserFormData, AvailableStudy, BACKEND_STUDIES } from './AddUserModal';
@@ -20,6 +25,8 @@ export const SiteAdminDashboard: React.FC = () => {
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
   const [users, setUsers] = useState<SiteAdminUser[]>([]);
   const [availableStudies, setAvailableStudies] = useState<AvailableStudy[]>(BACKEND_STUDIES);
+  const [siteRoles, setSiteRoles] = useState<RoleResponse[]>([]);
+  const [studyRoles, setStudyRoles] = useState<RoleResponse[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
@@ -56,11 +63,14 @@ export const SiteAdminDashboard: React.FC = () => {
             firstName: u.firstName,
             lastName: u.lastName,
             email: u.primaryEmail || '',
-            sitePermissions: u.sitePermission || '',
+            sitePermissions: toSitePermissionLabel(u.sitePermission),
+            sitePermissionCode: u.sitePermission,
+            siteId: u.siteId,
             studies: studyNames,
             studyAssignments: Array.isArray(u.studies) ? u.studies : [],
             status: u.status === 'ACTIVE' ? 'Active' : 'Inactive',
             title: u.title || '',
+            createdAt: u.createdAt,
           };
         });
 
@@ -82,9 +92,23 @@ export const SiteAdminDashboard: React.FC = () => {
     }
   }, []);
 
+  const fetchRoles = useCallback(async () => {
+    try {
+      const [siteData, studyData] = await Promise.all([
+        administrationApi.getRoles('SITE'),
+        administrationApi.getRoles('STUDY'),
+      ]);
+      if (Array.isArray(siteData)) setSiteRoles(siteData);
+      if (Array.isArray(studyData)) setStudyRoles(studyData);
+    } catch (err) {
+      console.warn('Failed to load roles from /api/v1/roles:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
-  }, [fetchUsers]);
+    fetchRoles();
+  }, [fetchUsers, fetchRoles]);
 
   // Modal State
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
@@ -109,15 +133,43 @@ export const SiteAdminDashboard: React.FC = () => {
           await administrationApi.updateUser(userToEdit.id, {
             firstName: formData.firstName,
             lastName: formData.lastName,
-            title: formData.title,
           });
+
+          // Sync site permission
+          const oldSitePerm = toSitePermissionLabel(userToEdit.sitePermissions);
+          const newSitePerm = toSitePermissionLabel(formData.sitePermissions);
+
+          if (newSitePerm !== oldSitePerm) {
+            if (newSitePerm === 'None' || !newSitePerm) {
+              await administrationApi.removeSiteRole(userToEdit.id).catch((err) => {
+                console.warn('Failed to remove site role:', err);
+              });
+            } else {
+              const roleCode =
+                SITE_PERMISSION_TO_ROLE_CODE[newSitePerm] ||
+                (formData.sitePermissions ? SITE_PERMISSION_TO_ROLE_CODE[formData.sitePermissions] : undefined) ||
+                newSitePerm;
+              const resolvedSiteId = userToEdit.siteId || users.find((u) => u.siteId)?.siteId || undefined;
+              try {
+                await administrationApi.assignScopedRole(userToEdit.id, {
+                  roleCode,
+                  scopeType: 'SITE',
+                  scopeId: resolvedSiteId as any,
+                });
+              } catch (siteErr: any) {
+                console.error('Failed to update site permission:', siteErr);
+                const sMsg = siteErr?.response?.data?.message || siteErr?.message || 'Access error';
+                toast.warning(`Site permission '${newSitePerm}' could not be updated: ${sMsg}`);
+              }
+            }
+          }
 
           // Sync study access assignments
           if (formData.assignedStudies && formData.assignedStudies.length > 0) {
             for (const s of formData.assignedStudies) {
               try {
                 await administrationApi.grantStudyAccess(s.studyId, userToEdit.id, {
-                  studyRole: formData.title || 'Study Coordinator',
+                  studyRole: s.permission || 'Study Member',
                   studyPermission: s.permission,
                 });
               } catch (studyErr: any) {
@@ -162,15 +214,34 @@ export const SiteAdminDashboard: React.FC = () => {
             firstName: formData.firstName,
             lastName: formData.lastName,
             email: formData.email,
-            title: formData.title,
           });
+
+          // If site permission was selected, assign it
+          if (created?.id && formData.sitePermissions) {
+            const sitePerm = toSitePermissionLabel(formData.sitePermissions);
+            if (sitePerm && sitePerm !== 'None') {
+              const roleCode = SITE_PERMISSION_TO_ROLE_CODE[sitePerm] || SITE_PERMISSION_TO_ROLE_CODE[formData.sitePermissions] || formData.sitePermissions;
+              const resolvedSiteId = users.find((u) => u.siteId)?.siteId || undefined;
+              try {
+                await administrationApi.assignScopedRole(created.id, {
+                  roleCode,
+                  scopeType: 'SITE',
+                  scopeId: resolvedSiteId as any,
+                });
+              } catch (siteErr: any) {
+                console.error('Failed to assign site permission:', siteErr);
+                const sMsg = siteErr?.response?.data?.message || siteErr?.message || 'Access error';
+                toast.warning(`User created, but site permission '${sitePerm}' could not be granted: ${sMsg}`);
+              }
+            }
+          }
 
           // If study assignments were selected, grant access
           if (created?.id && formData.assignedStudies && formData.assignedStudies.length > 0) {
             for (const s of formData.assignedStudies) {
               try {
                 await administrationApi.grantStudyAccess(s.studyId, created.id, {
-                  studyRole: formData.title || 'Study Coordinator',
+                  studyRole: s.permission || 'Study Member',
                   studyPermission: s.permission,
                 });
               } catch (studyErr: any) {
@@ -436,6 +507,8 @@ export const SiteAdminDashboard: React.FC = () => {
         onSave={handleSaveUser}
         userToEdit={userToEdit}
         availableStudies={availableStudies}
+        siteRoles={siteRoles}
+        studyRoles={studyRoles}
         onLockUser={handleLockUserFromModal}
         onUnlockUser={handleUnlockUserFromModal}
         onResendEnrollment={handleResendEnrollment}

@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.dtos.RoleResponse;
 import com.enrollnow.identity.dtos.UpdateRolePermissionsRequest;
 import com.enrollnow.identity.exceptions.InvalidPermissionException;
 import com.enrollnow.identity.exceptions.RoleNotFoundException;
@@ -81,5 +82,29 @@ public class RoleService {
 
             rolePermissionRepository.save(rolePermission);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoleResponse> getRoles(String scope) {
+        List<Role> roles;
+        if (scope != null && !scope.trim().isEmpty()) {
+            roles = roleRepository.findByScopeTypeAndActiveTrue(scope.trim().toUpperCase(Locale.ROOT));
+        } else {
+            roles = roleRepository.findByActiveTrue();
+        }
+
+        return roles.stream().map(this::toRoleResponse).toList();
+    }
+
+    private RoleResponse toRoleResponse(Role role) {
+        return new RoleResponse(
+                role.getId(),
+                role.getCode(),
+                role.getName(),
+                role.getScopeType(),
+                role.getDescription(),
+                role.isSystemRole(),
+                role.isActive()
+        );
     }
 }

@@ -374,3 +374,53 @@
     opacity: 0.7;
   }
 }
+
+// Full-width Top Green Notification Toaster Banner (Matching Screenshot)
+.enl-top-toaster-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-height: 46px;
+  background-color: #6eb33f;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  z-index: 99999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: enlToastTopSlideDown 250ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  .enl-top-toaster-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background-color: #538c29;
+    border-radius: 4px;
+    color: #ffffff;
+    flex-shrink: 0;
+  }
+
+  .enl-top-toaster-text {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #ffffff;
+    letter-spacing: 0.01em;
+  }
+}
+
+@keyframes enlToastTopSlideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

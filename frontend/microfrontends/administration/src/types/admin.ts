@@ -9,6 +9,8 @@ export interface SiteAdminUser {
   lastName?: string;
   email: string;
   sitePermissions: string;
+  sitePermissionCode?: string | null;
+  siteId?: string | null;
   studies: string[];
   studyAssignments?: Array<{
     id: string;

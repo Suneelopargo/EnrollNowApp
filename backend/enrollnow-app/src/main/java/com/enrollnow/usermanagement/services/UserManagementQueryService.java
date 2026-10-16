@@ -53,7 +53,7 @@ public class UserManagementQueryService {
     @Transactional(readOnly = true)
     public List<UserListItemResponse> getUsers(UUID tenantId) {
 
-        List<User> users = userRepository.findByTenantId(tenantId);
+        List<User> users = userRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
         List<UserListItemResponse> response = new ArrayList<>();
 
         for (User user : users) {
@@ -65,6 +65,7 @@ public class UserManagementQueryService {
             item.setLastName(user.getLastName());
             item.setTitle(user.getTitle());
             item.setStatus(user.getStatus());
+            item.setCreatedAt(user.getCreatedAt());
 
             UserEmail primaryEmail =
                     userEmailRepository
@@ -98,6 +99,7 @@ public class UserManagementQueryService {
                         && "SITE".equalsIgnoreCase(role.getScopeType())) {
 
                     sitePermission = role.getCode();
+                    item.setSiteId(assignment.getSiteId());
                     break;
                 }
             }

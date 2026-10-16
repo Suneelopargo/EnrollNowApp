@@ -95,6 +95,24 @@ export const mockAdapter: AxiosAdapter = async (
     return res;
   }
 
+  // Public unauthenticated forgot-password endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/forgot-password$/) ||
+      path === '/api/v1/auth/forgot-password') &&
+    method === 'POST'
+  ) {
+    return createMockSuccessResponse(
+      config,
+      {
+        message:
+          'If the e-mail you provided is in our system, you will receive a reset link shortly',
+        resetToken: 'mock-reset-token-xyz',
+      },
+      200,
+      'If the e-mail you provided is in our system, you will receive a reset link shortly'
+    );
+  }
+
   // 3. For ALL other endpoints, enforce token authentication check
   const token = extractBearerToken(config);
   if (!token) {
@@ -249,6 +267,88 @@ export const mockAdapter: AxiosAdapter = async (
   if (path.match(/^\/api\/v1\/administrator\/users\/[^/]+\/locations$/)) {
     if (method === 'GET') return createMockSuccessResponse(config, [1]);
     if (method === 'PUT') return createMockSuccessResponse(config, { saved: true });
+  }
+
+  // Authoritative Centralized Roles API
+  if (path === '/api/v1/roles' && method === 'GET') {
+    const rawScope = config.params?.scope || '';
+    const scope = typeof rawScope === 'string' ? rawScope.toUpperCase() : '';
+
+    const allRoles = [
+      {
+        id: '53000000-0000-0000-0000-000000000001',
+        code: 'SITE_REGISTRY',
+        name: 'Registry Access',
+        scopeType: 'SITE',
+        description: 'Access to site Registry without Site Admin access.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '53000000-0000-0000-0000-000000000002',
+        code: 'SITE_MANAGER',
+        name: 'Site Manager',
+        scopeType: 'SITE',
+        description: 'Registry access and Site Admin capabilities limited to assigned studies.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '53000000-0000-0000-0000-000000000003',
+        code: 'SITE_ADMIN',
+        name: 'Site Admin',
+        scopeType: 'SITE',
+        description: 'Full Registry and Site Admin access across the site.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000001',
+        code: 'STUDY_READ_ONLY',
+        name: 'Study Read-Only',
+        scopeType: 'STUDY',
+        description: 'View-only access to permitted study data and functionality.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000002',
+        code: 'STUDY_RA',
+        name: 'Study Restricted Access',
+        scopeType: 'STUDY',
+        description: 'Restricted study access intended for limited or de-identified study functionality.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000003',
+        code: 'STUDY_LEADER',
+        name: 'Study Leader',
+        scopeType: 'STUDY',
+        description: 'Operational access to participant and study activities without Study Settings administration.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000004',
+        code: 'STUDY_ADMIN',
+        name: 'Study Admin',
+        scopeType: 'STUDY',
+        description: 'Full study-level access including Study Settings.',
+        systemRole: true,
+        active: true,
+      },
+    ];
+
+    const filtered = scope
+      ? allRoles.filter((r) => r.scopeType.toUpperCase() === scope)
+      : allRoles;
+
+    return createMockSuccessResponse(config, filtered);
+  }
+
+  if (path.match(/^\/api\/v1\/tenants\/[^/]+\/users\/[^/]+\/roles\/site$/) && method === 'DELETE') {
+    return createMockSuccessResponse(config, { success: true }, 204);
   }
 
   if (path === '/api/v1/administrator/roles' && method === 'GET') {

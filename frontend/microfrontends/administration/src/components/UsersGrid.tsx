@@ -17,13 +17,13 @@ import {
   Pencil,
   Lock,
   Unlock,
-  ShieldCheck,
   Download,
   FileSpreadsheet,
   FileText,
   ChevronDown,
 } from 'lucide-react';
 import { SiteAdminUser, UserStatus } from '../types/admin';
+import { toSitePermissionLabel } from '../../../../shared/api/administrationApi';
 
 // ---------------------------------------------------------------------------
 // Custom Cell Renderers (CSS classes only - NO inline styles!)
@@ -74,17 +74,15 @@ const UserEmailCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (par
 };
 
 const UserPermissionCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (params) => {
-  const permission = params.value;
-  if (!permission) {
-    return <span className="site-admin-permission-none">—</span>;
+  const rawPermission = params.value;
+  const permission = toSitePermissionLabel(rawPermission);
+  if (!permission || permission === 'None' || permission === 'NONE') {
+    return <span className="site-admin-permission-cell text-muted">—</span>;
   }
 
   return (
-    <div className="site-admin-permission-cell">
-      <span className="site-admin-permission-pill">
-        <ShieldCheck size={13} aria-hidden="true" />
-        <span>{permission}</span>
-      </span>
+    <div className="site-admin-permission-cell" title={permission}>
+      <span>{permission}</span>
     </div>
   );
 };
@@ -214,33 +212,25 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Filter users based on status dropdown
+  // Filter users based on status dropdown and sort latest record at the top
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    const list = users.filter((u) => {
       if (statusFilter === 'Active') return u.status === 'Active';
       if (statusFilter === 'Disabled') return u.status === 'Inactive';
       return true; // 'All'
     });
+
+    return list.slice().sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (timeA && timeB) {
+        return timeB - timeA;
+      }
+      if (timeB && !timeA) return 1;
+      if (timeA && !timeB) return -1;
+      return 0;
+    });
   }, [users, statusFilter]);
-
-  // Counts
-  const activeCount = useMemo(() => users.filter((u) => u.status === 'Active').length, [users]);
-  const inactiveCount = users.length - activeCount;
-
-  // Track displayed rows (after AG Grid quick search and floating filters)
-  const [displayedCount, setDisplayedCount] = useState<number>(() => users.filter((u) => u.status === 'Active').length);
-
-  const updateCounts = useCallback(() => {
-    if (gridApi) {
-      setDisplayedCount(gridApi.getDisplayedRowCount());
-    } else {
-      setDisplayedCount(filteredUsers.length);
-    }
-  }, [gridApi, filteredUsers.length]);
-
-  useEffect(() => {
-    updateCounts();
-  }, [updateCounts, filteredUsers]);
 
   // Handle global search input change
   const handleSearchChange = (value: string) => {
@@ -258,7 +248,6 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
     if (searchTerm) {
       params.api.setGridOption('quickFilterText', searchTerm);
     }
-    setDisplayedCount(params.api.getDisplayedRowCount());
   }, [searchTerm]);
 
   // AG Grid Column Definitions
@@ -268,9 +257,8 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         headerName: 'Name',
         field: 'name',
         sortable: true,
-        sort: 'asc', // Default sorted ascending as in screenshot
         filter: 'agTextColumnFilter',
-        minWidth: 180,
+        minWidth: 150,
         flex: 1.2,
         cellRenderer: UserNameCellRenderer,
       },
@@ -291,6 +279,9 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         minWidth: 160,
         flex: 1,
         cellRenderer: UserPermissionCellRenderer,
+        valueFormatter: (params) => {
+          return toSitePermissionLabel(params.value) || '';
+        },
       },
       {
         headerName: 'Studies',
@@ -323,9 +314,9 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         field: 'id',
         sortable: false,
         filter: false,
-        width: 130,
-        minWidth: 120,
-        maxWidth: 140,
+        width: 95,
+        minWidth: 85,
+        maxWidth: 105,
         pinned: 'right',
         resizable: false,
         cellClass: 'p-0 flex items-center justify-center',
@@ -579,24 +570,6 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
           </div>
         )}
 
-        {/* Stats counter strip */}
-        <div className="site-admin-stats-bar">
-          <span className="site-admin-stat-item">
-            Total Users: <strong>{users.length}</strong>
-          </span>
-          <span className="site-admin-stat-item">
-            Active: <strong>{activeCount}</strong>
-          </span>
-          <span className="site-admin-stat-item">
-            Inactive: <strong>{inactiveCount}</strong>
-          </span>
-          {displayedCount !== users.length && (
-            <span className="site-admin-stat-item site-admin-stat-filtered">
-              Filtered matches: <strong>{displayedCount}</strong>
-            </span>
-          )}
-        </div>
-
         {/* Global DataGrid */}
         <DataGrid
           loading={loading}
@@ -605,8 +578,6 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
           defaultColDef={defaultColDef}
           context={{ onEditUser, onDeleteUser, onToggleStatus }}
           onGridReady={onGridReady}
-          onFilterChanged={updateCounts}
-          onModelUpdated={updateCounts}
           quickFilterText={searchTerm}
           rowHeight={56}
           headerHeight={44}
