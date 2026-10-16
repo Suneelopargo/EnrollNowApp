@@ -75,5 +75,18 @@ public interface UserRoleAssignmentRepository
             UUID roleId
     );
     
+    List<UserRoleAssignment>
+    findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
+            UUID tenantId,
+            UUID userId,
+            UUID siteId
+    );
+    
+    List<UserRoleAssignment>
+    findByTenantIdAndUserIdAndSiteIdIsNotNullAndActiveTrue(
+            UUID tenantId,
+            UUID userId
+    );
+    
  
 }

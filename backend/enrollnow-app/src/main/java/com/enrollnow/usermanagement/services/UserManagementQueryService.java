@@ -77,11 +77,32 @@ public class UserManagementQueryService {
                 item.setPrimaryEmail(primaryEmail.getEmail());
             }
 
-            /*
-             * Site Permission is intentionally not populated yet.
-             * Customer clarification is still pending.
-             */
-            item.setSitePermission(null);
+           
+            String sitePermission = "NONE";
+
+            List<UserRoleAssignment> siteAssignments =
+                    userRoleAssignmentRepository
+                            .findByTenantIdAndUserIdAndSiteIdIsNotNullAndActiveTrue(
+                                    tenantId,
+                                    user.getId()
+                            );
+
+            for (UserRoleAssignment assignment : siteAssignments) {
+
+                Role role =
+                        roleRepository
+                                .findById(assignment.getRoleId())
+                                .orElse(null);
+
+                if (role != null
+                        && "SITE".equalsIgnoreCase(role.getScopeType())) {
+
+                    sitePermission = role.getCode();
+                    break;
+                }
+            }
+
+            item.setSitePermission(sitePermission);
 
             List<StudyMember> memberships =
                     studyMemberRepository
