@@ -265,7 +265,7 @@ export const mockAdapter: AxiosAdapter = async (
   }
 
   // --- Studies ---
-  if (path === '/api/v1/studies') {
+  if (path === '/api/v1/studies' || path.match(/^\/api\/v1\/tenants\/[^/]+\/studies$/)) {
     if (method === 'GET') {
       return createMockSuccessResponse(config, mockStore.getStudies());
     }

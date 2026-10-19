@@ -20,14 +20,9 @@ import {
 export interface AvailableStudy {
   id: string;
   name: string;
+  studyCode?: string;
+  description?: string;
 }
-
-export const BACKEND_STUDIES: AvailableStudy[] = [
-  { id: '77777777-7777-7777-7777-777777777701', name: 'REG - HIV' },
-  { id: '77777777-7777-7777-7777-777777777702', name: 'REG - AD/MCI' },
-  { id: '77777777-7777-7777-7777-777777777703', name: 'Cognitive Aging Study' },
-  { id: '77777777-7777-7777-7777-777777777704', name: 'Memory Research Program' },
-];
 
 export interface RoleOption {
   code: string;
@@ -149,7 +144,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
   useEffect(() => {
     setIsSubmitting(false);
-    const studyList = (availableStudies && availableStudies.length > 0) ? availableStudies : BACKEND_STUDIES;
+    const studyList = Array.isArray(availableStudies) ? availableStudies : [];
 
     if (userToEdit) {
       const parts = (userToEdit.name || '').trim().split(/\s+/);
@@ -626,8 +621,15 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {studyRows.map((row, idx) => (
-                  <tr key={row.studyId}>
+                {studyRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
+                      No studies configured for this site.
+                    </td>
+                  </tr>
+                ) : (
+                  studyRows.map((row, idx) => (
+                    <tr key={row.studyId}>
                     <td>
                       <input
                         type="checkbox"
@@ -657,8 +659,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                       )}
                     </td>
                   </tr>
-                ))}
-              </tbody>
+                ))
+              )}
+            </tbody>
             </table>
           </div>
         </div>

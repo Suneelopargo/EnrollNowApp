@@ -4,6 +4,8 @@ import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
 import com.enrollnow.study.repositories.StudyMemberRepository;
+import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.exceptions.StudyNotFoundException;
 
 import com.enrollnow.identity.dtos.GrantStudyAccessRequest;
 import com.enrollnow.identity.exceptions.InvalidRoleAssignmentException;
@@ -29,17 +31,20 @@ public class StudyAccessService {
     private final RoleRepository roleRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final StudyMemberRepository studyMemberRepository;
+    private final StudyRepository studyRepository;
 
     public StudyAccessService(
             UserRepository userRepository,
             RoleRepository roleRepository,
             UserRoleAssignmentRepository userRoleAssignmentRepository,
-            StudyMemberRepository studyMemberRepository
+            StudyMemberRepository studyMemberRepository,
+            StudyRepository studyRepository
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.studyMemberRepository = studyMemberRepository;
+        this.studyRepository = studyRepository;
     }
     
     @Transactional
@@ -50,7 +55,11 @@ public class StudyAccessService {
             GrantStudyAccessRequest request
     ) {
 
-        // 1. Validate user belongs to tenant
+        // 1. Validate study belongs to tenant
+        studyRepository.findByTenantIdAndId(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException(studyId));
+
+        // 2. Validate user belongs to tenant
         userRepository.findByTenantIdAndId(tenantId, userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
@@ -149,6 +158,10 @@ public class StudyAccessService {
             UUID tenantId,
             UUID studyId,
             UUID userId) {
+
+        // Validate study belongs to tenant
+        studyRepository.findByTenantIdAndId(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException(studyId));
 
         userRepository
                 .findByTenantIdAndId(tenantId, userId)

@@ -62,6 +62,14 @@ export interface AssignRolePayload {
   scopeId: string;
 }
 
+export interface AvailableStudy {
+  id: string;
+  name: string;
+  studyCode?: string;
+  description?: string;
+  archived?: boolean;
+}
+
 export interface GrantStudyAccessPayload {
   studyRole: string;
   studyPermission: string;
@@ -338,6 +346,16 @@ export const administrationApi = {
   async getRoles(scope?: string): Promise<RoleResponse[]> {
     const params = scope ? { scope: scope.toUpperCase() } : {};
     const res = await apiClient.get<RoleResponse[]>('/api/v1/roles', { params });
+    return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
+  },
+
+  /**
+   * GET /api/v1/tenants/{tenantId}/studies
+   * Retrieves all active studies for the tenant from the backend.
+   */
+  async getStudies(tenantId?: string): Promise<AvailableStudy[]> {
+    const tid = resolveTenantId(tenantId);
+    const res = await apiClient.get<AvailableStudy[]>(`/api/v1/tenants/${tid}/studies`);
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 

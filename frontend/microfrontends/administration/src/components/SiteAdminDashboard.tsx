@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
 import { UsersGrid } from './UsersGrid';
-import { AddUserModal, UserFormData, AvailableStudy, BACKEND_STUDIES } from './AddUserModal';
+import { AddUserModal, UserFormData, AvailableStudy } from './AddUserModal';
 import {
   StudiesView,
   ImportView,
@@ -24,11 +24,22 @@ export const SiteAdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTabId>('users');
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
   const [users, setUsers] = useState<SiteAdminUser[]>([]);
-  const [availableStudies, setAvailableStudies] = useState<AvailableStudy[]>(BACKEND_STUDIES);
+  const [availableStudies, setAvailableStudies] = useState<AvailableStudy[]>([]);
   const [siteRoles, setSiteRoles] = useState<RoleResponse[]>([]);
   const [studyRoles, setStudyRoles] = useState<RoleResponse[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+
+  const fetchStudies = useCallback(async () => {
+    try {
+      const data = await administrationApi.getStudies();
+      if (Array.isArray(data)) {
+        setAvailableStudies(data);
+      }
+    } catch (err) {
+      console.warn('Failed to load studies from /api/v1/tenants/{tenantId}/studies:', err);
+    }
+  }, []);
 
   const fetchUsers = useCallback(async (quiet = false) => {
     if (!quiet) setLoadingUsers(true);
@@ -36,11 +47,6 @@ export const SiteAdminDashboard: React.FC = () => {
     try {
       const data = await administrationApi.getDetailedUsers();
       if (Array.isArray(data)) {
-        const studiesMap = new Map<string, AvailableStudy>();
-        for (const s of BACKEND_STUDIES) {
-          studiesMap.set(s.id, s);
-        }
-
         const mappedUsers: SiteAdminUser[] = data.map((u) => {
           const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
           const studyNames = Array.isArray(u.studies)
@@ -48,14 +54,6 @@ export const SiteAdminDashboard: React.FC = () => {
                 .map((s) => (typeof s === 'string' ? s : s?.name))
                 .filter(Boolean) as string[]
             : [];
-
-          if (Array.isArray(u.studies)) {
-            for (const s of u.studies) {
-              if (s && s.id && s.name) {
-                studiesMap.set(s.id, { id: s.id, name: s.name });
-              }
-            }
-          }
 
           return {
             id: String(u.id),
@@ -75,7 +73,6 @@ export const SiteAdminDashboard: React.FC = () => {
         });
 
         setUsers(mappedUsers);
-        setAvailableStudies(Array.from(studiesMap.values()));
       } else {
         setUsers([]);
       }
@@ -108,7 +105,8 @@ export const SiteAdminDashboard: React.FC = () => {
   useEffect(() => {
     fetchUsers();
     fetchRoles();
-  }, [fetchUsers, fetchRoles]);
+    fetchStudies();
+  }, [fetchUsers, fetchRoles, fetchStudies]);
 
   // Modal State
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
@@ -186,7 +184,7 @@ export const SiteAdminDashboard: React.FC = () => {
             }
           }
 
-          await fetchUsers(true);
+          await Promise.all([fetchUsers(true), fetchStudies()]);
           toast.success(`User '${formData.firstName} ${formData.lastName}' updated successfully.`);
           setIsAddUserModalOpen(false);
           setUserToEdit(null);
@@ -265,7 +263,7 @@ export const SiteAdminDashboard: React.FC = () => {
             }
           }
 
-          await fetchUsers(true);
+          await Promise.all([fetchUsers(true), fetchStudies()]);
           if (invitationSent) {
             toast.success(`User '${formData.firstName} ${formData.lastName}' created and invitation sent to ${formData.email}.`);
           } else {
@@ -292,7 +290,7 @@ export const SiteAdminDashboard: React.FC = () => {
         }
       }
     },
-    [userToEdit, fetchUsers]
+    [userToEdit, fetchUsers, fetchStudies]
   );
 
   const handleLockUserFromModal = useCallback(
@@ -436,8 +434,9 @@ export const SiteAdminDashboard: React.FC = () => {
 
   const handleRefresh = useCallback(() => {
     fetchUsers(true);
+    fetchStudies();
     toast.info('Refreshed user directory.');
-  }, [fetchUsers]);
+  }, [fetchUsers, fetchStudies]);
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
