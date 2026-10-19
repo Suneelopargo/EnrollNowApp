@@ -1,6 +1,5 @@
-package com.enrollnow.access.services;
+package com.enrollnow.study.services;
 
-import com.enrollnow.identity.dtos.GrantStudyAccessRequest;
 import com.enrollnow.identity.exceptions.InvalidRoleAssignmentException;
 import com.enrollnow.identity.exceptions.RoleNotFoundException;
 import com.enrollnow.identity.exceptions.UserNotFoundException;
@@ -9,6 +8,7 @@ import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
+import com.enrollnow.study.dtos.GrantStudyAccessRequest;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyMember;

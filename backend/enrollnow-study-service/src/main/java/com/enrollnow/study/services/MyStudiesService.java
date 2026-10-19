@@ -1,4 +1,4 @@
-package com.enrollnow.studycontext.services;
+package com.enrollnow.study.services;
 
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
@@ -10,7 +10,7 @@ import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
 
-import com.enrollnow.studycontext.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.MyStudyResponse;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

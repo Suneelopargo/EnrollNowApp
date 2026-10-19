@@ -1,4 +1,4 @@
-package com.enrollnow.identity.dtos;
+package com.enrollnow.study.dtos;
 
 import jakarta.validation.constraints.NotBlank;
 

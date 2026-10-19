@@ -1,4 +1,4 @@
-package com.enrollnow.studycontext.dtos;
+package com.enrollnow.study.dtos;
 
 import java.util.UUID;
 

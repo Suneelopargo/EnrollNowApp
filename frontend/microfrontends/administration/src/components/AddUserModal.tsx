@@ -1,5 +1,5 @@
 // frontend/microfrontends/administration/src/components/AddUserModal.tsx - Add/Edit User Modal
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Plus, Send, KeyRound, Lock } from 'lucide-react';
 import {
@@ -69,6 +69,7 @@ export interface AddUserModalProps {
   onSave: (user: UserFormData) => Promise<void> | void;
   userToEdit?: SiteAdminUser | null;
   availableStudies?: AvailableStudy[];
+  loadingStudies?: boolean;
   siteRoles?: RoleOption[] | RoleResponse[];
   studyRoles?: RoleOption[] | RoleResponse[];
   onLockUser?: (user: SiteAdminUser) => Promise<void> | void;
@@ -89,6 +90,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   onSave,
   userToEdit,
   availableStudies,
+  loadingStudies = false,
   siteRoles,
   studyRoles,
   onLockUser,
@@ -141,27 +143,47 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   }>({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const prevIsOpenRef = useRef(false);
 
   useEffect(() => {
+    if (!isOpen) {
+      prevIsOpenRef.current = false;
+      return;
+    }
+
+    const isJustOpening = !prevIsOpenRef.current && isOpen;
+    prevIsOpenRef.current = true;
+
     setIsSubmitting(false);
     const studyList = Array.isArray(availableStudies) ? availableStudies : [];
 
+    if (isJustOpening) {
+      if (userToEdit) {
+        const parts = (userToEdit.name || '').trim().split(/\s+/);
+        setFirstName(parts[0] || userToEdit.firstName || '');
+        setLastName(parts.slice(1).join(' ') || userToEdit.lastName || '');
+        setEmail(userToEdit.email || '');
+
+        const rawSite = userToEdit.sitePermissionCode || userToEdit.sitePermissions;
+        const resolvedLabel = toSitePermissionLabel(rawSite);
+        const matchedRole = resolvedSiteRoles.find(
+          (r) =>
+            (rawSite && r.code.toUpperCase() === String(rawSite).toUpperCase()) ||
+            (rawSite && r.name.toLowerCase() === String(rawSite).toLowerCase()) ||
+            (resolvedLabel && r.name.toLowerCase() === resolvedLabel.toLowerCase())
+        );
+        setSitePermissions(matchedRole ? matchedRole.name : (resolvedLabel || 'None'));
+      } else {
+        setFirstName('');
+        setLastName('');
+        setEmail('');
+        setSitePermissions('None');
+      }
+      setErrors({});
+      setTouched({});
+    }
+
     if (userToEdit) {
-      const parts = (userToEdit.name || '').trim().split(/\s+/);
-      setFirstName(parts[0] || userToEdit.firstName || '');
-      setLastName(parts.slice(1).join(' ') || userToEdit.lastName || '');
-      setEmail(userToEdit.email || '');
-
-      const rawSite = userToEdit.sitePermissionCode || userToEdit.sitePermissions;
-      const resolvedLabel = toSitePermissionLabel(rawSite);
-      const matchedRole = resolvedSiteRoles.find(
-        (r) =>
-          (rawSite && r.code.toUpperCase() === String(rawSite).toUpperCase()) ||
-          (rawSite && r.name.toLowerCase() === String(rawSite).toLowerCase()) ||
-          (resolvedLabel && r.name.toLowerCase() === resolvedLabel.toLowerCase())
-      );
-      setSitePermissions(matchedRole ? matchedRole.name : (resolvedLabel || 'None'));
-
       const assignmentsByStudyId = new Map<string, { role?: string | null; permission?: string | null }>();
       const assignmentsByStudyName = new Map<string, { role?: string | null; permission?: string | null }>();
       if (userToEdit.studyAssignments) {
@@ -187,22 +209,20 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         })
       );
     } else {
-      setFirstName('');
-      setLastName('');
-      setEmail('');
-      setSitePermissions('None');
-      setStudyRows(
-        studyList.map((study) => ({
-          studyId: study.id,
-          studyName: study.name,
-          assigned: false,
-          permissions: 'Admin',
-        }))
-      );
+      setStudyRows((prevRows) => {
+        const prevMap = new Map(prevRows.map((r) => [r.studyId, r]));
+        return studyList.map((study) => {
+          const existing = prevMap.get(study.id);
+          return {
+            studyId: study.id,
+            studyName: study.name,
+            assigned: existing ? existing.assigned : false,
+            permissions: existing ? existing.permissions : 'Admin',
+          };
+        });
+      });
     }
-    setErrors({});
-    setTouched({});
-  }, [userToEdit, isOpen, availableStudies]);
+  }, [userToEdit, isOpen, availableStudies, resolvedSiteRoles]);
 
   // Field-level validation on blur
   const handleBlur = useCallback(
@@ -621,7 +641,13 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {studyRows.length === 0 ? (
+                {loadingStudies ? (
+                  <tr>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
+                      Loading latest studies...
+                    </td>
+                  </tr>
+                ) : studyRows.length === 0 ? (
                   <tr>
                     <td colSpan={3} style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
                       No studies configured for this site.

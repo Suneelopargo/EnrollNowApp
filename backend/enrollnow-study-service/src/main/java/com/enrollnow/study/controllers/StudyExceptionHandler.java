@@ -1,4 +1,4 @@
-package com.enrollnow.access.controllers;
+package com.enrollnow.study.controllers;
 
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import org.springframework.core.Ordered;

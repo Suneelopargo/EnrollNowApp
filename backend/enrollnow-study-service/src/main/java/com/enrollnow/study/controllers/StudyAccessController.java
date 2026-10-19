@@ -1,7 +1,7 @@
-package com.enrollnow.access.controllers;
+package com.enrollnow.study.controllers;
 
-import com.enrollnow.access.services.StudyAccessService;
-import com.enrollnow.identity.dtos.GrantStudyAccessRequest;
+import com.enrollnow.study.services.StudyAccessService;
+import com.enrollnow.study.dtos.GrantStudyAccessRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

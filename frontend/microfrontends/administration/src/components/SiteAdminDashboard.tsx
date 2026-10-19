@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation, ConfirmationContainer } from '../../../../shared/confirmation';
 import {
@@ -25,12 +25,20 @@ export const SiteAdminDashboard: React.FC = () => {
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
   const [users, setUsers] = useState<SiteAdminUser[]>([]);
   const [availableStudies, setAvailableStudies] = useState<AvailableStudy[]>([]);
+  const [loadingStudies, setLoadingStudies] = useState<boolean>(false);
   const [siteRoles, setSiteRoles] = useState<RoleResponse[]>([]);
   const [studyRoles, setStudyRoles] = useState<RoleResponse[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
   const [usersError, setUsersError] = useState<string | null>(null);
 
+  const isFetchingUsersRef = useRef(false);
+  const isFetchingRolesRef = useRef(false);
+  const isFetchingStudiesRef = useRef(false);
+
   const fetchStudies = useCallback(async () => {
+    if (isFetchingStudiesRef.current) return;
+    isFetchingStudiesRef.current = true;
+    setLoadingStudies(true);
     try {
       const data = await administrationApi.getStudies();
       if (Array.isArray(data)) {
@@ -38,10 +46,15 @@ export const SiteAdminDashboard: React.FC = () => {
       }
     } catch (err) {
       console.warn('Failed to load studies from /api/v1/tenants/{tenantId}/studies:', err);
+    } finally {
+      isFetchingStudiesRef.current = false;
+      setLoadingStudies(false);
     }
   }, []);
 
   const fetchUsers = useCallback(async (quiet = false) => {
+    if (isFetchingUsersRef.current) return;
+    isFetchingUsersRef.current = true;
     if (!quiet) setLoadingUsers(true);
     setUsersError(null);
     try {
@@ -85,11 +98,14 @@ export const SiteAdminDashboard: React.FC = () => {
       setUsers([]);
       toast.error(msg, { title: 'User Directory Error' });
     } finally {
+      isFetchingUsersRef.current = false;
       if (!quiet) setLoadingUsers(false);
     }
   }, []);
 
   const fetchRoles = useCallback(async () => {
+    if (isFetchingRolesRef.current) return;
+    isFetchingRolesRef.current = true;
     try {
       const [siteData, studyData] = await Promise.all([
         administrationApi.getRoles('SITE'),
@@ -99,29 +115,33 @@ export const SiteAdminDashboard: React.FC = () => {
       if (Array.isArray(studyData)) setStudyRoles(studyData);
     } catch (err) {
       console.warn('Failed to load roles from /api/v1/roles:', err);
+    } finally {
+      isFetchingRolesRef.current = false;
     }
   }, []);
 
+  // Fetch initial users directory and roles on screen mount (studies are deferred until Add/Edit User is clicked)
   useEffect(() => {
     fetchUsers();
     fetchRoles();
-    fetchStudies();
-  }, [fetchUsers, fetchRoles, fetchStudies]);
+  }, [fetchUsers, fetchRoles]);
 
   // Modal State
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<SiteAdminUser | null>(null);
 
-  // User Actions
+  // User Actions - fetch fresh, latest studies whenever adding or editing a user
   const handleOpenAddUser = useCallback(() => {
     setUserToEdit(null);
     setIsAddUserModalOpen(true);
-  }, []);
+    fetchStudies();
+  }, [fetchStudies]);
 
   const handleOpenEditUser = useCallback((user: SiteAdminUser) => {
     setUserToEdit(user);
     setIsAddUserModalOpen(true);
-  }, []);
+    fetchStudies();
+  }, [fetchStudies]);
 
   const handleSaveUser = useCallback(
     async (formData: UserFormData) => {
@@ -184,7 +204,7 @@ export const SiteAdminDashboard: React.FC = () => {
             }
           }
 
-          await Promise.all([fetchUsers(true), fetchStudies()]);
+          await fetchUsers(true);
           toast.success(`User '${formData.firstName} ${formData.lastName}' updated successfully.`);
           setIsAddUserModalOpen(false);
           setUserToEdit(null);
@@ -263,7 +283,7 @@ export const SiteAdminDashboard: React.FC = () => {
             }
           }
 
-          await Promise.all([fetchUsers(true), fetchStudies()]);
+          await fetchUsers(true);
           if (invitationSent) {
             toast.success(`User '${formData.firstName} ${formData.lastName}' created and invitation sent to ${formData.email}.`);
           } else {
@@ -290,7 +310,7 @@ export const SiteAdminDashboard: React.FC = () => {
         }
       }
     },
-    [userToEdit, fetchUsers, fetchStudies]
+    [userToEdit, fetchUsers]
   );
 
   const handleLockUserFromModal = useCallback(
@@ -434,9 +454,8 @@ export const SiteAdminDashboard: React.FC = () => {
 
   const handleRefresh = useCallback(() => {
     fetchUsers(true);
-    fetchStudies();
     toast.info('Refreshed user directory.');
-  }, [fetchUsers, fetchStudies]);
+  }, [fetchUsers]);
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
@@ -506,6 +525,7 @@ export const SiteAdminDashboard: React.FC = () => {
         onSave={handleSaveUser}
         userToEdit={userToEdit}
         availableStudies={availableStudies}
+        loadingStudies={loadingStudies}
         siteRoles={siteRoles}
         studyRoles={studyRoles}
         onLockUser={handleLockUserFromModal}

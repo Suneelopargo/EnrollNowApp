@@ -1,7 +1,7 @@
-package com.enrollnow.studycontext.controllers;
+package com.enrollnow.study.controllers;
 
-import com.enrollnow.studycontext.dtos.MyStudyResponse;
-import com.enrollnow.studycontext.services.MyStudiesService;
+import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.services.MyStudiesService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
