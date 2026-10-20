@@ -164,4 +164,31 @@ public class IdentityExceptionHandler {
                 .status(HttpStatus.CONFLICT)
                 .body(body);
     }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex) {
+        return buildResponse(
+                HttpStatus.FORBIDDEN,
+                ex.getMessage() != null ? ex.getMessage() : "Access denied"
+        );
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthenticationException(
+            org.springframework.security.core.AuthenticationException ex) {
+        return buildResponse(
+                HttpStatus.UNAUTHORIZED,
+                ex.getMessage() != null ? ex.getMessage() : "Full authentication is required to access this resource"
+        );
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "A conflicting role assignment or data constraint already exists for this record."
+        );
+    }
 }

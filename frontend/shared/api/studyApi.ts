@@ -16,7 +16,7 @@ export interface Study {
 export const studyApi = {
   async getStudies(): Promise<Study[]> {
     const res = await apiClient.get('/api/v1/studies');
-    return res.data?.data || [];
+    return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
   async getStudy(id: string | number): Promise<Study> {

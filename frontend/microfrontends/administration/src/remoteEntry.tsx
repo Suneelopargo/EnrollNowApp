@@ -8,10 +8,10 @@ export interface AdministrationModuleProps {
   initialTab?: number | string;
 }
 
-export const AdministrationModule: React.FC<AdministrationModuleProps> = () => {
+export const AdministrationModule: React.FC<AdministrationModuleProps> = ({ context }) => {
   return (
     <div className="page-container">
-      <SiteAdminDashboard />
+      <SiteAdminDashboard context={context} />
     </div>
   );
 };

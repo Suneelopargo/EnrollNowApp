@@ -1,7 +1,7 @@
 package com.enrollnow.study.controllers;
 
-import com.enrollnow.study.services.StudyAccessService;
 import com.enrollnow.study.dtos.GrantStudyAccessRequest;
+import com.enrollnow.study.services.StudyAccessService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +25,7 @@ public class StudyAccessController {
             @PathVariable UUID userId,
             @Valid @RequestBody GrantStudyAccessRequest request
     ) {
+        studyAccessService.requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         studyAccessService.grantStudyAccess(
                 tenantId,
@@ -41,6 +42,7 @@ public class StudyAccessController {
             @PathVariable UUID tenantId,
             @PathVariable UUID studyId,
             @PathVariable UUID userId) {
+        studyAccessService.requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         studyAccessService.removeStudyAccess(
                 tenantId,

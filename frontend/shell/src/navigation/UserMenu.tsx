@@ -4,7 +4,7 @@ import { useTabWorkspace } from './TabWorkspaceContext';
 import { LogOut, User, Shield, ChevronDown } from 'lucide-react';
 
 export const UserMenu: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, canAccessSiteAdmin } = useAuth();
   const { activateTab } = useTabWorkspace();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -28,11 +28,14 @@ export const UserMenu: React.FC = () => {
     return user.username.substring(0, 2).toUpperCase();
   };
 
-  const primaryRole = user.roles && user.roles.length > 0
-    ? user.roles[0].replace('ROLE_', '').replace(/_/g, ' ')
-    : 'User';
+  const primaryRole =
+    user.sitePermissionLabel && user.siteRole && user.siteRole !== 'NONE'
+      ? user.sitePermissionLabel
+      : user.roles && user.roles.length > 0
+      ? user.roles[0].replace('ROLE_', '').replace(/_/g, ' ')
+      : 'User';
 
-  const isAdministrator = isAdmin || Boolean(user.roles?.some((r) => r.toUpperCase().includes('ADMIN')));
+  const isAdministrator = canAccessSiteAdmin;
 
   return (
     <div className="user-menu-wrapper" ref={menuRef}>

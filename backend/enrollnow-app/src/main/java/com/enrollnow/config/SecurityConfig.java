@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -16,6 +17,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
@@ -45,7 +47,8 @@ public class SecurityConfig {
                     "/api/v1/tenants/*/auth/login",
                     "/api/v1/tenants/*/auth/forgot-password",
                     "/api/v1/tenants/*/auth/reset-password",
-                    "/api/v1/tenants/*/auth/activate"
+                    "/api/v1/tenants/*/auth/activate",
+                    "/api/v1/tenants/*/auth/activate/validate"
                 ).permitAll()
 
                 /*

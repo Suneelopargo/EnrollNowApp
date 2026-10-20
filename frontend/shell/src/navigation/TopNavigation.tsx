@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
 import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
-import { MOCK_STUDIES } from '../../../shared/mock-api/mockData';
+import { administrationApi } from '../../../shared/api/administrationApi';
 import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
   LayoutDashboard,
@@ -54,15 +54,9 @@ const CLIENT_MODULE_LABELS: Record<string, string> = {
   communications: 'Support',
 };
 
-const MOCK_STUDY_ROLE_ACCESS: Record<string, string[]> = {
-  'ST-001': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_INVESTIGATOR', 'ROLE_STUDY_LEAD'],
-  'ST-002': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_INVESTIGATOR'],
-  'ST-003': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_STUDY_LEAD', 'ROLE_STUDY_COORDINATOR'],
-};
-
 export const TopNavigation: React.FC = () => {
   const { navItems } = useNavigation();
-  const { user, logout } = useAuth();
+  const { user, logout, loading, isFullSiteAdmin, canAccessSiteAdmin, hasPermission } = useAuth();
   const {
     openTabs,
     activeTabId,
@@ -81,6 +75,8 @@ export const TopNavigation: React.FC = () => {
   const [isCampusOpen, setIsCampusOpen] = useState(false);
   const [isStudyActionsOpen, setIsStudyActionsOpen] = useState(false);
   const [isStudySelectOpen, setIsStudySelectOpen] = useState(false);
+  const [studies, setStudies] = useState<any[]>([]);
+  const [loadingStudies, setLoadingStudies] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const campusRef = useRef<HTMLDivElement>(null);
   const studyActionsRef = useRef<HTMLDivElement>(null);
@@ -88,6 +84,68 @@ export const TopNavigation: React.FC = () => {
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+
+  // Load user's actual assigned studies from backend API
+  useEffect(() => {
+    if (!user?.id) {
+      setStudies([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingStudies(true);
+
+    const loadStudies = async () => {
+      try {
+        let userStudies: any[] = [];
+        // 1. Always prioritize loading the user's specific assigned studies
+        try {
+          userStudies = await administrationApi.getUserStudies(user.id, user.tenantId);
+        } catch {
+          userStudies = [];
+        }
+
+        // 2. Only if the user has NO specific study assignments AND is a full Site Admin,
+        // fallback to loading all tenant studies
+        if ((!Array.isArray(userStudies) || userStudies.length === 0) && isFullSiteAdmin) {
+          try {
+            userStudies = await administrationApi.getStudies(user.tenantId);
+          } catch {
+            userStudies = [];
+          }
+        }
+
+        if (!isCancelled) {
+          if (Array.isArray(userStudies) && userStudies.length > 0) {
+            setStudies(userStudies);
+          } else {
+            setStudies([]);
+          }
+        }
+      } catch {
+        if (!isCancelled) {
+          setStudies([]);
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoadingStudies(false);
+        }
+      }
+    };
+
+    void loadStudies();
+
+    const handlePermissionsUpdated = () => {
+      void loadStudies();
+    };
+    window.addEventListener('enrollnow_permissions_updated', handlePermissionsUpdated);
+    window.addEventListener('enrollnow:permissions-updated', handlePermissionsUpdated);
+
+    return () => {
+      isCancelled = true;
+      window.removeEventListener('enrollnow_permissions_updated', handlePermissionsUpdated);
+      window.removeEventListener('enrollnow:permissions-updated', handlePermissionsUpdated);
+    };
+  }, [user?.id, user?.tenantId, isFullSiteAdmin, canAccessSiteAdmin]);
 
   // Click outside listener for dropdowns
   useEffect(() => {
@@ -114,12 +172,10 @@ export const TopNavigation: React.FC = () => {
     }
   }, [activeTabId]);
 
-  if (!user) return null;
+  if (loading || !user) return null;
 
-  const userRoles = (user.roles || []).map((role) => role.toUpperCase());
-  const studyOptions = MOCK_STUDIES.filter((study) =>
-    (MOCK_STUDY_ROLE_ACCESS[String(study.id)] || []).some((role) => userRoles.includes(role))
-  );
+  const canCreateStudy = canAccessSiteAdmin || hasPermission('SITE_STUDIES_CREATE');
+  const studyOptions = studies;
 
   const renderIcon = (iconName?: string, size = 15) => {
     const IconComponent =
@@ -279,41 +335,51 @@ export const TopNavigation: React.FC = () => {
                           {isStudySelectOpen && (
                             <div className="enl-study-select-menu" role="menu" aria-label="Select a study">
                               <div className="enl-study-select-heading">Available Studies</div>
-                              {studyOptions.length > 0 ? studyOptions.map((study) => {
-                                const studyId = study.id ?? study.studyId ?? study.protocolNumber;
-                                return (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    key={studyId ?? study.title}
-                                    onClick={() => {
-                                      activateTab('studies');
-                                      navigate(`/studies?studyId=${encodeURIComponent(String(studyId))}`);
-                                      setIsStudySelectOpen(false);
-                                      setIsStudyActionsOpen(false);
-                                    }}
-                                  >
-                                    <span className="enl-study-option-icon"><BookOpen size={16} /></span>
-                                    <strong>{(study as any).title || (study as any).name || 'Untitled study'}</strong>
-                                    <small>{(study as any).protocolNumber || studyId || 'Study'}</small>
-                                  </button>
-                                );
-                              }) : <p>No studies available</p>}
+                              {loadingStudies ? (
+                                <p style={{ padding: '8px 14px', margin: 0, fontSize: 13, color: '#888' }}>Loading studies...</p>
+                              ) : studyOptions.length > 0 ? (
+                                studyOptions.map((study) => {
+                                  const studyId = study.id ?? study.studyId ?? study.protocolNumber;
+                                  const studyTitle = (study as any).title || (study as any).name || 'Untitled study';
+                                  const studyCode = (study as any).studyCode || (study as any).protocolNumber || (study as any).studyRole || '';
+                                  return (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      key={studyId ?? studyTitle}
+                                      onClick={() => {
+                                        activateTab('studies');
+                                        navigate(`/studies?studyId=${encodeURIComponent(String(studyId))}`);
+                                        setIsStudySelectOpen(false);
+                                        setIsStudyActionsOpen(false);
+                                      }}
+                                    >
+                                      <span className="enl-study-option-icon"><BookOpen size={16} /></span>
+                                      <strong>{studyTitle}</strong>
+                                      {studyCode && <small>{studyCode}</small>}
+                                    </button>
+                                  );
+                                })
+                              ) : (
+                                <p>No studies available</p>
+                              )}
                             </div>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          className="enl-study-module-menu-item"
-                          onClick={() => {
-                            activateTab('studies');
-                            navigate('/studies?action=add');
-                            setIsStudyActionsOpen(false);
-                          }}
-                        >
-                          <span>Add Study</span>
-                          <Plus size={16} strokeWidth={3} />
-                        </button>
+                        {canCreateStudy && (
+                          <button
+                            type="button"
+                            className="enl-study-module-menu-item"
+                            onClick={() => {
+                              activateTab('studies');
+                              navigate('/studies?action=add');
+                              setIsStudyActionsOpen(false);
+                            }}
+                          >
+                            <span>Add Study</span>
+                            <Plus size={16} strokeWidth={3} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

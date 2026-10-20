@@ -102,6 +102,14 @@ let activeMockErrorSimulation: string | null = null;
  * Defaults to 'mock' for local development until real Spring Boot backend is live.
  */
 export function getApiMode(): ApiMode {
+  // Production hard security lock: prohibit mock mode in production builds
+  const isProd =
+    (typeof import.meta !== 'undefined' && Boolean((import.meta as any).env?.PROD)) ||
+    (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
+  if (isProd) {
+    return 'real';
+  }
+
   if (activeApiMode) {
     return activeApiMode;
   }

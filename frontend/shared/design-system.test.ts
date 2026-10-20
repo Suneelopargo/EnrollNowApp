@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { LoadingSpinner } from './design-system/components/LoadingSpinner';
 import { Skeleton } from './design-system/components/Skeleton';
+import { ComingSoon } from './design-system/components/ComingSoon';
 
 describe('Design System SCSS Components', () => {
   describe('LoadingSpinner Component (Clinical OS Card & Inline Variants)', () => {
@@ -73,6 +74,21 @@ describe('Design System SCSS Components', () => {
       const multiline = Skeleton({ variant: 'text', lines: 3 }) as React.ReactElement<any>;
       expect(multiline.props.className).toContain('skeleton-group');
       expect(multiline.props.children).toHaveLength(3);
+    });
+  });
+
+  describe('ComingSoon Component', () => {
+    it('renders accessible region with feature title and target release', () => {
+      const element = ComingSoon({
+        title: 'Batch Import & Intake',
+        subtitle: 'CSV participant onboarding',
+        targetRelease: 'Sprint 3 Delivery',
+      }) as React.ReactElement<any>;
+
+      expect(element).toBeDefined();
+      expect(element.props.role).toBe('region');
+      expect(element.props['aria-label']).toContain('Batch Import & Intake');
+      expect(element.props.className).toContain('coming-soon-container');
     });
   });
 });

@@ -15,6 +15,14 @@ public class AssignRoleRequest {
 
     private UUID scopeId;
 
+    public AssignRoleRequest() {}
+
+    public AssignRoleRequest(String roleCode, String scopeType, UUID scopeId) {
+        this.roleCode = roleCode;
+        this.scopeType = scopeType;
+        this.scopeId = scopeId;
+    }
+
     public String getRoleCode() {
         return roleCode;
     }

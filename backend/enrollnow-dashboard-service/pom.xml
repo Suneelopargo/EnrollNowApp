@@ -23,6 +23,12 @@
 			<artifactId>enrollnow-common</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>com.enrollnow</groupId>
+			<artifactId>enrollnow-study-service</artifactId>
+			<version>${enrollnow.version}</version>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>

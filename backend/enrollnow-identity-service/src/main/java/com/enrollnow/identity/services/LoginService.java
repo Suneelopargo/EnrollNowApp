@@ -2,6 +2,7 @@ package com.enrollnow.identity.services;
 
 import com.enrollnow.identity.dtos.LoginRequest;
 import com.enrollnow.identity.dtos.LoginResponse;
+import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.exceptions.AccountDisabledException;
 import com.enrollnow.identity.exceptions.AccountLockedException;
 import com.enrollnow.identity.exceptions.InvalidCredentialsException;
@@ -14,6 +15,7 @@ import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,7 @@ public class LoginService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
     private final UserSessionService userSessionService;
+    private final SitePermissionService sitePermissionService;
 
     public LoginService(
             UserEmailRepository userEmailRepository,
@@ -43,6 +46,28 @@ public class LoginService {
             PasswordEncoder passwordEncoder,
             JwtTokenService jwtTokenService,
             UserSessionService userSessionService) {
+        this(
+                userEmailRepository,
+                userRepository,
+                userSecurityStateRepository,
+                securitySettingsRepository,
+                passwordEncoder,
+                jwtTokenService,
+                userSessionService,
+                null
+        );
+    }
+
+    @Autowired
+    public LoginService(
+            UserEmailRepository userEmailRepository,
+            UserRepository userRepository,
+            UserSecurityStateRepository userSecurityStateRepository,
+            SecuritySettingsRepository securitySettingsRepository,
+            PasswordEncoder passwordEncoder,
+            JwtTokenService jwtTokenService,
+            UserSessionService userSessionService,
+            SitePermissionService sitePermissionService) {
 
         this.userEmailRepository = userEmailRepository;
         this.userRepository = userRepository;
@@ -51,6 +76,7 @@ public class LoginService {
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
         this.userSessionService = userSessionService;
+        this.sitePermissionService = sitePermissionService;
     }
 
     @Transactional(noRollbackFor = InvalidCredentialsException.class)
@@ -96,6 +122,47 @@ public class LoginService {
             throw new AccountLockedException();
         }
 
+        SecuritySettings securitySettings = securitySettingsRepository
+                .findByTenantId(tenantId)
+                .orElse(null);
+
+        if (securitySettings != null) {
+            OffsetDateTime checkNow = OffsetDateTime.now();
+
+            if (securitySettings.getInactivityLockDays() != null && securitySettings.getInactivityLockDays() > 0) {
+                OffsetDateTime lastActivity = securityState.getLastActivityAt();
+                if (lastActivity == null) {
+                    lastActivity = user.getLastLoginAt();
+                }
+                if (lastActivity == null) {
+                    lastActivity = user.getCreatedAt();
+                }
+                if (lastActivity != null && checkNow.isAfter(lastActivity.plusDays(securitySettings.getInactivityLockDays()))) {
+                    securityState.setLockedAt(checkNow);
+                    securityState.setLockReason("INACTIVITY_LOCK");
+                    user.setStatus("LOCKED");
+                    userRepository.save(user);
+                    userSecurityStateRepository.save(securityState);
+                    throw new AccountLockedException();
+                }
+            }
+
+            if (securitySettings.getPasswordExpiryDays() != null && securitySettings.getPasswordExpiryDays() > 0) {
+                OffsetDateTime lastPasswordChange = securityState.getLastPasswordResetAt();
+                if (lastPasswordChange == null) {
+                    lastPasswordChange = user.getCreatedAt();
+                }
+                if (lastPasswordChange != null && checkNow.isAfter(lastPasswordChange.plusDays(securitySettings.getPasswordExpiryDays()))) {
+                    securityState.setLockedAt(checkNow);
+                    securityState.setLockReason("PASSWORD_EXPIRED");
+                    user.setStatus("LOCKED");
+                    userRepository.save(user);
+                    userSecurityStateRepository.save(securityState);
+                    throw new AccountLockedException();
+                }
+            }
+        }
+
         String passwordHash = user.getPasswordHash();
 
         if (passwordHash == null
@@ -130,9 +197,25 @@ public class LoginService {
         response.setFirstName(user.getFirstName());
         response.setLastName(user.getLastName());
 
-        /*
-         * JWT will be added in the next implementation step.
-         */
+        if (sitePermissionService != null) {
+            UserEffectivePermissionsResponse effective =
+                    sitePermissionService.resolveEffectivePermissions(
+                            user.getTenantId(),
+                            user.getId(),
+                            null
+                    );
+            if (effective != null) {
+                response.setSiteId(effective.getSiteId());
+                response.setSiteRole(effective.getSiteRole());
+                response.setSitePermissionLabel(effective.getSitePermissionLabel());
+                response.setRoles(effective.getRoles());
+                response.setPermissions(effective.getPermissions());
+                response.setSiteAssignments(effective.getSiteAssignments());
+                response.setCanAccessRegistry(effective.isCanAccessRegistry());
+                response.setCanAccessSiteAdmin(effective.isCanAccessSiteAdmin());
+            }
+        }
+
         String accessToken =
                 jwtTokenService.generateToken(
                         user.getTenantId(),

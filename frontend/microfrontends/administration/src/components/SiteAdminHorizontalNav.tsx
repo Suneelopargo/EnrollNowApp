@@ -22,6 +22,7 @@ export interface SiteAdminHorizontalNavProps {
   onTabChange: (tabId: AdminTabId) => void;
   usersCount?: number;
   onSelectExportOption?: (option: ExportSubOption) => void;
+  isFullSiteAdmin?: boolean;
 }
 
 export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
@@ -29,6 +30,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
   onTabChange,
   usersCount = 0,
   onSelectExportOption,
+  isFullSiteAdmin = true,
 }) => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
@@ -119,8 +121,8 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
             <option value="users">Users ({usersCount})</option>
             <option value="import">Import</option>
             <option value="export">Export</option>
-            <option value="audit">Audit Log</option>
-            <option value="security">Security</option>
+            {isFullSiteAdmin && <option value="audit">Audit Log</option>}
+            {isFullSiteAdmin && <option value="security">Security</option>}
             <option value="settings">General Settings</option>
           </select>
         </div>
@@ -236,30 +238,34 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
         </div>
 
         {/* Audit Log */}
-        <button
-          ref={activeTab === 'audit' ? activeTabRef : null}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'audit'}
-          className={`site-admin-tab-btn ${activeTab === 'audit' ? 'is-active' : ''}`}
-          onClick={() => onTabChange('audit')}
-        >
-          <ScrollText size={16} aria-hidden="true" />
-          <span>Audit Log</span>
-        </button>
+        {isFullSiteAdmin && (
+          <button
+            ref={activeTab === 'audit' ? activeTabRef : null}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'audit'}
+            className={`site-admin-tab-btn ${activeTab === 'audit' ? 'is-active' : ''}`}
+            onClick={() => onTabChange('audit')}
+          >
+            <ScrollText size={16} aria-hidden="true" />
+            <span>Audit Log</span>
+          </button>
+        )}
 
         {/* Security */}
-        <button
-          ref={activeTab === 'security' ? activeTabRef : null}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'security'}
-          className={`site-admin-tab-btn ${activeTab === 'security' ? 'is-active' : ''}`}
-          onClick={() => onTabChange('security')}
-        >
-          <Shield size={16} aria-hidden="true" />
-          <span>Security</span>
-        </button>
+        {isFullSiteAdmin && (
+          <button
+            ref={activeTab === 'security' ? activeTabRef : null}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'security'}
+            className={`site-admin-tab-btn ${activeTab === 'security' ? 'is-active' : ''}`}
+            onClick={() => onTabChange('security')}
+          >
+            <Shield size={16} aria-hidden="true" />
+            <span>Security</span>
+          </button>
+        )}
 
         {/* General Settings */}
         <button

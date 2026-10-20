@@ -1,10 +1,14 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation, ConfirmationContainer } from '../../../../shared/confirmation';
+import { apiClient } from '../../../../shared/api-client';
+import { MfeContext, AuthUser } from '../../../../shared/contracts';
+import { deriveUserAccessFlags, userIsFullSiteAdmin } from '../../../../shared/api/authApi';
 import {
   administrationApi,
   RoleResponse,
   toSitePermissionLabel,
+  normalizeSiteRoleCode,
   SITE_PERMISSION_TO_ROLE_CODE,
 } from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
@@ -20,7 +24,11 @@ import {
 } from './SiteAdminViews';
 import { SiteAdminUser, AdminTabId, ExportSubOption } from '../types/admin';
 
-export const SiteAdminDashboard: React.FC = () => {
+export interface SiteAdminDashboardProps {
+  context?: MfeContext;
+}
+
+export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context }) => {
   const [activeTab, setActiveTab] = useState<AdminTabId>('users');
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
   const [users, setUsers] = useState<SiteAdminUser[]>([]);
@@ -30,10 +38,64 @@ export const SiteAdminDashboard: React.FC = () => {
   const [studyRoles, setStudyRoles] = useState<RoleResponse[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(false);
   const [usersError, setUsersError] = useState<string | null>(null);
+  const [defaultSiteId, setDefaultSiteId] = useState<string | null>(null);
+
+  const currentUser = useMemo<AuthUser | null>(() => {
+    if (context?.user) {
+      return deriveUserAccessFlags(context.user);
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('enrollnow_user');
+        return raw ? deriveUserAccessFlags(JSON.parse(raw)) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }, [context?.user]);
+
+  const isFullSiteAdmin = useMemo(() => {
+    if (!currentUser) return true;
+    return userIsFullSiteAdmin(currentUser);
+  }, [currentUser]);
+
+  const activeSiteId = useMemo(() => {
+    return (
+      currentUser?.siteId ||
+      defaultSiteId ||
+      users.find((u) => u.siteId)?.siteId ||
+      null
+    );
+  }, [currentUser?.siteId, defaultSiteId, users]);
 
   const isFetchingUsersRef = useRef(false);
   const isFetchingRolesRef = useRef(false);
   const isFetchingStudiesRef = useRef(false);
+
+  // Resolve default tenant site if currentUser does not have a siteId cached
+  useEffect(() => {
+    if (currentUser?.siteId) {
+      setDefaultSiteId(currentUser.siteId);
+      return;
+    }
+    let mounted = true;
+    apiClient
+      .get<any>('/api/v1/sites', { skipToast: true } as any)
+      .then((res) => {
+        if (!mounted) return;
+        const list = Array.isArray(res?.data) ? res.data : res?.data?.data;
+        if (Array.isArray(list) && list.length > 0 && list[0]?.id) {
+          setDefaultSiteId(String(list[0].id));
+        }
+      })
+      .catch(() => {
+        // Fallback to user directory siteId if /api/v1/sites is unavailable
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser?.siteId]);
 
   const fetchStudies = useCallback(async () => {
     if (isFetchingStudiesRef.current) return;
@@ -58,7 +120,10 @@ export const SiteAdminDashboard: React.FC = () => {
     if (!quiet) setLoadingUsers(true);
     setUsersError(null);
     try {
-      const data = await administrationApi.getDetailedUsers();
+      const data = await administrationApi.getDetailedUsers(
+        undefined,
+        currentUser?.siteId || defaultSiteId || undefined
+      );
       if (Array.isArray(data)) {
         const mappedUsers: SiteAdminUser[] = data.map((u) => {
           const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'User';
@@ -75,7 +140,7 @@ export const SiteAdminDashboard: React.FC = () => {
             lastName: u.lastName,
             email: u.primaryEmail || '',
             sitePermissions: toSitePermissionLabel(u.sitePermission),
-            sitePermissionCode: u.sitePermission,
+            sitePermissionCode: normalizeSiteRoleCode(u.sitePermission),
             siteId: u.siteId,
             studies: studyNames,
             studyAssignments: Array.isArray(u.studies) ? u.studies : [],
@@ -101,7 +166,7 @@ export const SiteAdminDashboard: React.FC = () => {
       isFetchingUsersRef.current = false;
       if (!quiet) setLoadingUsers(false);
     }
-  }, []);
+  }, [currentUser?.siteId, defaultSiteId]);
 
   const fetchRoles = useCallback(async () => {
     if (isFetchingRolesRef.current) return;
@@ -154,20 +219,23 @@ export const SiteAdminDashboard: React.FC = () => {
           });
 
           // Sync site permission
-          const oldSitePerm = toSitePermissionLabel(userToEdit.sitePermissions);
-          const newSitePerm = toSitePermissionLabel(formData.sitePermissions);
+          const oldSiteRoleCode = normalizeSiteRoleCode(
+            userToEdit.sitePermissionCode || userToEdit.sitePermissions
+          );
+          const newSiteRoleCode = normalizeSiteRoleCode(formData.sitePermissions);
+          const newSitePerm = toSitePermissionLabel(newSiteRoleCode);
+          const resolvedSiteId = userToEdit.siteId || activeSiteId || undefined;
 
-          if (newSitePerm !== oldSitePerm) {
-            if (newSitePerm === 'None' || !newSitePerm) {
-              await administrationApi.removeSiteRole(userToEdit.id).catch((err) => {
-                console.warn('Failed to remove site role:', err);
-              });
+          if (newSiteRoleCode !== oldSiteRoleCode) {
+            if (newSiteRoleCode === 'NONE') {
+              await administrationApi
+                .removeSiteRole(userToEdit.id, undefined, resolvedSiteId)
+                .catch((err) => {
+                  console.warn('Failed to remove site role:', err);
+                });
             } else {
               const roleCode =
-                SITE_PERMISSION_TO_ROLE_CODE[newSitePerm] ||
-                (formData.sitePermissions ? SITE_PERMISSION_TO_ROLE_CODE[formData.sitePermissions] : undefined) ||
-                newSitePerm;
-              const resolvedSiteId = userToEdit.siteId || users.find((u) => u.siteId)?.siteId || undefined;
+                SITE_PERMISSION_TO_ROLE_CODE[newSitePerm] || newSiteRoleCode;
               try {
                 await administrationApi.assignScopedRole(userToEdit.id, {
                   roleCode,
@@ -205,6 +273,13 @@ export const SiteAdminDashboard: React.FC = () => {
           }
 
           await fetchUsers(true);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('enrollnow_permissions_updated', {
+                detail: { userId: userToEdit.id, siteId: resolvedSiteId },
+              })
+            );
+          }
           toast.success(`User '${formData.firstName} ${formData.lastName}' updated successfully.`);
           setIsAddUserModalOpen(false);
           setUserToEdit(null);
@@ -234,12 +309,15 @@ export const SiteAdminDashboard: React.FC = () => {
             email: formData.email,
           });
 
+          const resolvedSiteId = activeSiteId || undefined;
+
           // If site permission was selected, assign it
           if (created?.id && formData.sitePermissions) {
-            const sitePerm = toSitePermissionLabel(formData.sitePermissions);
-            if (sitePerm && sitePerm !== 'None') {
-              const roleCode = SITE_PERMISSION_TO_ROLE_CODE[sitePerm] || SITE_PERMISSION_TO_ROLE_CODE[formData.sitePermissions] || formData.sitePermissions;
-              const resolvedSiteId = users.find((u) => u.siteId)?.siteId || undefined;
+            const siteRoleCode = normalizeSiteRoleCode(formData.sitePermissions);
+            const sitePerm = toSitePermissionLabel(siteRoleCode);
+            if (siteRoleCode !== 'NONE') {
+              const roleCode =
+                SITE_PERMISSION_TO_ROLE_CODE[sitePerm] || siteRoleCode;
               try {
                 await administrationApi.assignScopedRole(created.id, {
                   roleCode,
@@ -310,7 +388,7 @@ export const SiteAdminDashboard: React.FC = () => {
         }
       }
     },
-    [userToEdit, fetchUsers]
+    [userToEdit, fetchUsers, activeSiteId]
   );
 
   const handleLockUserFromModal = useCallback(
@@ -480,11 +558,47 @@ export const SiteAdminDashboard: React.FC = () => {
       case 'export':
         return <ExportView selectedSubOption={selectedExportOption} />;
       case 'audit':
-        return <AuditLogView />;
+        return isFullSiteAdmin ? (
+          <AuditLogView />
+        ) : (
+          <UsersGrid
+            users={users}
+            loading={loadingUsers}
+            error={usersError}
+            onAddUser={handleOpenAddUser}
+            onEditUser={handleOpenEditUser}
+            onDeleteUser={handleDeleteUser}
+            onToggleStatus={handleToggleStatus}
+            onRefresh={handleRefresh}
+            onRetry={() => fetchUsers(false)}
+          />
+        );
       case 'security':
-        return <SecurityView />;
+        return isFullSiteAdmin ? (
+          <SecurityView
+            tenantId={currentUser?.tenantId}
+            isFullSiteAdmin={isFullSiteAdmin}
+          />
+        ) : (
+          <UsersGrid
+            users={users}
+            loading={loadingUsers}
+            error={usersError}
+            onAddUser={handleOpenAddUser}
+            onEditUser={handleOpenEditUser}
+            onDeleteUser={handleDeleteUser}
+            onToggleStatus={handleToggleStatus}
+            onRefresh={handleRefresh}
+            onRetry={() => fetchUsers(false)}
+          />
+        );
       case 'settings':
-        return <GeneralSettingsView />;
+        return (
+          <GeneralSettingsView
+            tenantId={currentUser?.tenantId}
+            isFullSiteAdmin={isFullSiteAdmin}
+          />
+        );
       default:
         return (
           <UsersGrid
@@ -510,6 +624,7 @@ export const SiteAdminDashboard: React.FC = () => {
         onTabChange={setActiveTab}
         usersCount={users.length}
         onSelectExportOption={setSelectedExportOption}
+        isFullSiteAdmin={isFullSiteAdmin}
       />
 
       {/* Screen Content for Active Tab */}
@@ -528,6 +643,9 @@ export const SiteAdminDashboard: React.FC = () => {
         loadingStudies={loadingStudies}
         siteRoles={siteRoles}
         studyRoles={studyRoles}
+        canManageSiteAdmins={isFullSiteAdmin}
+        currentUserId={currentUser?.id}
+        currentUserEmail={currentUser?.email}
         onLockUser={handleLockUserFromModal}
         onUnlockUser={handleUnlockUserFromModal}
         onResendEnrollment={handleResendEnrollment}

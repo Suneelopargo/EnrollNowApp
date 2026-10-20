@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.dtos.UserSummaryResponse;
 import com.enrollnow.identity.exceptions.UserNotFoundException;
 import com.enrollnow.identity.models.User;
@@ -7,6 +8,7 @@ import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.enrollnow.identity.dtos.CreateUserRequest;
@@ -24,13 +26,9 @@ import com.enrollnow.identity.dtos.AssignRoleRequest;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
 
-
-
 import java.util.Locale;
 import com.enrollnow.identity.models.Site;
 import com.enrollnow.identity.repositories.SiteRepository;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +42,7 @@ public class UserService {
 	private final RoleRepository roleRepository;
 	private final UserRoleAssignmentRepository userRoleAssignmentRepository;
 	private final SiteRepository siteRepository;
+	private final SitePermissionService sitePermissionService;
 
 	public UserService(
 	        UserRepository userRepository,
@@ -53,37 +52,92 @@ public class UserService {
 	        UserRoleAssignmentRepository userRoleAssignmentRepository,
 	        SiteRepository siteRepository
 	) {
+	    this(
+	            userRepository,
+	            userEmailRepository,
+	            userSecurityStateRepository,
+	            roleRepository,
+	            userRoleAssignmentRepository,
+	            siteRepository,
+	            null
+	    );
+	}
+
+	@Autowired
+	public UserService(
+	        UserRepository userRepository,
+	        UserEmailRepository userEmailRepository,
+	        UserSecurityStateRepository userSecurityStateRepository,
+	        RoleRepository roleRepository,
+	        UserRoleAssignmentRepository userRoleAssignmentRepository,
+	        SiteRepository siteRepository,
+	        SitePermissionService sitePermissionService
+	) {
 	    this.userRepository = userRepository;
 	    this.userEmailRepository = userEmailRepository;
 	    this.userSecurityStateRepository = userSecurityStateRepository;
 	    this.roleRepository = roleRepository;
 	    this.userRoleAssignmentRepository = userRoleAssignmentRepository;
 	    this.siteRepository = siteRepository;
+	    this.sitePermissionService = sitePermissionService;
 	}
 
 	public UserSummaryResponse getUser(UUID tenantId, UUID userId) {
+	    return getUser(tenantId, userId, null);
+	}
+
+	public UserSummaryResponse getUser(UUID tenantId, UUID userId, UUID siteId) {
 
 		User user = userRepository.findByTenantIdAndId(tenantId, userId)
 				.orElseThrow(() -> new UserNotFoundException(userId));
 
-		return toSummary(user);
+		return toSummary(user, siteId);
 	}
 
 	public List<UserSummaryResponse> getUsers(UUID tenantId) {
 
 	    return userRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)
 	            .stream()
-	            .map(this::toSummary)
+	            .map(u -> toSummary(u, null))
 	            .toList();
 	}
-	private UserSummaryResponse toSummary(User user) {
+
+	private UserSummaryResponse toSummary(User user, UUID requestedSiteId) {
 
 		String primaryEmail = userEmailRepository
 				.findByTenantIdAndUserIdAndPrimaryEmailTrue(user.getTenantId(), user.getId())
 				.map(email -> email.getEmail()).orElse(null);
 
-		return new UserSummaryResponse(user.getId(), user.getFirstName(), user.getLastName(), user.getTitle(),
-				user.getStatus(), primaryEmail);
+		UserSummaryResponse summary = new UserSummaryResponse(
+		        user.getId(),
+		        user.getFirstName(),
+		        user.getLastName(),
+		        user.getTitle(),
+		        user.getStatus(),
+		        primaryEmail
+		);
+		summary.setTenantId(user.getTenantId());
+
+		if (sitePermissionService != null) {
+		    UserEffectivePermissionsResponse effective =
+		            sitePermissionService.resolveEffectivePermissions(
+		                    user.getTenantId(),
+		                    user.getId(),
+		                    requestedSiteId
+		            );
+		    if (effective != null) {
+		        summary.setSiteId(effective.getSiteId());
+		        summary.setSiteRole(effective.getSiteRole());
+		        summary.setSitePermissionLabel(effective.getSitePermissionLabel());
+		        summary.setRoles(effective.getRoles());
+		        summary.setPermissions(effective.getPermissions());
+		        summary.setSiteAssignments(effective.getSiteAssignments());
+		        summary.setCanAccessRegistry(effective.isCanAccessRegistry());
+		        summary.setCanAccessSiteAdmin(effective.isCanAccessSiteAdmin());
+		    }
+		}
+
+		return summary;
 	}
 
 	@Transactional
@@ -125,8 +179,16 @@ public class UserService {
 
 		userSecurityStateRepository.save(securityState);
 
-		return new UserSummaryResponse(user.getId(), user.getFirstName(), user.getLastName(), user.getTitle(),
-				user.getStatus(), normalizedEmail);
+		UserSummaryResponse summary = new UserSummaryResponse(
+		        user.getId(),
+		        user.getFirstName(),
+		        user.getLastName(),
+		        user.getTitle(),
+		        user.getStatus(),
+		        normalizedEmail
+		);
+		summary.setTenantId(tenantId);
+		return summary;
 	}
 	
 	@Transactional
@@ -156,7 +218,7 @@ public class UserService {
 
 	    userRepository.save(user);
 
-	    return toSummary(user);
+	    return toSummary(user, null);
 	}
 	
 	@Transactional
@@ -172,7 +234,7 @@ public class UserService {
 
 	    userRepository.save(user);
 
-	    return toSummary(user);
+	    return toSummary(user, null);
 	}
 
 	@Transactional
@@ -188,7 +250,7 @@ public class UserService {
 
 	    userRepository.save(user);
 
-	    return toSummary(user);
+	    return toSummary(user, null);
 	}
 	
 	@Transactional
@@ -246,7 +308,16 @@ public class UserService {
 
 	    } else if (scopeType.equals("SITE")) {
 
-	        if (scopeId == null) {
+	        if (scopeId != null) {
+	            final UUID requestedSiteScopeId = scopeId;
+	            siteRepository.findById(requestedSiteScopeId).ifPresent(site -> {
+	                if (!tenantId.equals(site.getTenantId())) {
+	                    throw new InvalidRoleAssignmentException(
+	                            "Site " + requestedSiteScopeId + " does not belong to tenant " + tenantId
+	                    );
+	                }
+	            });
+	        } else {
 	            // 1. Try existing active site assignment for this user
 	            List<UserRoleAssignment> activeSite =
 	                    userRoleAssignmentRepository
@@ -256,18 +327,10 @@ public class UserService {
 	                            );
 	            if (!activeSite.isEmpty()) {
 	                scopeId = activeSite.get(0).getSiteId();
-	            } else {
-	                // 2. Try any active site assignment for any user in this tenant
-	                List<UserRoleAssignment> tenantSiteAssignments =
-	                        userRoleAssignmentRepository
-	                                .findByTenantIdAndSiteIdIsNotNullAndActiveTrue(tenantId);
-	                if (!tenantSiteAssignments.isEmpty()) {
-	                    scopeId = tenantSiteAssignments.get(0).getSiteId();
-	                }
 	            }
 
 	            if (scopeId == null) {
-	                // 3. Try finding active site for this tenant
+	                // 2. Try finding active site for this tenant
 	                scopeId = siteRepository
 	                        .findFirstByTenantIdAndActiveTrueOrderByNameAsc(tenantId)
 	                        .map(Site::getId)
@@ -275,11 +338,21 @@ public class UserService {
 	            }
 
 	            if (scopeId == null) {
-	                // 4. Try finding any site for this tenant
+	                // 3. Try finding any site for this tenant
 	                scopeId = siteRepository
 	                        .findFirstByTenantId(tenantId)
 	                        .map(Site::getId)
 	                        .orElse(null);
+	            }
+
+	            if (scopeId == null) {
+	                // 4. Fallback to any active site assignment in this tenant
+	                List<UserRoleAssignment> tenantSiteAssignments =
+	                        userRoleAssignmentRepository
+	                                .findByTenantIdAndSiteIdIsNotNullAndActiveTrue(tenantId);
+	                if (!tenantSiteAssignments.isEmpty()) {
+	                    scopeId = tenantSiteAssignments.get(0).getSiteId();
+	                }
 	            }
 
 	            if (scopeId == null) {
@@ -293,7 +366,6 @@ public class UserService {
 	                    defaultSite = siteRepository.save(defaultSite);
 	                    scopeId = defaultSite.getId();
 	                } catch (Exception ex) {
-	                    // In case of concurrent creation, re-query
 	                    scopeId = siteRepository
 	                            .findFirstByTenantId(tenantId)
 	                            .map(Site::getId)
@@ -317,7 +389,7 @@ public class UserService {
 	        }
 	    }
 
-	    // 6. Prevent duplicate active assignment / manage single active site permission
+	    // 6. Prevent duplicate active assignment / manage single active site permission per site
 	    if (scopeType.equals("SITE")) {
 	        List<UserRoleAssignment> activeSiteAssignments =
 	                userRoleAssignmentRepository
@@ -327,12 +399,26 @@ public class UserService {
 	                                scopeId
 	                        );
 
+	        UserRoleAssignment targetAssignment = null;
 	        for (UserRoleAssignment existing : activeSiteAssignments) {
-	            if (existing.getRoleId().equals(role.getId())) {
-	                return existing;
+	            if (existing.getTeamId() != null || existing.getStudyId() != null) {
+	                continue;
 	            }
-	            existing.setActive(false);
-	            userRoleAssignmentRepository.save(existing);
+	            if (targetAssignment == null) {
+	                targetAssignment = existing;
+	            } else {
+	                existing.setActive(false);
+	                userRoleAssignmentRepository.save(existing);
+	            }
+	        }
+
+	        if (targetAssignment != null) {
+	            if (targetAssignment.getRoleId().equals(role.getId())) {
+	                return targetAssignment;
+	            }
+	            targetAssignment.setRoleId(role.getId());
+	            targetAssignment.setActive(true);
+	            return userRoleAssignmentRepository.saveAndFlush(targetAssignment);
 	        }
 
 	    } else {
@@ -387,17 +473,23 @@ public class UserService {
 
 	@Transactional
 	public void removeSiteRole(UUID tenantId, UUID userId) {
+	    removeSiteRole(tenantId, userId, null);
+	}
+
+	@Transactional
+	public void removeSiteRole(UUID tenantId, UUID userId, UUID siteId) {
 	    userRepository.findByTenantIdAndId(tenantId, userId)
 	            .orElseThrow(() -> new UserNotFoundException(userId));
 
 	    List<UserRoleAssignment> activeSiteAssignments =
-	            userRoleAssignmentRepository
-	                    .findByTenantIdAndUserIdAndSiteIdIsNotNullAndActiveTrue(
-	                            tenantId,
-	                            userId
-	                    );
+	            siteId != null
+	                    ? userRoleAssignmentRepository.findByTenantIdAndUserIdAndSiteIdAndActiveTrue(tenantId, userId, siteId)
+	                    : userRoleAssignmentRepository.findByTenantIdAndUserIdAndSiteIdIsNotNullAndActiveTrue(tenantId, userId);
 
 	    for (UserRoleAssignment assignment : activeSiteAssignments) {
+	        if (assignment.getTeamId() != null || assignment.getStudyId() != null) {
+	            continue;
+	        }
 	        assignment.setActive(false);
 	        userRoleAssignmentRepository.save(assignment);
 	    }

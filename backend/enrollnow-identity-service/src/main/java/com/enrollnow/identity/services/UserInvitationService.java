@@ -48,6 +48,12 @@ public class UserInvitationService {
     private final InvitationEmailService invitationEmailService;
     private final UserSecurityStateRepository userSecurityStateRepository;
     private final PasswordEncoder passwordEncoder;
+    private PasswordPolicyValidator passwordPolicyValidator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setPasswordPolicyValidator(PasswordPolicyValidator passwordPolicyValidator) {
+        this.passwordPolicyValidator = passwordPolicyValidator;
+    }
 
     public UserInvitationService(
             UserActionTokenRepository userActionTokenRepository,
@@ -220,7 +226,11 @@ public class UserInvitationService {
             );
         }
 
-        validatePasswordPolicy(request.getPassword());
+        if (passwordPolicyValidator != null) {
+            passwordPolicyValidator.validatePassword(tenantId, null, request.getPassword());
+        } else {
+            validatePasswordPolicy(request.getPassword());
+        }
 
         String tokenHash =
                 hashToken(request.getToken());
@@ -294,6 +304,10 @@ public class UserInvitationService {
         }
 
         userRepository.save(user);
+
+        if (passwordPolicyValidator != null) {
+            passwordPolicyValidator.recordPasswordChange(tenantId, user.getId(), encodedPassword);
+        }
 
         userSecurityStateRepository
                 .findByTenantIdAndUserId(
