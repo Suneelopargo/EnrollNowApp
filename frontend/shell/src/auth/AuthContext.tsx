@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useNavigate } from 'react-router-dom';
 import { AuthUser, AuthState } from '../../../shared/contracts';
 import { telemetry } from '../../../shared/telemetry';
+import { toast } from '../../../shared/toaster';
+import { useInactivityLogout, STORAGE_KEY_SESSION_LOGOUT } from './useInactivityLogout';
 import {
   authApi,
   deriveUserAccessFlags,
@@ -228,11 +230,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const handleInactivityLogout = useCallback((reason: string) => {
+    clearSession();
+    localStorage.removeItem('enrollnow_token');
+    localStorage.removeItem('enrollnow_user');
+    authApi.logout();
+    navigate('/login', { replace: true });
+    if (reason === 'INACTIVITY_TIMEOUT') {
+      toast.warning('Session expired due to inactivity. Please log in again.', {
+        title: 'Session Timeout',
+      });
+    }
+  }, [clearSession, navigate]);
+
+  useInactivityLogout({
+    isAuthenticated,
+    tenantId: user?.tenantId,
+    onLogout: handleInactivityLogout,
+  });
+
   const logout = () => {
     clearSession();
     localStorage.clear();
     sessionStorage.clear();
     authApi.logout();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY_SESSION_LOGOUT, JSON.stringify({ reason: 'USER_LOGOUT', timestamp: Date.now() }));
+      } catch {
+        // ignore
+      }
+    }
     navigate('/login', { replace: true });
   };
 

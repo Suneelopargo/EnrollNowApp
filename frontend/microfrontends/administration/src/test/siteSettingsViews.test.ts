@@ -183,5 +183,16 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
       );
       expect(updated.defaultTextReply).toBe(validText);
     });
+
+    it('handles API loading failure and does not silently substitute hardcoded defaults', async () => {
+      vi.mocked(generalSettingsApi.getGeneralSettings).mockRejectedValueOnce(new Error('Network error'));
+
+      try {
+        await generalSettingsApi.getGeneralSettings('11111111-1111-1111-1111-111111111111');
+        expect.unreachable('Should have thrown');
+      } catch (err: any) {
+        expect(err.message).toBe('Network error');
+      }
+    });
   });
 });

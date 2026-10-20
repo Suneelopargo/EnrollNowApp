@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.util.List;
 import java.util.Optional;
@@ -64,5 +65,19 @@ class DashboardAggregationServiceTest {
         assertTrue(overview.getRecruitmentPipeline().isEmpty());
         assertTrue(overview.getRecentActivity().isEmpty());
         assertTrue(overview.getAlerts().isEmpty());
+    }
+
+    @Test
+    @DisplayName("getOverview propagates database query exceptions and does not swallow errors")
+    void shouldPropagateDatabaseExceptionWhenQueryFails() {
+        when(studyRepository.findAll()).thenThrow(new DataAccessResourceFailureException("Database connection timed out"));
+
+        DashboardAggregationService service = new DashboardAggregationService(Optional.of(studyRepository));
+
+        DataAccessResourceFailureException thrown = assertThrows(
+                DataAccessResourceFailureException.class,
+                service::getOverview
+        );
+        assertEquals("Database connection timed out", thrown.getMessage());
     }
 }

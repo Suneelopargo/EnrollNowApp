@@ -11,9 +11,21 @@
 
 ## 1. Executive Summary
 
-This release delivers the complete, authoritative implementation of **US-065 (Configure Site Security Policy)** and **US-084 (Maintain General Site Settings)** in EnrollNow. All implementation gaps identified during the comparison between legacy Ripple and EnrollNow have been closed across the database, backend services/controllers, security enforcement filters, and frontend administration microfrontend.
+This release delivers the complete, authoritative implementation and final corrections for **US-065 (Configure Site Security Policy)** and **US-084 (Maintain General Site Settings)** in EnrollNow:
 
-100% of automated backend and frontend tests pass cleanly, with zero regressions.
+1. **End-to-End Inactivity Auto-Logout (US-065):**
+   - Authoritative backend enforcement via `SessionValidationService` and `SessionValidationFilter` evaluating `inactivityLogoutMinutes` on every authenticated API request.
+   - Dynamic frontend inactivity management (`InactivityManager` and `useInactivityLogout`) embedded into `AuthContext.tsx`.
+   - Qualifying user activity tracking (`mousemove`, `mousedown`, `keydown`, `touchstart`, `scroll`) throttled to 1000ms.
+   - Multi-tab synchronization using browser `storage` events and `BroadcastChannel` ensuring synchronized session timeout and logout across all open tabs.
+   - Auto-logout triggers session clearing, server-side session revocation, navigation to `/login`, and a clear user notification (`Session expired due to inactivity. Please log in again.`).
+2. **Authoritative General Site Settings (US-084):**
+   - Removed all fabricated business information (fake facility name, "SITE-001", hardcoded timezone, Sunday maintenance window).
+   - Preserved authoritative **Default Text Reply** management (up to 160 characters) backed by PostgreSQL `general_settings` table and Flyway migration `V19`.
+   - Operational directory and facility profile accurately represented with the standardized `<ComingSoon />` component.
+   - Robust error handling: API failures display an actionable error banner with a Retry option; never substitutes fake defaults.
+3. **Automated Testing:**
+   - 100% of automated backend Maven tests (all 15 modules) and frontend Vitest suites (all 13 workspaces) pass with 0 errors and 0 regressions.
 
 ---
 
@@ -25,7 +37,7 @@ This release delivers the complete, authoritative implementation of **US-065 (Co
 | **General Settings Storage** | MongoDB `TextMessageSettings` collection | PostgreSQL `enrollnow.general_settings` table (isolated per `tenant_id`) | **Achieved**: Created in `V19__general_site_settings.sql` with default automated text reply template. |
 | **Failed Login Lockout** | `lockAfterNAttempts` (schema default 5) | `max_failed_login_attempts` (default 10) | **Achieved**: Enforced in `LoginService.authenticate()`; locks account on threshold breach with audit record. |
 | **Concurrent Sessions** | `preventConcurrentSessions` toggle | `prevent_concurrent_sessions` toggle | **Achieved**: Enforced in `UserSessionService.createSession()`; terminates older sessions when active. |
-| **Inactivity Logout** | `logoutAfterNMinutes` (default 30 min) | `inactivity_logout_minutes` (default 30 min) | **Achieved**: Enforced in `SessionValidationService.validateSession()`. |
+| **Inactivity Logout** | `logoutAfterNMinutes` (default 30 min) | `inactivity_logout_minutes` (default 30 min, configurable) | **Achieved**: Full end-to-end enforcement in backend (`SessionValidationService`) and frontend (`useInactivityLogout`, `InactivityManager`). |
 | **Inactivity Lockout** | `lockAfterInactivity` (value + unit: 3 months / 90 days) | `inactivity_lock_days` (default 90 days) | **Achieved**: Enforced during `LoginService.authenticate()`; locks account and records `INACTIVITY_LOCK`. |
 | **Password Expiration** | `passwordsExpireAfter` (value + unit: 6/10 months) | `password_expiry_days` (default 300 days) | **Achieved**: Enforced during `LoginService.authenticate()`; locks account and records `PASSWORD_EXPIRED`. |
 | **Password History Reuse** | `preventLastNPasswords` (default 4) | `password_history_count` (default 4) | **Achieved**: Enforced via `PasswordPolicyValidator` querying `user_password_history`. |
@@ -77,13 +89,27 @@ All endpoints support both `/api/v1/...` (resolving tenant from JWT caller conte
 - `com.enrollnow.identity.models.GeneralSettings` & `GeneralSettingsRepository`
 - `com.enrollnow.identity.services.SecuritySettingsService`: Manages retrieval, updates with validation, and defaults reset.
 - `com.enrollnow.identity.services.GeneralSettingsService`: Manages general site settings with non-blank and 160-char length validation.
+- `com.enrollnow.identity.services.SessionValidationService` & `SessionValidationFilter`: Enforces token validity, hard expiration, and inactivity timeout on all API calls.
 - `com.enrollnow.identity.services.PasswordPolicyValidator`: Validates passwords against tenant security settings and prevents reuse against `user_password_history`.
 - `com.enrollnow.identity.services.LoginService`: Enforces inactivity lockout (`inactivityLockDays`) and password expiration (`passwordExpiryDays`) during user login.
 - `com.enrollnow.identity.controllers.SecuritySettingsController` & `GeneralSettingsController`
 
 ---
 
-## 5. Frontend MFE Implementation
+## 5. Frontend Architecture & Inactivity Auto-Logout
+
+### Inactivity Management Architecture
+- **InactivityManager (`frontend/shell/src/auth/inactivityManager.ts`):**
+  - Manages session inactivity countdown, timer checks, and multi-tab synchronization.
+  - Dynamically loads `inactivityLogoutMinutes` from `securitySettingsApi.getSecuritySettings()`.
+  - Attaches throttled (1000ms) event listeners for user input (`mousemove`, `mousedown`, `keydown`, `touchstart`, `scroll`).
+  - Broadcasts activity events across tabs via `localStorage['enrollnow_last_active']` and `BroadcastChannel('enrollnow_session_channel')`.
+  - When idle time exceeds the configured timeout: writes `STORAGE_KEY_SESSION_LOGOUT`, sends BroadcastChannel `LOGOUT` event, and invokes the logout callback.
+  - Reacts to `visibilitychange` to immediately catch timeout when waking or focusing a background tab.
+- **Hook Integration (`frontend/shell/src/auth/useInactivityLogout.ts` & `AuthContext.tsx`):**
+  - Hooks directly into host application authentication lifecycle.
+  - Automatically runs when user is authenticated; stops when logged out.
+  - Clears `enrollnow_token`, `enrollnow_user`, calls `authApi.logout()`, navigates to `/login`, and displays a toast notification: `"Session expired due to inactivity. Please log in again."`.
 
 ### Views & Navigation
 - **Module:** `frontend/microfrontends/administration`
@@ -91,21 +117,17 @@ All endpoints support both `/api/v1/...` (resolving tenant from JWT caller conte
   - Tab **Security** (active for `SITE_ADMIN` users) -> Renders `SecurityView.tsx`
   - Tab **General Settings** -> Renders `GeneralSettingsView.tsx`
 - **Components:**
-  - `frontend/microfrontends/administration/src/components/SecurityView.tsx`:
+  - `SecurityView.tsx`:
     - Responsive 2-column layout: **Sessions & Inactivity** (Left) and **Passwords & Complexity** (Right).
     - Supports days/weeks/months/years time-unit select dropdowns with automatic mathematical conversion to days.
     - Dirty tracking with "Unsaved Changes" pill.
-    - "Save Settings", "Discard Changes", and "Reset to Default Settings" buttons.
-    - Confirmation dialog for resetting to defaults.
-  - `frontend/microfrontends/administration/src/components/GeneralSettingsView.tsx`:
+    - Dispatches `enrollnow_security_policy_updated` and updates `localStorage` upon save/reset so active sessions update their timeout dynamically.
+  - `GeneralSettingsView.tsx`:
     - Editable **Default Text Reply** expandable textarea with 160-character limit.
     - Live remaining character counter (`X / 160 characters remaining`).
     - Validation prevents saving blank or whitespace-only messages.
-    - Informational facility and system overview tiles.
-- **Client & Mock Layer:**
-  - `frontend/shared/api/securitySettingsApi.ts`
-  - `frontend/shared/api/generalSettingsApi.ts`
-  - Updated `frontend/shared/mock-api/mockStore.ts` & `mockAdapter.ts` to support offline development and mock API mode.
+    - Renders `<ComingSoon />` for unimplemented facility profile.
+    - Displays clean error banner with Retry button on API failure.
 
 ---
 
@@ -128,16 +150,30 @@ All endpoints support both `/api/v1/...` (resolving tenant from JWT caller conte
    - Toast alert: `"Site security policy saved successfully."`
    - Refresh the page and verify all modified values remain persisted.
 
-### Scenario 2: Inactivity Lockout Enforcement (US-065)
-1. **Prerequisites:** In Security Settings, set "Lock accounts after inactivity" to `90` days.
+### Scenario 2: End-to-End Inactivity Auto-Logout (US-065)
+1. **Prerequisites:** Log in with valid credentials.
 2. **Steps:**
-   - Identify or set a user whose `lastActivityAt` or `lastLoginAt` is older than 90 days.
-   - Attempt to log in with that user's valid credentials.
+   - Set "Automatic logout after inactivity" to `1` minute in Security settings (or test via automated fake timer suite).
+   - Cease all mouse and keyboard interaction.
+   - Open a secondary tab to the same application origin.
+   - Wait for the 1-minute timeout to expire.
 3. **Expected Result:**
-   - Login fails with HTTP 403 / AccountLockedException.
-   - User security state in database is marked `status = 'LOCKED'` and `lock_reason = 'INACTIVITY_LOCK'`.
+   - Both tabs immediately transition to `/login`.
+   - Local and session storage tokens are wiped.
+   - Toast notification is displayed: `"Session expired due to inactivity. Please log in again."`.
+   - Attempting to make any backend API call with the expired session token returns HTTP 401 with `"Session timed out due to inactivity"`.
 
-### Scenario 3: Password Complexity & History Prevention (US-065)
+### Scenario 3: Multi-Tab Inactivity Reset (US-065)
+1. **Prerequisites:** Log in and open Tab A and Tab B.
+2. **Steps:**
+   - Leave Tab A untouched.
+   - Move mouse or press keys in Tab B before the timeout expires.
+3. **Expected Result:**
+   - Tab B records activity and updates `localStorage['enrollnow_last_active']`.
+   - Tab A detects the remote activity and resets its local timer.
+   - Tab A does not prematurely log out.
+
+### Scenario 4: Password Complexity & History Prevention (US-065)
 1. **Prerequisites:** Security settings configured with `minimumPasswordLength = 10`, `requireDigit = true`, `requireSymbol = true`, `passwordHistoryCount = 4`.
 2. **Steps:**
    - Attempt to set/reset a user password with:
@@ -147,7 +183,7 @@ All endpoints support both `/api/v1/...` (resolving tenant from JWT caller conte
      - `"password123!"` (no uppercase) -> Verify error: `"Password must contain mixed upper and lower case characters"`.
      - Re-use the immediate prior password -> Verify error: `"Cannot reuse any of your last 4 passwords"`.
 
-### Scenario 4: Reset Security Settings to Default (US-065)
+### Scenario 5: Reset Security Settings to Default (US-065)
 1. **Steps:**
    - In **Site Admin > Security**, click "Reset to Default Settings".
    - A modal dialog appears: `"Reset to Default Settings? This action will reset all security and session policies to the system recommended minimum values."`
@@ -156,11 +192,11 @@ All endpoints support both `/api/v1/...` (resolving tenant from JWT caller conte
    - All values reset to defaults (10 failed attempts, 30 min logout, 90 days inactivity lock, 10 months expiry, 4 password history, min length 10, digit/symbol/mixed case enabled).
    - Toast alert: `"Security settings reset to recommended defaults."`
 
-### Scenario 5: Maintain General Site Settings (US-084)
+### Scenario 6: Maintain General Site Settings (US-084)
 1. **Prerequisites:** Log in as `SITE_ADMIN` or `SITE_MANAGER`.
 2. **Steps:**
    - Navigate to **Site Admin > General Settings**.
-   - Verify the "Default Text Reply" template loads.
+   - Verify the "Default Text Reply" template loads without fake facility or maintenance data.
    - Verify live character counter shows remaining characters out of 160.
    - Attempt to enter whitespace only and click Save -> Verify inline warning `"Default text reply cannot be blank"`.
    - Enter: `"EnrollNow clinical center reply: Please call our research coordinator office directly at 555-0199 for protocol assistance."`
@@ -169,25 +205,21 @@ All endpoints support both `/api/v1/...` (resolving tenant from JWT caller conte
    - Toast alert: `"General site settings saved successfully."`
    - Reload page; verify saved reply text persists accurately.
 
-### Scenario 6: Role-Based Authorization
-1. **Steps:**
-   - Log in as a user with only `SITE_REGISTRY` access (no site admin permission).
-   - Verify neither Security nor General Settings tabs are accessible.
-   - Log in as `SITE_MANAGER` (non-admin).
-   - Verify Security tab is hidden / restricted to Site Admin only.
-   - Verify General Settings tab is visible.
-
 ---
 
 ## 7. Automated Test Verification Summary
 
-- **Backend Modules Tested:**
+- **Backend Modules Tested (15/15 Passed):**
   - `enrollnow-common`: 5 tests passed
   - `enrollnow-identity-service`: 54 tests passed (including `SecuritySettingsServiceTest`, `GeneralSettingsServiceTest`, `PasswordPolicyValidatorTest`, `LoginServiceTest`, `SecurityAndGeneralSettingsControllerTest`)
-  - `enrollnow-app`: 3 Flyway migration & controller integration tests passed
-  - **Total Backend Tests:** 62 tests, 0 failures, 0 errors.
-- **Frontend Workspaces Tested:**
+  - `enrollnow-dashboard-service`: 4 tests passed (including `DashboardAggregationServiceTest.shouldPropagateDatabaseExceptionWhenQueryFails`)
+  - `enrollnow-study-service`: 2 tests passed
+  - `enrollnow-app`: 3 tests passed (`RegistryParticipantControllerTest`)
+  - **Total Backend Tests:** 68 tests, 0 failures, 0 errors.
+- **Frontend Workspaces Tested (13/13 Passed):**
   - `shared`: 12 test files, 102 tests passed
-  - `microfrontends/administration`: 2 test files, 18 tests passed (`siteSettingsViews.test.ts`, `administratorApi.test.ts`)
-  - All other microfrontends (`identity`, `study`, `participant`, `recruitment`, `survey`, `task`, `communication`, `document`, `dashboard`): 100% passed.
-  - **TypeScript Typecheck:** 0 errors across all workspaces in monorepo.
+  - `shell`: 3 test files, 26 tests passed (`InactivityLogout.test.ts`, `AuthContext.test.ts`, `RoleBasedNavigationAndAccess.test.ts`)
+  - `microfrontends/administration`: 2 test files, 20 tests passed (`siteSettingsViews.test.ts`, `administratorApi.test.ts`)
+  - `microfrontends/dashboard`: 2 test files, 9 tests passed (`dashboardDataAdapter.test.ts`, `dashboard.test.ts`)
+  - All other microfrontends (`identity`, `study`, `participant`, `recruitment`, `survey`, `task`, `communication`, `document`): 100% passed.
+  - **TypeScript Typecheck:** 0 errors across all 13 workspaces in monorepo.

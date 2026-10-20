@@ -28,27 +28,23 @@ public class DashboardAggregationService {
         List<DashboardStudyDto> studies = new ArrayList<>();
 
         if (studyRepository.isPresent()) {
-            try {
-                List<Study> dbStudies = studyRepository.get().findAll();
-                if (dbStudies != null && !dbStudies.isEmpty()) {
-                    for (Study s : dbStudies) {
-                        int target = s.getSampleSize() != null ? s.getSampleSize() : 0;
-                        int enrolled = 0;
-                        String status = s.isArchived() ? "COMPLETED" : "ACTIVE";
-                        studies.add(new DashboardStudyDto(
-                                s.getId() != null ? s.getId().toString() : (s.getStudyCode() != null ? s.getStudyCode() : "N/A"),
-                                s.getStudyCode() != null ? s.getStudyCode() : "N/A",
-                                s.getName() != null ? s.getName() : "Untitled Study",
-                                "Phase II/III",
-                                status,
-                                target,
-                                enrolled,
-                                0
-                        ));
-                    }
+            List<Study> dbStudies = studyRepository.get().findAll();
+            if (dbStudies != null && !dbStudies.isEmpty()) {
+                for (Study s : dbStudies) {
+                    int target = s.getSampleSize() != null ? s.getSampleSize() : 0;
+                    int enrolled = 0;
+                    String status = s.isArchived() ? "COMPLETED" : "ACTIVE";
+                    studies.add(new DashboardStudyDto(
+                            s.getId() != null ? s.getId().toString() : (s.getStudyCode() != null ? s.getStudyCode() : "N/A"),
+                            s.getStudyCode() != null ? s.getStudyCode() : "N/A",
+                            s.getName() != null ? s.getName() : "Untitled Study",
+                            "Phase II/III",
+                            status,
+                            target,
+                            enrolled,
+                            0
+                    ));
                 }
-            } catch (Exception ignored) {
-                // Return empty list on persistence query error
             }
         }
 

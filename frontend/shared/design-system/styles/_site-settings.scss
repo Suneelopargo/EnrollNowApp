@@ -1,0 +1,751 @@
+// frontend/shared/design-system/styles/_site-settings.scss - Pixel-Perfect Enterprise Security & Site Settings
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// ---------------------------------------------------------------------------
+// 1. Breadcrumbs & Master View Wrapper
+// ---------------------------------------------------------------------------
+.sec-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sec-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+
+  .sec-crumb-icon {
+    color: #0284c7;
+    display: flex;
+    align-items: center;
+  }
+
+  .sec-crumb-sep {
+    color: #94a3b8;
+    font-size: 11px;
+  }
+
+  .sec-crumb-active {
+    color: #1e293b;
+    font-weight: 600;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. Top Header Bar (Shield Badge + Title + Subtitle + Reset Button)
+// ---------------------------------------------------------------------------
+.sec-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 16px 0;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sec-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sec-shield-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background-color: #e0f2fe;
+  color: #0284c7;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.08);
+}
+
+.sec-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sec-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sec-header-title {
+  font-size: 21px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.015em;
+}
+
+.sec-header-subtitle {
+  font-size: 13.5px;
+  color: #64748b;
+  margin: 0;
+}
+
+.sec-dirty-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.sec-btn-reset-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ef4444;
+  background-color: #ffffff;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+  &:hover:not(:disabled) {
+    background-color: #fef2f2;
+    border-color: #ef4444;
+    color: #dc2626;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Two-Column Layout Grid (Left: Sessions Card, Right: Stacked Cards)
+// ---------------------------------------------------------------------------
+.sec-layout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+  width: 100%;
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sec-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+// ---------------------------------------------------------------------------
+// 4. White Card Containers & Headers
+// ---------------------------------------------------------------------------
+.sec-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-sizing: border-box;
+
+  @media (max-width: 640px) {
+    padding: 16px;
+  }
+}
+
+.sec-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sec-card-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+
+  &.is-blue {
+    background-color: #e0f2fe;
+    color: #0284c7;
+  }
+
+  &.is-green {
+    background-color: #dcfce7;
+    color: #16a34a;
+  }
+
+  &.is-indigo {
+    background-color: #e0e7ff;
+    color: #4f46e5;
+  }
+}
+
+.sec-card-title-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sec-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.sec-card-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+// ---------------------------------------------------------------------------
+// 5. Form Field Groups, Labels, Inputs & Descriptions
+// ---------------------------------------------------------------------------
+.sec-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sec-field-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.sec-field-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+}
+
+.sec-input-inline-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sec-number-input {
+  width: 72px;
+  height: 36px;
+  padding: 4px 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  transition: all 0.15s ease-in-out;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  }
+
+  &.is-invalid {
+    border-color: #ef4444;
+    background-color: #fef2f2;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  }
+
+  &:disabled {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+    border-color: #e2e8f0;
+  }
+}
+
+.sec-unit-suffix {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.sec-dropdown-select {
+  height: 36px;
+  padding: 4px 30px 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: all 0.15s ease-in-out;
+  min-width: 105px;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  }
+
+  &:disabled {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+    border-color: #e2e8f0;
+  }
+}
+
+.sec-field-error-msg {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #dc2626;
+  margin-top: 2px;
+}
+
+// ---------------------------------------------------------------------------
+// 6. Split Row with Switch (Prevent Concurrent Sessions)
+// ---------------------------------------------------------------------------
+.sec-switch-split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sec-switch-text-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+
+// Modern Blue Slider Switch
+.sec-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+    margin: 0;
+  }
+
+  .sec-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 24px;
+
+    &:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #ffffff;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+  }
+
+  input:checked + .sec-toggle-slider {
+    background-color: #0284c7;
+  }
+
+  input:focus-visible + .sec-toggle-slider {
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25);
+  }
+
+  input:checked + .sec-toggle-slider:before {
+    transform: translateX(20px);
+  }
+
+  input:disabled + .sec-toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7. Light Blue Note Box (Left Card Footer)
+// ---------------------------------------------------------------------------
+.sec-note-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  margin-top: 4px;
+
+  .sec-note-icon {
+    color: #0284c7;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .sec-note-content {
+    font-size: 12.5px;
+    color: #334155;
+    line-height: 1.45;
+
+    strong {
+      color: #0369a1;
+      font-weight: 700;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. 3-Column Toggle Row (Digit, Symbol, Mixed Case)
+// ---------------------------------------------------------------------------
+.sec-tri-toggle-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding-top: 4px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.sec-tri-toggle-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+
+  .sec-tri-toggle-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #334155;
+    line-height: 1.3;
+    min-height: 18px;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 9. Bottom Action Buttons Bar
+// ---------------------------------------------------------------------------
+.sec-bottom-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 20px 0;
+}
+
+.sec-btn-save-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #0284c7;
+  border: 1px solid #0284c7;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(2, 132, 199, 0.2);
+  transition: all 0.15s ease-in-out;
+
+  &:hover:not(:disabled) {
+    background-color: #0369a1;
+    border-color: #0369a1;
+    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.3);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.35);
+  }
+
+  &:disabled {
+    background-color: #94a3b8;
+    border-color: #94a3b8;
+    color: #f1f5f9;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+  }
+}
+
+.sec-btn-discard-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #475569;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+
+  &:hover:not(:disabled) {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+    color: #1e293b;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.2);
+  }
+
+  &:disabled {
+    color: #cbd5e1;
+    border-color: #e2e8f0;
+    background-color: #ffffff;
+    cursor: not-allowed;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 10. Pixel-Perfect Reset to Defaults Modal (Matching Screenshot 2)
+// ---------------------------------------------------------------------------
+.sec-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(3px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: secFadeIn 0.15s ease-out;
+}
+
+.sec-modal-card {
+  position: relative;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+  max-width: 440px;
+  width: 100%;
+  padding: 32px 28px 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  animation: secZoomIn 0.15s ease-out;
+}
+
+.sec-modal-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: #475569;
+  }
+}
+
+.sec-modal-alert-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background-color: #ffedd5;
+  color: #ea580c;
+  margin-bottom: 16px;
+}
+
+.sec-modal-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 10px 0;
+}
+
+.sec-modal-body-text {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 24px 0;
+}
+
+.sec-modal-btn-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.sec-modal-btn-cancel {
+  flex: 1;
+  padding: 9px 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #475569;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+
+  &:hover:not(:disabled) {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+  }
+}
+
+.sec-modal-btn-confirm {
+  flex: 1;
+  padding: 9px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #e11d48;
+  border: 1px solid #e11d48;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px rgba(225, 29, 72, 0.2);
+
+  &:hover:not(:disabled) {
+    background-color: #be123c;
+    border-color: #be123c;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+@keyframes secFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes secZoomIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+// ---------------------------------------------------------------------------
+// 11. General Settings Supporting Classes
+// ---------------------------------------------------------------------------
+.general-settings-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  margin-bottom: 20px;
+}
+
+.general-settings-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #1e293b;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.15s ease-in-out;
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+  }
+
+  &.is-invalid {
+    border-color: #dc2626;
+    background-color: #fff5f5;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+  }
+
+  &:disabled {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+  }
+}
+
+.general-settings-char-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
