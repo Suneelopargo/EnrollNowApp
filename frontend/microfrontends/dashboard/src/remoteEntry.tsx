@@ -157,7 +157,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
           const overviewStudies = res.data.data.recentStudies || [];
           try {
             const studiesRes = await apiClient.get('/api/v1/studies');
-            const allStudies = studiesRes.data?.data;
+            const allStudies = Array.isArray(studiesRes.data) ? studiesRes.data : studiesRes.data?.data;
             if (Array.isArray(allStudies) && allStudies.length > 0) {
               const overviewById = new Map<string, ReturnType<typeof normalizeStudy>>();
               overviewStudies.map(normalizeStudy).forEach((study: any) => {

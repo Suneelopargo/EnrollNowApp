@@ -1,7 +1,8 @@
 // frontend/shared/api/authApi.ts - Centralized Authentication API
 import { apiClient } from '../api-client';
 import { getApiMode, getTenantId } from '../api-config';
-import { AuthUser } from '../contracts';
+import { AuthUser, SiteRoleAssignmentSummary } from '../contracts';
+import { normalizeSiteRoleCode, toSitePermissionLabel } from './administrationApi';
 
 export interface LoginCredentials {
   username?: string;
@@ -55,6 +56,234 @@ export interface ResetPasswordResponse {
   message?: string;
 }
 
+const CANONICAL_ROLE_PERMISSIONS: Record<string, string[]> = {
+  SITE_ADMIN: [
+    'REGISTRY_VIEW',
+    'REGISTRY_MANAGE',
+    'SITE_ADMIN_ACCESS',
+    'SITE_STUDIES_VIEW',
+    'SITE_STUDIES_CREATE',
+    'SITE_ALL_STUDIES_MANAGE',
+    'SITE_USERS_VIEW',
+    'SITE_USERS_MANAGE',
+    'SITE_ADMIN_USERS_MANAGE',
+    'SITE_IMPORT_EXPORT',
+    'SITE_AUDIT_LOG_VIEW',
+    'SITE_SECURITY_MANAGE',
+    'SITE_SETTINGS_VIEW',
+    'SITE_SETTINGS_MANAGE',
+  ],
+  SITE_MANAGER: [
+    'REGISTRY_VIEW',
+    'REGISTRY_MANAGE',
+    'SITE_ADMIN_ACCESS',
+    'SITE_STUDIES_VIEW',
+    'SITE_STUDIES_CREATE',
+    'SITE_USERS_VIEW',
+    'SITE_USERS_MANAGE',
+    'SITE_IMPORT_EXPORT',
+    'SITE_SETTINGS_VIEW',
+  ],
+  SITE_REGISTRY: [
+    'REGISTRY_VIEW',
+    'REGISTRY_MANAGE',
+  ],
+};
+
+export function deriveUserAccessFlags(rawUser: Partial<AuthUser> & Record<string, any>): AuthUser {
+  const rawRoles: string[] = Array.isArray(rawUser.roles)
+    ? rawUser.roles.filter(Boolean).map((r: string) => String(r).trim())
+    : [];
+  const upperRoles = rawRoles.map((r) => r.toUpperCase());
+
+  let effectiveSiteRole: 'SITE_ADMIN' | 'SITE_MANAGER' | 'SITE_REGISTRY' | 'NONE' = 'NONE';
+  if (rawUser.siteRole) {
+    effectiveSiteRole = normalizeSiteRoleCode(rawUser.siteRole);
+  } else if (rawUser.sitePermission) {
+    effectiveSiteRole = normalizeSiteRoleCode(rawUser.sitePermission);
+  } else if (
+    upperRoles.includes('SITE_ADMIN') ||
+    upperRoles.includes('ROLE_SITE_ADMIN') ||
+    upperRoles.includes('ROLE_SUPER_ADMIN') ||
+    upperRoles.includes('SUPER_ADMIN') ||
+    upperRoles.includes('ROLE_ADMIN') ||
+    upperRoles.includes('ADMIN')
+  ) {
+    effectiveSiteRole = 'SITE_ADMIN';
+  } else if (
+    upperRoles.includes('SITE_MANAGER') ||
+    upperRoles.includes('ROLE_SITE_MANAGER')
+  ) {
+    effectiveSiteRole = 'SITE_MANAGER';
+  } else if (
+    upperRoles.includes('SITE_REGISTRY') ||
+    upperRoles.includes('ROLE_SITE_REGISTRY')
+  ) {
+    effectiveSiteRole = 'SITE_REGISTRY';
+  }
+
+  const roleSet = new Set<string>(rawRoles);
+  if (effectiveSiteRole !== 'NONE') {
+    roleSet.add(effectiveSiteRole);
+    roleSet.add(`ROLE_${effectiveSiteRole}`);
+  }
+
+  const rawPermissions: string[] = Array.isArray(rawUser.permissions)
+    ? rawUser.permissions.filter(Boolean).map((p: string) => String(p).trim().toUpperCase())
+    : [];
+  const permSet = new Set<string>(rawPermissions);
+
+  const canonicalPerms = CANONICAL_ROLE_PERMISSIONS[effectiveSiteRole] || [];
+  for (const p of canonicalPerms) {
+    permSet.add(p);
+  }
+
+  const canAccessRegistry =
+    typeof rawUser.canAccessRegistry === 'boolean'
+      ? rawUser.canAccessRegistry
+      : effectiveSiteRole === 'SITE_ADMIN' ||
+        effectiveSiteRole === 'SITE_MANAGER' ||
+        effectiveSiteRole === 'SITE_REGISTRY' ||
+        permSet.has('REGISTRY_VIEW');
+
+  const canAccessSiteAdmin =
+    typeof rawUser.canAccessSiteAdmin === 'boolean'
+      ? rawUser.canAccessSiteAdmin
+      : effectiveSiteRole === 'SITE_ADMIN' ||
+        effectiveSiteRole === 'SITE_MANAGER' ||
+        permSet.has('SITE_ADMIN_ACCESS');
+
+  const canManageSiteAdmins =
+    typeof rawUser.canManageSiteAdmins === 'boolean'
+      ? rawUser.canManageSiteAdmins
+      : effectiveSiteRole === 'SITE_ADMIN' ||
+        permSet.has('SITE_ADMIN_USERS_MANAGE');
+
+  if (canAccessRegistry) {
+    permSet.add('REGISTRY_VIEW');
+  }
+  if (canAccessSiteAdmin) {
+    permSet.add('SITE_ADMIN_ACCESS');
+  }
+  if (canManageSiteAdmins) {
+    permSet.add('SITE_ADMIN_USERS_MANAGE');
+  }
+
+  const siteAssignments: SiteRoleAssignmentSummary[] = Array.isArray(rawUser.siteAssignments)
+    ? rawUser.siteAssignments
+    : [];
+
+  return {
+    ...rawUser,
+    id: rawUser.id ?? rawUser.userId ?? '',
+    username: rawUser.username || rawUser.email || rawUser.primaryEmail || '',
+    email: rawUser.email || rawUser.primaryEmail || rawUser.username || '',
+    firstName: rawUser.firstName,
+    lastName: rawUser.lastName,
+    fullName:
+      rawUser.fullName ||
+      `${rawUser.firstName || ''} ${rawUser.lastName || ''}`.trim() ||
+      rawUser.username ||
+      rawUser.email ||
+      '',
+    roles: Array.from(roleSet),
+    permissions: Array.from(permSet),
+    siteId: rawUser.siteId ?? null,
+    siteRole: effectiveSiteRole,
+    sitePermissionLabel:
+      rawUser.sitePermissionLabel || toSitePermissionLabel(effectiveSiteRole),
+    siteAssignments,
+    canAccessRegistry,
+    canAccessSiteAdmin,
+    canManageSiteAdmins,
+    active: typeof rawUser.active === 'boolean' ? rawUser.active : rawUser.status !== 'DISABLED',
+    tenantId: rawUser.tenantId,
+  };
+}
+
+export function userHasRole(user: AuthUser | null | undefined, role: string): boolean {
+  if (!user || !role) return false;
+  const target = role.trim().toUpperCase();
+  const normalizedTarget = target.startsWith('ROLE_') ? target.slice(5) : target;
+
+  const userRoles = (user.roles || []).map((r) => r.trim().toUpperCase());
+  if (
+    userRoles.includes(target) ||
+    userRoles.includes(normalizedTarget) ||
+    userRoles.includes(`ROLE_${normalizedTarget}`)
+  ) {
+    return true;
+  }
+
+  if (user.siteRole && user.siteRole.toUpperCase() === normalizedTarget) {
+    return true;
+  }
+
+  return false;
+}
+
+export function userHasPermission(user: AuthUser | null | undefined, permission: string): boolean {
+  if (!user || !permission) return false;
+  const target = permission.trim().toUpperCase();
+
+  if (Array.isArray(user.permissions) && user.permissions.some((p) => p.toUpperCase() === target)) {
+    return true;
+  }
+
+  if (target === 'REGISTRY_VIEW') {
+    return userHasRegistryAccess(user);
+  }
+  if (target === 'SITE_ADMIN_ACCESS') {
+    return userHasSiteAdminAccess(user);
+  }
+  if (target === 'SITE_ADMIN_USERS_MANAGE') {
+    return userIsFullSiteAdmin(user);
+  }
+
+  return userHasRole(user, target);
+}
+
+export function userHasRegistryAccess(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  if (typeof user.canAccessRegistry === 'boolean') {
+    return user.canAccessRegistry;
+  }
+  return (
+    userHasRole(user, 'SITE_ADMIN') ||
+    userHasRole(user, 'SITE_MANAGER') ||
+    userHasRole(user, 'SITE_REGISTRY') ||
+    userHasRole(user, 'ROLE_SUPER_ADMIN') ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'REGISTRY_VIEW'))
+  );
+}
+
+export function userHasSiteAdminAccess(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  if (typeof user.canAccessSiteAdmin === 'boolean') {
+    return user.canAccessSiteAdmin;
+  }
+  return (
+    userHasRole(user, 'SITE_ADMIN') ||
+    userHasRole(user, 'SITE_MANAGER') ||
+    userHasRole(user, 'ROLE_SUPER_ADMIN') ||
+    userHasRole(user, 'ADMIN') ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_ADMIN_ACCESS'))
+  );
+}
+
+export function userIsFullSiteAdmin(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  if (typeof user.canManageSiteAdmins === 'boolean') {
+    return user.canManageSiteAdmins;
+  }
+  return (
+    userHasRole(user, 'SITE_ADMIN') ||
+    userHasRole(user, 'ROLE_SUPER_ADMIN') ||
+    userHasRole(user, 'ADMIN') ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_ADMIN_USERS_MANAGE'))
+  );
+}
+
 export const authApi = {
   /**
    * Performs user login using credentials.
@@ -82,20 +311,51 @@ export const authApi = {
         throw new Error('Authentication failed: Missing access token in server response');
       }
 
-      const user: AuthUser = {
-        id: data.userId || data.id,
-        username: data.email || username,
-        email: data.email || username,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        fullName: `${data.firstName || ''} ${data.lastName || ''}`.trim() || username,
-        roles: ['ROLE_SUPER_ADMIN', 'ROLE_SITE_ADMIN', 'ADMIN'],
+      const resolvedTenantId = data.tenantId || tenantId;
+      const userId = data.userId || data.id;
+
+      let profileData: Record<string, any> = { ...data };
+
+      // If login response did not include effective roles/siteRole, attempt to load user profile
+      if (!Array.isArray(data.roles) && !data.siteRole && userId && typeof apiClient.get === 'function') {
+        try {
+          const profileRes = await apiClient.get<any>(
+            `/api/v1/tenants/${resolvedTenantId}/users/${userId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              timeout: 8000,
+            } as any
+          );
+          if (profileRes?.data) {
+            profileData = { ...profileData, ...profileRes.data };
+          }
+        } catch {
+          // Proceed with login payload if secondary profile fetch is unavailable
+        }
+      }
+
+      const user = deriveUserAccessFlags({
+        id: userId,
+        username: profileData.email || profileData.primaryEmail || username,
+        email: profileData.email || profileData.primaryEmail || username,
+        firstName: profileData.firstName,
+        lastName: profileData.lastName,
+        fullName: `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim() || username,
+        roles: Array.isArray(profileData.roles) ? profileData.roles : [],
+        permissions: Array.isArray(profileData.permissions) ? profileData.permissions : [],
+        siteId: profileData.siteId ?? null,
+        siteRole: profileData.siteRole ?? profileData.sitePermission ?? 'NONE',
+        sitePermissionLabel: profileData.sitePermissionLabel,
+        siteAssignments: profileData.siteAssignments,
+        canAccessRegistry: profileData.canAccessRegistry,
+        canAccessSiteAdmin: profileData.canAccessSiteAdmin,
+        canManageSiteAdmins: profileData.canManageSiteAdmins,
         active: true,
-        tenantId: data.tenantId || tenantId,
-      };
+        tenantId: resolvedTenantId,
+      });
 
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('enrollnow_tenant_id', data.tenantId || tenantId);
+        localStorage.setItem('enrollnow_tenant_id', resolvedTenantId);
       }
 
       return { user, token };
@@ -115,7 +375,7 @@ export const authApi = {
 
     const data = res.data.data;
     const token = data.accessToken || data.token;
-    const user = data.user || {
+    const rawUser = data.user || {
       id: 1,
       username,
       email: `${username}@enrollnow.local`,
@@ -126,13 +386,14 @@ export const authApi = {
       throw new Error('Authentication failed: Missing access token in server response');
     }
 
+    const user = deriveUserAccessFlags(rawUser);
     return { user, token };
   },
 
   /**
    * Retrieves current authenticated user details from session endpoint.
    */
-  async getCurrentUser(): Promise<AuthUser> {
+  async getCurrentUser(siteId?: string): Promise<AuthUser> {
     const mode = getApiMode();
 
     if (mode === 'real') {
@@ -141,21 +402,42 @@ export const authApi = {
         try {
           const parsed = JSON.parse(storedUserRaw);
           const tenantId = parsed.tenantId || getTenantId();
+          const effectiveSiteId = siteId !== undefined ? siteId : parsed.siteId;
           if (tenantId && parsed.id) {
             const res = await apiClient.get<any>(`/api/v1/tenants/${tenantId}/users/${parsed.id}`, {
+              params: effectiveSiteId ? { siteId: effectiveSiteId } : undefined,
               timeout: 8000,
             });
             if (res.data) {
-              const u = res.data;
-              return {
+              const u = res.data?.data || res.data;
+              return deriveUserAccessFlags({
                 ...parsed,
-                id: u.id,
-                email: u.primaryEmail || parsed.email,
-                firstName: u.firstName,
-                lastName: u.lastName,
-                fullName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || parsed.username,
-                active: u.status === 'ACTIVE',
-              };
+                id: u.id ?? parsed.id,
+                username: u.primaryEmail || u.email || parsed.username,
+                email: u.primaryEmail || u.email || parsed.email,
+                firstName: u.firstName ?? parsed.firstName,
+                lastName: u.lastName ?? parsed.lastName,
+                fullName:
+                  `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
+                  parsed.fullName ||
+                  parsed.username,
+                roles: Array.isArray(u.roles) ? u.roles : (parsed.roles || []),
+                permissions: Array.isArray(u.permissions) ? u.permissions : (parsed.permissions || []),
+                siteId: 'siteId' in u ? u.siteId : parsed.siteId,
+                siteRole: u.siteRole ?? u.sitePermission ?? parsed.siteRole ?? 'NONE',
+                sitePermissionLabel: u.sitePermissionLabel ?? parsed.sitePermissionLabel,
+                siteAssignments: Array.isArray(u.siteAssignments)
+                  ? u.siteAssignments
+                  : (parsed.siteAssignments || []),
+                canAccessRegistry:
+                  typeof u.canAccessRegistry === 'boolean' ? u.canAccessRegistry : undefined,
+                canAccessSiteAdmin:
+                  typeof u.canAccessSiteAdmin === 'boolean' ? u.canAccessSiteAdmin : undefined,
+                canManageSiteAdmins:
+                  typeof u.canManageSiteAdmins === 'boolean' ? u.canManageSiteAdmins : undefined,
+                active: u.status ? u.status === 'ACTIVE' : parsed.active,
+                tenantId: u.tenantId || tenantId,
+              });
             }
           }
         } catch (err: any) {
@@ -165,7 +447,7 @@ export const authApi = {
           }
         }
         try {
-          return JSON.parse(storedUserRaw);
+          return deriveUserAccessFlags(JSON.parse(storedUserRaw));
         } catch {
           // ignore
         }
@@ -175,7 +457,7 @@ export const authApi = {
     const res = await apiClient.get<AuthApiResponse<AuthUser>>('/api/v1/auth/me', {
       timeout: 8000,
     });
-    return res.data?.data;
+    return deriveUserAccessFlags(res.data?.data || {});
   },
 
   /**

@@ -10,6 +10,9 @@ public class StudySummaryResponse {
     private String description;
     private boolean archived;
 
+    private Integer sampleSize;
+    private Integer enrolled;
+
     public StudySummaryResponse() {
     }
 
@@ -29,6 +32,10 @@ public class StudySummaryResponse {
         this.id = id;
     }
 
+    public String getStudyId() {
+        return id != null ? id.toString() : studyCode;
+    }
+
     public String getStudyCode() {
         return studyCode;
     }
@@ -37,12 +44,20 @@ public class StudySummaryResponse {
         this.studyCode = studyCode;
     }
 
+    public String getProtocolNumber() {
+        return studyCode;
+    }
+
     public String getName() {
         return name;
     }
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getTitle() {
+        return name;
     }
 
     public String getDescription() {
@@ -59,5 +74,29 @@ public class StudySummaryResponse {
 
     public void setArchived(boolean archived) {
         this.archived = archived;
+    }
+
+    public String getStatus() {
+        return archived ? "COMPLETED" : "ACTIVE";
+    }
+
+    public Integer getSampleSize() {
+        return sampleSize;
+    }
+
+    public void setSampleSize(Integer sampleSize) {
+        this.sampleSize = sampleSize;
+    }
+
+    public Integer getTargetEnrollment() {
+        return sampleSize != null ? sampleSize : 100;
+    }
+
+    public Integer getEnrolled() {
+        return enrolled != null ? enrolled : 0;
+    }
+
+    public void setEnrolled(Integer enrolled) {
+        this.enrolled = enrolled;
     }
 }

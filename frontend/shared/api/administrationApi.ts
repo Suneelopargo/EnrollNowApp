@@ -113,26 +113,62 @@ export function toStudyPermissionLabel(roleCode?: string | null): string {
   return ROLE_CODE_TO_STUDY_PERMISSION[roleCode] || roleCode;
 }
 
-export const SITE_PERMISSION_TO_ROLE_CODE: Record<string, string> = {
+export type SitePermissionLabel =
+  | 'Site Admin & Registry Access'
+  | 'Site Manager & Registry Access'
+  | 'Registry Access'
+  | 'None';
+
+export const SITE_PERMISSION_OPTIONS: readonly SitePermissionLabel[] = [
+  'Site Admin & Registry Access',
+  'Site Manager & Registry Access',
+  'Registry Access',
+  'None',
+] as const;
+
+export const SITE_PERMISSION_TO_ROLE_CODE: Record<string, 'SITE_ADMIN' | 'SITE_MANAGER' | 'SITE_REGISTRY' | 'NONE'> = {
   'None': 'NONE',
   'NONE': 'NONE',
   'Registry Access': 'SITE_REGISTRY',
+  'Registry Access Only': 'SITE_REGISTRY',
   'SITE_REGISTRY': 'SITE_REGISTRY',
+  'Site Manager & Registry Access': 'SITE_MANAGER',
   'Site Manager': 'SITE_MANAGER',
   'SITE_MANAGER': 'SITE_MANAGER',
+  'Site Admin & Registry Access': 'SITE_ADMIN',
   'Site Admin': 'SITE_ADMIN',
   'SITE_ADMIN': 'SITE_ADMIN',
 };
 
-export const ROLE_CODE_TO_SITE_PERMISSION: Record<string, string> = {
+export const ROLE_CODE_TO_SITE_PERMISSION: Record<string, SitePermissionLabel> = {
+  'SITE_ADMIN': 'Site Admin & Registry Access',
+  'SITE_MANAGER': 'Site Manager & Registry Access',
   'SITE_REGISTRY': 'Registry Access',
-  'SITE_MANAGER': 'Site Manager',
-  'SITE_ADMIN': 'Site Admin',
+  'NONE': 'None',
 };
 
-export function toSitePermissionLabel(val?: string | null): string {
-  if (!val || val === 'NONE' || val === 'None') return 'None';
-  return ROLE_CODE_TO_SITE_PERMISSION[val] || val;
+export function normalizeSiteRoleCode(val?: string | null): 'SITE_ADMIN' | 'SITE_MANAGER' | 'SITE_REGISTRY' | 'NONE' {
+  if (!val) return 'NONE';
+  const trimmed = val.trim();
+  if (SITE_PERMISSION_TO_ROLE_CODE[trimmed]) {
+    return SITE_PERMISSION_TO_ROLE_CODE[trimmed];
+  }
+  const upper = trimmed.toUpperCase();
+  if (upper === 'SITE_ADMIN' || upper === 'ROLE_SITE_ADMIN' || upper === 'SITE ADMIN & REGISTRY ACCESS' || upper === 'SITE ADMIN') {
+    return 'SITE_ADMIN';
+  }
+  if (upper === 'SITE_MANAGER' || upper === 'ROLE_SITE_MANAGER' || upper === 'SITE MANAGER & REGISTRY ACCESS' || upper === 'SITE MANAGER') {
+    return 'SITE_MANAGER';
+  }
+  if (upper === 'SITE_REGISTRY' || upper === 'ROLE_SITE_REGISTRY' || upper === 'REGISTRY ACCESS' || upper === 'REGISTRY ACCESS ONLY') {
+    return 'SITE_REGISTRY';
+  }
+  return 'NONE';
+}
+
+export function toSitePermissionLabel(val?: string | null): SitePermissionLabel {
+  const code = normalizeSiteRoleCode(val);
+  return ROLE_CODE_TO_SITE_PERMISSION[code] || 'None';
 }
 
 function resolveTenantId(tenantId?: string): string {
@@ -158,9 +194,13 @@ export const administrationApi = {
    * GET /api/v1/tenants/{tenantId}/users/details
    * Retrieves users enriched with active study-access details.
    */
-  async getDetailedUsers(tenantId?: string): Promise<UserListItemResponse[]> {
+  async getDetailedUsers(tenantId?: string, siteId?: string): Promise<UserListItemResponse[]> {
     const tid = resolveTenantId(tenantId);
-    const res = await apiClient.get<UserListItemResponse[]>(`/api/v1/tenants/${tid}/users/details`);
+    const params = siteId ? { siteId } : undefined;
+    const res = await apiClient.get<UserListItemResponse[]>(
+      `/api/v1/tenants/${tid}/users/details`,
+      params ? { params } : undefined
+    );
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
@@ -168,9 +208,13 @@ export const administrationApi = {
    * GET /api/v1/tenants/{tenantId}/users/{userId}
    * Retrieves single user summary details by ID.
    */
-  async getUser(userId: string | number, tenantId?: string): Promise<UserSummaryResponse> {
+  async getUser(userId: string | number, tenantId?: string, siteId?: string): Promise<UserSummaryResponse> {
     const tid = resolveTenantId(tenantId);
-    const res = await apiClient.get<UserSummaryResponse>(`/api/v1/tenants/${tid}/users/${userId}`);
+    const params = siteId ? { siteId } : undefined;
+    const res = await apiClient.get<UserSummaryResponse>(
+      `/api/v1/tenants/${tid}/users/${userId}`,
+      params ? { params } : undefined
+    );
     return res.data;
   },
 
@@ -286,7 +330,7 @@ export const administrationApi = {
   async getUserStudies(userId: string | number, tenantId?: string): Promise<any[]> {
     const tid = resolveTenantId(tenantId);
     const res = await apiClient.get(`/api/v1/tenants/${tid}/users/${userId}/studies`);
-    return Array.isArray(res.data) ? res.data : [];
+    return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
   /**
@@ -315,9 +359,21 @@ export const administrationApi = {
    * DELETE /api/v1/tenants/{tenantId}/users/{userId}/roles/site
    * Deactivates any active site-scoped role assignment for this user.
    */
-  async removeSiteRole(userId: string | number, tenantId?: string): Promise<void> {
+  async removeSiteRole(userId: string | number, tenantId?: string, siteId?: string): Promise<void> {
     const tid = resolveTenantId(tenantId);
-    await apiClient.delete(`/api/v1/tenants/${tid}/users/${userId}/roles/site`);
+    const config = siteId ? { params: { siteId } } : undefined;
+    await apiClient.delete(`/api/v1/tenants/${tid}/users/${userId}/roles/site`, config);
+  },
+
+  /**
+   * GET /api/v1/tenants/{tenantId}/users/{userId}/permissions
+   * Retrieves the user's effective roles, permissions, and site context.
+   */
+  async getUserPermissions(userId: string | number, tenantId?: string, siteId?: string): Promise<any> {
+    const tid = resolveTenantId(tenantId);
+    const config = siteId ? { params: { siteId } } : undefined;
+    const res = await apiClient.get(`/api/v1/tenants/${tid}/users/${userId}/permissions`, config);
+    return res.data;
   },
 
   // Supporting views compatibility methods

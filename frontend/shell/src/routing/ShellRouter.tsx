@@ -23,11 +23,48 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 };
 
 export const ShellRouter: React.FC = () => {
-  const protectedWorkspaceElement = (
-    <ProtectedRoute>
+  const workspaceContent = (
+    <>
       <TopNavigation />
       <WorkspaceScreenHost />
       <Footer variant="app-shell" />
+    </>
+  );
+
+  const protectedWorkspaceElement = (
+    <ProtectedRoute>{workspaceContent}</ProtectedRoute>
+  );
+
+  const protectedRegistryWorkspaceElement = (
+    <ProtectedRoute
+      requiredPermission="REGISTRY_VIEW"
+      requiredRoles={[
+        'SITE_ADMIN',
+        'SITE_MANAGER',
+        'SITE_REGISTRY',
+        'ROLE_SITE_ADMIN',
+        'ROLE_SITE_MANAGER',
+        'ROLE_SITE_REGISTRY',
+        'ROLE_SUPER_ADMIN',
+      ]}
+    >
+      {workspaceContent}
+    </ProtectedRoute>
+  );
+
+  const protectedAdminWorkspaceElement = (
+    <ProtectedRoute
+      requiredPermission="SITE_ADMIN_ACCESS"
+      requiredRoles={[
+        'SITE_ADMIN',
+        'SITE_MANAGER',
+        'ROLE_SITE_ADMIN',
+        'ROLE_SITE_MANAGER',
+        'ROLE_SUPER_ADMIN',
+        'ROLE_ADMIN',
+      ]}
+    >
+      {workspaceContent}
     </ProtectedRoute>
   );
 
@@ -60,8 +97,8 @@ export const ShellRouter: React.FC = () => {
         <Route path="/dashboard/*" element={protectedWorkspaceElement} />
         <Route path="/studies" element={protectedWorkspaceElement} />
         <Route path="/studies/*" element={protectedWorkspaceElement} />
-        <Route path="/participants" element={protectedWorkspaceElement} />
-        <Route path="/participants/*" element={protectedWorkspaceElement} />
+        <Route path="/participants" element={protectedRegistryWorkspaceElement} />
+        <Route path="/participants/*" element={protectedRegistryWorkspaceElement} />
         <Route path="/recruitment" element={protectedWorkspaceElement} />
         <Route path="/recruitment/*" element={protectedWorkspaceElement} />
         <Route path="/surveys" element={protectedWorkspaceElement} />
@@ -74,8 +111,8 @@ export const ShellRouter: React.FC = () => {
         <Route path="/documents/*" element={protectedWorkspaceElement} />
         <Route path="/organization" element={protectedWorkspaceElement} />
         <Route path="/organization/*" element={protectedWorkspaceElement} />
-        <Route path="/admin" element={protectedWorkspaceElement} />
-        <Route path="/admin/*" element={protectedWorkspaceElement} />
+        <Route path="/admin" element={protectedAdminWorkspaceElement} />
+        <Route path="/admin/*" element={protectedAdminWorkspaceElement} />
 
         {/* Fallback Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

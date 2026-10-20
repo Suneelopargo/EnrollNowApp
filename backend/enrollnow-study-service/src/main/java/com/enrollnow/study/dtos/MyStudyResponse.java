@@ -66,4 +66,12 @@ public class MyStudyResponse {
     public void setStudyPermission(String studyPermission) {
         this.studyPermission = studyPermission;
     }
+
+    public String getStudyCode() {
+        return code;
+    }
+
+    public String getTitle() {
+        return name;
+    }
 }

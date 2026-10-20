@@ -1,6 +1,12 @@
 // frontend/shell/src/navigation/NavigationContext.tsx - Dynamic Top Navigation Management
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { NavigationItem } from '../../../shared/contracts';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { AuthUser, NavigationItem } from '../../../shared/contracts';
+import {
+  userHasPermission,
+  userHasRegistryAccess,
+  userHasRole,
+  userHasSiteAdminAccess,
+} from '../../../shared/api/authApi';
 import { useAuth } from '../auth/AuthContext';
 
 interface NavigationContextType {
@@ -11,8 +17,22 @@ interface NavigationContextType {
 
 export const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'dashboard', label: 'Home', route: '/dashboard', icon: 'Home', order: 1 },
-  { id: 'admin', label: 'Administration', route: '/admin', icon: 'Settings', order: 2 },
-  { id: 'participants', label: 'Registry', route: '/participants', icon: 'Users', order: 3 },
+  {
+    id: 'admin',
+    label: 'Administration',
+    route: '/admin',
+    icon: 'Settings',
+    requiredPermission: 'SITE_ADMIN_ACCESS',
+    order: 2,
+  },
+  {
+    id: 'participants',
+    label: 'Registry',
+    route: '/participants',
+    icon: 'Users',
+    requiredPermission: 'REGISTRY_VIEW',
+    order: 3,
+  },
   { id: 'communications', label: 'Outreach', route: '/communications', icon: 'MessageSquare', order: 4 },
   { id: 'studies', label: 'Studies', route: '/studies', icon: 'BookOpen', order: 5 },
   // Temporarily hidden from the top navigation; routes and MFEs remain available.
@@ -23,48 +43,63 @@ export const DEFAULT_NAVIGATION_ITEMS: NavigationItem[] = [
   // { id: 'organization', label: 'Sites & Network', route: '/organization', icon: 'Building', order: 10 },
 ];
 
+export function getAuthorizedNavigationItems(
+  user: AuthUser | null | undefined,
+  items: NavigationItem[] = DEFAULT_NAVIGATION_ITEMS
+): NavigationItem[] {
+  if (!user) {
+    return [];
+  }
+
+  return items.filter((item) => {
+    if (!item.requiredPermission) {
+      return true;
+    }
+
+    if (item.id === 'admin' || item.requiredPermission === 'SITE_ADMIN_ACCESS') {
+      return userHasSiteAdminAccess(user);
+    }
+
+    if (item.id === 'participants' || item.requiredPermission === 'REGISTRY_VIEW') {
+      return userHasRegistryAccess(user);
+    }
+
+    return (
+      userHasPermission(user, item.requiredPermission) ||
+      userHasRole(user, item.requiredPermission)
+    );
+  });
+}
+
 const NavigationContext = createContext<NavigationContextType>({
-  navItems: DEFAULT_NAVIGATION_ITEMS,
+  navItems: [],
   loading: false,
   refreshNavigation: async () => {},
 });
 
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, hasRole, isAdmin } = useAuth();
-  const [navItems, setNavItems] = useState<NavigationItem[]>(DEFAULT_NAVIGATION_ITEMS);
-  const [loading] = useState<boolean>(false);
+  const { user, loading: authLoading } = useAuth();
+  const [navItems, setNavItems] = useState<NavigationItem[]>(() =>
+    authLoading ? [] : getAuthorizedNavigationItems(user)
+  );
 
-  const filterNavItems = () => {
-    if (!user) {
+  const filterNavItems = useCallback(() => {
+    if (authLoading || !user) {
       setNavItems([]);
       return;
     }
-
-    const filtered = DEFAULT_NAVIGATION_ITEMS.filter((item) => {
-      if (!item.requiredPermission) return true;
-      return (
-        isAdmin ||
-        hasRole(item.requiredPermission) ||
-        hasRole('ROLE_SUPER_ADMIN') ||
-        hasRole('ROLE_SITE_ADMIN') ||
-        hasRole('ROLE_ADMIN') ||
-        hasRole('ADMIN') ||
-        Boolean(user?.roles?.some((r) => r.toUpperCase().includes('ADMIN')))
-      );
-    });
-
-    setNavItems(filtered);
-  };
+    setNavItems(getAuthorizedNavigationItems(user));
+  }, [user, authLoading]);
 
   useEffect(() => {
     filterNavItems();
-  }, [user, isAdmin]);
+  }, [filterNavItems]);
 
   return (
     <NavigationContext.Provider
       value={{
         navItems,
-        loading,
+        loading: authLoading,
         refreshNavigation: async () => filterNavItems(),
       }}
     >

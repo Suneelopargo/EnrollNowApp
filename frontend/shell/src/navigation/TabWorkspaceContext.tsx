@@ -1,6 +1,9 @@
 // frontend/shell/src/navigation/TabWorkspaceContext.tsx - Multi-Tab Keep-Alive Workspace Context
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { AuthUser } from '../../../shared/contracts';
+import { userHasRegistryAccess, userHasSiteAdminAccess } from '../../../shared/api/authApi';
+import { useAuth } from '../auth/AuthContext';
 
 export interface WorkspaceTab {
   id: string;
@@ -48,6 +51,18 @@ export const DEFAULT_HOME_TAB: WorkspaceTab = {
   createdAt: Date.now(),
 };
 
+export function isTabAuthorizedForUser(tabId: string, user: AuthUser | null | undefined): boolean {
+  if (tabId === 'dashboard') return true;
+  if (!user) return false;
+  if (tabId === 'admin') {
+    return userHasSiteAdminAccess(user);
+  }
+  if (tabId === 'participants') {
+    return userHasRegistryAccess(user);
+  }
+  return true;
+}
+
 export function findDefinition(identifier: string): Omit<WorkspaceTab, 'refreshCount' | 'createdAt'> | null {
   if (!identifier) return null;
   const clean = identifier.split('?')[0].split('#')[0];
@@ -92,6 +107,7 @@ const STORAGE_KEY = 'enrollnow_workspace_tabs';
 export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
 
   // Restore open tabs from sessionStorage or start with Home + current URL
   const [openTabs, setOpenTabs] = useState<WorkspaceTab[]>(() => {
@@ -105,7 +121,7 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
           const validated = parsed
             .map((t: any) => {
               const def = findDefinition(t.id) || findDefinition(t.route);
-              if (def) {
+              if (def && isTabAuthorizedForUser(def.id, user)) {
                 return {
                   ...def,
                   refreshCount: t.refreshCount || 0,
@@ -129,9 +145,13 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Ignore storage read errors
     }
 
-    // If initial location corresponds to another tab, add it immediately
+    // If initial location corresponds to another authorized tab, add it immediately
     const initialDef = findDefinition(location.pathname);
-    if (initialDef && !tabs.some((t) => t.id === initialDef.id)) {
+    if (
+      initialDef &&
+      isTabAuthorizedForUser(initialDef.id, user) &&
+      !tabs.some((t) => t.id === initialDef.id)
+    ) {
       tabs.push({
         ...initialDef,
         refreshCount: 0,
@@ -144,11 +164,29 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     const currentDef = findDefinition(location.pathname);
-    return currentDef ? currentDef.id : 'dashboard';
+    return currentDef && isTabAuthorizedForUser(currentDef.id, user) ? currentDef.id : 'dashboard';
   });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshingTabId, setRefreshingTabId] = useState<string | null>(null);
+
+  // Prune any open tabs that the user is not authorized to access when permissions load or change
+  useEffect(() => {
+    if (authLoading) return;
+    setOpenTabs((prev) => {
+      const filtered = prev.filter((t) => isTabAuthorizedForUser(t.id, user));
+      if (!filtered.some((t) => t.id === 'dashboard')) {
+        filtered.unshift(DEFAULT_HOME_TAB);
+      }
+      if (filtered.length === prev.length && filtered.every((t, idx) => t.id === prev[idx].id)) {
+        return prev;
+      }
+      return filtered;
+    });
+    if (!isTabAuthorizedForUser(activeTabId, user)) {
+      setActiveTabId('dashboard');
+    }
+  }, [user, authLoading, activeTabId]);
 
   // Sync open tabs to sessionStorage
   useEffect(() => {
@@ -209,22 +247,25 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Activate tab: opens the tab if not already in openTabs, sets it active, navigates, and refreshes
   const activateTab = useCallback(
     (tabId: string, options?: { refresh?: boolean }) => {
+      const def = findDefinition(tabId);
+      if (def && !isTabAuthorizedForUser(def.id, user)) {
+        navigate('/unauthorized', { replace: true });
+        return;
+      }
+
       let target = openTabs.find((t) => t.id === tabId || t.route === tabId);
 
-      if (!target) {
-        const def = findDefinition(tabId);
-        if (def) {
-          const newTab: WorkspaceTab = {
-            ...def,
-            refreshCount: 0,
-            createdAt: Date.now(),
-          };
-          setOpenTabs((prev) => {
-            if (prev.some((t) => t.id === newTab.id)) return prev;
-            return [...prev, newTab];
-          });
-          target = newTab;
-        }
+      if (!target && def) {
+        const newTab: WorkspaceTab = {
+          ...def,
+          refreshCount: 0,
+          createdAt: Date.now(),
+        };
+        setOpenTabs((prev) => {
+          if (prev.some((t) => t.id === newTab.id)) return prev;
+          return [...prev, newTab];
+        });
+        target = newTab;
       }
 
       if (!target) return;
@@ -240,7 +281,7 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
         refreshTab(target.id);
       }
     },
-    [openTabs, activeTabId, location.pathname, navigate, refreshTab]
+    [openTabs, activeTabId, location.pathname, navigate, refreshTab, user]
   );
 
   // Open or switch tab by route
@@ -255,8 +296,13 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Sync tab state when browser URL changes (e.g., Back/Forward navigation)
   useEffect(() => {
+    if (authLoading) return;
     const def = findDefinition(location.pathname);
     if (!def) return;
+
+    if (!isTabAuthorizedForUser(def.id, user)) {
+      return;
+    }
 
     setOpenTabs((prev) => {
       if (prev.some((t) => t.id === def.id)) {
@@ -273,7 +319,7 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
 
     setActiveTabId(def.id);
-  }, [location.pathname]);
+  }, [location.pathname, user, authLoading]);
 
   // Close tab cleanly
   const closeTab = useCallback(

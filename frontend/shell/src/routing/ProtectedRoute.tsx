@@ -6,10 +6,15 @@ import { LoadingSpinner } from '../../../shared/design-system/components/Loading
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRoles?: string[];
+  requiredPermission?: string;
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles }) => {
-  const { isAuthenticated, user, hasRole, loading } = useAuth();
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  requiredRoles,
+  requiredPermission,
+}) => {
+  const { isAuthenticated, user, hasRole, hasPermission, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -24,7 +29,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requiredRoles && requiredRoles.length > 0) {
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    const roleFallbackAuthorized =
+      requiredRoles &&
+      requiredRoles.length > 0 &&
+      requiredRoles.some((r) => hasRole(r) || hasRole('ROLE_SUPER_ADMIN'));
+    if (!roleFallbackAuthorized) {
+      return <Navigate to="/unauthorized" replace />;
+    }
+  } else if (requiredRoles && requiredRoles.length > 0) {
     const authorized = requiredRoles.some((r) => hasRole(r) || hasRole('ROLE_SUPER_ADMIN'));
     if (!authorized) {
       return <Navigate to="/unauthorized" replace />;

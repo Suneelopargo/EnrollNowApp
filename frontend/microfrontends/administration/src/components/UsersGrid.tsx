@@ -76,7 +76,7 @@ const UserEmailCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (par
 const UserPermissionCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (params) => {
   const rawPermission = params.value;
   const permission = toSitePermissionLabel(rawPermission);
-  if (!permission || permission === 'None' || permission === 'NONE') {
+  if (!permission || permission === 'None') {
     return <span className="site-admin-permission-cell text-muted">—</span>;
   }
 

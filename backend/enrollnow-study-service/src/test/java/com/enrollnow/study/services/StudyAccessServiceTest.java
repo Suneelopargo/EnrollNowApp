@@ -118,8 +118,6 @@ class StudyAccessServiceTest {
                 .thenReturn(Optional.empty());
         when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, studyId))
                 .thenReturn(Collections.emptyList());
-        when(userRoleAssignmentRepository.existsByTenantIdAndUserIdAndRoleIdAndStudyIdAndActiveTrue(
-                tenantId, userId, role.getId(), studyId)).thenReturn(false);
 
         assertDoesNotThrow(() -> studyAccessService.grantStudyAccess(tenantId, studyId, userId, request));
 

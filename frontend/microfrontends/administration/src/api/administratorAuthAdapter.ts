@@ -23,10 +23,25 @@ export class EnrollNowAdministratorAuthAdapter implements AdministratorAuthAdapt
   }
 
   hasAdministratorAccess(): boolean {
-    if (!this.context.user || !this.context.user.roles) {
+    if (!this.context.user) {
       return false;
     }
-    const adminRoles = ['ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'SUPER_ADMIN', 'ADMIN', 'SITE_ADMIN'];
-    return this.context.user.roles.some((r) => adminRoles.includes(r));
+    if (this.context.user.canAccessSiteAdmin === true) {
+      return true;
+    }
+    if (!this.context.user.roles) {
+      return false;
+    }
+    const adminRoles = [
+      'ROLE_SUPER_ADMIN',
+      'ROLE_ADMIN',
+      'ROLE_SITE_ADMIN',
+      'ROLE_SITE_MANAGER',
+      'SUPER_ADMIN',
+      'ADMIN',
+      'SITE_ADMIN',
+      'SITE_MANAGER',
+    ];
+    return this.context.user.roles.some((r) => adminRoles.includes(r.toUpperCase()));
   }
 }

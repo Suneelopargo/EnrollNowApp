@@ -13,7 +13,9 @@ import { toast } from '../../../../shared/toaster';
 import {
   toStudyPermissionLabel,
   toSitePermissionLabel,
+  normalizeSiteRoleCode,
   ROLE_CODE_TO_STUDY_PERMISSION,
+  ROLE_CODE_TO_SITE_PERMISSION,
   RoleResponse,
 } from '../../../../shared/api/administrationApi';
 
@@ -31,19 +33,6 @@ export interface RoleOption {
   description?: string | null;
   [key: string]: any;
 }
-
-export const DEFAULT_SITE_ROLES: RoleOption[] = [
-  { code: 'SITE_REGISTRY', name: 'Registry Access', scopeType: 'SITE' },
-  { code: 'SITE_MANAGER', name: 'Site Manager', scopeType: 'SITE' },
-  { code: 'SITE_ADMIN', name: 'Site Admin', scopeType: 'SITE' },
-];
-
-export const DEFAULT_STUDY_ROLES: RoleOption[] = [
-  { code: 'STUDY_ADMIN', name: 'Study Admin', scopeType: 'STUDY' },
-  { code: 'STUDY_LEADER', name: 'Study Leader', scopeType: 'STUDY' },
-  { code: 'STUDY_RA', name: 'Study Restricted Access', scopeType: 'STUDY' },
-  { code: 'STUDY_READ_ONLY', name: 'Study Read-Only', scopeType: 'STUDY' },
-];
 
 export interface StudyAssignmentState {
   studyId: string;
@@ -72,6 +61,9 @@ export interface AddUserModalProps {
   loadingStudies?: boolean;
   siteRoles?: RoleOption[] | RoleResponse[];
   studyRoles?: RoleOption[] | RoleResponse[];
+  canManageSiteAdmins?: boolean;
+  currentUserId?: string | number | null;
+  currentUserEmail?: string | null;
   onLockUser?: (user: SiteAdminUser) => Promise<void> | void;
   onUnlockUser?: (user: SiteAdminUser) => Promise<void> | void;
   onResendEnrollment?: (user: SiteAdminUser) => Promise<void> | void;
@@ -84,6 +76,12 @@ const FORM_VALIDATION_SCHEMA = {
   email: [validators.required('Email'), validators.email('Email')],
 };
 
+const SITE_ROLE_SORT_ORDER: Record<string, number> = {
+  SITE_ADMIN: 1,
+  SITE_MANAGER: 2,
+  SITE_REGISTRY: 3,
+};
+
 export const AddUserModal: React.FC<AddUserModalProps> = ({
   isOpen,
   onClose,
@@ -93,6 +91,9 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   loadingStudies = false,
   siteRoles,
   studyRoles,
+  canManageSiteAdmins = true,
+  currentUserId,
+  currentUserEmail,
   onLockUser,
   onUnlockUser,
   onResendEnrollment,
@@ -105,10 +106,26 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   const [studyRows, setStudyRows] = useState<StudyAssignmentState[]>([]);
 
   const resolvedSiteRoles: RoleOption[] =
-    siteRoles && siteRoles.length > 0 ? siteRoles : DEFAULT_SITE_ROLES;
+    siteRoles && siteRoles.length > 0 ? siteRoles : [];
 
   const resolvedStudyRoles: RoleOption[] =
-    studyRoles && studyRoles.length > 0 ? studyRoles : DEFAULT_STUDY_ROLES;
+    studyRoles && studyRoles.length > 0 ? studyRoles : [];
+
+  const sitePermissionOptions = useMemo(() => {
+    return [...resolvedSiteRoles]
+      .sort(
+        (a, b) =>
+          (SITE_ROLE_SORT_ORDER[a.code?.toUpperCase()] ?? 99) -
+          (SITE_ROLE_SORT_ORDER[b.code?.toUpperCase()] ?? 99)
+      )
+      .map((r) => ({
+        code: r.code,
+        label:
+          ROLE_CODE_TO_SITE_PERMISSION[r.code?.toUpperCase()] ||
+          toSitePermissionLabel(r.code || r.name),
+        name: r.name,
+      }));
+  }, [resolvedSiteRoles]);
 
   const studyPermissionOptions = resolvedStudyRoles.map((r) => ({
     code: r.code,
@@ -116,17 +133,61 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     name: r.name,
   }));
 
+  const targetEditingSiteRoleCode = useMemo(() => {
+    if (!userToEdit) return 'NONE';
+    return normalizeSiteRoleCode(userToEdit.sitePermissionCode || userToEdit.sitePermissions);
+  }, [userToEdit]);
+
+  const isEditingSelf = useMemo(() => {
+    if (!userToEdit) return false;
+    if (currentUserId && String(userToEdit.id) === String(currentUserId)) {
+      return true;
+    }
+    if (
+      currentUserEmail &&
+      userToEdit.email &&
+      userToEdit.email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase()
+    ) {
+      return true;
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('enrollnow_user');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.id && String(userToEdit.id) === String(parsed.id)) return true;
+          if (
+            parsed?.email &&
+            userToEdit.email &&
+            userToEdit.email.trim().toLowerCase() === parsed.email.trim().toLowerCase()
+          ) {
+            return true;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return false;
+  }, [userToEdit, currentUserId, currentUserEmail]);
+
+  const isSitePermissionSelectDisabled =
+    Boolean(userToEdit) &&
+    (isEditingSelf || (!canManageSiteAdmins && targetEditingSiteRoleCode === 'SITE_ADMIN'));
+
   const selectedSitePermissionValue = useMemo(() => {
     if (!sitePermissions || sitePermissions === 'NONE' || sitePermissions === 'None') {
       return 'None';
     }
-    const match = resolvedSiteRoles.find(
+    const canonicalLabel = toSitePermissionLabel(sitePermissions);
+    const match = sitePermissionOptions.find(
       (r) =>
         r.code.toUpperCase() === sitePermissions.toUpperCase() ||
+        r.label.toLowerCase() === canonicalLabel.toLowerCase() ||
         r.name.toLowerCase() === sitePermissions.toLowerCase()
     );
-    return match ? match.name : toSitePermissionLabel(sitePermissions);
-  }, [sitePermissions, resolvedSiteRoles]);
+    return match ? match.label : canonicalLabel;
+  }, [sitePermissions, sitePermissionOptions]);
 
   // Field-level error state
   const [errors, setErrors] = useState<{
@@ -144,20 +205,33 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const prevIsOpenRef = useRef(false);
+  const prevUserToEditIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!isOpen) {
       prevIsOpenRef.current = false;
+      prevUserToEditIdRef.current = undefined;
+      setFirstName('');
+      setLastName('');
+      setEmail('');
+      setSitePermissions('None');
+      setStudyRows([]);
+      setErrors({});
+      setTouched({});
       return;
     }
 
-    const isJustOpening = !prevIsOpenRef.current && isOpen;
+    const currentUserId = userToEdit ? userToEdit.id : null;
+    const isModalOpeningOrSwitchingMode =
+      !prevIsOpenRef.current || prevUserToEditIdRef.current !== currentUserId;
+
     prevIsOpenRef.current = true;
+    prevUserToEditIdRef.current = currentUserId;
 
     setIsSubmitting(false);
     const studyList = Array.isArray(availableStudies) ? availableStudies : [];
 
-    if (isJustOpening) {
+    if (isModalOpeningOrSwitchingMode) {
       if (userToEdit) {
         const parts = (userToEdit.name || '').trim().split(/\s+/);
         setFirstName(parts[0] || userToEdit.firstName || '');
@@ -166,13 +240,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
         const rawSite = userToEdit.sitePermissionCode || userToEdit.sitePermissions;
         const resolvedLabel = toSitePermissionLabel(rawSite);
-        const matchedRole = resolvedSiteRoles.find(
-          (r) =>
-            (rawSite && r.code.toUpperCase() === String(rawSite).toUpperCase()) ||
-            (rawSite && r.name.toLowerCase() === String(rawSite).toLowerCase()) ||
-            (resolvedLabel && r.name.toLowerCase() === resolvedLabel.toLowerCase())
-        );
-        setSitePermissions(matchedRole ? matchedRole.name : (resolvedLabel || 'None'));
+        setSitePermissions(resolvedLabel || 'None');
       } else {
         setFirstName('');
         setLastName('');
@@ -209,18 +277,30 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         })
       );
     } else {
-      setStudyRows((prevRows) => {
-        const prevMap = new Map(prevRows.map((r) => [r.studyId, r]));
-        return studyList.map((study) => {
-          const existing = prevMap.get(study.id);
-          return {
+      // In Add User mode: if fresh opening or switching mode, all studies must be unassigned
+      if (isModalOpeningOrSwitchingMode) {
+        setStudyRows(
+          studyList.map((study) => ({
             studyId: study.id,
             studyName: study.name,
-            assigned: existing ? existing.assigned : false,
-            permissions: existing ? existing.permissions : 'Admin',
-          };
+            assigned: false,
+            permissions: 'Admin',
+          }))
+        );
+      } else {
+        setStudyRows((prevRows) => {
+          const prevMap = new Map(prevRows.map((r) => [r.studyId, r]));
+          return studyList.map((study) => {
+            const existing = prevMap.get(study.id);
+            return {
+              studyId: study.id,
+              studyName: study.name,
+              assigned: existing ? existing.assigned : false,
+              permissions: existing ? existing.permissions : 'Admin',
+            };
+          });
         });
-      });
+      }
     }
   }, [userToEdit, isOpen, availableStudies, resolvedSiteRoles]);
 
@@ -479,40 +559,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="site-admin-modal-form" noValidate>
         {isEditMode ? (
-          /* Edit User Mode Field Layout: First Name, Last Name, Email (Static), Site Permissions */
+          /* Edit User Mode Field Layout: Email (Static), Site Permissions */
           <div className="site-admin-form-grid">
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-first-name">
-                First Name <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-first-name"
-                type="text"
-                placeholder={errors.firstName || 'Enter First Name'}
-                className="form-input"
-                value={firstName}
-                onChange={(e) => handleChange('firstName', e.target.value, setFirstName)}
-                onBlur={() => handleBlur('firstName')}
-                aria-invalid={!!errors.firstName}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-last-name">
-                Last Name <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-last-name"
-                type="text"
-                placeholder={errors.lastName || 'Enter Last Name'}
-                className="form-input"
-                value={lastName}
-                onChange={(e) => handleChange('lastName', e.target.value, setLastName)}
-                onBlur={() => handleBlur('lastName')}
-                aria-invalid={!!errors.lastName}
-              />
-            </div>
-
             <div className="form-group">
               <label className="form-label" htmlFor="site-admin-email-static">
                 Email <small className="text-muted">(Immutable per contract)</small>
@@ -537,12 +585,30 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 className="form-select"
                 value={selectedSitePermissionValue}
                 onChange={(e) => setSitePermissions(e.target.value)}
+                disabled={isSitePermissionSelectDisabled}
+                title={
+                  isEditingSelf
+                    ? 'Users cannot modify their own site permissions'
+                    : isSitePermissionSelectDisabled
+                    ? 'Site Managers cannot modify a Site Admin role'
+                    : undefined
+                }
                 aria-label="Site Permissions"
               >
                 <option value="None">None</option>
-                {resolvedSiteRoles.map((role) => (
-                  <option key={role.code} value={role.name}>
-                    {role.name}
+                {selectedSitePermissionValue !== 'None' &&
+                  !sitePermissionOptions.some((r) => r.label === selectedSitePermissionValue) && (
+                    <option value={selectedSitePermissionValue}>
+                      {selectedSitePermissionValue}
+                    </option>
+                  )}
+                {sitePermissionOptions.map((role) => (
+                  <option
+                    key={role.code}
+                    value={role.label}
+                    disabled={!canManageSiteAdmins && role.code?.toUpperCase() === 'SITE_ADMIN'}
+                  >
+                    {role.label}
                   </option>
                 ))}
               </select>
@@ -611,9 +677,13 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                 aria-label="Site Permissions"
               >
                 <option value="None">None</option>
-                {resolvedSiteRoles.map((role) => (
-                  <option key={role.code} value={role.name}>
-                    {role.name}
+                {sitePermissionOptions.map((role) => (
+                  <option
+                    key={role.code}
+                    value={role.label}
+                    disabled={!canManageSiteAdmins && role.code?.toUpperCase() === 'SITE_ADMIN'}
+                  >
+                    {role.label}
                   </option>
                 ))}
               </select>
