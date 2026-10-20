@@ -242,6 +242,57 @@ public class SiteAuthorizationService {
         }
     }
 
+    public void requireSecuritySettingsManage(UUID targetTenantId) {
+        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
+        if (callerOpt.isEmpty()) {
+            return;
+        }
+        CallerIdentity caller = callerOpt.get();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanManageSiteAdmins()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_SECURITY_MANAGE)) {
+            throw new AccessDeniedException("Access denied: managing site security policy requires SITE_ADMIN role or SITE_SECURITY_MANAGE permission");
+        }
+    }
+
+    public void requireGeneralSettingsView(UUID targetTenantId) {
+        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
+        if (callerOpt.isEmpty()) {
+            return;
+        }
+        CallerIdentity caller = callerOpt.get();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanAccessSiteAdmin()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_SETTINGS_VIEW)) {
+            throw new AccessDeniedException("Access denied: viewing site settings requires SITE_SETTINGS_VIEW permission");
+        }
+    }
+
+    public void requireGeneralSettingsManage(UUID targetTenantId) {
+        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
+        if (callerOpt.isEmpty()) {
+            return;
+        }
+        CallerIdentity caller = callerOpt.get();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanManageSiteAdmins()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_SETTINGS_MANAGE)) {
+            throw new AccessDeniedException("Access denied: updating site settings requires SITE_SETTINGS_MANAGE permission");
+        }
+    }
+
     public Optional<UserEffectivePermissionsResponse> getCallerEffectivePermissions(UUID targetTenantId, UUID siteId) {
         Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
         if (callerOpt.isEmpty()) {

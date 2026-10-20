@@ -122,6 +122,47 @@ public class LoginService {
             throw new AccountLockedException();
         }
 
+        SecuritySettings securitySettings = securitySettingsRepository
+                .findByTenantId(tenantId)
+                .orElse(null);
+
+        if (securitySettings != null) {
+            OffsetDateTime checkNow = OffsetDateTime.now();
+
+            if (securitySettings.getInactivityLockDays() != null && securitySettings.getInactivityLockDays() > 0) {
+                OffsetDateTime lastActivity = securityState.getLastActivityAt();
+                if (lastActivity == null) {
+                    lastActivity = user.getLastLoginAt();
+                }
+                if (lastActivity == null) {
+                    lastActivity = user.getCreatedAt();
+                }
+                if (lastActivity != null && checkNow.isAfter(lastActivity.plusDays(securitySettings.getInactivityLockDays()))) {
+                    securityState.setLockedAt(checkNow);
+                    securityState.setLockReason("INACTIVITY_LOCK");
+                    user.setStatus("LOCKED");
+                    userRepository.save(user);
+                    userSecurityStateRepository.save(securityState);
+                    throw new AccountLockedException();
+                }
+            }
+
+            if (securitySettings.getPasswordExpiryDays() != null && securitySettings.getPasswordExpiryDays() > 0) {
+                OffsetDateTime lastPasswordChange = securityState.getLastPasswordResetAt();
+                if (lastPasswordChange == null) {
+                    lastPasswordChange = user.getCreatedAt();
+                }
+                if (lastPasswordChange != null && checkNow.isAfter(lastPasswordChange.plusDays(securitySettings.getPasswordExpiryDays()))) {
+                    securityState.setLockedAt(checkNow);
+                    securityState.setLockReason("PASSWORD_EXPIRED");
+                    user.setStatus("LOCKED");
+                    userRepository.save(user);
+                    userSecurityStateRepository.save(securityState);
+                    throw new AccountLockedException();
+                }
+            }
+        }
+
         String passwordHash = user.getPasswordHash();
 
         if (passwordHash == null

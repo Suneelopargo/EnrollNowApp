@@ -40,54 +40,7 @@ export const MOCK_USERS: MockUserRecord[] = [
   },
 ];
 
-/**
- * Mock Dashboard Overview Metrics
- */
-export const MOCK_DASHBOARD_OVERVIEW = {
-  totalStudies: 12,
-  activeStudies: 8,
-  totalParticipants: 2450,
-  activeParticipants: 1875,
-  enrolledParticipants: 1875,
-  screeningParticipants: 320,
-  pendingTasks: 23,
-  recruitmentVelocity: '+14.2%',
-  recentStudies: [
-    {
-      id: 'ST-001',
-      studyId: 'ST-001',
-      protocolNumber: 'EN-2026-001',
-      title: 'Phase III Oncology Trial in Solid Tumors',
-      phase: 'Phase III',
-      therapeuticArea: 'Oncology',
-      targetEnrollment: 500,
-      enrolled: 450,
-      status: 'ACTIVE',
-    },
-    {
-      id: 'ST-002',
-      studyId: 'ST-002',
-      protocolNumber: 'EN-2026-002',
-      title: 'Cardiovascular Risk Factor Longitudinal Study',
-      phase: 'Phase II',
-      therapeuticArea: 'Cardiology',
-      targetEnrollment: 1200,
-      enrolled: 1200,
-      status: 'ACTIVE',
-    },
-    {
-      id: 'ST-003',
-      studyId: 'ST-003',
-      protocolNumber: 'EN-2026-003',
-      title: 'Neurological Early Biomarker Screening Protocol',
-      phase: 'Phase I',
-      therapeuticArea: 'Neurology',
-      targetEnrollment: 400,
-      enrolled: 225,
-      status: 'RECRUITING',
-    },
-  ],
-};
+// MOCK_DASHBOARD_OVERVIEW removed: exactly one approved JSON file at frontend/microfrontends/dashboard/src/demo/dashboard-demo-data.json
 
 /**
  * Mock Studies List

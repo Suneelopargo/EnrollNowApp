@@ -2,6 +2,8 @@ package com.enrollnow.identity.services;
 
 import com.enrollnow.identity.dtos.LoginRequest;
 import com.enrollnow.identity.dtos.LoginResponse;
+import com.enrollnow.identity.exceptions.AccountLockedException;
+import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.models.UserEmail;
 import com.enrollnow.identity.models.UserSecurityState;
@@ -20,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -217,5 +220,93 @@ class LoginServiceTest {
                         accessToken,
                         3600L
                 );
+    }
+
+    @Test
+    void authenticate_shouldLockAccountWhenInactivityExceeded() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("user@example.com");
+        request.setPassword("Password@123");
+
+        UserEmail userEmail = new UserEmail();
+        userEmail.setTenantId(tenantId);
+        userEmail.setUserId(userId);
+        userEmail.setEmail("user@example.com");
+
+        User user = new User();
+        user.setId(userId);
+        user.setTenantId(tenantId);
+        user.setStatus("ACTIVE");
+        user.setPasswordHash("$argon2id$stored-hash");
+
+        UserSecurityState securityState = new UserSecurityState();
+        securityState.setTenantId(tenantId);
+        securityState.setUserId(userId);
+        securityState.setLastActivityAt(OffsetDateTime.now().minusDays(95)); // Exceeds 90 days
+
+        SecuritySettings settings = new SecuritySettings();
+        settings.setInactivityLockDays(90);
+
+        when(userEmailRepository.findByTenantIdAndEmailIgnoreCase(tenantId, "user@example.com"))
+                .thenReturn(Optional.of(userEmail));
+        when(userRepository.findByTenantIdAndId(tenantId, userId)).thenReturn(Optional.of(user));
+        when(userSecurityStateRepository.findByTenantIdAndUserId(tenantId, userId))
+                .thenReturn(Optional.of(securityState));
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(settings));
+
+        assertThrows(AccountLockedException.class, () ->
+                loginService.authenticate(tenantId, request)
+        );
+
+        assertEquals("LOCKED", user.getStatus());
+        assertEquals("INACTIVITY_LOCK", securityState.getLockReason());
+        assertNotNull(securityState.getLockedAt());
+        verify(userRepository).save(user);
+        verify(userSecurityStateRepository).save(securityState);
+    }
+
+    @Test
+    void authenticate_shouldLockAccountWhenPasswordExpired() {
+        LoginRequest request = new LoginRequest();
+        request.setEmail("user@example.com");
+        request.setPassword("Password@123");
+
+        UserEmail userEmail = new UserEmail();
+        userEmail.setTenantId(tenantId);
+        userEmail.setUserId(userId);
+        userEmail.setEmail("user@example.com");
+
+        User user = new User();
+        user.setId(userId);
+        user.setTenantId(tenantId);
+        user.setStatus("ACTIVE");
+        user.setPasswordHash("$argon2id$stored-hash");
+
+        UserSecurityState securityState = new UserSecurityState();
+        securityState.setTenantId(tenantId);
+        securityState.setUserId(userId);
+        securityState.setLastActivityAt(OffsetDateTime.now().minusDays(5));
+        securityState.setLastPasswordResetAt(OffsetDateTime.now().minusDays(305)); // Exceeds 300 days
+
+        SecuritySettings settings = new SecuritySettings();
+        settings.setInactivityLockDays(90);
+        settings.setPasswordExpiryDays(300);
+
+        when(userEmailRepository.findByTenantIdAndEmailIgnoreCase(tenantId, "user@example.com"))
+                .thenReturn(Optional.of(userEmail));
+        when(userRepository.findByTenantIdAndId(tenantId, userId)).thenReturn(Optional.of(user));
+        when(userSecurityStateRepository.findByTenantIdAndUserId(tenantId, userId))
+                .thenReturn(Optional.of(securityState));
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(settings));
+
+        assertThrows(AccountLockedException.class, () ->
+                loginService.authenticate(tenantId, request)
+        );
+
+        assertEquals("LOCKED", user.getStatus());
+        assertEquals("PASSWORD_EXPIRED", securityState.getLockReason());
+        assertNotNull(securityState.getLockedAt());
+        verify(userRepository).save(user);
+        verify(userSecurityStateRepository).save(securityState);
     }
 }

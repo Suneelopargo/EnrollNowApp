@@ -7,7 +7,6 @@ import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
 import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
 import { administrationApi } from '../../../shared/api/administrationApi';
-import { MOCK_STUDIES } from '../../../shared/mock-api/mockData';
 import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
   LayoutDashboard,
@@ -53,12 +52,6 @@ const CLIENT_MODULE_LABELS: Record<string, string> = {
   admin: 'Site Admin',
   participants: 'Registry',
   communications: 'Support',
-};
-
-const MOCK_STUDY_ROLE_ACCESS: Record<string, string[]> = {
-  'ST-001': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_INVESTIGATOR', 'ROLE_STUDY_LEAD'],
-  'ST-002': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_INVESTIGATOR'],
-  'ST-003': ['ADMIN', 'ROLE_ADMIN', 'ROLE_SITE_ADMIN', 'ROLE_SUPER_ADMIN', 'USER', 'ROLE_USER', 'ROLE_STUDY_LEAD', 'ROLE_STUDY_COORDINATOR'],
 };
 
 export const TopNavigation: React.FC = () => {

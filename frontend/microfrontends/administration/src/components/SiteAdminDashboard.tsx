@@ -575,7 +575,10 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
         );
       case 'security':
         return isFullSiteAdmin ? (
-          <SecurityView />
+          <SecurityView
+            tenantId={currentUser?.tenantId}
+            isFullSiteAdmin={isFullSiteAdmin}
+          />
         ) : (
           <UsersGrid
             users={users}
@@ -590,7 +593,12 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
           />
         );
       case 'settings':
-        return <GeneralSettingsView />;
+        return (
+          <GeneralSettingsView
+            tenantId={currentUser?.tenantId}
+            isFullSiteAdmin={isFullSiteAdmin}
+          />
+        );
       default:
         return (
           <UsersGrid

@@ -15,6 +15,7 @@ import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import org.springframework.stereotype.Service;
@@ -39,11 +40,11 @@ public class PasswordRecoveryService {
 
     private final UserEmailRepository userEmailRepository;
     private final UserActionTokenRepository userActionTokenRepository;
-    
     private final UserRepository userRepository;
     private final UserSecurityStateRepository userSecurityStateRepository;
     private final PasswordEncoder passwordEncoder;
     private final InvitationEmailService invitationEmailService;
+    private final PasswordPolicyValidator passwordPolicyValidator;
 
     public PasswordRecoveryService(
             UserEmailRepository userEmailRepository,
@@ -52,6 +53,26 @@ public class PasswordRecoveryService {
             UserSecurityStateRepository userSecurityStateRepository,
             PasswordEncoder passwordEncoder,
             InvitationEmailService invitationEmailService) {
+        this(
+                userEmailRepository,
+                userActionTokenRepository,
+                userRepository,
+                userSecurityStateRepository,
+                passwordEncoder,
+                invitationEmailService,
+                null
+        );
+    }
+
+    @Autowired
+    public PasswordRecoveryService(
+            UserEmailRepository userEmailRepository,
+            UserActionTokenRepository userActionTokenRepository,
+            UserRepository userRepository,
+            UserSecurityStateRepository userSecurityStateRepository,
+            PasswordEncoder passwordEncoder,
+            InvitationEmailService invitationEmailService,
+            @Autowired(required = false) PasswordPolicyValidator passwordPolicyValidator) {
 
         this.userEmailRepository = userEmailRepository;
         this.userActionTokenRepository = userActionTokenRepository;
@@ -59,6 +80,7 @@ public class PasswordRecoveryService {
         this.userSecurityStateRepository = userSecurityStateRepository;
         this.passwordEncoder = passwordEncoder;
         this.invitationEmailService = invitationEmailService;
+        this.passwordPolicyValidator = passwordPolicyValidator;
     }
 
     @Transactional
@@ -252,7 +274,11 @@ public class PasswordRecoveryService {
                                 )
                         );
 
-        validatePasswordPolicy(request.getNewPassword());
+        if (passwordPolicyValidator != null) {
+            passwordPolicyValidator.validatePassword(tenantId, user.getId(), request.getNewPassword());
+        } else {
+            validatePasswordPolicy(request.getNewPassword());
+        }
 
         /*
          * Encode using our existing Argon2 PasswordEncoder bean.
@@ -270,6 +296,10 @@ public class PasswordRecoveryService {
         user.setStatus("ACTIVE");
 
         userRepository.save(user);
+
+        if (passwordPolicyValidator != null) {
+            passwordPolicyValidator.recordPasswordChange(tenantId, user.getId(), encodedPassword);
+        }
 
         /*
          * Clear failed-login lock information.

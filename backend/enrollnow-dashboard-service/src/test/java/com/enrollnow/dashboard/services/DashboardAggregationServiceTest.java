@@ -51,13 +51,18 @@ class DashboardAggregationServiceTest {
     }
 
     @Test
-    @DisplayName("getOverview falls back to sample studies when database is empty")
-    void shouldFallbackToSampleStudiesWhenEmpty() {
+    @DisplayName("getOverview returns empty overview without mock fabrication when database is empty")
+    void shouldReturnEmptyOverviewWhenDatabaseIsEmpty() {
         DashboardAggregationService service = new DashboardAggregationService(Optional.empty());
         DashboardOverviewResponse overview = service.getOverview();
 
         assertNotNull(overview);
-        assertTrue(overview.getTotalStudies() > 0);
-        assertFalse(overview.getRecentStudies().isEmpty());
+        assertEquals(0, overview.getTotalStudies());
+        assertEquals(0, overview.getActiveStudies());
+        assertTrue(overview.getRecentStudies().isEmpty());
+        assertEquals(0, overview.getTotalParticipants());
+        assertTrue(overview.getRecruitmentPipeline().isEmpty());
+        assertTrue(overview.getRecentActivity().isEmpty());
+        assertTrue(overview.getAlerts().isEmpty());
     }
 }

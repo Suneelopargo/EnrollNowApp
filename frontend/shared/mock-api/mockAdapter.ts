@@ -1,4 +1,4 @@
-// frontend/shared/mock-api/mockAdapter.ts - Centralized Axios Adapter for Mock API
+﻿// frontend/shared/mock-api/mockAdapter.ts - Centralized Axios Adapter for Mock API
 import { AxiosAdapter, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { getMockErrorSimulation } from '../api-config';
 import { mockAuthApi, extractBearerToken } from './mockAuthApi';
@@ -474,6 +474,44 @@ export const mockAdapter: AxiosAdapter = async (
 
   if (path === '/api/v1/administrator/audit-logs' && method === 'GET') {
     return createMockSuccessResponse(config, mockStore.getAdminAuditLogs());
+  }
+
+  // --- Security Settings ---
+  if (path === '/api/v1/security-settings' || path.match(/^\/api\/v1\/tenants\/[^/]+\/security-settings$/)) {
+    if (method === 'GET') {
+      return createMockSuccessResponse(config, mockStore.getSecuritySettings());
+    }
+    if (method === 'PUT') {
+      const updated = mockStore.updateSecuritySettings(payload);
+      return createMockSuccessResponse(config, updated, 200, 'Security settings updated successfully');
+    }
+  }
+
+  if (path === '/api/v1/security-settings/reset-defaults' || path.match(/^\/api\/v1\/tenants\/[^/]+\/security-settings\/reset-defaults$/)) {
+    if (method === 'POST') {
+      const reset = mockStore.resetSecuritySettings();
+      return createMockSuccessResponse(config, reset, 200, 'Security settings reset to defaults');
+    }
+  }
+
+  // --- General Settings ---
+  if (path === '/api/v1/general-settings' || path.match(/^\/api\/v1\/tenants\/[^/]+\/general-settings$/)) {
+    if (method === 'GET') {
+      return createMockSuccessResponse(config, mockStore.getGeneralSettings());
+    }
+    if (method === 'PUT') {
+      if (!payload?.defaultTextReply || !payload.defaultTextReply.trim()) {
+        throw createMockErrorResponse(config, 400, 'Default message response cannot be blank', 'BAD_REQUEST');
+      }
+      if (payload.defaultTextReply.trim().length > 160) {
+        throw createMockErrorResponse(config, 400, 'Default text reply cannot exceed 160 characters', 'BAD_REQUEST');
+      }
+      const updated = mockStore.updateGeneralSettings({
+        ...payload,
+        defaultTextReply: payload.defaultTextReply.trim(),
+      });
+      return createMockSuccessResponse(config, updated, 200, 'General settings updated successfully');
+    }
   }
 
   // --- Recruitment Campaigns ---

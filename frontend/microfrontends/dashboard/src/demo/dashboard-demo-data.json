@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "EnrollNow Platform - Authorized Dashboard Demonstration Dataset for Client-Side Evaluation and Offline Presentation. Contains de-identified, fabricated operational metrics for demonstration only.",
+  "metadata": {
+    "version": "1.0.0",
+    "purpose": "Dashboard UI Demonstration and Showcase Only",
+    "compliance": "De-identified synthetic data; contains zero PHI/PII or production secrets",
+    "lastUpdated": "2026-10-20"
+  },
+  "overview": {
+    "totalStudies": 12,
+    "activeStudies": 8,
+    "totalParticipants": 2450,
+    "activeParticipants": 1875,
+    "enrolledParticipants": 1875,
+    "screeningParticipants": 320,
+    "pendingTasks": 23,
+    "recruitmentVelocity": "+14.2%"
+  },
+  "studies": [
+    {
+      "id": "PROTO-2026-001",
+      "studyId": "PROTO-2026-001",
+      "protocolNumber": "EN-CARD-2026",
+      "title": "Phase III Novel Antihypertensive Efficacy Trial",
+      "phase": "Phase III",
+      "therapeuticArea": "Cardiology",
+      "status": "ACTIVE",
+      "targetEnrollment": 150,
+      "enrolled": 112
+    },
+    {
+      "id": "PROTO-2026-002",
+      "studyId": "PROTO-2026-002",
+      "protocolNumber": "EN-ONCO-2026",
+      "title": "Targeted Immunotherapy for Non-Small Cell Lung Cancer",
+      "phase": "Phase II",
+      "therapeuticArea": "Oncology",
+      "status": "ACTIVE",
+      "targetEnrollment": 80,
+      "enrolled": 64
+    },
+    {
+      "id": "PROTO-2026-003",
+      "studyId": "PROTO-2026-003",
+      "protocolNumber": "EN-NEURO-2026",
+      "title": "Cognitive Biomarker Assessment in Early Stage Alzheimer",
+      "phase": "Phase IIa",
+      "therapeuticArea": "Neurology",
+      "status": "SCREENING",
+      "targetEnrollment": 100,
+      "enrolled": 38
+    },
+    {
+      "id": "PROTO-2026-004",
+      "studyId": "PROTO-2026-004",
+      "protocolNumber": "EN-METAB-2026",
+      "title": "Continuous Glucose Monitoring in Type 2 Diabetes",
+      "phase": "Phase IV",
+      "therapeuticArea": "Endocrinology",
+      "status": "ACTIVE",
+      "targetEnrollment": 200,
+      "enrolled": 175
+    },
+    {
+      "id": "PROTO-2026-005",
+      "studyId": "PROTO-2026-005",
+      "protocolNumber": "EN-RESP-2026",
+      "title": "Pediatric Severe Asthma Biologic Response Evaluation",
+      "phase": "Phase II",
+      "therapeuticArea": "Pulmonology",
+      "status": "ACTIVE",
+      "targetEnrollment": 60,
+      "enrolled": 42
+    },
+    {
+      "id": "PROTO-2026-006",
+      "studyId": "PROTO-2026-006",
+      "protocolNumber": "EN-DERM-2025",
+      "title": "Topical JAK Inhibitor for Atopic Dermatitis Extension",
+      "phase": "Phase III",
+      "therapeuticArea": "Dermatology",
+      "status": "COMPLETED",
+      "targetEnrollment": 120,
+      "enrolled": 120
+    }
+  ],
+  "participants": [
+    {
+      "id": "PT-DEMO-001",
+      "participantId": "PT-DEMO-001",
+      "studyId": "PROTO-2026-001",
+      "status": "ENROLLED",
+      "enrolledAt": "2026-02-14"
+    },
+    {
+      "id": "PT-DEMO-002",
+      "participantId": "PT-DEMO-002",
+      "studyId": "PROTO-2026-001",
+      "status": "ENROLLED",
+      "enrolledAt": "2026-03-01"
+    },
+    {
+      "id": "PT-DEMO-003",
+      "participantId": "PT-DEMO-003",
+      "studyId": "PROTO-2026-002",
+      "status": "ENROLLED",
+      "enrolledAt": "2026-01-20"
+    },
+    {
+      "id": "PT-DEMO-004",
+      "participantId": "PT-DEMO-004",
+      "studyId": "PROTO-2026-003",
+      "status": "SCREENING",
+      "enrolledAt": "2026-03-10"
+    },
+    {
+      "id": "PT-DEMO-005",
+      "participantId": "PT-DEMO-005",
+      "studyId": "PROTO-2026-003",
+      "status": "SCREENING",
+      "enrolledAt": "2026-03-12"
+    },
+    {
+      "id": "PT-DEMO-006",
+      "participantId": "PT-DEMO-006",
+      "studyId": "PROTO-2026-004",
+      "status": "ACTIVE",
+      "enrolledAt": "2026-02-01"
+    }
+  ]
+}
