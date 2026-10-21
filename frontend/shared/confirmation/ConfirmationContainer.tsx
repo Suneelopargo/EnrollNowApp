@@ -14,6 +14,10 @@ import { useConfirmation } from './useConfirmation';
 import { ConfirmationIntent } from './types';
 import { useFocusTrap } from '../accessibility/useFocusTrap';
 
+// Singleton registry to prevent multiple active ConfirmationContainers from colliding
+let primaryHostInstanceId: string | null = null;
+const registeredHosts = new Set<string>();
+
 export interface ConfirmationContainerProps {
   className?: string;
 }
@@ -21,11 +25,31 @@ export interface ConfirmationContainerProps {
 export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
   className = '',
 }) => {
+  const instanceId = React.useId();
+  const [isPrimaryHost, setIsPrimaryHost] = useState(true);
+
+  useEffect(() => {
+    registeredHosts.add(instanceId);
+    if (!primaryHostInstanceId) {
+      primaryHostInstanceId = instanceId;
+      setIsPrimaryHost(true);
+    } else {
+      setIsPrimaryHost(primaryHostInstanceId === instanceId);
+    }
+
+    return () => {
+      registeredHosts.delete(instanceId);
+      if (primaryHostInstanceId === instanceId) {
+        primaryHostInstanceId = registeredHosts.values().next().value || null;
+      }
+    };
+  }, [instanceId]);
+
   const { state, isOpen, isLoading } = useConfirmation();
   const [confirmInput, setConfirmInput] = useState('');
 
   const trapRef = useFocusTrap<HTMLDivElement>({
-    active: isOpen,
+    active: isOpen && isPrimaryHost,
     onEscape: () => {
       if (!isLoading) confirmation.handleCancel();
     },
@@ -39,7 +63,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
 
   // Note: Background scroll-lock & inert are handled via useFocusTrap reference counting
 
-  if (!isOpen || !state) {
+  if (!isOpen || !state || !isPrimaryHost) {
     return null;
   }
 
@@ -107,6 +131,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
         aria-labelledby="enl-confirm-title"
         aria-describedby="enl-confirm-message"
         aria-busy={isLoading}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Icon, Title, and Close Button */}
         <div className="enl-confirm-header">

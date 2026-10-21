@@ -58,6 +58,33 @@ Always use approved components from `@enrollnow/shared` rather than writing cust
 - Accessible name: `"Keyboard shortcuts help"`.
 - Opens an accessible `KeyboardShortcutsModal` displaying verified, currently supported shortcuts categorized into General Navigation, Workspace Screen Tabs, Dialogs, and Forms.
 
+### 3.3 Professional Accessible Toast Notifications
+- **Solid Colored Visual Architecture**: Toasts render with solid, fully colored backgrounds and pure white (`#FFFFFF`) typography and icons for immediate cognitive recognition without relying on color alone:
+  - **Success (`#15803D`)**: CheckCircle icon (`size={22}`), 5.02:1 contrast ratio against white text. Default duration: 4 seconds.
+  - **Error (`#B91C1C`)**: AlertCircle icon (`size={22}`), 6.47:1 contrast ratio against white text. Default duration: 7 seconds (recoverable) or permanent until dismissed (`critical: true`).
+  - **Warning (`#92400E`)**: AlertTriangle icon (`size={22}`), 7.09:1 contrast ratio against white text. Default duration: 6 seconds.
+  - **Information (`#1D4ED8`)**: Info icon (`size={22}`), 6.70:1 contrast ratio against white text. Default duration: 5 seconds.
+- **Typography & Compact Sizing**:
+  - **Heading**: 16px (1rem), font-weight 600 (semibold), line-height 1.4, margin 0.
+  - **Message**: 16px (1rem), font-weight 400 (regular), line-height 1.5, margin 0.
+  - **Heading-to-Message Gap**: 4px.
+  - **Status & Close Icons**: 22px with consistent 2.2 stroke width.
+  - **Container Dimensions**: Compact responsive width `min(400px, calc(100vw - 32px))` with `max-width: 420px` on desktop and full-width padding on mobile devices.
+  - **Padding**: 16px consistent padding.
+- **Screen Reader Announcements**:
+  - Urgent error messages utilize `role="alert"` and `aria-live="assertive"`.
+  - Routine notifications (Success, Warning, Info) utilize `role="status"` and `aria-live="polite"`.
+  - Outer container defines `role="region"` with `aria-label="Notifications"`.
+  - Icons marked with `aria-hidden="true"` to prevent redundant speech synthesizer announcements.
+- **Keyboard & Focus Safety**:
+  - Toast appearances **never** hijack keyboard focus away from the user's active workflow.
+  - Close buttons are standard keyboard-operable native `<button>` elements (`Tab` -> `Enter` / `Space`) with `aria-label="Dismiss [type] notification"` and visible high-contrast focus rings (`outline: 2px solid #ffffff`).
+- **Timing, Deduplication & Stacking**:
+  - Hovering or focusing a toast pauses its auto-dismiss timer, ensuring sufficient reading time.
+  - Identical rapid notifications within 1.5 seconds are deduplicated.
+  - Up to 4 notifications stack cleanly in the top-right viewport without overlapping page controls.
+  - Windows High Contrast (Forced Colors) and `prefers-reduced-motion` are fully supported.
+
 ---
 
 ## 4. Forms, Validation & Error Handling
