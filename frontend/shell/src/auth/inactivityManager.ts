@@ -1,13 +1,15 @@
 // frontend/shell/src/auth/inactivityManager.ts - Enterprise Inactivity & Session Management Service
 import { securitySettingsApi } from '../../../shared/api/securitySettingsApi';
+import { authApi } from '../../../shared/api/authApi';
 
 export interface InactivityManagerOptions {
   isAuthenticated: boolean;
   tenantId?: string;
-  onLogout: (reason: string) => void;
+  onLogout: (reason: string, message?: string) => void;
   defaultTimeoutMinutes?: number;
   throttleMs?: number;
   checkIntervalMs?: number;
+  checkSessionHealth?: () => Promise<{ active: boolean; reason?: string; message?: string }>;
 }
 
 export const DEFAULT_INACTIVITY_LOGOUT_MINUTES = 15;
@@ -22,10 +24,11 @@ export const STORAGE_KEY_INACTIVITY_MINUTES = 'enrollnow_inactivity_minutes';
 export class InactivityManager {
   private isAuthenticated: boolean;
   private tenantId?: string;
-  private onLogout: (reason: string) => void;
+  private onLogout: (reason: string, message?: string) => void;
   private defaultTimeoutMinutes: number;
   private throttleMs: number;
   private checkIntervalMs: number;
+  private checkSessionHealthFn?: () => Promise<{ active: boolean; reason?: string; message?: string }>;
 
   private timeoutMinutes: number;
   private lastActivityTime: number = Date.now();
@@ -33,6 +36,7 @@ export class InactivityManager {
   private intervalId: any = null;
   private broadcastChannel: any = null;
   private isRunning: boolean = false;
+  private isCheckingServerSession: boolean = false;
 
   private activityHandler = () => this.recordActivity();
   private storageHandler = (e: any) => this.handleStorageEvent(e);
@@ -46,6 +50,7 @@ export class InactivityManager {
     this.defaultTimeoutMinutes = options.defaultTimeoutMinutes ?? DEFAULT_INACTIVITY_LOGOUT_MINUTES;
     this.throttleMs = options.throttleMs ?? ACTIVITY_THROTTLE_MS;
     this.checkIntervalMs = options.checkIntervalMs ?? CHECK_INTERVAL_MS;
+    this.checkSessionHealthFn = options.checkSessionHealth;
 
     this.timeoutMinutes = this.loadInitialTimeout();
   }
@@ -99,9 +104,10 @@ export class InactivityManager {
     // 2. Attach DOM activity listeners
     this.attachListeners();
 
-    // 3. Start check interval
+    // 3. Start check interval (checks local inactivity and periodic server session status)
     this.intervalId = setInterval(() => {
       this.checkInactivity();
+      void this.verifyServerSession();
     }, this.checkIntervalMs);
   }
 
@@ -134,6 +140,32 @@ export class InactivityManager {
       }
     } catch {
       // Graceful fallback to default/cached policy
+    }
+  }
+
+  /**
+   * Actively queries the backend to verify that this session was not revoked by a new login
+   * in another browser/device (concurrent sessions prevention) or expired on the server.
+   */
+  public async verifyServerSession(): Promise<boolean> {
+    if (!this.isRunning || !this.isAuthenticated || this.isCheckingServerSession) {
+      return true;
+    }
+    this.isCheckingServerSession = true;
+    try {
+      const checker = this.checkSessionHealthFn || (() => authApi.verifySessionStatus());
+      const res = await checker();
+      if (!res.active) {
+        const reason = res.reason || 'CONCURRENT_SESSION_LOGOUT';
+        const message = res.message;
+        this.triggerLogout(reason, message);
+        return false;
+      }
+      return true;
+    } catch {
+      return true;
+    } finally {
+      this.isCheckingServerSession = false;
     }
   }
 
@@ -175,14 +207,14 @@ export class InactivityManager {
     }
   }
 
-  public triggerLogout(reason: string): void {
+  public triggerLogout(reason: string, message?: string): void {
     const now = Date.now();
 
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem(
           STORAGE_KEY_SESSION_LOGOUT,
-          JSON.stringify({ reason, timestamp: now })
+          JSON.stringify({ reason, message, timestamp: now })
         );
       } catch {
         // ignore
@@ -194,14 +226,18 @@ export class InactivityManager {
         if (!this.broadcastChannel) {
           this.broadcastChannel = new BroadcastChannel(INACTIVITY_BROADCAST_CHANNEL);
         }
-        this.broadcastChannel.postMessage({ type: 'LOGOUT', reason });
+        this.broadcastChannel.postMessage({ type: 'LOGOUT', reason, message });
       } catch {
         // ignore
       }
     }
 
     this.stop();
-    this.onLogout(reason);
+    if (message !== undefined) {
+      this.onLogout(reason, message);
+    } else {
+      this.onLogout(reason);
+    }
   }
 
   public handleStorageEvent(e: any): void {
@@ -212,14 +248,20 @@ export class InactivityManager {
       }
     } else if (e.key === STORAGE_KEY_SESSION_LOGOUT && e.newValue) {
       let reason = 'SESSION_LOGOUT';
+      let message: string | undefined;
       try {
         const parsed = JSON.parse(e.newValue);
         reason = parsed.reason || reason;
+        message = parsed.message;
       } catch {
         // ignore
       }
       this.stop();
-      this.onLogout(reason);
+      if (message !== undefined) {
+        this.onLogout(reason, message);
+      } else {
+        this.onLogout(reason);
+      }
     } else if (e.key === STORAGE_KEY_INACTIVITY_MINUTES && e.newValue) {
       const parsed = parseInt(e.newValue, 10);
       if (!isNaN(parsed) && parsed > 0) {
@@ -251,6 +293,8 @@ export class InactivityManager {
         }
       }
       this.checkInactivity();
+      // Immediately verify server session status when tab becomes visible or window gains focus
+      void this.verifyServerSession();
     }
   }
 
@@ -281,7 +325,11 @@ export class InactivityManager {
             this.lastActivityTime = Math.max(this.lastActivityTime, data.timestamp);
           } else if (data?.type === 'LOGOUT') {
             this.stop();
-            this.onLogout(data.reason || 'INACTIVITY_TIMEOUT');
+            if (data.message !== undefined) {
+              this.onLogout(data.reason || 'INACTIVITY_TIMEOUT', data.message);
+            } else {
+              this.onLogout(data.reason || 'INACTIVITY_TIMEOUT');
+            }
           }
         };
       } catch {

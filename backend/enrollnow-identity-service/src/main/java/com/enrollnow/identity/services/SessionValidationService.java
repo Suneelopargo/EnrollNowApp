@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.exceptions.SessionRevokedException;
 import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.models.UserSession;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
@@ -29,11 +30,21 @@ public class SessionValidationService {
         this.securitySettingsRepository = securitySettingsRepository;
     }
 
-    @Transactional(noRollbackFor = IllegalStateException.class)
+    @Transactional(noRollbackFor = {IllegalStateException.class, SessionRevokedException.class})
     public void validateAndTouch(
             String rawAccessToken,
             UUID tenantId,
             UUID userId) {
+
+        validateSession(rawAccessToken, tenantId, userId, true);
+    }
+
+    @Transactional(noRollbackFor = {IllegalStateException.class, SessionRevokedException.class})
+    public void validateSession(
+            String rawAccessToken,
+            UUID tenantId,
+            UUID userId,
+            boolean touchActivity) {
 
         String tokenHash = hashToken(rawAccessToken);
 
@@ -59,11 +70,13 @@ public class SessionValidationService {
         }
 
         /*
-         * Explicitly revoked session.
+         * Explicitly revoked session (e.g. concurrent login from another browser).
          */
         if (session.getRevokedAt() != null) {
-            throw new IllegalStateException(
-                    "Session has been revoked"
+            String reason = session.getRevokeReason() != null ? session.getRevokeReason() : "REVOKED";
+            throw new SessionRevokedException(
+                    "Session has been revoked",
+                    reason
             );
         }
 
@@ -82,8 +95,9 @@ public class SessionValidationService {
 
             userSessionRepository.save(session);
 
-            throw new IllegalStateException(
-                    "Session has expired"
+            throw new SessionRevokedException(
+                    "Session has expired",
+                    "EXPIRED"
             );
         }
 
@@ -113,18 +127,20 @@ public class SessionValidationService {
 
                 userSessionRepository.save(session);
 
-                throw new IllegalStateException(
-                        "Session timed out due to inactivity"
+                throw new SessionRevokedException(
+                        "Session timed out due to inactivity",
+                        "INACTIVITY_TIMEOUT"
                 );
             }
         }
 
         /*
-         * Valid authenticated activity.
+         * Valid authenticated activity - only touch if not a passive status poll.
          */
-        session.setLastActivityAt(now);
-
-        userSessionRepository.save(session);
+        if (touchActivity) {
+            session.setLastActivityAt(now);
+            userSessionRepository.save(session);
+        }
     }
 
     private String hashToken(String token) {

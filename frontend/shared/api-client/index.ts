@@ -203,7 +203,7 @@ export function normalizeApiError(error: any): NormalizedApiError {
 /**
  * Clears current session tokens and notifies listeners without redirect loops.
  */
-export function handleSessionExpired(): void {
+export function handleSessionExpired(reason: string = 'SESSION_EXPIRED', message?: string): void {
   if (typeof localStorage !== 'undefined' && typeof localStorage.removeItem === 'function') {
     try {
       localStorage.removeItem('enrollnow_token');
@@ -224,7 +224,7 @@ export function handleSessionExpired(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('enrollnow_auth_change', {
-        detail: { logout: true, reason: 'SESSION_EXPIRED' },
+        detail: { logout: true, reason, message },
       })
     );
   }
@@ -382,7 +382,14 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
 
         // Only expire session if it was an authenticated request, not failed credentials on login
         if (!isLoginRequest) {
-          handleSessionExpired();
+          const resData = error.response?.data;
+          const reason =
+            resData?.reason ||
+            (resData?.message?.includes('another browser') || resData?.message?.includes('concurrent')
+              ? 'NEW_LOGIN'
+              : 'SESSION_EXPIRED');
+          const message = resData?.message;
+          handleSessionExpired(reason, message);
         }
       } else if (normalized.status === 403 && options.onForbidden) {
         options.onForbidden();

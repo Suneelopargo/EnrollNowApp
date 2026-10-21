@@ -461,6 +461,49 @@ export const authApi = {
   },
 
   /**
+   * Performs lightweight passive session status check to detect server revocation (e.g. concurrent login elsewhere).
+   * Uses X-Passive-Check: true so backend inactivity timer is not artificially reset.
+   */
+  async verifySessionStatus(): Promise<{ active: boolean; reason?: string; message?: string }> {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('enrollnow_token') : null;
+    if (!token) {
+      return { active: false, reason: 'NO_TOKEN' };
+    }
+
+    const tenantId = getTenantId() || '11111111-1111-1111-1111-111111111111';
+    try {
+      const res = await apiClient.get<any>(`/api/v1/tenants/${tenantId}/auth/session-status`, {
+        headers: {
+          'X-Passive-Check': 'true',
+          'X-Skip-Toast': 'true',
+          'X-Skip-Loader': 'true',
+        },
+        skipLoader: true,
+        silent: true,
+        skipToast: true,
+        timeout: 5000,
+      } as any);
+
+      return {
+        active: Boolean(res?.data?.active !== false),
+      };
+    } catch (err: any) {
+      const status = err.status || err.response?.status;
+      if (status === 401 || status === 403) {
+        const raw = err.raw || err.response?.data;
+        const reason = raw?.reason || (raw?.message?.includes('another browser') ? 'NEW_LOGIN' : 'UNAUTHORIZED');
+        return {
+          active: false,
+          reason,
+          message: raw?.message,
+        };
+      }
+      // Transient network errors do not immediately invalidate session
+      return { active: true };
+    }
+  },
+
+  /**
    * Activates a new user account with initial password.
    * Calls POST /api/v1/tenants/{tenantId}/auth/activate
    */

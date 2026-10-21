@@ -175,6 +175,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       } else if (detail?.logout) {
         clearSession();
+        navigate('/login', { replace: true });
+        if (detail?.reason === 'NEW_LOGIN' || detail?.reason === 'CONCURRENT_SESSION_LOGOUT') {
+          toast.warning(
+            detail.message ||
+              'Your session has ended because your account was logged in from another browser or device.',
+            { title: 'Session Terminated' }
+          );
+        }
       }
     };
 
@@ -230,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const handleInactivityLogout = useCallback((reason: string) => {
+  const handleInactivityLogout = useCallback((reason: string, message?: string) => {
     clearSession();
     localStorage.removeItem('enrollnow_token');
     localStorage.removeItem('enrollnow_user');
@@ -240,6 +248,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.warning('Session expired due to inactivity. Please log in again.', {
         title: 'Session Timeout',
       });
+    } else if (reason === 'NEW_LOGIN' || reason === 'CONCURRENT_SESSION_LOGOUT') {
+      toast.warning(
+        message ||
+          'Your session has ended because your account was logged in from another browser or device.',
+        { title: 'Session Terminated' }
+      );
     }
   }, [clearSession, navigate]);
 

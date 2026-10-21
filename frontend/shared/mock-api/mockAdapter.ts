@@ -1,4 +1,4 @@
-﻿// frontend/shared/mock-api/mockAdapter.ts - Centralized Axios Adapter for Mock API
+// frontend/shared/mock-api/mockAdapter.ts - Centralized Axios Adapter for Mock API
 import { AxiosAdapter, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { getMockErrorSimulation } from '../api-config';
 import { mockAuthApi, extractBearerToken } from './mockAuthApi';
@@ -85,6 +85,17 @@ export const mockAdapter: AxiosAdapter = async (
       throw res;
     }
     return res;
+  }
+
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/session-status$/) || path === '/api/v1/auth/session-status') &&
+    method === 'GET'
+  ) {
+    const token = extractBearerToken(config);
+    if (!token) {
+      throw createMockErrorResponse(config, 401, 'Authentication required: Missing Authorization token.', 'UNAUTHORIZED');
+    }
+    return createMockSuccessResponse(config, { active: true }, 200, 'Session active');
   }
 
   if (path === '/api/v1/auth/logout' && method === 'POST') {

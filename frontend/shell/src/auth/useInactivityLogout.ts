@@ -41,10 +41,11 @@ export function useInactivityLogout(options: InactivityManagerOptions) {
     const inst = new InactivityManager({
       isAuthenticated: options.isAuthenticated,
       tenantId: options.tenantId,
-      onLogout: (reason) => optionsRef.current.onLogout(reason),
+      onLogout: (reason, message) => optionsRef.current.onLogout(reason, message),
       defaultTimeoutMinutes: options.defaultTimeoutMinutes,
       throttleMs: options.throttleMs,
       checkIntervalMs: options.checkIntervalMs,
+      checkSessionHealth: options.checkSessionHealth,
     });
 
     void inst.start();

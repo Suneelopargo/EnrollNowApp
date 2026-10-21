@@ -321,4 +321,78 @@ describe('Enterprise Inactivity Auto-Logout Suite', () => {
 
     expect(onLogout).toHaveBeenCalledWith('INACTIVITY_TIMEOUT');
   });
+
+  it('automatically logs out on visibilitychange/focus without user interaction when session is revoked by another browser login', async () => {
+    const onLogout = vi.fn();
+    const checkSessionHealth = vi.fn().mockResolvedValue({
+      active: false,
+      reason: 'NEW_LOGIN',
+      message: 'Your session has ended because your account was logged in from another browser or device.',
+    });
+
+    const manager = new InactivityManager({
+      isAuthenticated: true,
+      defaultTimeoutMinutes: 30,
+      checkIntervalMs: 60 * 60 * 1000,
+      checkSessionHealth,
+      onLogout,
+    });
+    await manager.start();
+
+    // Reset initial calls from start()
+    checkSessionHealth.mockClear();
+    onLogout.mockClear();
+
+    // User returns to tab/browser (visibilitychange or window focus) without clicking anything
+    mockDocument.visibilityState = 'visible';
+    mockDocument.dispatchEvent({ type: 'visibilitychange' });
+
+    // Allow promise microtasks to resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(checkSessionHealth).toHaveBeenCalledTimes(1);
+    expect(onLogout).toHaveBeenCalledWith(
+      'NEW_LOGIN',
+      'Your session has ended because your account was logged in from another browser or device.'
+    );
+  });
+
+  it('automatically logs out during periodic background interval when server detects session revocation', async () => {
+    const onLogout = vi.fn();
+    let isRevokedOnServer = false;
+    const checkSessionHealth = vi.fn().mockImplementation(async () => {
+      if (isRevokedOnServer) {
+        return {
+          active: false,
+          reason: 'NEW_LOGIN',
+          message: 'Your session has ended because your account was logged in from another browser or device.',
+        };
+      }
+      return { active: true };
+    });
+
+    const manager = new InactivityManager({
+      isAuthenticated: true,
+      defaultTimeoutMinutes: 30,
+      checkIntervalMs: 5000,
+      checkSessionHealth,
+      onLogout,
+    });
+    await manager.start();
+
+    // Initial check while active
+    expect(onLogout).not.toHaveBeenCalled();
+
+    // Remote browser logs in, revoking session on server
+    isRevokedOnServer = true;
+
+    // Advance 5s interval (passive background check)
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(onLogout).toHaveBeenCalledWith(
+      'NEW_LOGIN',
+      'Your session has ended because your account was logged in from another browser or device.'
+    );
+  });
 });

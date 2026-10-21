@@ -44,7 +44,17 @@ public class AuthController {
                 loginService.authenticate(tenantId, request)
         );
     }
-    
+
+    @GetMapping("/session-status")
+    public ResponseEntity<?> getSessionStatus(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(
+                java.util.Map.of(
+                        "active", true,
+                        "tenantId", tenantId
+                )
+        );
+    }
+
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(
             @PathVariable UUID tenantId,
@@ -78,7 +88,7 @@ public class AuthController {
                 )
         );
     }
-    
+
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(
             @PathVariable UUID tenantId,
@@ -121,7 +131,7 @@ public class AuthController {
             );
         }
     }
-    
+
     @PostMapping("/activate")
     public ResponseEntity<?> activateAccount(
             @PathVariable UUID tenantId,

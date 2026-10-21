@@ -1,5 +1,6 @@
 package com.enrollnow.config;
 
+import com.enrollnow.identity.exceptions.SessionRevokedException;
 import com.enrollnow.identity.services.SessionValidationService;
 
 import jakarta.servlet.FilterChain;
@@ -66,12 +67,44 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                                     jwt.getSubject()
                             );
 
+                    String uri = request.getRequestURI();
+                    boolean isPassive = "true".equalsIgnoreCase(request.getHeader("X-Passive-Check"))
+                            || uri.endsWith("/session-status");
+
                     sessionValidationService
-                            .validateAndTouch(
+                            .validateSession(
                                     rawToken,
                                     tenantId,
-                                    userId
+                                    userId,
+                                    !isPassive
                             );
+
+                } catch (SessionRevokedException ex) {
+
+                    response.setStatus(
+                            HttpServletResponse.SC_UNAUTHORIZED
+                    );
+
+                    response.setContentType(
+                            "application/json"
+                    );
+
+                    String reason = ex.getReason() != null ? ex.getReason() : "REVOKED";
+                    String message = "NEW_LOGIN".equals(reason)
+                            ? "Your session has ended because your account was logged in from another browser or device."
+                            : ("INACTIVITY_TIMEOUT".equals(reason)
+                            ? "Session expired due to inactivity."
+                            : "Session has expired or was revoked.");
+
+                    response.getWriter().write(String.format("""
+                            {
+                              "error": "Unauthorized",
+                              "message": "%s",
+                              "reason": "%s"
+                            }
+                            """, message, reason));
+
+                    return;
 
                 } catch (Exception ex) {
 
@@ -87,7 +120,8 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                             """
                             {
                               "error": "Unauthorized",
-                              "message": "Session is invalid, expired, or revoked"
+                              "message": "Session is invalid, expired, or revoked",
+                              "reason": "INVALID_SESSION"
                             }
                             """
                     );
