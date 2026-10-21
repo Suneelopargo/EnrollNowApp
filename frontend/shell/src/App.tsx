@@ -10,6 +10,7 @@ import { LoadingSpinner } from '../../shared/design-system/components/LoadingSpi
 import { ToasterContainer, toast } from '../../shared/toaster';
 import { ConfirmationContainer } from '../../shared/confirmation';
 import { LoaderContainer } from '../../shared/loader';
+import { SkipLink } from '../../shared/accessibility/SkipLink';
 import '../../shared/design-system/styles/index.scss';
 
 export const App: React.FC = () => {
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
 
   return (
     <BrowserRouter>
+      <SkipLink targetId="main-content" label="Skip to main content" />
       <AuthProvider>
         <NavigationProvider>
           <TabWorkspaceProvider>

@@ -205,8 +205,8 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
 
               {/* Error Alert */}
               {error && (
-                <div className="enl-error-alert" role="alert">
-                  <AlertCircle size={15} />
+                <div id="enl-login-error" className="enl-error-alert" role="alert" aria-live="assertive" aria-atomic="true">
+                  <AlertCircle size={15} aria-hidden="true" />
                   <span>{error}</span>
                 </div>
               )}
@@ -227,7 +227,11 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       placeholder="Enter your email address"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      autoComplete="off"
+                      autoComplete="username"
+                      required
+                      aria-required="true"
+                      aria-invalid={!!error}
+                      aria-describedby={error ? 'enl-login-error' : undefined}
                     />
                   </div>
                 </div>
@@ -246,25 +250,27 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="off"
+                      autoComplete="current-password"
+                      required
+                      aria-required="true"
+                      aria-invalid={!!error}
+                      aria-describedby={error ? 'enl-login-error' : undefined}
                     />
                     <button
                       type="button"
                       className="enl-toggle-eye"
                       onClick={() => setShowPassword((prev) => !prev)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
 
                 {/* Options Row */}
                 <div className="enl-options-row">
-                  <label className="enl-remember-label">
-                   
-                    <span></span>
-                  </label>
+                  <div className="enl-remember-spacer" aria-hidden="true" />
                   <a
                     href="/recover-password"
                     className="enl-forgot-link"

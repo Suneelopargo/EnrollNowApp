@@ -624,13 +624,21 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
               <input
                 id="site-admin-first-name"
                 type="text"
-                placeholder={errors.firstName || 'Enter First Name'}
+                placeholder={!firstName && errors.firstName ? errors.firstName : 'Enter First Name'}
                 className="form-input"
                 value={firstName}
                 onChange={(e) => handleChange('firstName', e.target.value, setFirstName)}
                 onBlur={() => handleBlur('firstName')}
                 aria-invalid={!!errors.firstName}
+                aria-describedby={errors.firstName ? 'site-admin-first-name-error' : undefined}
+                required
+                aria-required="true"
               />
+              {errors.firstName && (
+                <div id="site-admin-first-name-error" className="sr-only" role="alert">
+                  {errors.firstName}
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -640,13 +648,21 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
               <input
                 id="site-admin-last-name"
                 type="text"
-                placeholder={errors.lastName || 'Enter Last Name'}
+                placeholder={!lastName && errors.lastName ? errors.lastName : 'Enter Last Name'}
                 className="form-input"
                 value={lastName}
                 onChange={(e) => handleChange('lastName', e.target.value, setLastName)}
                 onBlur={() => handleBlur('lastName')}
                 aria-invalid={!!errors.lastName}
+                aria-describedby={errors.lastName ? 'site-admin-last-name-error' : undefined}
+                required
+                aria-required="true"
               />
+              {errors.lastName && (
+                <div id="site-admin-last-name-error" className="sr-only" role="alert">
+                  {errors.lastName}
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -656,13 +672,21 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
               <input
                 id="site-admin-email"
                 type="email"
-                placeholder={errors.email || 'Enter Email'}
+                placeholder={!email && errors.email ? errors.email : 'Enter Email'}
                 className="form-input"
                 value={email}
                 onChange={(e) => handleChange('email', e.target.value, setEmail)}
                 onBlur={() => handleBlur('email')}
                 aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? 'site-admin-email-error' : undefined}
+                required
+                aria-required="true"
               />
+              {errors.email && (
+                <div id="site-admin-email-error" className="sr-only" role="alert">
+                  {errors.email}
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -697,7 +721,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             <table className="site-admin-studies-table">
               <thead>
                 <tr>
-                  <th className="site-admin-studies-th-checkbox">
+                  <th scope="col" className="site-admin-studies-th-checkbox">
                     <input
                       type="checkbox"
                       checked={allAssigned}
@@ -706,8 +730,8 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                       aria-label="Select or deselect all studies"
                     />
                   </th>
-                  <th>Study Name</th>
-                  <th>Study Permissions</th>
+                  <th scope="col">Study Name</th>
+                  <th scope="col">Study Permissions</th>
                 </tr>
               </thead>
               <tbody>

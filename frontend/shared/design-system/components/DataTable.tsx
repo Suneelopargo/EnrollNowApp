@@ -13,6 +13,8 @@ export interface DataTableProps<T> {
   keyExtractor: (item: T, index: number) => string | number;
   emptyMessage?: string;
   loading?: boolean;
+  ariaLabel?: string;
+  caption?: string;
 }
 
 export function DataTable<T>({
@@ -21,11 +23,13 @@ export function DataTable<T>({
   keyExtractor,
   emptyMessage = 'No records found.',
   loading = false,
+  ariaLabel,
+  caption,
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className="spinner-container">
-        <div className="spinner" />
+      <div className="spinner-container" role="status" aria-live="polite">
+        <div className="spinner" aria-hidden="true" />
         <span>Loading records...</span>
       </div>
     );
@@ -33,19 +37,20 @@ export function DataTable<T>({
 
   if (!data || data.length === 0) {
     return (
-      <div className="spinner-container">
+      <div className="spinner-container" role="status" aria-live="polite">
         <span>{emptyMessage}</span>
       </div>
     );
   }
 
   return (
-    <div className="table-responsive">
-      <table className="data-table">
+    <div className="table-responsive" role="region" aria-label={ariaLabel || 'Data table'} tabIndex={0}>
+      <table className="data-table" aria-label={ariaLabel}>
+        {caption && <caption className="sr-only">{caption}</caption>}
         <thead>
           <tr>
             {columns.map((col) => (
-              <th key={col.key}>
+              <th key={col.key} scope="col">
                 {col.header}
               </th>
             ))}

@@ -19,12 +19,14 @@ export const Step1Metadata: React.FC<Step1MetadataProps> = ({ survey, onChange }
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-4 md:col-span-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Survey Title <span className="text-red-500">*</span>
+            <label htmlFor="survey-title-input" className="block text-sm font-medium text-gray-700 mb-1">
+              Survey Title <span className="text-red-500" aria-hidden="true">*</span>
             </label>
             <input
+              id="survey-title-input"
               type="text"
               required
+              aria-required="true"
               value={survey.title}
               onChange={(e) => onChange({ title: e.target.value })}
               placeholder="e.g. Baseline Sleep & Quality of Life Questionnaire"
@@ -33,10 +35,11 @@ export const Step1Metadata: React.FC<Step1MetadataProps> = ({ survey, onChange }
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="survey-description-input" className="block text-sm font-medium text-gray-700 mb-1">
               Description / Participant Instructions
             </label>
             <textarea
+              id="survey-description-input"
               rows={3}
               value={survey.description || ''}
               onChange={(e) => onChange({ description: e.target.value })}
@@ -47,24 +50,27 @@ export const Step1Metadata: React.FC<Step1MetadataProps> = ({ survey, onChange }
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="survey-study-id-input" className="block text-sm font-medium text-gray-700 mb-1">
             Clinical Study ID / Protocol Number (Optional)
           </label>
           <input
+            id="survey-study-id-input"
             type="number"
+            aria-describedby="survey-study-id-hint"
             value={survey.studyId || ''}
             onChange={(e) => onChange({ studyId: e.target.value ? parseInt(e.target.value, 10) : null })}
             placeholder="e.g. 101"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           />
-          <p className="text-xs text-gray-500 mt-1">Leave empty for independent or organization-wide surveys.</p>
+          <p id="survey-study-id-hint" className="text-xs text-gray-500 mt-1">Leave empty for independent or organization-wide surveys.</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="survey-thank-you-input" className="block text-sm font-medium text-gray-700 mb-1">
             Custom Completion / Thank You Message
           </label>
           <input
+            id="survey-thank-you-input"
             type="text"
             value={survey.thankYouMessage || ''}
             onChange={(e) => onChange({ thankYouMessage: e.target.value })}

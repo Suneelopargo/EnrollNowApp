@@ -198,7 +198,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close export dropdown on outside click
+  // Close export dropdown on outside click or Escape key
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (
@@ -208,9 +208,18 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         setIsExportMenuOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isExportMenuOpen) {
+        setIsExportMenuOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExportMenuOpen]);
 
   // Filter users based on status dropdown and sort latest record at the top
   const filteredUsers = useMemo(() => {
@@ -504,6 +513,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
               className="form-input"
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
+              aria-label="Search users"
             />
             {searchTerm && (
               <button

@@ -18,43 +18,47 @@ export const ToasterContainer: React.FC<ToasterContainerProps> = ({ className = 
   const renderIcon = (type: ToastItem['type']) => {
     switch (type) {
       case 'success':
-        return <CheckCircle2 size={18} strokeWidth={2.4} />;
+        return <CheckCircle2 size={18} strokeWidth={2.4} aria-hidden="true" />;
       case 'error':
-        return <AlertCircle size={18} strokeWidth={2.4} />;
+        return <AlertCircle size={18} strokeWidth={2.4} aria-hidden="true" />;
       case 'warning':
-        return <AlertTriangle size={18} strokeWidth={2.4} />;
+        return <AlertTriangle size={18} strokeWidth={2.4} aria-hidden="true" />;
       case 'info':
       default:
-        return <Info size={18} strokeWidth={2.4} />;
+        return <Info size={18} strokeWidth={2.4} aria-hidden="true" />;
     }
   };
 
   return (
     <div className={`enl-toaster-container ${className}`} role="region" aria-label="Notifications">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`enl-toast enl-toast--${toast.type}`}
-          role="alert"
-          aria-live="assertive"
-        >
-          <div className="enl-toast-icon-wrap" aria-hidden="true">
-            {renderIcon(toast.type)}
-          </div>
-          <div className="enl-toast-content">
-            {toast.title && <div className="enl-toast-title">{toast.title}</div>}
-            <div className="enl-toast-message">{toast.message}</div>
-          </div>
-          <button
-            type="button"
-            className="enl-toast-close"
-            onClick={() => dismiss(toast.id)}
-            aria-label="Close notification"
+      {toasts.map((toast) => {
+        const isError = toast.type === 'error';
+        return (
+          <div
+            key={toast.id}
+            className={`enl-toast enl-toast--${toast.type}`}
+            role={isError ? 'alert' : 'status'}
+            aria-live={isError ? 'assertive' : 'polite'}
+            aria-atomic="true"
           >
-            <X size={15} strokeWidth={2.2} />
-          </button>
-        </div>
-      ))}
+            <div className="enl-toast-icon-wrap" aria-hidden="true">
+              {renderIcon(toast.type)}
+            </div>
+            <div className="enl-toast-content">
+              {toast.title && <div className="enl-toast-title">{toast.title}</div>}
+              <div className="enl-toast-message">{toast.message}</div>
+            </div>
+            <button
+              type="button"
+              className="enl-toast-close"
+              onClick={() => dismiss(toast.id)}
+              aria-label={`Close ${toast.title || toast.type} notification`}
+            >
+              <X size={15} strokeWidth={2.2} aria-hidden="true" />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 };

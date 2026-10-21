@@ -17,6 +17,7 @@ import {
   SecuritySettingsResponse,
 } from '../../../../shared/api/securitySettingsApi';
 import { toast } from '../../../../shared/toaster';
+import { useFocusTrap } from '../../../../shared/accessibility/useFocusTrap';
 
 export interface SecurityViewProps {
   tenantId?: string;
@@ -142,6 +143,11 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
+  const resetTrapRef = useFocusTrap<HTMLDivElement>({
+    active: showResetModal,
+    onEscape: () => setShowResetModal(false),
+    returnFocus: true,
+  });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -359,7 +365,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   <span className="sec-unit-suffix">attempts</span>
                 </div>
                 {errors.lockAfterNAttempts && (
-                  <div className="sec-field-error-msg">{errors.lockAfterNAttempts}</div>
+                  <div className="sec-field-error-msg" role="alert">{errors.lockAfterNAttempts}</div>
                 )}
               </div>
 
@@ -419,7 +425,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   </select>
                 </div>
                 {errors.logoutAfterValue && (
-                  <div className="sec-field-error-msg">{errors.logoutAfterValue}</div>
+                  <div className="sec-field-error-msg" role="alert">{errors.logoutAfterValue}</div>
                 )}
               </div>
 
@@ -456,7 +462,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   </select>
                 </div>
                 {errors.inactivityLockValue && (
-                  <div className="sec-field-error-msg">{errors.inactivityLockValue}</div>
+                  <div className="sec-field-error-msg" role="alert">{errors.inactivityLockValue}</div>
                 )}
               </div>
 
@@ -520,7 +526,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   </select>
                 </div>
                 {errors.passwordExpiryValue && (
-                  <div className="sec-field-error-msg">{errors.passwordExpiryValue}</div>
+                  <div className="sec-field-error-msg" role="alert">{errors.passwordExpiryValue}</div>
                 )}
               </div>
 
@@ -546,7 +552,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   <span className="sec-unit-suffix">previous passwords</span>
                 </div>
                 {errors.preventLastNPasswords && (
-                  <div className="sec-field-error-msg">{errors.preventLastNPasswords}</div>
+                  <div className="sec-field-error-msg" role="alert">{errors.preventLastNPasswords}</div>
                 )}
               </div>
             </div>
@@ -586,7 +592,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   />
                 </div>
                 {errors.minimumPasswordLength && (
-                  <div className="sec-field-error-msg">{errors.minimumPasswordLength}</div>
+                  <div className="sec-field-error-msg" role="alert">{errors.minimumPasswordLength}</div>
                 )}
               </div>
 
@@ -688,18 +694,23 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
       {showResetModal && (
         <div
           className="sec-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="reset-modal-title"
+          role="presentation"
         >
-          <div className="sec-modal-card">
+          <div
+            ref={resetTrapRef}
+            className="sec-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-modal-title"
+            tabIndex={-1}
+          >
             <button
               type="button"
               className="sec-modal-close-btn"
               onClick={() => setShowResetModal(false)}
               aria-label="Close dialog"
             >
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
 
             <div className="sec-modal-alert-icon-wrap">

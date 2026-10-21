@@ -161,8 +161,21 @@ export const TopNavigation: React.FC = () => {
         setIsStudyActionsOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsActionsOpen(false);
+        setIsCampusOpen(false);
+        setIsStudySelectOpen(false);
+        setIsStudyActionsOpen(false);
+        setIsMobileOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -185,6 +198,24 @@ export const TopNavigation: React.FC = () => {
 
   const organizationName =
     user.organizationName || 'Clinical Health Campus';
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const nextIndex = (index + 1) % openTabs.length;
+      activateTab(openTabs[nextIndex].id);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prevIndex = (index - 1 + openTabs.length) % openTabs.length;
+      activateTab(openTabs[prevIndex].id);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      activateTab(openTabs[0].id);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      activateTab(openTabs[openTabs.length - 1].id);
+    }
+  };
 
   const handleModuleNavigation = (moduleId: string) => {
     if (moduleId === 'communications') {
@@ -423,24 +454,28 @@ export const TopNavigation: React.FC = () => {
           <div className="enl-screens-label">Open Screens:</div>
 
           {/* Scrollable Tab Strip */}
-          <div className="enl-screens-strip">
-            {openTabs.map((tab) => {
+          <div className="enl-screens-strip" role="tablist" aria-label="Open screens">
+            {openTabs.map((tab, index) => {
               const isActive = tab.id === activeTabId;
               return (
                 <div
                   key={tab.id}
+                  id={`tab-${tab.id}`}
                   className={`enl-screen-tab ${isActive ? 'enl-screen-tab--active' : ''}`}
                   onClick={() => activateTab(tab.id)}
                   role="tab"
                   aria-selected={isActive}
-                  tabIndex={0}
+                  aria-controls={`screen-pane-${tab.id}`}
+                  tabIndex={isActive ? 0 : -1}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       activateTab(tab.id);
+                    } else {
+                      handleTabKeyDown(e, index);
                     }
                   }}
                 >
-                  <span className="enl-screen-tab-icon">
+                  <span className="enl-screen-tab-icon" aria-hidden="true">
                     {renderIcon(tab.icon, 14)}
                   </span>
                   <span className="enl-screen-tab-title">{tab.title}</span>
@@ -456,7 +491,7 @@ export const TopNavigation: React.FC = () => {
                       aria-label={`Close ${tab.title} tab`}
                       title="Close Screen"
                     >
-                      <X size={13} strokeWidth={2.4} />
+                      <X size={13} strokeWidth={2.4} aria-hidden="true" />
                     </button>
                   )}
                 </div>
