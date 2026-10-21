@@ -6,3 +6,6 @@ export * from './useAnnounce';
 export * from './SkipLink';
 export * from './AccessibleField';
 export * from './a11y-test-helpers';
+export * from './modalA11yManager';
+export * from './shortcutRegistry';
+export * from './KeyboardShortcutsModal';

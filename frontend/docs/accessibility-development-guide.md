@@ -32,6 +32,9 @@ Always use approved components from `@enrollnow/shared` rather than writing cust
 | `useRovingTabIndex` | `@enrollnow/shared` | Hook for arrow-key navigation in composite widgets |
 | `useEscapeKey` | `@enrollnow/shared` | Hook to dismiss menus and overlays on Escape key press |
 | `announceMessage` | `@enrollnow/shared` | Live-region announcements for screen readers (`polite` / `assertive`) |
+| `acquireScrollLock` | `@enrollnow/shared` | Reference-counted document scroll lock preventing background scrolling |
+| `acquireInertBackground` | `@enrollnow/shared` | Ancestor-safe native `inert` and `aria-hidden` background isolation |
+| `KeyboardShortcutsModal` | `@enrollnow/shared` | Centralized keyboard shortcuts help dialog accessible from header |
 
 ---
 
@@ -43,6 +46,17 @@ Always use approved components from `@enrollnow/shared` rather than writing cust
 - **Escape Key**: All dismissible overlays (modals, alertdialogs, user menus, dropdown popups) must close on `Escape` and restore focus to the triggering element.
 - **Composite Widgets**: Tab lists, menu bars, and listboxes should support arrow keys (`ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`) using roving tabindex.
 - **No Keyboard Traps**: Focus must never become trapped in any element or widget unless inside an active modal dialog (WCAG 2.1.2).
+
+### 3.1 Modal Dialog Keyboard & Background Isolation
+- **Focus Containment**: When a modal opens, focus moves to the first interactive element or container. `Tab` and `Shift+Tab` wrap within the active dialog controls.
+- **Background Interactivity (`inert`)**: All background siblings across the DOM tree receive the native `inert` attribute and `aria-hidden="true"`. Ancestors of the active dialog are NEVER made inert, ensuring child and portaled modals remain fully interactive.
+- **Background Scrolling Lock**: Document body scrolling is locked using reference counting (`acquireScrollLock`). Scrollbar width is compensated to prevent desktop layout shift. Internal modal content scrolling is fully preserved.
+- **Focus Restoration**: Upon modal closure via close button, Cancel, or `Escape`, focus is restored to the triggering element. If the original trigger was removed from the DOM, focus falls back safely to `#main-content`.
+
+### 3.2 Global Keyboard Shortcuts Help
+- A dedicated keyboard shortcuts help icon (`Keyboard` icon) is positioned in the global application header.
+- Accessible name: `"Keyboard shortcuts help"`.
+- Opens an accessible `KeyboardShortcutsModal` displaying verified, currently supported shortcuts categorized into General Navigation, Workspace Screen Tabs, Dialogs, and Forms.
 
 ---
 

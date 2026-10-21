@@ -1,6 +1,12 @@
 // frontend/shared/design-system/styles/_modals.scss - Modal & Dialog Styles
 @use 'variables' as *;
 
+// Global body scroll lock when modal or dialog is active
+body.enl-modal-open,
+body.enl-body-freeze {
+  overflow: hidden !important;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

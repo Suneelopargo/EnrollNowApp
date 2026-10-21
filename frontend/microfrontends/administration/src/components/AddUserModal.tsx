@@ -372,6 +372,19 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
       if (Object.keys(validationErrors).length > 0) {
         setErrors(validationErrors);
+        // Move focus to first invalid field per WCAG 2.4.3 Focus Order & 3.3.1 Error Identification
+        const fieldIds: Record<string, string> = {
+          firstName: 'site-admin-first-name',
+          lastName: 'site-admin-last-name',
+          email: 'site-admin-email',
+        };
+        const firstInvalid = ['firstName', 'lastName', 'email'].find(
+          (k) => validationErrors[k as keyof typeof validationErrors]
+        );
+        if (firstInvalid && fieldIds[firstInvalid]) {
+          const el = document.getElementById(fieldIds[firstInvalid]);
+          el?.focus();
+        }
         return;
       }
     }

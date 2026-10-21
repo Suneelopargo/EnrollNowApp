@@ -37,25 +37,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
     setConfirmInput('');
   }, [state?.id]);
 
-  // Lock background scrolling
-  useEffect(() => {
-    if (!isOpen) {
-      if (typeof document !== 'undefined') {
-        document.body.classList.remove('enl-body-freeze');
-      }
-      return;
-    }
-
-    if (typeof document !== 'undefined') {
-      document.body.classList.add('enl-body-freeze');
-    }
-
-    return () => {
-      if (typeof document !== 'undefined') {
-        document.body.classList.remove('enl-body-freeze');
-      }
-    };
-  }, [isOpen]);
+  // Note: Background scroll-lock & inert are handled via useFocusTrap reference counting
 
   if (!isOpen || !state) {
     return null;

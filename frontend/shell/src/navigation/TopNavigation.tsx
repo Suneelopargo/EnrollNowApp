@@ -5,6 +5,7 @@ import { useNavigation } from './NavigationContext';
 import { useAuth } from '../auth/AuthContext';
 import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
+import { KeyboardShortcutsModal } from '../../../shared/accessibility/KeyboardShortcutsModal';
 import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
 import { administrationApi } from '../../../shared/api/administrationApi';
 import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
@@ -29,6 +30,7 @@ import {
   Sparkles,
   Home,
   MoreVertical,
+  Keyboard,
   LucideIcon,
 } from 'lucide-react';
 
@@ -71,6 +73,7 @@ export const TopNavigation: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isCampusOpen, setIsCampusOpen] = useState(false);
   const [isStudyActionsOpen, setIsStudyActionsOpen] = useState(false);
@@ -432,7 +435,17 @@ export const TopNavigation: React.FC = () => {
 
           {/* Right: Notifications, User Profile Pill, Logout */}
           <div className="enl-header-right">
-            {/* Notification Bell */}
+            {/* Keyboard Shortcuts Help */}
+            <button
+              type="button"
+              className="enl-icon-action-btn enl-icon-action-btn--shortcuts"
+              onClick={() => setIsShortcutsHelpOpen(true)}
+              aria-label="Keyboard shortcuts help"
+              title="Keyboard shortcuts help"
+            >
+              <Keyboard size={18} strokeWidth={2.2} aria-hidden="true" />
+            </button>
+
             {/* User Profile */}
             <UserMenu />
 
@@ -608,6 +621,12 @@ export const TopNavigation: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* Accessible Global Keyboard Shortcuts Help Modal */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsHelpOpen}
+        onClose={() => setIsShortcutsHelpOpen(false)}
+      />
     </>
   );
 };
