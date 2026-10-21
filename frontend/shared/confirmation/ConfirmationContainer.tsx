@@ -12,6 +12,11 @@ import {
 import { confirmation } from './confirmationManager';
 import { useConfirmation } from './useConfirmation';
 import { ConfirmationIntent } from './types';
+import { useFocusTrap } from '../accessibility/useFocusTrap';
+
+// Singleton registry to prevent multiple active ConfirmationContainers from colliding
+let primaryHostInstanceId: string | null = null;
+const registeredHosts = new Set<string>();
 
 export interface ConfirmationContainerProps {
   className?: string;
@@ -20,44 +25,45 @@ export interface ConfirmationContainerProps {
 export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
   className = '',
 }) => {
+  const instanceId = React.useId();
+  const [isPrimaryHost, setIsPrimaryHost] = useState(true);
+
+  useEffect(() => {
+    registeredHosts.add(instanceId);
+    if (!primaryHostInstanceId) {
+      primaryHostInstanceId = instanceId;
+      setIsPrimaryHost(true);
+    } else {
+      setIsPrimaryHost(primaryHostInstanceId === instanceId);
+    }
+
+    return () => {
+      registeredHosts.delete(instanceId);
+      if (primaryHostInstanceId === instanceId) {
+        primaryHostInstanceId = registeredHosts.values().next().value || null;
+      }
+    };
+  }, [instanceId]);
+
   const { state, isOpen, isLoading } = useConfirmation();
   const [confirmInput, setConfirmInput] = useState('');
+
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: isOpen && isPrimaryHost,
+    onEscape: () => {
+      if (!isLoading) confirmation.handleCancel();
+    },
+    returnFocus: true,
+  });
 
   // Reset confirmation input when dialog opens or changes
   useEffect(() => {
     setConfirmInput('');
   }, [state?.id]);
 
-  // Lock background scrolling and attach keyboard shortcuts
-  useEffect(() => {
-    if (!isOpen) {
-      if (typeof document !== 'undefined') {
-        document.body.classList.remove('enl-body-freeze');
-      }
-      return;
-    }
+  // Note: Background scroll-lock & inert are handled via useFocusTrap reference counting
 
-    if (typeof document !== 'undefined') {
-      document.body.classList.add('enl-body-freeze');
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isLoading) {
-        confirmation.handleCancel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      if (typeof document !== 'undefined') {
-        document.body.classList.remove('enl-body-freeze');
-      }
-    };
-  }, [isOpen, isLoading]);
-
-  if (!isOpen || !state) {
+  if (!isOpen || !state || !isPrimaryHost) {
     return null;
   }
 
@@ -117,12 +123,15 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
       role="presentation"
     >
       <div
+        ref={trapRef}
+        tabIndex={-1}
         className={`enl-confirm-dialog enl-confirm-dialog--${intent}`}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="enl-confirm-title"
         aria-describedby="enl-confirm-message"
         aria-busy={isLoading}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Icon, Title, and Close Button */}
         <div className="enl-confirm-header">
@@ -144,7 +153,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
             disabled={isLoading}
             aria-label="Dismiss dialog"
           >
-            <X size={18} strokeWidth={2.2} />
+            <X size={18} strokeWidth={2.2} aria-hidden="true" />
           </button>
         </div>
 
@@ -197,7 +206,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
           {/* Inline Error Banner if onConfirm Rejected */}
           {errorMessage && (
             <div className="enl-confirm-error" role="alert">
-              <AlertCircle size={17} className="enl-confirm-error-icon" />
+              <AlertCircle size={17} className="enl-confirm-error-icon" aria-hidden="true" />
               <div className="enl-confirm-error-text">{errorMessage}</div>
             </div>
           )}
@@ -222,7 +231,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
           >
             {isLoading ? (
               <>
-                <Loader2 size={16} className="enl-confirm-spinner" />
+                <Loader2 size={16} className="enl-confirm-spinner" aria-hidden="true" />
                 <span>{loadingText}</span>
               </>
             ) : (

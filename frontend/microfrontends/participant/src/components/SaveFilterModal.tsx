@@ -63,12 +63,19 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
               setFilterName(e.target.value);
               if (error) setError('');
             }}
-            placeholder={error || 'Enter Filter Name'}
+            placeholder={!filterName && error ? error : 'Enter Filter Name'}
             autoFocus
             required
+            aria-required="true"
             className="form-input"
             aria-invalid={!!error}
+            aria-describedby={error ? 'saved-filter-name-error' : undefined}
           />
+          {error && (
+            <div id="saved-filter-name-error" className="sr-only" role="alert">
+              {error}
+            </div>
+          )}
         </div>
       </form>
     </Modal>

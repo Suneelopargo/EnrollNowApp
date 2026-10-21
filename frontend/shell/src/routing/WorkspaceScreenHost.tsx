@@ -1,7 +1,8 @@
 // frontend/shell/src/routing/WorkspaceScreenHost.tsx - Keep-Alive Multi-Screen Workspace Host
 import React from 'react';
 import { CircleHelp } from 'lucide-react';
-import { useTabWorkspace } from '../navigation/TabWorkspaceContext';
+import { useAuth } from '../auth/AuthContext';
+import { useTabWorkspace, isTabAuthorizedForUser } from '../navigation/TabWorkspaceContext';
 import { LoadingSpinner } from '../../../shared/design-system/components/LoadingSpinner';
 import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
@@ -19,6 +20,7 @@ import {
 
 export const WorkspaceScreenHost: React.FC = () => {
   const { openTabs, activeTabId, isRefreshing } = useTabWorkspace();
+  const { user } = useAuth();
 
   const renderModuleContent = (tabId: string, refreshCount: number) => {
     switch (tabId) {
@@ -47,7 +49,8 @@ export const WorkspaceScreenHost: React.FC = () => {
     }
   };
 
-  const activeTab = openTabs.find((t) => t.id === activeTabId);
+  const authorizedTabs = openTabs.filter((tab) => isTabAuthorizedForUser(tab.id, user));
+  const activeTab = authorizedTabs.find((t) => t.id === activeTabId);
 
   return (
     <div className="enl-workspace-screen-host">
@@ -55,14 +58,14 @@ export const WorkspaceScreenHost: React.FC = () => {
       {isRefreshing && (
         <LoadingSpinner
           variant="overlay"
-          title="Please Wait "
+          title="Please Wait"
           message={`Refreshing ${activeTab?.title || 'Screen'} Data...`}
           subtitle="Updating records while preserving your workspace state"
         />
       )}
 
-      {/* Keep-Alive Screen Panes: All open tabs stay mounted in memory */}
-      {openTabs.map((tab) => {
+      {/* Keep-Alive Screen Panes: All authorized open tabs stay mounted in memory */}
+      {authorizedTabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         return (
           <div
@@ -70,9 +73,15 @@ export const WorkspaceScreenHost: React.FC = () => {
             id={`screen-pane-${tab.id}`}
             role="tabpanel"
             aria-labelledby={`tab-${tab.id}`}
+            hidden={!isActive}
+            aria-hidden={!isActive}
             className={`enl-screen-pane ${isActive ? 'enl-screen-pane--active' : 'enl-screen-pane--hidden'}`}
           >
-            <main className="page-container">
+            <main
+              id={isActive ? 'main-content' : undefined}
+              className="page-container"
+              tabIndex={-1}
+            >
               <div className="page-context-banner">
                 <h1>{tab.title}</h1>
                 <a

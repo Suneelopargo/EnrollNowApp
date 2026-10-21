@@ -15,13 +15,13 @@ export interface Participant {
 }
 
 export const participantApi = {
-  async getParticipants(): Promise<Participant[]> {
-    const res = await apiClient.get('/api/v1/participants');
+  async getParticipants(config?: any): Promise<Participant[]> {
+    const res = await apiClient.get('/api/v1/participants', { skipToast: true, ...config });
     return res.data?.data || [];
   },
 
-  async getParticipant(id: string | number): Promise<Participant> {
-    const res = await apiClient.get(`/api/v1/participants/${id}`);
+  async getParticipant(id: string | number, config?: any): Promise<Participant> {
+    const res = await apiClient.get(`/api/v1/participants/${id}`, { skipToast: true, ...config });
     return res.data?.data;
   },
 

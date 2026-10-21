@@ -10,15 +10,20 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        secure: false,
       },
     },
   },
   preview: {
     port: 3000,
     cors: true,
-  },
-  define: {
-    'process.env.NODE_ENV': JSON.stringify('production'),
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   build: {
     target: 'esnext',

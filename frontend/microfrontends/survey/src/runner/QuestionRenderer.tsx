@@ -21,7 +21,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
     switch (question.type) {
       case 'Single Choice':
         return (
-          <div className="space-y-2 mt-2">
+          <fieldset className="space-y-2 mt-2" aria-required={question.required}>
+            <legend className="sr-only">{question.text}</legend>
             {question.options?.map((opt, i) => (
               <label key={i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
                 <input
@@ -31,12 +32,15 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                   checked={value === opt}
                   onChange={(e) => onChange(e.target.value)}
                   disabled={disabled}
+                  required={question.required}
+                  aria-required={question.required}
+                  aria-describedby={question.description ? `q_desc_${question.id || index}` : undefined}
                   className="w-4 h-4 text-sky-600 focus:ring-sky-500"
                 />
                 <span className="text-sm font-medium text-slate-700">{opt}</span>
               </label>
             ))}
-          </div>
+          </fieldset>
         );
 
       case 'Multiple Choice': {
@@ -49,7 +53,8 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
           }
         };
         return (
-          <div className="space-y-2 mt-2">
+          <fieldset className="space-y-2 mt-2" aria-required={question.required}>
+            <legend className="sr-only">{question.text}</legend>
             {question.options?.map((opt, i) => (
               <label key={i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors">
                 <input
@@ -57,21 +62,27 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
                   checked={selectedList.includes(opt)}
                   onChange={() => handleToggle(opt)}
                   disabled={disabled}
+                  aria-describedby={question.description ? `q_desc_${question.id || index}` : undefined}
                   className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
                 />
                 <span className="text-sm font-medium text-slate-700">{opt}</span>
               </label>
             ))}
-          </div>
+          </fieldset>
         );
       }
 
       case 'Dropdown':
         return (
           <select
+            id={`q_input_${question.id || index}`}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
+            required={question.required}
+            aria-required={question.required}
+            aria-describedby={question.description ? `q_desc_${question.id || index}` : undefined}
+            aria-label={question.text}
             className="w-full mt-2 p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-sky-500 focus:outline-none"
           >
             <option value="">-- Please select an option --</option>
@@ -142,10 +153,15 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       case 'Phone':
         return (
           <input
+            id={`q_input_${question.id || index}`}
             type={question.type === 'Email' ? 'email' : question.type === 'Phone' ? 'tel' : 'text'}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
+            required={question.required}
+            aria-required={question.required}
+            aria-describedby={question.description ? `q_desc_${question.id || index}` : undefined}
+            aria-label={question.text}
             placeholder={`Enter ${question.type.toLowerCase()}...`}
             className="w-full mt-2 p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-sky-500 focus:outline-none"
           />
@@ -154,10 +170,15 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       case 'Paragraph':
         return (
           <textarea
+            id={`q_input_${question.id || index}`}
             rows={4}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
+            required={question.required}
+            aria-required={question.required}
+            aria-describedby={question.description ? `q_desc_${question.id || index}` : undefined}
+            aria-label={question.text}
             placeholder="Type your response here..."
             className="w-full mt-2 p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-sky-500 focus:outline-none resize-y"
           />
@@ -166,10 +187,15 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       case 'Number':
         return (
           <input
+            id={`q_input_${question.id || index}`}
             type="number"
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
+            required={question.required}
+            aria-required={question.required}
+            aria-describedby={question.description ? `q_desc_${question.id || index}` : undefined}
+            aria-label={question.text}
             placeholder="Enter numeric value..."
             className="w-full mt-2 p-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-sky-500 focus:outline-none"
           />
@@ -273,10 +299,10 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   return (
     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2 transition-all hover:border-slate-300">
       <div className="flex items-start justify-between gap-2">
-        <label className="text-sm font-semibold text-slate-800 block">
-          <span className="text-slate-400 font-mono mr-2">Q{index + 1}.</span>
+        <label htmlFor={`q_input_${question.id || index}`} className="text-sm font-semibold text-slate-800 block">
+          <span className="text-slate-400 font-mono mr-2" aria-hidden="true">Q{index + 1}.</span>
           {question.text}
-          {question.required && <span className="text-red-500 ml-1 font-bold">*</span>}
+          {question.required && <span className="text-red-500 ml-1 font-bold" aria-hidden="true">*</span>}
         </label>
         <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
           {question.type}
@@ -284,7 +310,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       </div>
 
       {question.description && (
-        <p className="text-xs text-slate-500 italic mb-2">{question.description}</p>
+        <p id={`q_desc_${question.id || index}`} className="text-xs text-slate-500 italic mb-2">{question.description}</p>
       )}
 
       {renderControl()}

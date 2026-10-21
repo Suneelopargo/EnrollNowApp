@@ -6,6 +6,8 @@ export interface ToastOptions {
   title?: string;
   duration?: number; // Duration in ms before auto-dismiss (0 for sticky)
   dismissible?: boolean;
+  sticky?: boolean;
+  critical?: boolean;
 }
 
 export interface ToastItem {
@@ -15,4 +17,5 @@ export interface ToastItem {
   message: string;
   duration: number;
   timestamp: number;
+  sticky?: boolean;
 }

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { authApi } from '../../../shared/api/authApi';
+import { toast } from '../../../shared/toaster';
 import '../../../shared/design-system/styles/index.scss';
 
 // Reusable Code-Driven Marketing & Brand Components
@@ -25,6 +26,10 @@ import { FloatingInfoCard } from './components/FloatingInfoCard';
 import { LoginStatistics } from './components/LoginStatistics';
 import { loginContent, defaultStatistics } from './data/loginContent';
 
+import { ActivateAccountPage } from './components/ActivateAccountPage';
+import { RecoverPasswordPage } from './components/RecoverPasswordPage';
+import { ResetPasswordPage } from './components/ResetPasswordPage';
+
 // Export components for consumers and unit testing
 export {
   LoginMarketingPanel,
@@ -36,6 +41,9 @@ export {
   LoginStatistics,
   loginContent,
   defaultStatistics,
+  ActivateAccountPage,
+  RecoverPasswordPage,
+  ResetPasswordPage,
 };
 
 export interface IdentityModuleProps {
@@ -52,6 +60,21 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let warningMsg: string | null = null;
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      warningMsg = urlParams.get('warning');
+    }
+    if (!warningMsg && typeof history !== 'undefined' && (history.state as any)?.usr?.warning) {
+      warningMsg = (history.state as any).usr.warning;
+    }
+
+    if (warningMsg) {
+      toast.warning(warningMsg);
+    }
+  }, []);
 
   useEffect(() => {
     if (context.user && context.token) {
@@ -182,8 +205,8 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
 
               {/* Error Alert */}
               {error && (
-                <div className="enl-error-alert" role="alert">
-                  <AlertCircle size={15} />
+                <div id="enl-login-error" className="enl-error-alert" role="alert" aria-live="assertive" aria-atomic="true">
+                  <AlertCircle size={15} aria-hidden="true" />
                   <span>{error}</span>
                 </div>
               )}
@@ -204,7 +227,11 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       placeholder="Enter your email address"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      autoComplete="off"
+                      autoComplete="username"
+                      required
+                      aria-required="true"
+                      aria-invalid={!!error}
+                      aria-describedby={error ? 'enl-login-error' : undefined}
                     />
                   </div>
                 </div>
@@ -223,31 +250,37 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="off"
+                      autoComplete="current-password"
+                      required
+                      aria-required="true"
+                      aria-invalid={!!error}
+                      aria-describedby={error ? 'enl-login-error' : undefined}
                     />
                     <button
                       type="button"
                       className="enl-toggle-eye"
                       onClick={() => setShowPassword((prev) => !prev)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                     </button>
                   </div>
                 </div>
 
                 {/* Options Row */}
                 <div className="enl-options-row">
-                  <label className="enl-remember-label">
-                   
-                    <span></span>
-                  </label>
+                  <div className="enl-remember-spacer" aria-hidden="true" />
                   <a
-                    href="#forgot-password"
+                    href="/recover-password"
                     className="enl-forgot-link"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert('Password reset instructions routed to your administrator.');
+                      if (context.navigate) {
+                        context.navigate('/recover-password');
+                      } else {
+                        window.location.href = '/recover-password';
+                      }
                     }}
                   >
                     Forgot password?

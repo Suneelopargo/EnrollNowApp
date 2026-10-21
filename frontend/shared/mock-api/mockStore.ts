@@ -1,3 +1,4 @@
+import approvedDemoDashboardData from '../../microfrontends/dashboard/src/demo/dashboard-demo-data.json';
 // frontend/shared/mock-api/mockStore.ts - In-Memory State Store for Mock API
 import {
   MOCK_USERS,
@@ -9,7 +10,6 @@ import {
   MOCK_ADMIN_ROLES,
   MOCK_ADMIN_LOCATIONS,
   MOCK_ADMIN_AUDIT_LOGS,
-  MOCK_DASHBOARD_OVERVIEW,
   MOCK_CAMPAIGNS,
   MOCK_SURVEYS,
   MOCK_SURVEY_DASHBOARD,
@@ -18,6 +18,28 @@ import {
   MOCK_DOCUMENTS,
   MockUserRecord,
 } from './mockData';
+
+export const DEFAULT_MOCK_SECURITY_SETTINGS = {
+  id: '33333333-3333-3333-3333-333333333333',
+  tenantId: '11111111-1111-1111-1111-111111111111',
+  maxFailedLoginAttempts: 10,
+  preventConcurrentSessions: false,
+  inactivityLogoutMinutes: 30,
+  inactivityLockDays: 90,
+  passwordExpiryDays: 300,
+  passwordHistoryCount: 4,
+  minimumPasswordLength: 10,
+  minimumPasswordStrength: 'MODERATE',
+  requireDigit: true,
+  requireSymbol: true,
+  requireMixedCase: true,
+};
+
+export const DEFAULT_MOCK_GENERAL_SETTINGS = {
+  id: '44444444-4444-4444-4444-444444444444',
+  tenantId: '11111111-1111-1111-1111-111111111111',
+  defaultTextReply: 'This is an automated message. We can not receive replies to this number.',
+};
 
 class MockStore {
   private users: MockUserRecord[] = [];
@@ -30,6 +52,8 @@ class MockStore {
   private campaigns: any[] = [];
   private communications: any[] = [];
   private documents: any[] = [];
+  private securitySettings: any = {};
+  private generalSettings: any = {};
 
   constructor() {
     this.reset();
@@ -46,6 +70,41 @@ class MockStore {
     this.campaigns = JSON.parse(JSON.stringify(MOCK_CAMPAIGNS));
     this.communications = JSON.parse(JSON.stringify(MOCK_COMMUNICATIONS));
     this.documents = JSON.parse(JSON.stringify(MOCK_DOCUMENTS));
+    this.securitySettings = JSON.parse(JSON.stringify(DEFAULT_MOCK_SECURITY_SETTINGS));
+    this.generalSettings = JSON.parse(JSON.stringify(DEFAULT_MOCK_GENERAL_SETTINGS));
+  }
+
+  // Security Settings
+  public getSecuritySettings(): any {
+    return { ...this.securitySettings };
+  }
+
+  public updateSecuritySettings(payload: any): any {
+    this.securitySettings = {
+      ...this.securitySettings,
+      ...payload,
+      updatedAt: new Date().toISOString(),
+    };
+    return { ...this.securitySettings };
+  }
+
+  public resetSecuritySettings(): any {
+    this.securitySettings = JSON.parse(JSON.stringify(DEFAULT_MOCK_SECURITY_SETTINGS));
+    return { ...this.securitySettings };
+  }
+
+  // General Settings
+  public getGeneralSettings(): any {
+    return { ...this.generalSettings };
+  }
+
+  public updateGeneralSettings(payload: any): any {
+    this.generalSettings = {
+      ...this.generalSettings,
+      ...payload,
+      updatedAt: new Date().toISOString(),
+    };
+    return { ...this.generalSettings };
   }
 
   // Users & Auth
@@ -58,18 +117,17 @@ class MockStore {
     return this.users.find((u) => u.user.username.toLowerCase() === normalized || u.user.email.toLowerCase() === normalized);
   }
 
-  public findUserByToken(token: string): MockUserRecord | undefined {
-    return this.users.find((u) => u.token === token);
+  public findUserById(id: string): MockUserRecord | undefined {
+    return this.users.find((u) => u.user.id === id);
   }
 
-  // Dashboard Overview
-  public getDashboardOverview(): any {
-    return {
-      ...MOCK_DASHBOARD_OVERVIEW,
-      totalStudies: this.studies.length,
-      activeStudies: this.studies.filter((s) => s.status === 'ACTIVE').length,
-      totalParticipants: this.participants.length + 2447,
-    };
+  public findUserByEmail(email: string): MockUserRecord | undefined {
+    const normalized = (email || '').trim().toLowerCase();
+    return this.users.find((u) => u.user.email.toLowerCase() === normalized);
+  }
+
+  public findUserByToken(token: string): MockUserRecord | undefined {
+    return this.users.find((u) => u.token === token);
   }
 
   // Studies
@@ -77,28 +135,30 @@ class MockStore {
     return [...this.studies];
   }
 
-  public findStudy(id: string | number): any {
-    const sid = String(id);
-    return this.studies.find((s) => String(s.id) === sid || s.studyId === sid);
+  public findStudy(id: string): any {
+    return this.studies.find((s) => s.id === id);
   }
 
-  public createStudy(data: any): any {
+  public createStudy(study: any): any {
     const newStudy = {
-      id: `ST-${String(this.studies.length + 1).padStart(3, '0')}`,
-      studyId: `ST-${String(this.studies.length + 1).padStart(3, '0')}`,
-      protocolNumber: `EN-2026-${String(this.studies.length + 1).padStart(3, '0')}`,
-      status: 'ACTIVE',
-      ...data,
+      id: `study-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...study,
     };
-    this.studies.push(newStudy);
+    this.studies.unshift(newStudy);
     return newStudy;
   }
 
-  public updateStudy(id: string | number, data: any): any {
-    const study = this.findStudy(id);
-    if (!study) return null;
-    Object.assign(study, data);
-    return study;
+  public updateStudy(id: string, patch: any): any {
+    const index = this.studies.findIndex((s) => s.id === id);
+    if (index === -1) return null;
+    this.studies[index] = {
+      ...this.studies[index],
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.studies[index];
   }
 
   // Participants
@@ -107,15 +167,32 @@ class MockStore {
   }
 
   public findParticipant(id: string | number): any {
-    const pid = String(id);
-    return this.participants.find((p) => String(p.id) === pid || p.participantId === pid);
+    return this.participants.find((p) => String(p.id) === String(id));
+  }
+
+  public createParticipant(participant: any): any {
+    const newP = {
+      id: `p-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      ...participant,
+    };
+    this.participants.unshift(newP);
+    return newP;
+  }
+
+  public updateParticipant(id: string | number, patch: any): any {
+    const index = this.participants.findIndex((p) => String(p.id) === String(id));
+    if (index === -1) return null;
+    this.participants[index] = {
+      ...this.participants[index],
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    return this.participants[index];
   }
 
   public updateParticipantStatus(id: string | number, status: string): any {
-    const participant = this.findParticipant(id);
-    if (!participant) return null;
-    participant.status = status;
-    return participant;
+    return this.updateParticipant(id, { status });
   }
 
   // Sites
@@ -123,55 +200,56 @@ class MockStore {
     return [...this.sites];
   }
 
-  public findSite(code: string): any {
-    const normalized = (code || '').toLowerCase();
-    return this.sites.find((s) => s.siteCode.toLowerCase() === normalized);
+  public findSite(id: string | number): any {
+    return this.sites.find((s) => String(s.id) === String(id));
   }
 
   // Admin
   public getAdminDashboard(): any {
-    return {
-      ...MOCK_ADMIN_DASHBOARD,
-      totalUsers: this.adminUsers.length + 46,
-    };
+    return { ...MOCK_ADMIN_DASHBOARD };
   }
 
   public getAdminUsers(): any[] {
     return [...this.adminUsers];
   }
 
-  public findAdminUser(id: number | string): any {
-    return this.adminUsers.find((u) => String(u.id) === String(id));
+  public findAdminUser(id: string): any {
+    return this.adminUsers.find((u) => u.id === id);
   }
 
-  public createAdminUser(data: any): any {
-    const newUser = {
-      id: this.adminUsers.length + 1,
-      status: 'ACTIVE',
+  public createAdminUser(user: any): any {
+    const newAdmin = {
+      id: `admin-${Date.now()}`,
+      status: 'active',
       createdAt: new Date().toISOString(),
-      ...data,
+      ...user,
     };
-    this.adminUsers.push(newUser);
-    return newUser;
+    this.adminUsers.unshift(newAdmin);
+    return newAdmin;
   }
 
-  public updateAdminUser(id: number | string, data: any): any {
-    const user = this.findAdminUser(id);
-    if (!user) return null;
-    Object.assign(user, data);
-    return user;
+  public updateAdminUser(id: string, patch: any): any {
+    const index = this.adminUsers.findIndex((u) => u.id === id);
+    if (index === -1) return null;
+    this.adminUsers[index] = { ...this.adminUsers[index], ...patch };
+    return this.adminUsers[index];
   }
 
   public getAdminRoles(): any[] {
-    return MOCK_ADMIN_ROLES;
+    return [...MOCK_ADMIN_ROLES];
   }
 
   public getAdminLocations(): any[] {
-    return MOCK_ADMIN_LOCATIONS;
+    return [...MOCK_ADMIN_LOCATIONS];
   }
 
   public getAdminAuditLogs(): any[] {
-    return MOCK_ADMIN_AUDIT_LOGS;
+    return [...MOCK_ADMIN_AUDIT_LOGS];
+  }
+
+  // Dashboard Overview
+  public getDashboardOverview(): any {
+    return { ...approvedDemoDashboardData.overview, recentStudies: approvedDemoDashboardData.studies };
   }
 
   // Campaigns
@@ -179,8 +257,8 @@ class MockStore {
     return [...this.campaigns];
   }
 
-  public findCampaign(id: string | number): any {
-    return this.campaigns.find((c) => String(c.id) === String(id) || c.campaignId === String(id));
+  public findCampaign(id: string): any {
+    return this.campaigns.find((c) => c.campaignId === id);
   }
 
   // Surveys
@@ -188,12 +266,12 @@ class MockStore {
     return [...this.surveys];
   }
 
-  public findSurvey(id: number | string): any {
-    return this.surveys.find((s) => String(s.id) === String(id));
+  public getSurveyDashboard(): any {
+    return { ...MOCK_SURVEY_DASHBOARD };
   }
 
-  public getSurveyDashboard(): any {
-    return MOCK_SURVEY_DASHBOARD;
+  public findSurvey(id: string): any {
+    return this.surveys.find((s) => s.id === id || s.surveyId === id);
   }
 
   // Tasks
@@ -201,22 +279,23 @@ class MockStore {
     return [...this.tasks];
   }
 
-  public findTask(taskId: string): any {
-    return this.tasks.find((t) => t.taskId === taskId);
+  public findTask(id: string): any {
+    return this.tasks.find((t) => t.id === id);
   }
 
-  public createTask(data: any): any {
-    const newTask = {
-      taskId: `TSK-${this.tasks.length + 101}`,
+  public createTask(task: any): any {
+    const newT = {
+      id: `task-${Date.now()}`,
       status: 'PENDING',
-      ...data,
+      createdAt: new Date().toISOString(),
+      ...task,
     };
-    this.tasks.push(newTask);
-    return newTask;
+    this.tasks.unshift(newT);
+    return newT;
   }
 
-  public updateTaskStatus(taskId: string, status: string): any {
-    const task = this.findTask(taskId);
+  public updateTaskStatus(id: string, status: string): any {
+    const task = this.tasks.find((t) => t.id === id);
     if (!task) return null;
     task.status = status;
     return task;

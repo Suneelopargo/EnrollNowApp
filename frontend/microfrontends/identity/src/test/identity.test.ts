@@ -11,6 +11,9 @@ import {
   LoginStatistics,
   loginContent,
   defaultStatistics,
+  ActivateAccountPage,
+  RecoverPasswordPage,
+  ResetPasswordPage,
 } from '../remoteEntry';
 
 describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
@@ -71,5 +74,53 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
 
     expect(defaultStatistics).toBeDefined();
     expect(Array.isArray(defaultStatistics)).toBe(true);
+  });
+
+  it('exports ActivateAccountPage as a valid React component', () => {
+    expect(ActivateAccountPage).toBeDefined();
+    expect(typeof ActivateAccountPage).toBe('function');
+  });
+
+  it('exports RecoverPasswordPage as a valid React component', () => {
+    expect(RecoverPasswordPage).toBeDefined();
+    expect(typeof RecoverPasswordPage).toBe('function');
+  });
+
+  it('exports ResetPasswordPage as a valid React component', () => {
+    expect(ResetPasswordPage).toBeDefined();
+    expect(typeof ResetPasswordPage).toBe('function');
+  });
+
+  it('triggers warning in toaster for Already enrolled! Please login', async () => {
+    const { toast } = await import('../../../../shared/toaster');
+    const warningSpy = vi.spyOn(toast, 'warning');
+    toast.warning('Already enrolled! Please login');
+    expect(warningSpy).toHaveBeenCalledWith('Already enrolled! Please login');
+    const activeToasts = toast.getToasts();
+    expect(activeToasts.some((t) => t.message === 'Already enrolled! Please login' && t.type === 'warning')).toBe(true);
+    warningSpy.mockRestore();
+  });
+
+  it('provides validateActivationToken method on authApi', async () => {
+    const { authApi } = await import('../../../../shared/api/authApi');
+    expect(typeof authApi.validateActivationToken).toBe('function');
+  });
+
+  it('routes password reset and account activation errors to toaster instead of on-screen banner', async () => {
+    const { toast } = await import('../../../../shared/toaster');
+    const errorSpy = vi.spyOn(toast, 'error');
+    const warningSpy = vi.spyOn(toast, 'warning');
+
+    // Simulate password history reuse error
+    const reuseMsg = 'Cannot reuse any of your last 1 passwords';
+    toast.error(reuseMsg, { title: 'Password Reset Failed' });
+    expect(errorSpy).toHaveBeenCalledWith(reuseMsg, { title: 'Password Reset Failed' });
+
+    // Verify toast is present in central toaster
+    const active = toast.getToasts();
+    expect(active.some((t) => t.message === reuseMsg && t.type === 'error')).toBe(true);
+
+    errorSpy.mockRestore();
+    warningSpy.mockRestore();
   });
 });

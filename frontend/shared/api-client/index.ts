@@ -1,9 +1,10 @@
 // frontend/shared/api-client/index.ts - Authoritative Centralized API Client & Interceptors
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosAdapter } from 'axios';
-import { getApiBaseUrl, getApiMode, ApiMode } from '../api-config';
+import { getApiBaseUrl, getApiMode, getTenantId, ApiMode } from '../api-config';
 import { telemetry } from '../telemetry';
 import { mockAdapter } from '../mock-api/mockAdapter';
 import { toast } from '../toaster';
+import { loader } from '../loader';
 
 export interface ApiHeaderContext {
   getToken?: () => string | null;
@@ -89,9 +90,13 @@ export function getAccessToken(): string | null {
     const token = activeHeaderProvider.getToken();
     if (token && token.trim().length > 0) return token.trim();
   }
-  if (typeof localStorage !== 'undefined') {
-    const token = localStorage.getItem('enrollnow_token');
-    if (token && token.trim().length > 0) return token.trim();
+  if (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function') {
+    try {
+      const token = localStorage.getItem('enrollnow_token');
+      if (token && token.trim().length > 0) return token.trim();
+    } catch {
+      // Safe fallback
+    }
   }
   return null;
 }
@@ -198,10 +203,14 @@ export function normalizeApiError(error: any): NormalizedApiError {
 /**
  * Clears current session tokens and notifies listeners without redirect loops.
  */
-export function handleSessionExpired(): void {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('enrollnow_token');
-    localStorage.removeItem('enrollnow_user');
+export function handleSessionExpired(reason: string = 'SESSION_EXPIRED', message?: string): void {
+  if (typeof localStorage !== 'undefined' && typeof localStorage.removeItem === 'function') {
+    try {
+      localStorage.removeItem('enrollnow_token');
+      localStorage.removeItem('enrollnow_user');
+    } catch {
+      // Safe fallback
+    }
   }
 
   unauthorizedCallbacks.forEach((cb) => {
@@ -215,7 +224,7 @@ export function handleSessionExpired(): void {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('enrollnow_auth_change', {
-        detail: { logout: true, reason: 'SESSION_EXPIRED' },
+        detail: { logout: true, reason, message },
       })
     );
   }
@@ -228,6 +237,36 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
   // REQUEST INTERCEPTOR
   instance.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
+      // 0. URL Normalization: Enforce relative /api architecture and prevent duplicate prefixes
+      if (config.url) {
+        let url = config.url.trim();
+
+        // If a request accidentally included the localhost backend origin, strip it
+        // so it routes through the centralized proxy
+        if (url.startsWith('http://localhost:8080') || url.startsWith('http://127.0.0.1:8080')) {
+          url = url.replace(/^http:\/\/(localhost|127\.0\.0\.1):8080/, '');
+        }
+
+        const base = (config.baseURL || '').trim().replace(/\/+$/, '');
+
+        // If baseURL is '/api' (or ends with '/api') and the url also begins with '/api/',
+        // strip the leading '/api' so Axios doesn't generate '/api/api/...'
+        if (base === '/api' || base.endsWith('/api')) {
+          if (url.startsWith('/api/')) {
+            url = url.substring(4); // e.g. '/api/v1/studies' -> '/v1/studies'
+          } else if (url === '/api') {
+            url = '';
+          }
+        } else if (!base && !url.startsWith('http://') && !url.startsWith('https://')) {
+          // If no baseURL is configured, guarantee the URL starts with /api
+          if (!url.startsWith('/api/') && url !== '/api') {
+            url = `/api${url.startsWith('/') ? '' : '/'}${url}`;
+          }
+        }
+
+        config.url = url;
+      }
+
       // 1. Common Accept header
       if (!config.headers.Accept) {
         config.headers.Accept = 'application/json';
@@ -244,7 +283,7 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
       }
 
       // 3. Dynamic context headers (Tenant, Org, etc.)
-      const tenantId = activeHeaderProvider.getTenantId ? activeHeaderProvider.getTenantId() : null;
+      const tenantId = activeHeaderProvider.getTenantId ? activeHeaderProvider.getTenantId() : getTenantId();
       if (tenantId && !config.headers['X-Tenant-Id']) {
         config.headers['X-Tenant-Id'] = tenantId;
       }
@@ -268,18 +307,59 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         config.headers['Content-Type'] = 'application/json';
       }
 
+      // 6. Enterprise Global Loader: Automatically show loader for in-flight requests unless silenced
+      const skipLoader =
+        Boolean((config as any).skipLoader) ||
+        Boolean((config as any).silent) ||
+        Boolean(config.headers?.['x-skip-loader'] === 'true') ||
+        Boolean((config.headers as any)?.get?.('x-skip-loader') === 'true');
+
+      if (!skipLoader) {
+        (config as any).__hasActiveLoader = true;
+        const loaderMsg = (config as any).loaderMessage || 'Processing Request & Syncing Data...';
+        loader.show(loaderMsg, {
+          title: (config as any).loaderTitle || 'EnrollNow',
+          subtitle: (config as any).loaderSubtitle || 'Please wait while the server responds',
+        });
+      }
+
+      if ((config as any).skipToast || (config as any).silent) {
+        (config as any).skipToast = true;
+        if (config.headers && typeof (config.headers as any).set === 'function') {
+          (config.headers as any).set('x-skip-toast', 'true');
+        } else if (config.headers) {
+          config.headers['x-skip-toast'] = 'true';
+        }
+      }
+
       return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+      if ((error?.config as any)?.__hasActiveLoader) {
+        (error.config as any).__hasActiveLoader = false;
+        loader.hide();
+      }
+      return Promise.reject(error);
+    }
   );
 
   // RESPONSE INTERCEPTOR
   instance.interceptors.response.use(
-    (response: AxiosResponse) => response,
+    (response: AxiosResponse) => {
+      if ((response.config as any)?.__hasActiveLoader) {
+        (response.config as any).__hasActiveLoader = false;
+        loader.hide();
+      }
+      return response;
+    },
     async (error) => {
+      if ((error?.config as any)?.__hasActiveLoader) {
+        (error.config as any).__hasActiveLoader = false;
+        loader.hide();
+      }
       const normalized = normalizeApiError(error);
       const url = error.config?.url || '';
-      const isLoginRequest = url.includes('/api/v1/auth/login');
+      const isLoginRequest = url.includes('/auth/login');
 
       // Telemetry error tracking
       telemetry.track({
@@ -302,14 +382,32 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
 
         // Only expire session if it was an authenticated request, not failed credentials on login
         if (!isLoginRequest) {
-          handleSessionExpired();
+          const resData = error.response?.data;
+          const reason =
+            resData?.reason ||
+            (resData?.message?.includes('another browser') || resData?.message?.includes('concurrent')
+              ? 'NEW_LOGIN'
+              : 'SESSION_EXPIRED');
+          const message = resData?.message;
+          handleSessionExpired(reason, message);
         }
       } else if (normalized.status === 403 && options.onForbidden) {
         options.onForbidden();
       }
 
       // Automatically dispatch global error toast (unless explicitly silenced)
-      const skipToast = (error.config as any)?.skipToast || (error.config as any)?.silent;
+      const reqHeaders = error?.config?.headers;
+      const headerSkip =
+        Boolean(reqHeaders && typeof reqHeaders.get === 'function' && reqHeaders.get('x-skip-toast') === 'true') ||
+        reqHeaders?.['x-skip-toast'] === 'true' ||
+        reqHeaders?.['X-Skip-Toast'] === 'true';
+
+      const skipToast =
+        Boolean((error?.config as any)?.skipToast) ||
+        Boolean((error?.config as any)?.silent) ||
+        Boolean((error as any)?.skipToast) ||
+        Boolean((error as any)?.config?.skipToast) ||
+        headerSkip;
       if (!skipToast && !isLoginRequest) {
         toast.error(normalized.message, {
           title: normalized.code || `Error (${normalized.status || 'Network'})`,
@@ -358,6 +456,39 @@ export function createApiClient(options: CreateApiClientOptions = {}): AxiosInst
     baseURL: options.baseURL !== undefined ? options.baseURL : getApiBaseUrl(),
     timeout: options.timeout || 15000,
     adapter: dynamicAdapter,
+  });
+
+  // Preserve custom config flags (e.g. skipToast, skipLoader, silent) across Axios mergeConfig
+  const methods = ['get', 'delete', 'head', 'options'] as const;
+  methods.forEach((method) => {
+    const orig = (instance as any)[method].bind(instance);
+    (instance as any)[method] = function (url: string, config?: any) {
+      if (config && (config.skipToast || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-toast'] = 'true';
+      }
+      if (config && (config.skipLoader || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-loader'] = 'true';
+      }
+      return orig(url, config);
+    };
+  });
+
+  const bodyMethods = ['post', 'put', 'patch'] as const;
+  bodyMethods.forEach((method) => {
+    const orig = (instance as any)[method].bind(instance);
+    (instance as any)[method] = function (url: string, data?: any, config?: any) {
+      if (config && (config.skipToast || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-toast'] = 'true';
+      }
+      if (config && (config.skipLoader || config.silent)) {
+        if (!config.headers) config.headers = {};
+        config.headers['x-skip-loader'] = 'true';
+      }
+      return orig(url, data, config);
+    };
   });
 
   attachInterceptors(instance, options);

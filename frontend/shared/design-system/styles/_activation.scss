@@ -1,0 +1,377 @@
+// frontend/shared/design-system/styles/_activation.scss - Central Account Activation & Password Setup Styles
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.enl-activation-page {
+  position: relative;
+  width: 100vw;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #004b87;
+  padding: 40px 16px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+}
+
+.enl-activation-card {
+  width: 100%;
+  max-width: 440px;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  background-color: #00274c;
+  animation: enlActivationFadeIn 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes enlActivationFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+// Top White Brand Card
+.enl-activation-header {
+  background-color: #ffffff;
+  padding: 26px 24px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 28px 28px 0 0;
+
+  .enl-brand-container {
+    width: 100%;
+    max-width: 310px;
+    display: flex;
+    justify-content: center;
+
+    .enl-brand-svg {
+      width: 100%;
+      height: auto;
+    }
+  }
+}
+
+// Dark Navy Card Body
+.enl-activation-body {
+  background-color: #00274c;
+  padding: 24px 28px 20px;
+  color: #ffffff;
+}
+
+.enl-activation-welcome {
+  margin: 0 0 4px 0;
+  font-size: 19px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  line-height: 1.25;
+}
+
+.enl-activation-subtitle {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  line-height: 1.25;
+}
+
+.enl-activation-input-group {
+  margin-bottom: 12px;
+}
+
+.enl-activation-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 15px;
+  color: #0f172a;
+  background-color: #ffffff;
+  outline: none;
+  transition: all 150ms ease;
+
+  &::placeholder {
+    color: #64748b;
+    opacity: 0.85;
+  }
+
+  &:focus {
+    border-color: #ffcb05;
+    box-shadow: 0 0 0 3px rgba(255, 203, 5, 0.45);
+  }
+
+  &.is-filled {
+    background-color: #fffde7;
+  }
+
+  &.is-invalid {
+    border-color: #ef4444;
+    background-color: #fff5f5;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35);
+  }
+
+  &:disabled {
+    background-color: #f1f5f9;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+}
+
+// Validation Sections
+.enl-activation-meter-group {
+  margin-top: 10px;
+}
+
+.enl-activation-overall-status {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.enl-activation-test-title {
+  margin: 12px 0 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+// Test #1: Progress Meter Bar
+.enl-activation-meter-container {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.enl-activation-meter-bg {
+  width: 100%;
+  height: 11px;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.enl-activation-meter-fill {
+  height: 100%;
+  transition: width 200ms ease, background-color 200ms ease;
+
+  &.score-0, &.score-1 {
+    background-color: #ea580c;
+  }
+
+  &.score-2 {
+    background-color: #f59e0b;
+  }
+
+  &.score-3 {
+    background-color: #ffcb05;
+  }
+
+  &.score-4 {
+    background-color: #10b981;
+  }
+}
+
+.enl-activation-crack-time {
+  font-size: 13px;
+  color: #ffffff;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.enl-activation-suggestions {
+  font-size: 13px;
+  color: #ffffff;
+  margin-bottom: 10px;
+  line-height: 1.4;
+
+  .enl-activation-suggestions-label {
+    margin-bottom: 3px;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    list-style-type: disc;
+  }
+
+  li {
+    margin-bottom: 2px;
+  }
+}
+
+.enl-activation-strength-status {
+  font-size: 13px;
+  color: #ffffff;
+  margin-bottom: 14px;
+  line-height: 1.4;
+
+  strong {
+    font-weight: 700;
+  }
+}
+
+// Test #2: Password Requirements
+.enl-activation-reqs-intro {
+  font-size: 13px;
+  color: #ffffff;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.enl-activation-reqs-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style-type: disc;
+  font-size: 13px;
+  color: #ffffff;
+  line-height: 1.5;
+
+  li {
+    margin-bottom: 2px;
+  }
+
+  li.is-met {
+    font-weight: 700;
+  }
+}
+
+// Alert Message Banner inside Card
+.enl-activation-alert {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 14px;
+
+  &.is-error {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+  }
+
+  &.is-success {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+  }
+}
+
+// Field Label in Card Body
+.enl-activation-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+
+// Recover Password Informational Banner matching exact screenshot
+.enl-recover-info-banner {
+  background-color: #d8ecf8;
+  border: 1px solid #bce8f1;
+  color: #31708f;
+  padding: 12px 14px;
+  border-radius: 4px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+// Return to Login Link inside Card
+.enl-activation-back-link {
+  display: inline-block;
+  color: #93c5fd;
+  font-size: 13.5px;
+  text-decoration: underline;
+  margin-top: 14px;
+  cursor: pointer;
+  transition: color 150ms ease;
+
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+// Set Password Submit Button
+.enl-activation-submit-btn {
+  width: 100%;
+  height: 64px;
+  background-color: #ffcb05;
+  color: #00274c;
+  border: none;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 0 0 28px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 150ms ease;
+  user-select: none;
+
+  &:hover:not(:disabled) {
+    background-color: #f5be00;
+  }
+
+  &:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.6);
+    outline-offset: -3px;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background-color: #cbd5e1;
+    color: #64748b;
+  }
+}
+
+// Footer below Card
+.enl-activation-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #ffffff;
+
+  .enl-activation-copyright {
+    display: inline;
+  }
+
+  .enl-activation-footer-link {
+    color: #ffffff;
+    text-decoration: underline;
+    margin: 0 4px;
+    transition: opacity 150ms ease;
+
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+
+  .enl-activation-footer-divider {
+    margin: 0 4px;
+    opacity: 0.7;
+  }
+}
+

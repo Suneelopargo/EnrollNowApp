@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../../accessibility/useFocusTrap';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -8,6 +9,9 @@ export interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: 'default' | 'wide';
+  className?: string;
+  ariaLabel?: string;
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,33 +21,41 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   footer,
   size = 'default',
+  className = '',
+  ariaLabel,
+  initialFocusRef,
 }) => {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  const titleId = useId();
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: isOpen,
+    onEscape: onClose,
+    initialFocusRef,
+    returnFocus: true,
+  });
 
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} role="presentation">
       <div
-        className={`modal-container ${size === 'wide' ? 'modal-container--wide' : ''}`}
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={ariaLabel ? undefined : titleId}
+        aria-label={ariaLabel}
+        tabIndex={-1}
+        className={`modal-container ${size === 'wide' ? 'modal-container--wide' : ''} ${className}`.trim()}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
-          <h3>{title}</h3>
+          <h3 id={titleId}>{title}</h3>
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={onClose}
             aria-label="Close dialog"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
         <div className="modal-body">{children}</div>

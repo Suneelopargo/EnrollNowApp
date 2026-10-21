@@ -9,6 +9,13 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { DataGrid, type ColDef, type GridApi } from '../../../shared/design-system/components/DataGrid';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
+import { ComingSoon } from '../../../shared/design-system/components/ComingSoon';
+import {
+  loadDashboardData,
+  isDashboardDemoMode,
+  normalizeStudy,
+  type DashboardDataMode,
+} from './demo/dashboardDataAdapter';
 import {
   Users,
   Building,
@@ -24,14 +31,9 @@ import {
   X,
   FileSpreadsheet,
   ChevronDown,
+  Sparkles,
+  RotateCw,
 } from 'lucide-react';
-import { apiClient } from '../../../shared/api-client';
-
-const SAMPLE_STUDIES = [
-  { id: 'PROTO-2026-001', title: 'Phase III Novel Antihypertensive Efficacy Trial', phase: 'Phase III', status: 'ACTIVE', enrolled: 112, target: 150 },
-  { id: 'PROTO-2026-002', title: 'Targeted Immunotherapy for Non-Small Cell Lung Cancer', phase: 'Phase II', status: 'ACTIVE', enrolled: 64, target: 80 },
-  { id: 'PROTO-2026-003', title: 'Cognitive Biomarker Assessment in Early Stage Alzheimer', phase: 'Phase IIa', status: 'SCREENING', enrolled: 38, target: 100 },
-];
 
 interface DashboardPieSegment {
   key: string;
@@ -51,17 +53,7 @@ interface ExecutivePieChartProps {
 
 const PIE_COLORS = ['#087eb8', '#14a38b', '#f0a638', '#8256b5', '#dc6b73', '#70869a'];
 
-function normalizeStudy(study: any) {
-  return {
-    ...study,
-    id: study.id ?? study.studyId ?? study.protocolId ?? study.protocolNumber ?? 'Unknown protocol',
-    title: study.title ?? study.studyTitle ?? 'Untitled study',
-    phase: study.phase ?? study.studyPhase ?? 'Unspecified',
-    status: study.status ?? 'OTHER',
-    enrolled: Number(study.enrolled ?? study.enrolledParticipants ?? study.participantsEnrolled ?? 0),
-    targetEnrollment: Number(study.targetEnrollment ?? study.targetParticipants ?? study.target ?? 0),
-  };
-}
+// normalizeStudy is imported from ./demo/dashboardDataAdapter
 
 function pieSlicePath(startAngle: number, endAngle: number): string {
   const radius = 46;
@@ -140,64 +132,49 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
   const [recentStudies, setRecentStudies] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataMode, setDataMode] = useState<DashboardDataMode>('live');
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [selectedDrilldown, setSelectedDrilldown] = useState<{ chart: 'status' | 'phase' | 'participants'; key: string } | null>(null);
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
   const [quickSearch, setQuickSearch] = useState('');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [participants, setParticipants] = useState<any[]>([]);
+  const [retryTrigger, setRetryTrigger] = useState<number>(0);
 
   useEffect(() => {
+    let isCancelled = false;
     const fetchDashboardData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await apiClient.get('/api/v1/dashboard/overview');
-        if (res.data?.data) {
-          setStats(res.data.data);
-          const overviewStudies = res.data.data.recentStudies || [];
-          try {
-            const studiesRes = await apiClient.get('/api/v1/studies');
-            const allStudies = studiesRes.data?.data;
-            if (Array.isArray(allStudies) && allStudies.length > 0) {
-              const overviewById = new Map<string, ReturnType<typeof normalizeStudy>>();
-              overviewStudies.map(normalizeStudy).forEach((study: any) => {
-                [study.id, study.studyId, study.protocolNumber].forEach((id) => {
-                  if (id !== undefined && id !== null) overviewById.set(String(id), study);
-                });
-              });
-              setRecentStudies(allStudies.map((rawStudy: any) => {
-                const study = normalizeStudy(rawStudy);
-                const overviewStudy = [study.id, study.studyId, study.protocolNumber]
-                  .map((id) => id === undefined || id === null ? undefined : overviewById.get(String(id)))
-                  .find(Boolean);
-                return normalizeStudy({
-                  ...overviewStudy,
-                  ...rawStudy,
-                  enrolled: rawStudy.enrolled ?? rawStudy.enrolledParticipants ?? rawStudy.participantsEnrolled ?? overviewStudy?.enrolled,
-                  targetEnrollment: rawStudy.targetEnrollment ?? rawStudy.targetParticipants ?? rawStudy.target ?? overviewStudy?.targetEnrollment,
-                });
-              }));
-            } else {
-              setRecentStudies(overviewStudies.map(normalizeStudy));
-            }
-          } catch {
-            setRecentStudies(overviewStudies.map(normalizeStudy));
-          }
-        }
-        try {
-          const participantsRes = await apiClient.get('/api/v1/participants');
-          setParticipants(Array.isArray(participantsRes.data?.data) ? participantsRes.data.data : []);
-        } catch {
+        const result = await loadDashboardData();
+        if (isCancelled) return;
+        setDataMode(result.mode);
+        setIsDemoMode(result.isDemoMode);
+        if (result.mode === 'coming_soon') {
+          setStats(null);
+          setRecentStudies([]);
           setParticipants([]);
+        } else {
+          setStats(result.stats);
+          setRecentStudies(result.studies || []);
+          setParticipants(result.participants || []);
         }
-      } catch (err: any) {
-        setError('Clinical Operations metrics are currently unavailable from Dashboard Service.');
+      } catch {
+        if (!isCancelled) {
+          setDataMode('live');
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
     fetchDashboardData();
-  }, []);
+    return () => {
+      isCancelled = true;
+    };
+  }, [retryTrigger]);
 
   useEffect(() => {
     if (!selectedDrilldown) return;
@@ -221,7 +198,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
     setExportMenuOpen(false);
   };
 
-  const dashboardStudies = recentStudies.length > 0 ? recentStudies : SAMPLE_STUDIES;
+  const dashboardStudies = recentStudies;
   const studyProgress = dashboardStudies.slice(0, 4).map((study) => {
     const enrolled = Math.max(0, Number(study.enrolled) || 0);
     const target = Math.max(0, Number(study.targetEnrollment ?? study.target) || 0);
@@ -430,18 +407,74 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
       {error ? (
         <div className="card">
           <div className="card-body">
-            <div className="dashboard-error-banner">
-              <AlertCircle size={20} />
-              <span>{error}</span>
+            <div className="dashboard-error-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertCircle size={20} />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setRetryTrigger((n) => n + 1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+              >
+                <RotateCw size={14} />
+                <span>Retry</span>
+              </button>
             </div>
-            <p className="stat-subtext">
-              The dashboard displays live operational calculations from the backend aggregation service.
-              Please ensure enrollnow-dashboard-service is running.
+            <p className="stat-subtext" style={{ marginTop: '0.5rem' }}>
+              The dashboard connects directly to the backend aggregation service.
+              Live API errors are never masked by silent demo data fallbacks.
             </p>
           </div>
         </div>
+      ) : dataMode === 'coming_soon' ? (
+        <ComingSoon
+          title="Clinical Operations Dashboard"
+          subtitle="Executive Trial Analytics & Portfolio KPI Aggregation"
+          description="Consolidated portfolio KPI calculation and metrics aggregation are currently scheduled for upcoming Sprint deployment. No fabricated or simulated records are displayed."
+          targetRelease="Scheduled Sprint Release"
+        />
       ) : (
         <>
+          {isDemoMode && (
+            <div
+              role="status"
+              aria-label="Dashboard Demonstration Mode Active"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 1.25rem',
+                backgroundColor: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: '0.5rem',
+                color: '#92400e',
+                marginBottom: '1.25rem',
+                fontSize: '0.875rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sparkles size={18} className="text-amber-600" />
+                <span>
+                  <strong>Demonstration Mode Active:</strong> Displaying authorized demonstration data from <code>dashboard-demo-data.json</code> for evaluation. Live backend APIs are bypassed.
+                </span>
+              </div>
+              <span
+                style={{
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '9999px',
+                  backgroundColor: '#fef3c7',
+                  border: '1px solid #fcd34d',
+                  fontWeight: 600,
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Demo Data
+              </span>
+            </div>
+          )}
           <section className="executive-progress-panel" aria-labelledby="executive-progress-title">
             <div className="executive-progress-panel__heading">
               <div>

@@ -6,7 +6,12 @@ import { TopNavigation } from '../navigation/TopNavigation';
 import { WorkspaceScreenHost } from './WorkspaceScreenHost';
 import { Footer } from '../../../shared/design-system/components/Footer';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
-import { IdentityModule } from '../modules';
+import {
+  IdentityModule,
+  ActivateAccountModule,
+  RecoverPasswordModule,
+  ResetPasswordModule,
+} from '../modules';
 import { useAuth } from '../auth/AuthContext';
 
 const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -18,11 +23,48 @@ const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 };
 
 export const ShellRouter: React.FC = () => {
-  const protectedWorkspaceElement = (
-    <ProtectedRoute>
+  const workspaceContent = (
+    <>
       <TopNavigation />
       <WorkspaceScreenHost />
       <Footer variant="app-shell" />
+    </>
+  );
+
+  const protectedWorkspaceElement = (
+    <ProtectedRoute>{workspaceContent}</ProtectedRoute>
+  );
+
+  const protectedRegistryWorkspaceElement = (
+    <ProtectedRoute
+      requiredPermission="REGISTRY_VIEW"
+      requiredRoles={[
+        'SITE_ADMIN',
+        'SITE_MANAGER',
+        'SITE_REGISTRY',
+        'ROLE_SITE_ADMIN',
+        'ROLE_SITE_MANAGER',
+        'ROLE_SITE_REGISTRY',
+        'ROLE_SUPER_ADMIN',
+      ]}
+    >
+      {workspaceContent}
+    </ProtectedRoute>
+  );
+
+  const protectedAdminWorkspaceElement = (
+    <ProtectedRoute
+      requiredPermission="SITE_ADMIN_ACCESS"
+      requiredRoles={[
+        'SITE_ADMIN',
+        'SITE_MANAGER',
+        'ROLE_SITE_ADMIN',
+        'ROLE_SITE_MANAGER',
+        'ROLE_SUPER_ADMIN',
+        'ROLE_ADMIN',
+      ]}
+    >
+      {workspaceContent}
     </ProtectedRoute>
   );
 
@@ -38,6 +80,16 @@ export const ShellRouter: React.FC = () => {
             </PublicOnlyRoute>
           }
         />
+        {/* Public Account Activation Routes - Always accessible without redirecting to dashboard */}
+        <Route path="/activate-account" element={<ActivateAccountModule />} />
+        <Route path="/activate" element={<ActivateAccountModule />} />
+        <Route path="/enroll/:token" element={<ActivateAccountModule />} />
+        <Route path="/enroll" element={<ActivateAccountModule />} />
+        {/* Public Password Recovery & Reset Routes */}
+        <Route path="/recover-password" element={<RecoverPasswordModule />} />
+        <Route path="/forgot-password" element={<RecoverPasswordModule />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordModule />} />
+        <Route path="/reset-password" element={<ResetPasswordModule />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
         {/* Protected Feature Module Routes - Mapped to Keep-Alive Multi-Screen Workspace */}
@@ -45,8 +97,8 @@ export const ShellRouter: React.FC = () => {
         <Route path="/dashboard/*" element={protectedWorkspaceElement} />
         <Route path="/studies" element={protectedWorkspaceElement} />
         <Route path="/studies/*" element={protectedWorkspaceElement} />
-        <Route path="/participants" element={protectedWorkspaceElement} />
-        <Route path="/participants/*" element={protectedWorkspaceElement} />
+        <Route path="/participants" element={protectedRegistryWorkspaceElement} />
+        <Route path="/participants/*" element={protectedRegistryWorkspaceElement} />
         <Route path="/recruitment" element={protectedWorkspaceElement} />
         <Route path="/recruitment/*" element={protectedWorkspaceElement} />
         <Route path="/surveys" element={protectedWorkspaceElement} />
@@ -59,8 +111,8 @@ export const ShellRouter: React.FC = () => {
         <Route path="/documents/*" element={protectedWorkspaceElement} />
         <Route path="/organization" element={protectedWorkspaceElement} />
         <Route path="/organization/*" element={protectedWorkspaceElement} />
-        <Route path="/admin" element={protectedWorkspaceElement} />
-        <Route path="/admin/*" element={protectedWorkspaceElement} />
+        <Route path="/admin" element={protectedAdminWorkspaceElement} />
+        <Route path="/admin/*" element={protectedAdminWorkspaceElement} />
 
         {/* Fallback Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

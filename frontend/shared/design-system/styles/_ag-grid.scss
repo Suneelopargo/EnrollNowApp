@@ -53,9 +53,64 @@
 
   // The header wrapper spans the full grid even when columns do not. Keep the
   // unused track neutral so it never looks like an empty, colored column.
-  .ag-header { background: #f5f8fa !important; }
+  .ag-header { background: $color-table-header !important; }
 
   .ag-header { border-bottom: 1px solid $color-table-header-border; }
+
+  .ag-header-row:first-child {
+    background: $color-table-header !important;
+  }
+
+  // Pinned right header column (Actions) with elevation over horizontally scrolled columns
+  .ag-pinned-right-header {
+    background: $color-table-header !important;
+    border-left: 1px solid rgba(220, 231, 238, 0.35);
+    box-shadow: -3px 0 6px rgba(0, 0, 0, 0.08);
+    z-index: 4;
+
+    .ag-header-row:first-child {
+      background: $color-table-header !important;
+    }
+
+    .ag-header-row-column-filter {
+      background: #f5f9fc !important;
+      border-left: 1px solid #dce7ee;
+
+      .ag-header-cell {
+        background: #f5f9fc !important;
+
+        input,
+        .ag-floating-filter-input,
+        .ag-floating-filter-button {
+          display: none !important;
+        }
+      }
+    }
+  }
+
+  // Pinned right body cells container with elevation over horizontally scrolled rows
+  .ag-pinned-right-cols-container {
+    background: #ffffff;
+    box-shadow: -3px 0 6px rgba(0, 0, 0, 0.06);
+    z-index: 3;
+
+    .ag-cell {
+      border-left: 1px solid #dce7ee;
+    }
+
+    .ag-row-odd .ag-cell {
+      background: #f1f6f9 !important;
+    }
+
+    .ag-row-even .ag-cell {
+      background: #ffffff !important;
+    }
+  }
+
+  // Seamless top-right vertical scrollbar spacer matching the header
+  .ag-body-vertical-scroll-start-spacer {
+    background: $color-table-header !important;
+  }
 
   .ag-header-cell-text {
     color: #f5f8fa;
@@ -117,6 +172,11 @@
     border-right: 1px solid #dce7ee;
     color: #143550;
     font-size: 12px;
+
+    &.ag-cell-focus:focus-visible {
+      outline: 2px solid var(--ag-accent-color, #087eb8) !important;
+      outline-offset: -2px !important;
+    }
   }
 
   .ag-row { border-bottom: 1px solid #dce7ee; }

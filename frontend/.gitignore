@@ -163,6 +163,8 @@ docs/
 !docs/FRONTEND_ARCHITECTURE.md
 !docs/FRONTEND_DEVELOPER_GUIDE.md
 !docs/FRONTEND_CLEANUP_REPORT.md
+!docs/accessibility-development-guide.md
+!docs/pull-request-accessibility-checklist.md
 
 # ------------------------------------------------------------
 # Local reports - DO NOT COMMIT

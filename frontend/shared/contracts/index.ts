@@ -1,5 +1,14 @@
 // frontend/shared/contracts/index.ts - Authoritative TypeScript Contracts for Micro-Frontends
 
+export interface SiteRoleAssignmentSummary {
+  siteId: string;
+  siteCode?: string | null;
+  siteName?: string | null;
+  roleCode: string;
+  roleName?: string | null;
+  permissionLabel?: string | null;
+}
+
 export interface AuthUser {
   id: number | string;
   username: string;
@@ -9,8 +18,19 @@ export interface AuthUser {
   fullName?: string;
   active?: boolean;
   roles: string[];
+  permissions?: string[];
+  siteId?: string | null;
+  siteCode?: string | null;
+  siteName?: string | null;
+  siteRole?: string | null;
+  sitePermissionLabel?: string | null;
+  siteAssignments?: SiteRoleAssignmentSummary[];
+  canAccessRegistry?: boolean;
+  canAccessSiteAdmin?: boolean;
+  canManageSiteAdmins?: boolean;
   siteCodes?: string[];
   organizationName?: string;
+  tenantId?: string;
 }
 
 export interface AuthState {
@@ -18,6 +38,7 @@ export interface AuthState {
   user: AuthUser | null;
   token: string | null;
   expiresAt?: number;
+  permissionsLoading?: boolean;
 }
 
 export interface NavigationItem {

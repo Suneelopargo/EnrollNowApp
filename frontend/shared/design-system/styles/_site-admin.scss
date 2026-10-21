@@ -1,0 +1,1223 @@
+// frontend/shared/design-system/styles/_site-admin.scss - Site Administration Global Styles
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.site-admin-container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  width: 100%;
+  min-height: 100%;
+}
+
+// ---------------------------------------------------------------------------
+// 1. Horizontal Navigation Bar (Replaces legacy vertical sidebar)
+// ---------------------------------------------------------------------------
+.site-admin-horizontal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  padding: 0 $spacing-4;
+  box-shadow: $shadow-sm;
+  position: relative;
+  z-index: 20;
+
+  @media (max-width: 768px) {
+    padding: $spacing-2;
+    border-radius: $border-radius-md;
+    flex-direction: column;
+    align-items: stretch;
+    gap: $spacing-2;
+  }
+}
+
+// Mobile-first section dropdown selector (visible on screens <= 768px)
+.site-admin-mobile-nav-select-wrap {
+  display: none;
+
+  @media (max-width: 768px) {
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+    width: 100%;
+    padding-bottom: $spacing-2;
+    border-bottom: 1px solid $border-color-light;
+  }
+}
+
+.site-admin-mobile-nav-label {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $text-secondary;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.site-admin-mobile-select-box {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.site-admin-mobile-select {
+  width: 100%;
+  height: 38px;
+  padding: 0 $spacing-3;
+  font-size: 14px;
+  font-weight: $font-weight-semibold;
+  color: $color-primary;
+  background-color: $bg-surface-secondary;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  cursor: pointer;
+  outline: none;
+  transition: all $transition-fast;
+
+  &:focus {
+    border-color: $color-brand-accent;
+    background-color: $bg-surface;
+    box-shadow: 0 0 0 3px rgba($color-brand-accent, 0.15);
+  }
+}
+
+.site-admin-nav-tabs-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.site-admin-nav-scroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  box-shadow: $shadow-md;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background-color: $bg-surface-secondary;
+    color: $color-brand-accent;
+    box-shadow: $shadow-lg;
+    transform: translateY(-50%) scale(1.05);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  &.site-admin-nav-scroll-left {
+    left: -4px;
+  }
+
+  &.site-admin-nav-scroll-right {
+    right: -4px;
+  }
+}
+
+.site-admin-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba($text-muted, 0.3) transparent;
+  min-width: 0;
+  width: 100%;
+  scroll-behavior: smooth;
+
+  &::-webkit-scrollbar {
+    height: 3px;
+    display: block;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba($text-muted, 0.3);
+    border-radius: 3px;
+
+    &:hover {
+      background-color: rgba($text-muted, 0.6);
+    }
+  }
+
+  @media (max-width: 768px) {
+    flex: 1 1 100%;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    padding: $spacing-1 14px;
+  }
+}
+
+.site-admin-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-3 $spacing-4;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $text-secondary;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all $transition-fast;
+  position: relative;
+  top: 1px;
+
+  @media (max-width: 768px) {
+    padding: $spacing-2 $spacing-3;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    color: $color-brand-accent;
+    background-color: $bg-surface-secondary;
+  }
+
+  &.is-active {
+    color: $color-brand-accent;
+    font-weight: $font-weight-semibold;
+    border-bottom-color: $color-brand-accent;
+    background-color: rgba($color-brand-accent, 0.04);
+  }
+}
+
+.site-admin-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  border-radius: $border-radius-full;
+  background-color: $bg-surface-secondary;
+  color: $text-secondary;
+
+  .is-active & {
+    background-color: $color-brand-accent-light;
+    color: $color-brand-accent;
+  }
+}
+
+// Export Dropdown Tab
+.site-admin-nav-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.site-admin-nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-lg;
+  padding: $spacing-1 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.site-admin-nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-2 $spacing-4;
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color $transition-fast, color $transition-fast;
+
+  &:hover {
+    background-color: $bg-surface-secondary;
+    color: $color-brand-accent;
+  }
+}
+
+.site-admin-nav-meta {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  flex-shrink: 0;
+  padding-left: $spacing-4;
+  border-left: 1px solid $border-color;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+.site-admin-version-badge {
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: $text-muted;
+  letter-spacing: 0.02em;
+}
+
+// ---------------------------------------------------------------------------
+// 2. Users Workspace Toolbar & Action Controls
+// ---------------------------------------------------------------------------
+.site-admin-users-card {
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+
+  @media (max-width: 768px) {
+    border-radius: $border-radius-md;
+  }
+}
+
+.site-admin-users-toolbar.card-header {
+  border-bottom: 1px solid $border-color;
+  padding: $spacing-4 $spacing-5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: $spacing-4;
+
+  .data-grid-toolbar__heading {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-3;
+    flex-wrap: nowrap;
+  }
+
+  .data-grid-toolbar__actions {
+    flex: 1 1 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $spacing-3;
+    flex-wrap: nowrap;
+  }
+
+  .data-grid-toolbar__search {
+    flex: 0 1 260px;
+    width: 260px;
+    min-width: 160px;
+  }
+
+  @media (max-width: 768px) {
+    padding: $spacing-3;
+    flex-direction: column;
+    align-items: stretch;
+    gap: $spacing-3;
+
+    .data-grid-toolbar__heading {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: $spacing-2;
+    }
+
+    .site-admin-screen-title {
+      font-size: $font-size-lg;
+    }
+
+    .site-admin-add-user-btn {
+      min-height: 38px;
+      height: 38px;
+      padding: 0 $spacing-3;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .data-grid-toolbar__actions {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: $spacing-2;
+    }
+
+    .site-admin-filter-select-wrap {
+      flex: 1 1 auto;
+      min-width: 120px;
+      max-width: calc(100% - 110px);
+
+      .form-select {
+        min-height: 38px;
+        height: 38px;
+        font-size: 13px;
+        padding-left: $spacing-2;
+        padding-right: $spacing-6;
+      }
+    }
+
+    .data-grid-export-wrap {
+      flex: 0 0 auto;
+
+      .data-grid-export-btn {
+        min-height: 38px;
+        height: 38px;
+        padding: 0 $spacing-3;
+        font-size: 13px;
+      }
+    }
+
+    .data-grid-toolbar__search {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 100% !important;
+      flex: 1 1 100% !important;
+      order: 3;
+
+      > .form-input {
+        min-height: 38px;
+        height: 38px;
+        font-size: 13px;
+      }
+    }
+  }
+}
+
+.data-grid-toolbar__search-clear {
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 2px;
+  color: $text-muted;
+  cursor: pointer;
+
+  &:hover {
+    color: $text-primary;
+  }
+}
+
+.site-admin-screen-title {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.site-admin-add-user-btn {
+  min-height: 44px;
+  gap: $spacing-2;
+  font-weight: $font-weight-semibold;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.site-admin-filter-select-wrap {
+  min-width: 140px;
+
+  .form-select {
+    min-height: 44px;
+    height: 44px;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    border-radius: $border-radius-md;
+    border-color: #cedce6;
+    background-color: #ffffff;
+    color: #24445b;
+    padding-left: $spacing-3;
+    padding-right: $spacing-8;
+    cursor: pointer;
+
+    &:hover,
+    &:focus {
+      border-color: #087eb8;
+    }
+  }
+}
+
+.site-admin-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: $border-radius-md;
+  border: 1px solid #cedce6;
+  background-color: #ffffff;
+  color: #52697c;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background-color: #f1f6f9;
+    color: #087eb8;
+    border-color: #087eb8;
+  }
+}
+
+.site-admin-users-card-body {
+  padding: $spacing-4 $spacing-5;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+
+  @media (max-width: 768px) {
+    padding: $spacing-3;
+    gap: $spacing-2;
+  }
+}
+
+// Stats & count bar
+.site-admin-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: $spacing-5;
+  padding: $spacing-2 $spacing-4;
+  background-color: #f1f6f9;
+  border: 1px solid #e1ebf2;
+  border-radius: $border-radius-md;
+  font-size: $font-size-xs;
+  color: #52697c;
+
+  @media (max-width: 640px) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: $spacing-2;
+    font-size: 11px;
+
+    .site-admin-stat-item {
+      font-size: 11px;
+    }
+
+    .site-admin-stat-filtered {
+      margin-left: 0;
+    }
+  }
+}
+
+.site-admin-stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-1;
+
+  strong {
+    color: #123a5a;
+    font-weight: 700;
+  }
+}
+
+.site-admin-stat-filtered {
+  margin-left: auto;
+  color: #087eb8;
+
+  strong {
+    color: #087eb8;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. AG Grid Specific Custom Cell Renderers (No Inline Styles!)
+// ---------------------------------------------------------------------------
+.site-admin-user-cell {
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  height: 100%;
+}
+
+.site-admin-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: $border-radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #0091ca;
+  flex-shrink: 0;
+  box-shadow: $shadow-sm;
+}
+
+.site-admin-user-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-brand-accent;
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+  transition: color $transition-fast, text-decoration $transition-fast;
+
+  &:hover {
+    color: $color-brand-accent-hover;
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $color-brand-accent;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+.site-admin-email-cell {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  height: 100%;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  color: $text-secondary;
+
+  svg {
+    color: $text-muted;
+    flex-shrink: 0;
+  }
+}
+
+.site-admin-permission-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-normal;
+  color: $text-secondary;
+  line-height: 1.4;
+
+  &.text-muted {
+    color: $text-muted;
+  }
+}
+
+.site-admin-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-normal;
+  color: $text-secondary;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.site-admin-studies-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-normal;
+  color: $text-secondary;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  padding: $spacing-1 0;
+}
+
+.site-admin-status-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+// Screenshot Match: Vivid blue badge for Active status
+.site-admin-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 12px;
+  border-radius: $border-radius-md;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.02em;
+
+  &.is-active {
+    background-color: #1976d2;
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(25, 118, 210, 0.3);
+  }
+
+  &.is-disabled,
+  &.is-inactive {
+    background-color: #2e3e4f;
+    color: #ffffff;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+  }
+}
+
+.site-admin-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: $spacing-1;
+  height: 100%;
+}
+
+.site-admin-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: $border-radius-md;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background-color: $bg-surface-secondary;
+    color: $color-brand-accent;
+    border-color: $border-color;
+  }
+
+  &.is-danger:hover {
+    background-color: $color-danger-bg;
+    color: $color-danger;
+    border-color: $color-danger-border;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. Modal Form Layouts (Add/Edit User)
+// ---------------------------------------------------------------------------
+.site-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $spacing-4;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.site-admin-form-full {
+  grid-column: 1 / -1;
+}
+
+.site-admin-studies-selector {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  padding: $spacing-3;
+  background-color: $bg-app;
+}
+
+.site-admin-study-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  font-size: $font-size-xs;
+  color: $text-primary;
+  cursor: pointer;
+
+  input[type='checkbox'] {
+    accent-color: $color-brand-accent;
+    cursor: pointer;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. Views for Other Tabs (Studies, Import, Export, Audit, Security, Settings)
+// ---------------------------------------------------------------------------
+.site-admin-card-view {
+  background-color: $bg-surface;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-sm;
+  padding: $spacing-6;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-5;
+}
+
+.site-admin-card-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid $border-color;
+  padding-bottom: $spacing-4;
+}
+
+.site-admin-card-view-title {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-bold;
+  color: $color-primary;
+  margin: 0;
+}
+
+.site-admin-card-view-subtitle {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  margin-top: $spacing-1;
+}
+
+.site-admin-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: $spacing-4;
+}
+
+.site-admin-info-tile {
+  background-color: $bg-app;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-md;
+  padding: $spacing-4;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  h4 {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+    color: $color-primary;
+    margin: 0;
+  }
+
+  p {
+    font-size: $font-size-xs;
+    color: $text-secondary;
+    margin: 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Add User Modal (Matching Add Participant style: dark blue header, red placeholder on error)
+// ---------------------------------------------------------------------------
+.site-admin-add-user-modal {
+  max-width: 960px !important;
+  width: 92vw !important;
+
+  .modal-body {
+    padding: 24px 32px 16px !important;
+    max-height: calc(85vh - 130px) !important;
+    overflow-y: auto !important;
+  }
+
+  .modal-footer {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 16px 32px !important;
+    width: 100% !important;
+  }
+
+  .form-input[aria-invalid='true'],
+  .form-select[aria-invalid='true'] {
+    border-color: #dc2626 !important;
+
+    &::placeholder {
+      color: #dc2626 !important;
+      opacity: 1 !important;
+    }
+
+    &:focus {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14) !important;
+    }
+  }
+}
+
+.site-admin-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.site-admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 24px;
+  width: 100%;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+
+  .form-group {
+    margin-bottom: 0;
+  }
+}
+
+// Site Permissions Dropdown Row (Matching Screenshot above Studies Frame)
+.site-admin-site-permissions-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 18px;
+  margin-bottom: 4px;
+
+  .site-admin-site-permissions-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    min-width: 130px;
+    margin: 0;
+  }
+
+  .site-admin-site-permissions-select {
+    min-width: 220px;
+    height: 38px;
+    padding: 6px 12px;
+    font-size: 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background-color: #ffffff;
+    color: #374151;
+    cursor: pointer;
+
+    &:focus {
+      border-color: #2563eb;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
+  }
+}
+
+// Studies Table Box (left blue border line matching the screenshot)
+.site-admin-studies-frame {
+  margin-top: 18px;
+  border-left: 3px solid #3b82f6;
+  border-top: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background-color: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.site-admin-studies-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.site-admin-studies-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: #23506d;
+    border-bottom: 1px solid #1a3f57;
+
+    th {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+
+      &.site-admin-studies-th-checkbox {
+        width: 44px;
+        padding-left: 16px;
+        padding-right: 8px;
+      }
+    }
+  }
+
+  tbody {
+    tr {
+      transition: background-color $transition-fast;
+
+      &:nth-child(even) {
+        background-color: #f9fafb;
+      }
+
+      &:nth-child(odd) {
+        background-color: #ffffff;
+      }
+
+      &:hover {
+        background-color: #f0f9ff;
+      }
+
+      td {
+        padding: 10px 16px;
+        font-size: 13px;
+        color: #374151;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+      }
+    }
+  }
+}
+
+.site-admin-study-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid #d1d5db;
+  accent-color: #1976d2;
+  cursor: pointer;
+  display: block;
+}
+
+.site-admin-study-select {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: #374151;
+  min-width: 140px;
+  cursor: pointer;
+
+  &:focus {
+    border-color: #93c5fd;
+    outline: none;
+  }
+
+  &:disabled {
+    background-color: #f9fafb;
+    color: #9ca3af;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+// Bottom Action Button "+ Send Invitation" matching Screenshot 2
+.site-admin-btn-send-invitation {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #1976d2;
+  border: 1px solid #1976d2;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    background-color: #1565c0;
+    border-color: #1565c0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #1976d2;
+    outline-offset: 2px;
+  }
+}
+
+// Edit Mode Footer Layout & Action Buttons (Matching Screenshot 2)
+.site-admin-modal-footer-edit {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.site-admin-modal-footer-add {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+}
+
+.site-admin-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #0b69a3;
+  border: 1px solid #0b69a3;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #085586;
+    border-color: #085586;
+  }
+}
+
+.site-admin-btn-resend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: #6d93d3;
+  border: 1px solid #6d93d3;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #597fbf;
+    border-color: #597fbf;
+  }
+}
+
+.site-admin-btn-reset-pw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: #6d93d3;
+  border: 1px solid #6d93d3;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #597fbf;
+    border-color: #597fbf;
+  }
+}
+
+.site-admin-btn-lock,
+.site-admin-btn-unlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #e54b42;
+  border: 1px solid #e54b42;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background-color: #c93d35;
+    border-color: #c93d35;
+  }
+}
+
+// Edit User Mode top info layout matching screenshot
+.site-admin-form-edit-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 8px;
+
+  .site-admin-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .site-admin-edit-label {
+    min-width: 140px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4b5563;
+  }
+
+  .site-admin-edit-value {
+    font-size: 13px;
+    color: #1f2937;
+    font-weight: 500;
+  }
+
+  .site-admin-edit-control {
+    flex: 1;
+    max-width: 260px;
+  }
+
+  .site-admin-permissions-select {
+    width: 100%;
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+}
+
+.site-admin-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  margin-bottom: 14px;
+  background-color: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 13px;
+
+  .site-admin-error-msg {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.site-admin-permission-none {
+  color: $text-muted;
+  font-family: $font-family-base;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-normal;
+}
+

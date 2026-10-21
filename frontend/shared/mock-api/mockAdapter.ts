@@ -14,15 +14,22 @@ import {
  * Extracts normalized pathname from request URL.
  */
 function normalizePath(url: string = ''): string {
+  let path = '';
   try {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       const parsed = new URL(url);
-      return parsed.pathname;
+      path = parsed.pathname;
     }
   } catch {
     // fallback to regex or string split
   }
-  return url.split('?')[0];
+  if (!path) {
+    path = url.split('?')[0];
+  }
+  if (path && !path.startsWith('/api') && path.startsWith('/')) {
+    path = `/api${path}`;
+  }
+  return path;
 }
 
 /**
@@ -80,12 +87,154 @@ export const mockAdapter: AxiosAdapter = async (
     return res;
   }
 
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/session-status$/) || path === '/api/v1/auth/session-status') &&
+    method === 'GET'
+  ) {
+    const token = extractBearerToken(config);
+    if (!token) {
+      throw createMockErrorResponse(config, 401, 'Authentication required: Missing Authorization token.', 'UNAUTHORIZED');
+    }
+    return createMockSuccessResponse(config, { active: true }, 200, 'Session active');
+  }
+
   if (path === '/api/v1/auth/logout' && method === 'POST') {
     const res = mockAuthApi.handleLogout(config);
     if (res instanceof Error || 'isAxiosError' in res) {
       throw res;
     }
     return res;
+  }
+
+  // Public unauthenticated forgot-password endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/forgot-password$/) ||
+      path === '/api/v1/auth/forgot-password') &&
+    method === 'POST'
+  ) {
+    return createMockSuccessResponse(
+      config,
+      {
+        message:
+          'If the e-mail you provided is in our system, you will receive a reset link shortly',
+        resetToken: 'mock-reset-token-xyz',
+      },
+      200,
+      'If the e-mail you provided is in our system, you will receive a reset link shortly'
+    );
+  }
+
+  // Public unauthenticated activate/validate endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/activate\/validate$/) ||
+      path === '/api/v1/auth/activate/validate') &&
+    method === 'GET'
+  ) {
+    const rawToken = config.params?.token || '';
+    if (
+      rawToken === 'expired-token' ||
+      rawToken.toLowerCase().includes('expired')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent',
+        'TOKEN_EXPIRED'
+      );
+    }
+    if (
+      rawToken === 'already-enrolled' ||
+      rawToken === 'used-token' ||
+      rawToken.toLowerCase().includes('already') ||
+      rawToken.toLowerCase().includes('enrolled')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Already enrolled! Please login',
+        'ALREADY_ENROLLED'
+      );
+    }
+    return createMockSuccessResponse(config, { valid: true });
+  }
+
+  // Public unauthenticated activate endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/activate$/) ||
+      path === '/api/v1/auth/activate') &&
+    method === 'POST'
+  ) {
+    const activatePayload = parsePayload(config.data);
+    const tokenVal = activatePayload?.token || '';
+    if (
+      tokenVal === 'expired-token' ||
+      tokenVal.toLowerCase().includes('expired')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent',
+        'TOKEN_EXPIRED'
+      );
+    }
+    if (
+      tokenVal === 'already-enrolled' ||
+      tokenVal === 'used-token' ||
+      tokenVal.toLowerCase().includes('already') ||
+      tokenVal.toLowerCase().includes('enrolled')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Already enrolled! Please login',
+        'ALREADY_ENROLLED'
+      );
+    }
+    return createMockSuccessResponse(
+      config,
+      { message: 'Account activated successfully.' },
+      200,
+      'Account activated successfully.'
+    );
+  }
+
+  // Public unauthenticated reset-password endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/reset-password$/) ||
+      path === '/api/v1/auth/reset-password') &&
+    method === 'POST'
+  ) {
+    const resetPayload = parsePayload(config.data);
+    const tokenVal = resetPayload?.token || '';
+    if (
+      tokenVal === 'expired-token' ||
+      tokenVal.toLowerCase().includes('expired')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Enrollment Token Expired. Please Contact Your Site Admin To Have The Link Sent Resent',
+        'TOKEN_EXPIRED'
+      );
+    }
+    if (
+      tokenVal === 'already-enrolled' ||
+      tokenVal === 'used-token' ||
+      tokenVal.toLowerCase().includes('already')
+    ) {
+      throw createMockErrorResponse(
+        config,
+        409,
+        'Already enrolled! Please login',
+        'ALREADY_ENROLLED'
+      );
+    }
+    return createMockSuccessResponse(
+      config,
+      { message: 'Password reset successfully.' },
+      200,
+      'Password reset successfully.'
+    );
   }
 
   // 3. For ALL other endpoints, enforce token authentication check
@@ -127,7 +276,7 @@ export const mockAdapter: AxiosAdapter = async (
   }
 
   // --- Studies ---
-  if (path === '/api/v1/studies') {
+  if (path === '/api/v1/studies' || path.match(/^\/api\/v1\/tenants\/[^/]+\/studies$/)) {
     if (method === 'GET') {
       return createMockSuccessResponse(config, mockStore.getStudies());
     }
@@ -244,6 +393,88 @@ export const mockAdapter: AxiosAdapter = async (
     if (method === 'PUT') return createMockSuccessResponse(config, { saved: true });
   }
 
+  // Authoritative Centralized Roles API
+  if (path === '/api/v1/roles' && method === 'GET') {
+    const rawScope = config.params?.scope || '';
+    const scope = typeof rawScope === 'string' ? rawScope.toUpperCase() : '';
+
+    const allRoles = [
+      {
+        id: '53000000-0000-0000-0000-000000000001',
+        code: 'SITE_REGISTRY',
+        name: 'Registry Access',
+        scopeType: 'SITE',
+        description: 'Access to site Registry without Site Admin access.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '53000000-0000-0000-0000-000000000002',
+        code: 'SITE_MANAGER',
+        name: 'Site Manager',
+        scopeType: 'SITE',
+        description: 'Registry access and Site Admin capabilities limited to assigned studies.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '53000000-0000-0000-0000-000000000003',
+        code: 'SITE_ADMIN',
+        name: 'Site Admin',
+        scopeType: 'SITE',
+        description: 'Full Registry and Site Admin access across the site.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000001',
+        code: 'STUDY_READ_ONLY',
+        name: 'Study Read-Only',
+        scopeType: 'STUDY',
+        description: 'View-only access to permitted study data and functionality.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000002',
+        code: 'STUDY_RA',
+        name: 'Study Restricted Access',
+        scopeType: 'STUDY',
+        description: 'Restricted study access intended for limited or de-identified study functionality.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000003',
+        code: 'STUDY_LEADER',
+        name: 'Study Leader',
+        scopeType: 'STUDY',
+        description: 'Operational access to participant and study activities without Study Settings administration.',
+        systemRole: true,
+        active: true,
+      },
+      {
+        id: '51000000-0000-0000-0000-000000000004',
+        code: 'STUDY_ADMIN',
+        name: 'Study Admin',
+        scopeType: 'STUDY',
+        description: 'Full study-level access including Study Settings.',
+        systemRole: true,
+        active: true,
+      },
+    ];
+
+    const filtered = scope
+      ? allRoles.filter((r) => r.scopeType.toUpperCase() === scope)
+      : allRoles;
+
+    return createMockSuccessResponse(config, filtered);
+  }
+
+  if (path.match(/^\/api\/v1\/tenants\/[^/]+\/users\/[^/]+\/roles\/site$/) && method === 'DELETE') {
+    return createMockSuccessResponse(config, { success: true }, 204);
+  }
+
   if (path === '/api/v1/administrator/roles' && method === 'GET') {
     return createMockSuccessResponse(config, mockStore.getAdminRoles());
   }
@@ -254,6 +485,44 @@ export const mockAdapter: AxiosAdapter = async (
 
   if (path === '/api/v1/administrator/audit-logs' && method === 'GET') {
     return createMockSuccessResponse(config, mockStore.getAdminAuditLogs());
+  }
+
+  // --- Security Settings ---
+  if (path === '/api/v1/security-settings' || path.match(/^\/api\/v1\/tenants\/[^/]+\/security-settings$/)) {
+    if (method === 'GET') {
+      return createMockSuccessResponse(config, mockStore.getSecuritySettings());
+    }
+    if (method === 'PUT') {
+      const updated = mockStore.updateSecuritySettings(payload);
+      return createMockSuccessResponse(config, updated, 200, 'Security settings updated successfully');
+    }
+  }
+
+  if (path === '/api/v1/security-settings/reset-defaults' || path.match(/^\/api\/v1\/tenants\/[^/]+\/security-settings\/reset-defaults$/)) {
+    if (method === 'POST') {
+      const reset = mockStore.resetSecuritySettings();
+      return createMockSuccessResponse(config, reset, 200, 'Security settings reset to defaults');
+    }
+  }
+
+  // --- General Settings ---
+  if (path === '/api/v1/general-settings' || path.match(/^\/api\/v1\/tenants\/[^/]+\/general-settings$/)) {
+    if (method === 'GET') {
+      return createMockSuccessResponse(config, mockStore.getGeneralSettings());
+    }
+    if (method === 'PUT') {
+      if (!payload?.defaultTextReply || !payload.defaultTextReply.trim()) {
+        throw createMockErrorResponse(config, 400, 'Default message response cannot be blank', 'BAD_REQUEST');
+      }
+      if (payload.defaultTextReply.trim().length > 160) {
+        throw createMockErrorResponse(config, 400, 'Default text reply cannot exceed 160 characters', 'BAD_REQUEST');
+      }
+      const updated = mockStore.updateGeneralSettings({
+        ...payload,
+        defaultTextReply: payload.defaultTextReply.trim(),
+      });
+      return createMockSuccessResponse(config, updated, 200, 'General settings updated successfully');
+    }
   }
 
   // --- Recruitment Campaigns ---
