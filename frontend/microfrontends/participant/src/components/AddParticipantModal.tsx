@@ -121,12 +121,19 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
               setFirstName(e.target.value);
               if (firstNameError) setFirstNameError('');
             }}
-            placeholder={firstNameError || 'Enter First Name'}
+            placeholder={!firstName && firstNameError ? firstNameError : 'Enter First Name'}
             autoFocus
             required
+            aria-required="true"
             className="form-input"
             aria-invalid={!!firstNameError}
+            aria-describedby={firstNameError ? 'participant-first-name-error' : undefined}
           />
+          {firstNameError && (
+            <div id="participant-first-name-error" className="sr-only" role="alert">
+              {firstNameError}
+            </div>
+          )}
         </div>
 
         <div className="form-group">
@@ -153,11 +160,18 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
               setLastName(e.target.value);
               if (lastNameError) setLastNameError('');
             }}
-            placeholder={lastNameError || 'Enter Last Name'}
+            placeholder={!lastName && lastNameError ? lastNameError : 'Enter Last Name'}
             required
+            aria-required="true"
             className="form-input"
             aria-invalid={!!lastNameError}
+            aria-describedby={lastNameError ? 'participant-last-name-error' : undefined}
           />
+          {lastNameError && (
+            <div id="participant-last-name-error" className="sr-only" role="alert">
+              {lastNameError}
+            </div>
+          )}
         </div>
       </form>
     </Modal>

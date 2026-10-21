@@ -131,6 +131,14 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
     params.context?.onToggleStatus?.(user);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      const cell = (e.currentTarget as HTMLElement).closest<HTMLElement>('.ag-cell');
+      cell?.focus();
+    }
+  };
+
   const isUserActive = user.status === 'Active';
 
   return (
@@ -139,6 +147,7 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
         type="button"
         className="participant-grid__row-action"
         onClick={handleEdit}
+        onKeyDown={handleKeyDown}
         title="Edit user details"
         aria-label={`Edit ${user.name}`}
       >
@@ -153,6 +162,7 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
             : 'participant-grid__row-action--success'
         }`}
         onClick={handleToggleStatus}
+        onKeyDown={handleKeyDown}
         title={isUserActive ? 'Lock user' : 'Unlock user'}
         aria-label={isUserActive ? `Lock ${user.name}` : `Unlock ${user.name}`}
       >
@@ -198,7 +208,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close export dropdown on outside click
+  // Close export dropdown on outside click or Escape key
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (
@@ -208,9 +218,18 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         setIsExportMenuOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isExportMenuOpen) {
+        setIsExportMenuOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExportMenuOpen]);
 
   // Filter users based on status dropdown and sort latest record at the top
   const filteredUsers = useMemo(() => {
@@ -314,6 +333,9 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
         field: 'id',
         sortable: false,
         filter: false,
+        floatingFilter: false,
+        suppressMenu: true,
+        suppressSizeToFit: true,
         width: 95,
         minWidth: 85,
         maxWidth: 105,
@@ -348,6 +370,29 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
     }
     return filteredUsers;
   }, [gridApi, filteredUsers]);
+
+  // Keyboard activation on grid cells (WAI-ARIA Grid navigation)
+  const handleCellKeyDown = useCallback(
+    (event: any) => {
+      if (!event.event) return;
+      const key = event.event.key;
+      if (key === 'Enter' || key === ' ') {
+        const colId = event.column?.getColId();
+        if (colId === 'name' && event.data) {
+          event.event.preventDefault();
+          onEditUser(event.data);
+        } else if (colId === 'actions' || colId === 'id') {
+          event.event.preventDefault();
+          const cellEl =
+            (event.event.target as HTMLElement | null)?.closest?.('.ag-cell') ||
+            (event.event.target as HTMLElement | null);
+          const firstBtn = cellEl?.querySelector<HTMLButtonElement>('button');
+          firstBtn?.focus();
+        }
+      }
+    },
+    [onEditUser]
+  );
 
   const exportFileName = `site-users-${new Date().toISOString().slice(0, 10)}`;
 
@@ -504,6 +549,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
               className="form-input"
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
+              aria-label="Search users"
             />
             {searchTerm && (
               <button
@@ -586,7 +632,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
           paginationPageSize={10}
           paginationPageSizeSelector={[5, 10, 20, 50]}
           animateRows={true}
-          suppressCellFocus={true}
+          onCellKeyDown={handleCellKeyDown}
         />
       </div>
     </div>

@@ -20,6 +20,7 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "axe-core": "^4.14.0",
     "concurrently": "^10.0.5",
     "sass": "^1.105.0",
     "typescript": "^5.7.2",

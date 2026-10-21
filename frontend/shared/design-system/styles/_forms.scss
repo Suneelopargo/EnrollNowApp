@@ -46,7 +46,26 @@
 .form-textarea[aria-invalid='true'] {
   border-color: $color-danger;
 
-  &::placeholder { color: $color-danger; opacity: 1; }
+  &::placeholder {
+    color: $color-danger;
+    opacity: 1;
+    font-weight: $font-weight-medium;
+  }
+  &::-webkit-input-placeholder {
+    color: $color-danger;
+    opacity: 1;
+    font-weight: $font-weight-medium;
+  }
+  &::-moz-placeholder {
+    color: $color-danger;
+    opacity: 1;
+    font-weight: $font-weight-medium;
+  }
+  &:-ms-input-placeholder {
+    color: $color-danger;
+    opacity: 1;
+    font-weight: $font-weight-medium;
+  }
 
   &:focus {
     border-color: $color-danger;

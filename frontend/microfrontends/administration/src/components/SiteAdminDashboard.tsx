@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { toast } from '../../../../shared/toaster';
-import { requestConfirmation, ConfirmationContainer } from '../../../../shared/confirmation';
+import { requestConfirmation } from '../../../../shared/confirmation';
 import { apiClient } from '../../../../shared/api-client';
 import { MfeContext, AuthUser } from '../../../../shared/contracts';
 import { deriveUserAccessFlags, userIsFullSiteAdmin } from '../../../../shared/api/authApi';
@@ -652,8 +652,8 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
         onResetPassword={handleResetPassword}
       />
 
-      {/* Enterprise Global Confirmation Dialog Host */}
-      <ConfirmationContainer />
+
+
     </div>
   );
 };

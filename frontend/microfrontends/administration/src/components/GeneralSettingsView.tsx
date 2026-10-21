@@ -150,6 +150,9 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
           </p>
 
           <div className="sec-field-group">
+            <label htmlFor="defaultTextReply" className="sr-only">
+              Default Text Reply
+            </label>
             <textarea
               id="defaultTextReply"
               name="defaultTextReply"
@@ -162,6 +165,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
               value={defaultTextReply}
               onChange={handleChange}
               disabled={!isFullSiteAdmin || saving}
+              aria-invalid={!!validationError}
               aria-describedby="default-text-reply-help default-text-reply-error"
             />
           </div>
@@ -184,7 +188,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
           </div>
 
           {validationError && (
-            <div id="default-text-reply-error" className="sec-field-error-msg">
+            <div id="default-text-reply-error" className="sec-field-error-msg" role="alert">
               {validationError}
             </div>
           )}

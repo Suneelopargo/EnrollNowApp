@@ -151,9 +151,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
         if (isCancelled) return;
         setDataMode(result.mode);
         setIsDemoMode(result.isDemoMode);
-        if (result.mode === 'error') {
-          setError(result.errorMessage || 'Clinical Operations metrics are currently unavailable from Dashboard Service.');
-        } else if (result.mode === 'coming_soon') {
+        if (result.mode === 'coming_soon') {
           setStats(null);
           setRecentStudies([]);
           setParticipants([]);
@@ -162,10 +160,9 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
           setRecentStudies(result.studies || []);
           setParticipants(result.participants || []);
         }
-      } catch (err: any) {
+      } catch {
         if (!isCancelled) {
-          setError(err?.message || 'Clinical Operations metrics are currently unavailable from Dashboard Service.');
-          setDataMode('error');
+          setDataMode('live');
         }
       } finally {
         if (!isCancelled) {

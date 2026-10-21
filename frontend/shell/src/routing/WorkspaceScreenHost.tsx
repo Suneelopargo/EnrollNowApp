@@ -58,7 +58,7 @@ export const WorkspaceScreenHost: React.FC = () => {
       {isRefreshing && (
         <LoadingSpinner
           variant="overlay"
-          title="Please Wait "
+          title="Please Wait"
           message={`Refreshing ${activeTab?.title || 'Screen'} Data...`}
           subtitle="Updating records while preserving your workspace state"
         />
@@ -73,9 +73,15 @@ export const WorkspaceScreenHost: React.FC = () => {
             id={`screen-pane-${tab.id}`}
             role="tabpanel"
             aria-labelledby={`tab-${tab.id}`}
+            hidden={!isActive}
+            aria-hidden={!isActive}
             className={`enl-screen-pane ${isActive ? 'enl-screen-pane--active' : 'enl-screen-pane--hidden'}`}
           >
-            <main className="page-container">
+            <main
+              id={isActive ? 'main-content' : undefined}
+              className="page-container"
+              tabIndex={-1}
+            >
               <div className="page-context-banner">
                 <h1>{tab.title}</h1>
                 <a

@@ -9,3 +9,4 @@ export * from './toaster';
 export * from './confirmation';
 export * from './loader';
 export * from './design-system/components';
+export * from './accessibility';
