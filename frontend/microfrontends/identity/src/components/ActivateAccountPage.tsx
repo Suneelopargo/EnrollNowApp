@@ -43,7 +43,6 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Validate activation token on mount; if already used, redirect to /login with warning
@@ -133,25 +132,24 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
 
     if (!token) {
-      setErrorMessage('No activation token found. Please check your invitation email.');
+      toast.error('No activation token found. Please check your invitation email.');
       return;
     }
 
     if (!password) {
-      setErrorMessage('Please enter a password.');
+      toast.error('Please enter a password.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.');
+      toast.error('Passwords do not match.');
       return;
     }
 
     if (!overallPassed) {
-      setErrorMessage('Password does not match all strength and complexity requirements.');
+      toast.error('Password does not match all strength and complexity requirements.');
       return;
     }
 
@@ -217,7 +215,6 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
         return;
       }
 
-      setErrorMessage(serverMessage);
       toast.error(serverMessage, { title: 'Activation Failed' });
     } finally {
       setLoading(false);
@@ -335,27 +332,6 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
               </ul>
             </div>
           </div>
-
-          {/* Password Mismatch Warning */}
-          {confirmPassword && !passwordsMatch && !errorMessage && !successMessage && (
-            <div className="enl-activation-alert is-error" role="alert">
-              Passwords do not match.
-            </div>
-          )}
-
-          {/* Missing Token Alert */}
-          {!token && !errorMessage && !successMessage && (
-            <div className="enl-activation-alert is-error" role="alert">
-              No activation token found in URL. Please click the complete link received in your invitation email.
-            </div>
-          )}
-
-          {/* Error Banner */}
-          {errorMessage && (
-            <div className="enl-activation-alert is-error" role="alert">
-              {errorMessage}
-            </div>
-          )}
 
           {/* Success Banner */}
           {successMessage && (

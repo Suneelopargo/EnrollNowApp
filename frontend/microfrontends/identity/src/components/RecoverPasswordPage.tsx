@@ -16,7 +16,6 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
   const [email, setEmail] = useState('');
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const trimmedEmail = email.trim();
@@ -39,9 +38,6 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEmail(e.target.value);
     setTouched(true);
-    if (errorMessage) {
-      setErrorMessage(null);
-    }
   };
 
   const handleBlur = () => {
@@ -51,9 +47,11 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    setErrorMessage(null);
 
     if (!isEmailValid) {
+      if (validationError) {
+        toast.warning(validationError);
+      }
       return;
     }
 
@@ -72,7 +70,6 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
         err?.response?.data?.message ||
         err?.message ||
         'Unable to process password recovery request. Please try again or contact support.';
-      setErrorMessage(msg);
       toast.error(msg, { title: 'Recovery Failed' });
     } finally {
       setLoading(false);
@@ -125,20 +122,6 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
                 aria-invalid={Boolean(touched && validationError)}
               />
             </div>
-
-            {/* Field Validation Error */}
-            {touched && validationError && !successMessage && (
-              <div className="enl-activation-alert is-error" role="alert">
-                {validationError}
-              </div>
-            )}
-
-            {/* Server Error Message */}
-            {errorMessage && !successMessage && (
-              <div className="enl-activation-alert is-error" role="alert">
-                {errorMessage}
-              </div>
-            )}
 
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
               <a

@@ -28,12 +28,10 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [isDirty, setIsDirty] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadSettings = useCallback(async () => {
     try {
       setLoading(true);
-      setLoadError(null);
       const data = await generalSettingsApi.getGeneralSettings(tenantId);
       const text = data?.defaultTextReply || '';
       setDefaultTextReply(text);
@@ -42,7 +40,6 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
       setValidationError(null);
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to load general settings';
-      setLoadError(msg);
       toast.error(msg, { title: 'General Settings Error' });
     } finally {
       setLoading(false);
@@ -121,32 +118,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
     );
   }
 
-  if (loadError) {
-    return (
-      <div className="sec-view-wrapper">
-        <div className="sec-header-bar" style={{ paddingBottom: '12px', borderBottom: '1px solid #f1f5f9', marginBottom: '20px' }}>
-          <div className="sec-header-title-row">
-            <h2 className="sec-header-title">General Settings</h2>
-          </div>
-        </div>
-        <div className="site-admin-error-banner">
-          <div className="site-admin-error-msg">
-            <AlertCircle size={18} />
-            <span>{loadError}</span>
-          </div>
-          <button
-            type="button"
-            className="sec-btn-discard-main"
-            onClick={loadSettings}
-            style={{ padding: '4px 12px', fontSize: '12.5px' }}
-          >
-            <RotateCw size={13} />
-            <span>Retry</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="sec-view-wrapper">

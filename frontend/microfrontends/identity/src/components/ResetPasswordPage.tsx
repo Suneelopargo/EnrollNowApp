@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import zxcvbn from 'zxcvbn';
 import { EnrollNowBrand } from './EnrollNowBrand';
@@ -43,8 +43,14 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Notify if password reset token is missing from URL
+  useEffect(() => {
+    if (!token) {
+      toast.warning('No password reset token found in URL. Please check your reset email.');
+    }
+  }, [token]);
 
   // Test #1: Password Strength via zxcvbn
   const strengthResult = useMemo(() => {
@@ -89,30 +95,29 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
 
     if (!token) {
-      setErrorMessage('No password reset token found in URL. Please check your reset email.');
+      toast.error('No password reset token found in URL. Please check your reset email.');
       return;
     }
 
     if (!password) {
-      setErrorMessage('Please enter a new password.');
+      toast.error('Please enter a new password.');
       return;
     }
 
     if (!confirmPassword) {
-      setErrorMessage('Please confirm your new password.');
+      toast.error('Please confirm your new password.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('The entered passwords do not match. Please ensure both fields are identical.');
+      toast.error('The entered passwords do not match. Please ensure both fields are identical.');
       return;
     }
 
     if (!overallPassed) {
-      setErrorMessage('Please ensure your password meets all requirements and achieves Moderate or Strong rating.');
+      toast.error('Please ensure your password meets all requirements and achieves Moderate or Strong rating.');
       return;
     }
 
@@ -160,7 +165,6 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
         return;
       }
 
-      setErrorMessage(msg);
       toast.error(msg, { title: 'Password Reset Failed' });
     } finally {
       setLoading(false);
@@ -268,27 +272,6 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
                 )}
               </ul>
             </div>
-
-            {/* Missing Token Alert */}
-            {!token && !errorMessage && !successMessage && (
-              <div className="enl-activation-alert is-error" role="alert">
-                No password reset token found in URL. Please click the complete link received in your reset email.
-              </div>
-            )}
-
-            {/* Password Mismatch Warning */}
-            {confirmPassword && !passwordsMatch && !errorMessage && !successMessage && (
-              <div className="enl-activation-alert is-error" role="alert">
-                Passwords do not match.
-              </div>
-            )}
-
-            {/* Error Banner */}
-            {errorMessage && (
-              <div className="enl-activation-alert is-error" role="alert">
-                {errorMessage}
-              </div>
-            )}
 
             {/* Success Banner */}
             {successMessage && (

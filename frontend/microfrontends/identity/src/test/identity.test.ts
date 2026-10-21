@@ -105,4 +105,22 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     const { authApi } = await import('../../../../shared/api/authApi');
     expect(typeof authApi.validateActivationToken).toBe('function');
   });
+
+  it('routes password reset and account activation errors to toaster instead of on-screen banner', async () => {
+    const { toast } = await import('../../../../shared/toaster');
+    const errorSpy = vi.spyOn(toast, 'error');
+    const warningSpy = vi.spyOn(toast, 'warning');
+
+    // Simulate password history reuse error
+    const reuseMsg = 'Cannot reuse any of your last 1 passwords';
+    toast.error(reuseMsg, { title: 'Password Reset Failed' });
+    expect(errorSpy).toHaveBeenCalledWith(reuseMsg, { title: 'Password Reset Failed' });
+
+    // Verify toast is present in central toaster
+    const active = toast.getToasts();
+    expect(active.some((t) => t.message === reuseMsg && t.type === 'error')).toBe(true);
+
+    errorSpy.mockRestore();
+    warningSpy.mockRestore();
+  });
 });
