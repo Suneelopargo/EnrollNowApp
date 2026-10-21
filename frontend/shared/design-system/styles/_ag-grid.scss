@@ -172,6 +172,11 @@
     border-right: 1px solid #dce7ee;
     color: #143550;
     font-size: 12px;
+
+    &.ag-cell-focus:focus-visible {
+      outline: 2px solid var(--ag-accent-color, #087eb8) !important;
+      outline-offset: -2px !important;
+    }
   }
 
   .ag-row { border-bottom: 1px solid #dce7ee; }
