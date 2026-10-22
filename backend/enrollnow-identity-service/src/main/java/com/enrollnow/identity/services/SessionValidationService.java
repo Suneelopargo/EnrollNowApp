@@ -2,10 +2,13 @@ package com.enrollnow.identity.services;
 
 import com.enrollnow.identity.exceptions.SessionRevokedException;
 import com.enrollnow.identity.models.SecuritySettings;
+import com.enrollnow.identity.models.UserSecurityState;
 import com.enrollnow.identity.models.UserSession;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
+import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 import com.enrollnow.identity.repositories.UserSessionRepository;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,13 +24,29 @@ public class SessionValidationService {
 
     private final UserSessionRepository userSessionRepository;
     private final SecuritySettingsRepository securitySettingsRepository;
+    private UserSecurityStateRepository userSecurityStateRepository;
 
     public SessionValidationService(
             UserSessionRepository userSessionRepository,
             SecuritySettingsRepository securitySettingsRepository) {
 
+        this(userSessionRepository, securitySettingsRepository, null);
+    }
+
+    @Autowired
+    public SessionValidationService(
+            UserSessionRepository userSessionRepository,
+            SecuritySettingsRepository securitySettingsRepository,
+            @Autowired(required = false) UserSecurityStateRepository userSecurityStateRepository) {
+
         this.userSessionRepository = userSessionRepository;
         this.securitySettingsRepository = securitySettingsRepository;
+        this.userSecurityStateRepository = userSecurityStateRepository;
+    }
+
+    @Autowired(required = false)
+    public void setUserSecurityStateRepository(UserSecurityStateRepository userSecurityStateRepository) {
+        this.userSecurityStateRepository = userSecurityStateRepository;
     }
 
     @Transactional(noRollbackFor = {IllegalStateException.class, SessionRevokedException.class})
@@ -70,7 +89,7 @@ public class SessionValidationService {
         }
 
         /*
-         * Explicitly revoked session (e.g. concurrent login from another browser).
+         * Explicitly revoked session (e.g. concurrent login from another browser or force reset).
          */
         if (session.getRevokedAt() != null) {
             String reason = session.getRevokeReason() != null ? session.getRevokeReason() : "REVOKED";
@@ -83,9 +102,23 @@ public class SessionValidationService {
         OffsetDateTime now = OffsetDateTime.now();
 
         /*
+         * Mandatory password reset check: users requiring reset cannot use active sessions.
+         */
+        if (userSecurityStateRepository != null) {
+            UserSecurityState secState = userSecurityStateRepository.findByTenantIdAndUserId(tenantId, userId).orElse(null);
+            if (secState != null && secState.isPasswordResetRequired()) {
+                session.setRevokedAt(now);
+                session.setRevokeReason("PASSWORD_RESET_REQUIRED");
+                userSessionRepository.save(session);
+                throw new SessionRevokedException(
+                        "A password reset is required for your account. Please check your email or use Forgot Password.",
+                        "PASSWORD_RESET_REQUIRED"
+                );
+            }
+        }
+
+        /*
          * Server-side hard expiry.
-         * JWT expiry is also checked by Spring Security,
-         * but we validate our session record too.
          */
         if (session.getExpiresAt() != null
                 && session.getExpiresAt().isBefore(now)) {

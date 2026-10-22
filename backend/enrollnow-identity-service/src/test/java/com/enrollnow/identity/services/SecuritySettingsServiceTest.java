@@ -1,8 +1,20 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.dtos.ForceResetResultDto;
+import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
+import com.enrollnow.identity.models.AuditEvent;
 import com.enrollnow.identity.models.SecuritySettings;
+import com.enrollnow.identity.models.User;
+import com.enrollnow.identity.models.UserActionToken;
+import com.enrollnow.identity.models.UserEmail;
+import com.enrollnow.identity.models.UserSecurityState;
+import com.enrollnow.identity.repositories.AuditEventRepository;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
+import com.enrollnow.identity.repositories.UserActionTokenRepository;
+import com.enrollnow.identity.repositories.UserEmailRepository;
+import com.enrollnow.identity.repositories.UserRepository;
+import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +23,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.OffsetDateTime;
+import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +43,27 @@ class SecuritySettingsServiceTest {
 
     @Mock
     private SiteAuthorizationService siteAuthorizationService;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
+    private UserEmailRepository userEmailRepository;
+
+    @Mock
+    private UserSecurityStateRepository userSecurityStateRepository;
+
+    @Mock
+    private UserSessionService userSessionService;
+
+    @Mock
+    private UserActionTokenRepository userActionTokenRepository;
+
+    @Mock
+    private InvitationEmailService invitationEmailService;
+
+    @Mock
+    private AuditEventRepository auditEventRepository;
 
     @InjectMocks
     private SecuritySettingsService securitySettingsService;
@@ -180,5 +218,132 @@ class SecuritySettingsServiceTest {
         assertThrows(AccessDeniedException.class, () ->
                 securitySettingsService.updateSecuritySettings(tenantId, dto)
         );
+    }
+
+    @Test
+    void testGetPublicPasswordPolicy_ReturnsConfiguredSettings() {
+        SecuritySettings existing = new SecuritySettings();
+        existing.setTenantId(tenantId);
+        existing.setMinimumPasswordLength(14);
+        existing.setMinimumPasswordStrength("STRONG");
+        existing.setRequireDigit(true);
+        existing.setRequireSymbol(false);
+        existing.setRequireMixedCase(true);
+
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(existing));
+
+        PasswordPolicyDto policy = securitySettingsService.getPublicPasswordPolicy(tenantId);
+
+        assertNotNull(policy);
+        assertEquals(14, policy.getMinimumPasswordLength());
+        assertEquals("STRONG", policy.getMinimumPasswordStrength());
+        assertTrue(policy.getRequireDigit());
+        assertFalse(policy.getRequireSymbol());
+        assertTrue(policy.getRequireMixedCase());
+        verify(siteAuthorizationService, never()).requireSiteAdminAccess(any(), any());
+    }
+
+    @Test
+    void testGetPublicPasswordPolicy_ReturnsDefaultsWhenNotFound() {
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.empty());
+
+        PasswordPolicyDto policy = securitySettingsService.getPublicPasswordPolicy(tenantId);
+
+        assertNotNull(policy);
+        assertEquals(SecuritySettingsService.DEFAULT_MINIMUM_PASSWORD_LENGTH, policy.getMinimumPasswordLength());
+        assertEquals(SecuritySettingsService.DEFAULT_MINIMUM_PASSWORD_STRENGTH, policy.getMinimumPasswordStrength());
+        assertTrue(policy.getRequireDigit());
+        assertTrue(policy.getRequireSymbol());
+        assertTrue(policy.getRequireMixedCase());
+    }
+
+    @Test
+    void testForcePasswordReset_Success() {
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+
+        User user1 = new User();
+        user1.setId(UUID.randomUUID());
+        user1.setTenantId(tenantId);
+        user1.setFirstName("John");
+        user1.setLastName("Doe");
+        user1.setStatus("ACTIVE");
+
+        User userDisabled = new User();
+        userDisabled.setId(UUID.randomUUID());
+        userDisabled.setTenantId(tenantId);
+        userDisabled.setStatus("DISABLED");
+
+        when(userRepository.findByTenantId(tenantId)).thenReturn(List.of(user1, userDisabled));
+
+        UserSecurityState secState1 = new UserSecurityState();
+        secState1.setTenantId(tenantId);
+        secState1.setUserId(user1.getId());
+        when(userSecurityStateRepository.findByTenantIdAndUserId(tenantId, user1.getId())).thenReturn(Optional.of(secState1));
+
+        UserEmail email1 = new UserEmail();
+        email1.setTenantId(tenantId);
+        email1.setUserId(user1.getId());
+        email1.setEmail("john.doe@example.com");
+        email1.setPrimaryEmail(true);
+        when(userEmailRepository.findByTenantIdAndUserIdAndPrimaryEmailTrue(tenantId, user1.getId())).thenReturn(Optional.of(email1));
+
+        ForceResetResultDto result = securitySettingsService.forcePasswordReset(tenantId);
+
+        // Verify authorization
+        verify(siteAuthorizationService).requireTenantMatch(tenantId);
+        verify(siteAuthorizationService).requireSecuritySettingsManage(tenantId);
+
+        // Only active user was affected (disabled skipped)
+        assertEquals(1, result.getTotalAffected());
+        assertEquals(1, result.getEmailsSent());
+        assertEquals(0, result.getEmailsFailed());
+
+        // Verify user security state was marked password reset required
+        assertTrue(secState1.isPasswordResetRequired());
+        assertEquals("PASSWORD_RESET_REQUIRED", secState1.getLockReason());
+        assertNotNull(secState1.getLockedAt());
+        verify(userSecurityStateRepository).save(secState1);
+
+        // Verify session revoked
+        verify(userSessionService).revokeExistingSessions(tenantId, user1.getId(), "PASSWORD_RESET_REQUIRED");
+
+        // Verify token saved and email sent
+        verify(userActionTokenRepository, atLeastOnce()).save(any(UserActionToken.class));
+        verify(invitationEmailService).sendPasswordReset(eq("john.doe@example.com"), eq("John Doe"), eq(tenantId.toString()), anyString());
+
+        // Verify audit event recorded
+        verify(auditEventRepository).save(any(AuditEvent.class));
+    }
+
+    @Test
+    void testGetPublicPasswordPolicy_WithTokenResolvesTenant() {
+        String rawToken = "sample-token-abc";
+        String tokenHash;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            tokenHash = HexFormat.of().formatHex(digest.digest(rawToken.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        UserActionToken tokenEntity = new UserActionToken();
+        tokenEntity.setTenantId(tenantId);
+        tokenEntity.setUserId(userId);
+        tokenEntity.setTokenHash(tokenHash);
+
+        SecuritySettings existing = new SecuritySettings();
+        existing.setTenantId(tenantId);
+        existing.setMinimumPasswordLength(16);
+        existing.setMinimumPasswordStrength("STRONG");
+
+        when(userActionTokenRepository.findByTokenHash(tokenHash)).thenReturn(Optional.of(tokenEntity));
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(existing));
+
+        // Call with null tenantId but valid token
+        PasswordPolicyDto policy = securitySettingsService.getPublicPasswordPolicy(null, rawToken);
+
+        assertNotNull(policy);
+        assertEquals(16, policy.getMinimumPasswordLength());
+        assertEquals("STRONG", policy.getMinimumPasswordStrength());
     }
 }

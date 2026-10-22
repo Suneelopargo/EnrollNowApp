@@ -2,12 +2,19 @@
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
+export interface ToastAction {
+  label: string;
+  onClick?: () => void;
+  route?: string;
+}
+
 export interface ToastOptions {
   title?: string;
   duration?: number; // Duration in ms before auto-dismiss (0 for sticky)
   dismissible?: boolean;
   sticky?: boolean;
   critical?: boolean;
+  action?: ToastAction;
 }
 
 export interface ToastItem {
@@ -18,4 +25,5 @@ export interface ToastItem {
   duration: number;
   timestamp: number;
   sticky?: boolean;
+  action?: ToastAction;
 }

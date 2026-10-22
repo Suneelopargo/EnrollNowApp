@@ -1,8 +1,14 @@
 // frontend/microfrontends/study/src/test/study.test.ts
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StudyModule } from '../remoteEntry';
+import { studyApi } from '../../../../shared/api/studyApi';
+import { apiClient } from '../../../../shared/api-client';
 
-describe('Study MFE Remote Entry', () => {
+describe('Study MFE Remote Entry & Study API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('exports StudyModule as a valid React component', () => {
     expect(StudyModule).toBeDefined();
     expect(typeof StudyModule).toBe('function');
@@ -22,5 +28,24 @@ describe('Study MFE Remote Entry', () => {
       navigate: vi.fn(),
     };
     expect(mockContext.apiBaseUrl).toBe('http://localhost:8080');
+  });
+
+  it('suppresses error toasts when fetching studies via studyApi.getStudies', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: [{ id: 'study-1', title: 'Cardiology 101', status: 'ACTIVE' }],
+    } as any);
+
+    const studies = await studyApi.getStudies();
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/studies', expect.objectContaining({ skipToast: true }));
+    expect(studies.length).toBe(1);
+    getSpy.mockRestore();
+  });
+
+  it('passes skipToast: true to prevent 403 error toasts on study failure', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockRejectedValueOnce(new Error('Forbidden'));
+
+    await expect(studyApi.getStudies()).rejects.toThrow('Forbidden');
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/studies', expect.objectContaining({ skipToast: true }));
+    getSpy.mockRestore();
   });
 });

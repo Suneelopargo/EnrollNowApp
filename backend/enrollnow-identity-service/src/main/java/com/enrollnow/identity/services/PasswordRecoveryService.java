@@ -45,6 +45,7 @@ public class PasswordRecoveryService {
     private final PasswordEncoder passwordEncoder;
     private final InvitationEmailService invitationEmailService;
     private final PasswordPolicyValidator passwordPolicyValidator;
+    private UserSessionService userSessionService;
 
     public PasswordRecoveryService(
             UserEmailRepository userEmailRepository,
@@ -60,6 +61,27 @@ public class PasswordRecoveryService {
                 userSecurityStateRepository,
                 passwordEncoder,
                 invitationEmailService,
+                null,
+                null
+        );
+    }
+
+    public PasswordRecoveryService(
+            UserEmailRepository userEmailRepository,
+            UserActionTokenRepository userActionTokenRepository,
+            UserRepository userRepository,
+            UserSecurityStateRepository userSecurityStateRepository,
+            PasswordEncoder passwordEncoder,
+            InvitationEmailService invitationEmailService,
+            PasswordPolicyValidator passwordPolicyValidator) {
+        this(
+                userEmailRepository,
+                userActionTokenRepository,
+                userRepository,
+                userSecurityStateRepository,
+                passwordEncoder,
+                invitationEmailService,
+                passwordPolicyValidator,
                 null
         );
     }
@@ -72,7 +94,8 @@ public class PasswordRecoveryService {
             UserSecurityStateRepository userSecurityStateRepository,
             PasswordEncoder passwordEncoder,
             InvitationEmailService invitationEmailService,
-            @Autowired(required = false) PasswordPolicyValidator passwordPolicyValidator) {
+            @Autowired(required = false) PasswordPolicyValidator passwordPolicyValidator,
+            @Autowired(required = false) UserSessionService userSessionService) {
 
         this.userEmailRepository = userEmailRepository;
         this.userActionTokenRepository = userActionTokenRepository;
@@ -81,6 +104,12 @@ public class PasswordRecoveryService {
         this.passwordEncoder = passwordEncoder;
         this.invitationEmailService = invitationEmailService;
         this.passwordPolicyValidator = passwordPolicyValidator;
+        this.userSessionService = userSessionService;
+    }
+
+    @Autowired(required = false)
+    public void setUserSessionService(UserSessionService userSessionService) {
+        this.userSessionService = userSessionService;
     }
 
     @Transactional
@@ -290,19 +319,13 @@ public class PasswordRecoveryService {
 
         user.setPasswordHash(encodedPassword);
 
-        /*
-         * A successful password reset unlocks the account.
-         */
-        user.setStatus("ACTIVE");
-
-        userRepository.save(user);
-
         if (passwordPolicyValidator != null) {
             passwordPolicyValidator.recordPasswordChange(tenantId, user.getId(), encodedPassword);
         }
 
         /*
-         * Clear failed-login lock information.
+         * Clear password-related locks and reset requirement.
+         * Preserve unrelated administrative, inactivity, or soft locks.
          */
         userSecurityStateRepository
                 .findByTenantIdAndUserId(
@@ -310,16 +333,37 @@ public class PasswordRecoveryService {
                         user.getId()
                 )
                 .ifPresent(securityState -> {
-
-                    securityState.setFailedLoginAttempts(0);
-                    securityState.setLockedAt(null);
-                    securityState.setLockReason(null);
+                    securityState.setPasswordResetRequired(false);
                     securityState.setLastPasswordResetAt(now);
 
-                    userSecurityStateRepository.save(
-                            securityState
+                    String lockReason = securityState.getLockReason();
+                    boolean isPasswordRelatedLock = lockReason != null && (
+                            "PASSWORD_RESET_REQUIRED".equalsIgnoreCase(lockReason)
+                            || "MAX_FAILED_LOGIN_ATTEMPTS".equalsIgnoreCase(lockReason)
+                            || "PASSWORD_EXPIRED".equalsIgnoreCase(lockReason)
+                            || "PASSWORD_LOCK".equalsIgnoreCase(lockReason)
                     );
+
+                    if (isPasswordRelatedLock) {
+                        securityState.setFailedLoginAttempts(0);
+                        securityState.setLockedAt(null);
+                        securityState.setLockReason(null);
+                        if (!"DISABLED".equalsIgnoreCase(user.getStatus())) {
+                            user.setStatus("ACTIVE");
+                        }
+                    }
+
+                    userSecurityStateRepository.save(securityState);
                 });
+
+        userRepository.save(user);
+
+        /*
+         * Changing password invalidates existing sessions.
+         */
+        if (userSessionService != null) {
+            userSessionService.revokeExistingSessions(tenantId, user.getId(), "PASSWORD_RESET");
+        }
 
         /*
          * One-time token: mark it consumed.

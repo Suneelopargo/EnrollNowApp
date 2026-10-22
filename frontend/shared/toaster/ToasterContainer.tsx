@@ -61,6 +61,19 @@ export const ToasterContainer: React.FC<ToasterContainerProps> = ({ className = 
             <div className="enl-toast-content">
               {item.title && <div className="enl-toast-title">{item.title}</div>}
               <div className="enl-toast-message">{item.message}</div>
+              {item.action && (
+                <button
+                  type="button"
+                  className="enl-toast-action-btn"
+                  onClick={() => {
+                    item.action?.onClick?.();
+                    dismiss(item.id);
+                  }}
+                  aria-label={item.action.label}
+                >
+                  {item.action.label}
+                </button>
+              )}
             </div>
             <button
               type="button"

@@ -1,5 +1,7 @@
 package com.enrollnow.identity.controllers;
 
+import com.enrollnow.identity.dtos.ForceResetResultDto;
+import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
 import com.enrollnow.identity.services.SecuritySettingsService;
 import com.enrollnow.identity.services.SiteAuthorizationService;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -37,12 +40,26 @@ public class SecuritySettingsController {
         return ResponseEntity.ok(securitySettingsService.getSecuritySettings(effectiveTenantId));
     }
 
+    @GetMapping("/password-policy")
+    public ResponseEntity<PasswordPolicyDto> getPasswordPolicy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @RequestParam(name = "token", required = false) String token) {
+        return ResponseEntity.ok(securitySettingsService.getPublicPasswordPolicy(tenantId, token));
+    }
+
     @PutMapping
     public ResponseEntity<SecuritySettingsDto> updateSecuritySettings(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @Valid @RequestBody SecuritySettingsDto dto) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         return ResponseEntity.ok(securitySettingsService.updateSecuritySettings(effectiveTenantId, dto));
+    }
+
+    @PostMapping("/force-password-reset")
+    public ResponseEntity<ForceResetResultDto> forcePasswordReset(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        return ResponseEntity.ok(securitySettingsService.forcePasswordReset(effectiveTenantId));
     }
 
     @PostMapping("/reset-defaults")

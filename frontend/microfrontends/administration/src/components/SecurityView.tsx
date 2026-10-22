@@ -17,11 +17,12 @@ import {
   SecuritySettingsResponse,
 } from '../../../../shared/api/securitySettingsApi';
 import { toast } from '../../../../shared/toaster';
-import { useFocusTrap } from '../../../../shared/accessibility/useFocusTrap';
+import { confirmation } from '../../../../shared/confirmation';
 
 export interface SecurityViewProps {
   tenantId?: string;
   isFullSiteAdmin?: boolean;
+  canEdit?: boolean;
 }
 
 type TimeUnit = 'days' | 'weeks' | 'months' | 'years';
@@ -118,7 +119,9 @@ function mapResponseToForm(resp: SecuritySettingsResponse): FormState {
 export const SecurityView: React.FC<SecurityViewProps> = ({
   tenantId,
   isFullSiteAdmin = true,
+  canEdit,
 }) => {
+  const isEditable = canEdit !== undefined ? canEdit : isFullSiteAdmin;
   const [formState, setFormState] = useState<FormState>({
     lockAfterNAttempts: 10,
     preventConcurrentSessions: false,
@@ -141,13 +144,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [isDirty, setIsDirty] = useState<boolean>(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
-  const resetTrapRef = useFocusTrap<HTMLDivElement>({
-    active: showResetModal,
-    onEscape: () => setShowResetModal(false),
-    returnFocus: true,
-  });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -215,6 +212,18 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
     try {
       setSaving(true);
+
+      // Detect if password complexity requirements specifically changed
+      const passwordRequirementsChanged = Boolean(
+        savedSettings && (
+          formState.minimumPasswordLength !== savedSettings.minimumPasswordLength ||
+          formState.minimumPasswordStrength !== (savedSettings.minimumPasswordStrength || 'MODERATE').toUpperCase() ||
+          formState.requireDigit !== (savedSettings.requireDigit ?? true) ||
+          formState.requireSymbol !== (savedSettings.requireSymbol ?? true) ||
+          formState.requireMixedCase !== (savedSettings.requireMixedCase ?? true)
+        )
+      );
+
       const computedLogoutMinutes = unitAndValueToMinutes(
         formState.logoutAfterValue,
         formState.logoutAfterUnit
@@ -239,13 +248,43 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
       setFormState(mapResponseToForm(updated));
       setIsDirty(false);
       setErrors({});
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('enrollnow_security_policy_updated', { detail: updated }));
         if (updated?.inactivityLogoutMinutes) {
           localStorage.setItem('enrollnow_inactivity_minutes', String(updated.inactivityLogoutMinutes));
         }
       }
-      toast.success('Security settings updated successfully.');
+
+      toast.success('Security settings saved');
+
+      if (passwordRequirementsChanged) {
+        confirmation.confirm({
+          title: 'Reset Password for All Users in Team',
+          message:
+            "You just changed the password requirements for the team. New passwords will have to comply with the new requirements, but current passwords can't be checked. You can choose to reset all passwords in the team, or do nothing and wait for users to create new passwords.",
+          intent: 'danger',
+          confirmText: 'Force reset all passwords',
+          cancelText: 'Leave existing passwords intact',
+          loadingText: 'Resetting All Passwords...',
+          onConfirm: async () => {
+            try {
+              const res = await securitySettingsApi.forcePasswordReset(tenantId);
+              toast.success(
+                res.message || 'All passwords reset! Reset links have been emailed to affected users.'
+              );
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message || err?.message || 'Failed to force reset passwords';
+              toast.error(msg, { title: 'Force Reset Failed' });
+              throw err;
+            }
+          },
+          onCancel: () => {
+            // No info toast when closed/cancelled per user requirement
+          },
+        });
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save security settings';
       toast.error(msg, { title: 'Save Failed' });
@@ -263,28 +302,41 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
     }
   };
 
-  const handleResetToDefaults = async () => {
-    try {
-      setIsResetting(true);
-      const reset = await securitySettingsApi.resetToDefaultSecuritySettings(tenantId);
-      setSavedSettings(reset);
-      setFormState(mapResponseToForm(reset));
-      setIsDirty(false);
-      setErrors({});
-      setShowResetModal(false);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('enrollnow_security_policy_updated', { detail: reset }));
-        if (reset?.inactivityLogoutMinutes) {
-          localStorage.setItem('enrollnow_inactivity_minutes', String(reset.inactivityLogoutMinutes));
+  const handleResetToDefaults = () => {
+    confirmation.confirm({
+      title: 'Reset to Default Settings',
+      message:
+        'Are you sure you want to reset all security settings to the recommended default values? This action cannot be undone.',
+      intent: 'warning',
+      confirmText: 'Reset to Defaults',
+      cancelText: 'Cancel',
+      loadingText: 'Resetting...',
+      onConfirm: async () => {
+        try {
+          setIsResetting(true);
+          const reset = await securitySettingsApi.resetToDefaultSecuritySettings(tenantId);
+          setSavedSettings(reset);
+          setFormState(mapResponseToForm(reset));
+          setIsDirty(false);
+          setErrors({});
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('enrollnow_security_policy_updated', { detail: reset })
+            );
+            if (reset?.inactivityLogoutMinutes) {
+              localStorage.setItem('enrollnow_inactivity_minutes', String(reset.inactivityLogoutMinutes));
+            }
+          }
+          toast.success('Security settings reset to recommended defaults.');
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || 'Failed to reset settings';
+          toast.error(msg, { title: 'Reset Failed' });
+          throw err;
+        } finally {
+          setIsResetting(false);
         }
-      }
-      toast.success('Security settings reset to recommended defaults.');
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to reset settings';
-      toast.error(msg, { title: 'Reset Failed' });
-    } finally {
-      setIsResetting(false);
-    }
+      },
+    });
   };
 
   if (loading) {
@@ -300,7 +352,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
   return (
     <div className="sec-view-wrapper">
-      {/* Clean Top Header Bar (Matching Legacy Security Settings Title & Reset Action) */}
+      {/* Clean Top Header Bar */}
       <div className="sec-header-bar">
         <div className="sec-header-title-row">
           <h2 className="sec-header-title">Security Settings</h2>
@@ -312,16 +364,36 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           )}
         </div>
 
-        {isFullSiteAdmin && (
-          <button
-            type="button"
-            className="sec-btn-reset-top"
-            onClick={() => setShowResetModal(true)}
-            disabled={saving || isResetting}
-          >
-            <RotateCcw size={14} aria-hidden="true" />
-            <span>Reset to Default Settings</span>
-          </button>
+        {isEditable && (
+          <div className="sec-header-actions-group">
+            <button
+              type="button"
+              className="sec-btn-save-main"
+              onClick={handleSave}
+              disabled={!isDirty || saving || !isEditable}
+            >
+              <Save size={14} aria-hidden="true" />
+              <span>{saving ? 'Saving...' : 'Save Settings'}</span>
+            </button>
+            <button
+              type="button"
+              className="sec-btn-discard-main"
+              onClick={handleDiscard}
+              disabled={!isDirty || saving}
+            >
+              <Undo2 size={14} aria-hidden="true" />
+              <span>Discard Changes</span>
+            </button>
+            <button
+              type="button"
+              className="sec-btn-reset-top"
+              onClick={handleResetToDefaults}
+              disabled={saving || isResetting}
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              <span>Reset to Default Settings</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -360,7 +432,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.lockAfterNAttempts ? 'is-invalid' : ''}`}
                     value={formState.lockAfterNAttempts}
                     onChange={(e) => updateField('lockAfterNAttempts', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <span className="sec-unit-suffix">attempts</span>
                 </div>
@@ -385,7 +457,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     type="checkbox"
                     checked={formState.preventConcurrentSessions}
                     onChange={(e) => updateField('preventConcurrentSessions', e.target.checked)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <span className="sec-toggle-slider" />
                 </label>
@@ -408,13 +480,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.logoutAfterValue ? 'is-invalid' : ''}`}
                     value={formState.logoutAfterValue}
                     onChange={(e) => updateField('logoutAfterValue', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <select
                     className="sec-dropdown-select"
                     value={formState.logoutAfterUnit}
                     onChange={(e) => updateField('logoutAfterUnit', e.target.value as LogoutUnit)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                     aria-label="Logout after inactivity unit"
                   >
                     {LOGOUT_UNIT_OPTIONS.map((opt) => (
@@ -445,13 +517,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.inactivityLockValue ? 'is-invalid' : ''}`}
                     value={formState.inactivityLockValue}
                     onChange={(e) => updateField('inactivityLockValue', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <select
                     className="sec-dropdown-select"
                     value={formState.inactivityLockUnit}
                     onChange={(e) => updateField('inactivityLockUnit', e.target.value as TimeUnit)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                     aria-label="Lock after inactivity unit"
                   >
                     {TIME_UNIT_OPTIONS.map((opt) => (
@@ -509,13 +581,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.passwordExpiryValue ? 'is-invalid' : ''}`}
                     value={formState.passwordExpiryValue}
                     onChange={(e) => updateField('passwordExpiryValue', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <select
                     className="sec-dropdown-select"
                     value={formState.passwordExpiryUnit}
                     onChange={(e) => updateField('passwordExpiryUnit', e.target.value as TimeUnit)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                     aria-label="Password expiration unit"
                   >
                     {TIME_UNIT_OPTIONS.map((opt) => (
@@ -547,7 +619,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.preventLastNPasswords ? 'is-invalid' : ''}`}
                     value={formState.preventLastNPasswords}
                     onChange={(e) => updateField('preventLastNPasswords', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <span className="sec-unit-suffix">previous passwords</span>
                 </div>
@@ -588,7 +660,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.minimumPasswordLength ? 'is-invalid' : ''}`}
                     value={formState.minimumPasswordLength}
                     onChange={(e) => updateField('minimumPasswordLength', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                 </div>
                 {errors.minimumPasswordLength && (
@@ -610,7 +682,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   style={{ width: '220px' }}
                   value={formState.minimumPasswordStrength}
                   onChange={(e) => updateField('minimumPasswordStrength', e.target.value)}
-                  disabled={!isFullSiteAdmin || saving}
+                  disabled={!isEditable || saving}
                 >
                   {PASSWORD_STRENGTH_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -629,7 +701,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                       type="checkbox"
                       checked={formState.requireDigit}
                       onChange={(e) => updateField('requireDigit', e.target.checked)}
-                      disabled={!isFullSiteAdmin || saving}
+                      disabled={!isEditable || saving}
                       aria-label="Require at least one digit"
                     />
                     <span className="sec-toggle-slider" />
@@ -643,7 +715,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                       type="checkbox"
                       checked={formState.requireSymbol}
                       onChange={(e) => updateField('requireSymbol', e.target.checked)}
-                      disabled={!isFullSiteAdmin || saving}
+                      disabled={!isEditable || saving}
                       aria-label="Require at least one symbol"
                     />
                     <span className="sec-toggle-slider" />
@@ -657,7 +729,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                       type="checkbox"
                       checked={formState.requireMixedCase}
                       onChange={(e) => updateField('requireMixedCase', e.target.checked)}
-                      disabled={!isFullSiteAdmin || saving}
+                      disabled={!isEditable || saving}
                       aria-label="Require mixed case"
                     />
                     <span className="sec-toggle-slider" />
@@ -667,93 +739,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Bottom Action Bar (Save Settings / Discard Changes) */}
-        <div className="sec-bottom-action-bar">
-          <button
-            type="submit"
-            className="sec-btn-save-main"
-            disabled={!isDirty || saving || !isFullSiteAdmin}
-          >
-            <Save size={15} aria-hidden="true" />
-            <span>{saving ? 'Saving...' : 'Save Settings'}</span>
-          </button>
-          <button
-            type="button"
-            className="sec-btn-discard-main"
-            onClick={handleDiscard}
-            disabled={!isDirty || saving}
-          >
-            <Undo2 size={15} aria-hidden="true" />
-            <span>Discard Changes</span>
-          </button>
-        </div>
       </form>
-
-      {/* Reset to Default Settings Modal */}
-      {showResetModal && (
-        <div
-          className="sec-modal-overlay"
-          role="presentation"
-        >
-          <div
-            ref={resetTrapRef}
-            className="sec-modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-modal-title"
-            tabIndex={-1}
-          >
-            <button
-              type="button"
-              className="sec-modal-close-btn"
-              onClick={() => setShowResetModal(false)}
-              aria-label="Close dialog"
-            >
-              <X size={18} aria-hidden="true" />
-            </button>
-
-            <div className="sec-modal-alert-icon-wrap">
-              <AlertCircle size={30} aria-hidden="true" />
-            </div>
-
-            <h3 id="reset-modal-title" className="sec-modal-heading">
-              Reset to Default Settings
-            </h3>
-
-            <p className="sec-modal-body-text">
-              Are you sure you want to reset all security settings to the recommended default values?<br />
-              This action cannot be undone.
-            </p>
-
-            <div className="sec-modal-btn-row">
-              <button
-                type="button"
-                className="sec-modal-btn-cancel"
-                onClick={() => setShowResetModal(false)}
-                disabled={isResetting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="sec-modal-btn-confirm"
-                onClick={handleResetToDefaults}
-                disabled={isResetting}
-              >
-                {isResetting ? (
-                  <>
-                    <Clock className="animate-spin" size={14} style={{ display: 'inline', marginRight: 6 }} />
-                    <span>Resetting...</span>
-                  </>
-                ) : (
-                  <span>Reset to Defaults</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

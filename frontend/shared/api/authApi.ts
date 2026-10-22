@@ -52,6 +52,14 @@ export interface ResetPasswordRequest {
   newPassword: string;
 }
 
+export interface PasswordPolicy {
+  minimumPasswordLength: number;
+  minimumPasswordStrength: 'WEAK' | 'MODERATE' | 'STRONG' | string;
+  requireDigit: boolean;
+  requireSymbol: boolean;
+  requireMixedCase: boolean;
+}
+
 export interface ResetPasswordResponse {
   message?: string;
 }
@@ -82,7 +90,9 @@ const CANONICAL_ROLE_PERMISSIONS: Record<string, string[]> = {
     'SITE_USERS_VIEW',
     'SITE_USERS_MANAGE',
     'SITE_IMPORT_EXPORT',
+    'SITE_SECURITY_MANAGE',
     'SITE_SETTINGS_VIEW',
+    'SITE_SETTINGS_MANAGE',
   ],
   SITE_REGISTRY: [
     'REGISTRY_VIEW',
@@ -281,6 +291,19 @@ export function userIsFullSiteAdmin(user: AuthUser | null | undefined): boolean 
     userHasRole(user, 'ROLE_SUPER_ADMIN') ||
     userHasRole(user, 'ADMIN') ||
     Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_ADMIN_USERS_MANAGE'))
+  );
+}
+
+export function userCanManageSiteSettings(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  return (
+    userIsFullSiteAdmin(user) ||
+    userHasRole(user, 'SITE_ADMIN') ||
+    userHasRole(user, 'SITE_MANAGER') ||
+    userHasRole(user, 'ROLE_SUPER_ADMIN') ||
+    userHasRole(user, 'ADMIN') ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_SECURITY_MANAGE')) ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_SETTINGS_MANAGE'))
   );
 }
 
@@ -559,6 +582,30 @@ export const authApi = {
    * Resets password using token received via email.
    * Calls POST /api/v1/tenants/{tenantId}/auth/reset-password
    */
+  /**
+   * Retrieves password requirements policy for a tenant.
+   * Calls GET /api/v1/tenants/{tenantId}/auth/password-policy
+   */
+  async getPasswordPolicy(tenantId?: string, token?: string): Promise<PasswordPolicy> {
+    const tid = tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
+    const params = token ? { token } : undefined;
+    const res = await apiClient.get<PasswordPolicy>(
+      `/api/v1/tenants/${tid}/auth/password-policy`,
+      { params, skipToast: true } as any
+    );
+    const data = (res.data as any)?.data ?? res.data;
+    if (!data) {
+      throw new Error('Failed to load authoritative password policy');
+    }
+    return {
+      minimumPasswordLength: data.minimumPasswordLength ?? 10,
+      minimumPasswordStrength: (data.minimumPasswordStrength || 'MODERATE').toUpperCase(),
+      requireDigit: data.requireDigit ?? true,
+      requireSymbol: data.requireSymbol ?? true,
+      requireMixedCase: data.requireMixedCase ?? true,
+    };
+  },
+
   async resetPassword(payload: ResetPasswordRequest): Promise<ResetPasswordResponse> {
     const tenantId = payload.tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
     const body = {

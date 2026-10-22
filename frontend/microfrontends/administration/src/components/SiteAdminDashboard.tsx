@@ -3,7 +3,7 @@ import { toast } from '../../../../shared/toaster';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { apiClient } from '../../../../shared/api-client';
 import { MfeContext, AuthUser } from '../../../../shared/contracts';
-import { deriveUserAccessFlags, userIsFullSiteAdmin } from '../../../../shared/api/authApi';
+import { deriveUserAccessFlags, userIsFullSiteAdmin, userCanManageSiteSettings } from '../../../../shared/api/authApi';
 import {
   administrationApi,
   RoleResponse,
@@ -58,6 +58,11 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
   const isFullSiteAdmin = useMemo(() => {
     if (!currentUser) return true;
     return userIsFullSiteAdmin(currentUser);
+  }, [currentUser]);
+
+  const canManageSiteSettings = useMemo(() => {
+    if (!currentUser) return true;
+    return userCanManageSiteSettings(currentUser);
   }, [currentUser]);
 
   const activeSiteId = useMemo(() => {
@@ -574,29 +579,19 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
           />
         );
       case 'security':
-        return isFullSiteAdmin ? (
+        return (
           <SecurityView
             tenantId={currentUser?.tenantId}
-            isFullSiteAdmin={isFullSiteAdmin}
-          />
-        ) : (
-          <UsersGrid
-            users={users}
-            loading={loadingUsers}
-            error={usersError}
-            onAddUser={handleOpenAddUser}
-            onEditUser={handleOpenEditUser}
-            onDeleteUser={handleDeleteUser}
-            onToggleStatus={handleToggleStatus}
-            onRefresh={handleRefresh}
-            onRetry={() => fetchUsers(false)}
+            isFullSiteAdmin={canManageSiteSettings}
+            canEdit={canManageSiteSettings}
           />
         );
       case 'settings':
         return (
           <GeneralSettingsView
             tenantId={currentUser?.tenantId}
-            isFullSiteAdmin={isFullSiteAdmin}
+            isFullSiteAdmin={canManageSiteSettings}
+            canEdit={canManageSiteSettings}
           />
         );
       default:

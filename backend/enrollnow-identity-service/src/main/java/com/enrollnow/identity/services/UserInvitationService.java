@@ -4,20 +4,17 @@ import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 import com.enrollnow.identity.models.UserActionToken;
 import com.enrollnow.identity.dtos.ActivateAccountRequest;
 import com.enrollnow.identity.models.User;
+import com.enrollnow.identity.models.UserEmail;
 import com.enrollnow.identity.models.UserSecurityState;
+import com.enrollnow.identity.repositories.UserActionTokenRepository;
+import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import com.enrollnow.identity.repositories.UserActionTokenRepository;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.enrollnow.identity.models.User;
-import com.enrollnow.identity.models.UserEmail;
-import com.enrollnow.identity.repositories.UserEmailRepository;
-import com.enrollnow.identity.repositories.UserRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -33,16 +30,13 @@ import java.util.UUID;
 public class UserInvitationService {
 
     /*
-     * Existing V2 database constraint currently calls this ENROLLMENT.
-     * In application terminology this means STAFF ACCOUNT ACTIVATION,
-     * not participant study enrollment.
+     * Existing V2 database constraint calls this ENROLLMENT.
+     * In application terminology this means STAFF ACCOUNT ACTIVATION.
      */
     private static final String TOKEN_TYPE = "ENROLLMENT";
-
     private static final int TOKEN_EXPIRY_DAYS = 14;
 
     private final UserActionTokenRepository userActionTokenRepository;
-    
     private final UserRepository userRepository;
     private final UserEmailRepository userEmailRepository;
     private final InvitationEmailService invitationEmailService;
@@ -50,7 +44,7 @@ public class UserInvitationService {
     private final PasswordEncoder passwordEncoder;
     private PasswordPolicyValidator passwordPolicyValidator;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired(required = false)
     public void setPasswordPolicyValidator(PasswordPolicyValidator passwordPolicyValidator) {
         this.passwordPolicyValidator = passwordPolicyValidator;
     }
@@ -67,10 +61,10 @@ public class UserInvitationService {
         this.userRepository = userRepository;
         this.userEmailRepository = userEmailRepository;
         this.invitationEmailService = invitationEmailService;
-		this.userSecurityStateRepository = userSecurityStateRepository;
-		this.passwordEncoder = passwordEncoder;
-		
+        this.userSecurityStateRepository = userSecurityStateRepository;
+        this.passwordEncoder = passwordEncoder;
     }
+
     @Transactional
     public String createActivationToken(
             UUID tenantId,
@@ -114,11 +108,6 @@ public class UserInvitationService {
                 activationToken
         );
 
-        /*
-         * Temporary development behavior.
-         * Later this raw token will be emailed
-         * to the newly created staff member.
-         */
         return rawToken;
     }
 
@@ -188,12 +177,6 @@ public class UserInvitationService {
                                 )
                         );
 
-        /*
-         * Your existing method:
-         * generates raw token,
-         * stores only SHA-256 hash,
-         * expires in 14 days.
-         */
         String rawToken =
                 createActivationToken(
                         tenantId,
@@ -224,12 +207,6 @@ public class UserInvitationService {
             throw new IllegalArgumentException(
                     "Password and confirmation do not match"
             );
-        }
-
-        if (passwordPolicyValidator != null) {
-            passwordPolicyValidator.validatePassword(tenantId, null, request.getPassword());
-        } else {
-            validatePasswordPolicy(request.getPassword());
         }
 
         String tokenHash =
@@ -283,6 +260,12 @@ public class UserInvitationService {
                                 )
                         );
 
+        if (passwordPolicyValidator != null) {
+            passwordPolicyValidator.validatePassword(tenantId, user.getId(), request.getPassword());
+        } else {
+            validatePasswordPolicy(request.getPassword());
+        }
+
         String encodedPassword =
                 passwordEncoder.encode(
                         request.getPassword()
@@ -293,9 +276,7 @@ public class UserInvitationService {
         /*
          * First-time account activation.
          * Keep ACTIVE users active.
-         *
-         * We should NOT reactivate a user who was
-         * deliberately disabled by an administrator.
+         * Do NOT reactivate a user who was deliberately disabled.
          */
         if (!"DISABLED".equalsIgnoreCase(
                 user.getStatus())) {
@@ -315,15 +296,13 @@ public class UserInvitationService {
                         user.getId()
                 )
                 .ifPresent(securityState -> {
-
+                    securityState.setPasswordResetRequired(false);
                     securityState.setFailedLoginAttempts(0);
                     securityState.setLockedAt(null);
                     securityState.setLockReason(null);
                     securityState.setLastPasswordResetAt(now);
 
-                    userSecurityStateRepository.save(
-                            securityState
-                    );
+                    userSecurityStateRepository.save(securityState);
                 });
 
         activationToken.setUsedAt(now);
