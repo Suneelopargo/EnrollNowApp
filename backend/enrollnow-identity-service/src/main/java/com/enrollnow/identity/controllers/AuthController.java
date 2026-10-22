@@ -51,9 +51,11 @@ public class AuthController {
     }
 
     @GetMapping("/password-policy")
-    public ResponseEntity<PasswordPolicyDto> getPasswordPolicy(@PathVariable UUID tenantId) {
+    public ResponseEntity<PasswordPolicyDto> getPasswordPolicy(
+            @PathVariable UUID tenantId,
+            @RequestParam(required = false) String token) {
         return ResponseEntity.ok(
-                securitySettingsService.getPublicPasswordPolicy(tenantId)
+                securitySettingsService.getPublicPasswordPolicy(tenantId, token)
         );
     }
 
@@ -78,10 +80,6 @@ public class AuthController {
                         request
                 );
 
-        /*
-         * Temporary developer response.
-         * Later the token will be emailed and not returned.
-         */
         if (resetToken == null) {
             return ResponseEntity.ok(
                     java.util.Map.of(

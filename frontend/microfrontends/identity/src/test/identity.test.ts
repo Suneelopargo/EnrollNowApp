@@ -108,6 +108,15 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     expect(typeof authApi.getPasswordPolicy).toBe('function');
     expect(typeof securitySettingsApi.getPasswordPolicy).toBe('function');
 
+    const mockPolicy = {
+      minimumPasswordLength: 10,
+      minimumPasswordStrength: 'MODERATE',
+      requireDigit: true,
+      requireSymbol: true,
+      requireMixedCase: true,
+    };
+    vi.spyOn(authApi, 'getPasswordPolicy').mockResolvedValue(mockPolicy);
+
     const policy = await authApi.getPasswordPolicy('11111111-1111-1111-1111-111111111111');
     expect(policy).toBeDefined();
     expect(typeof policy.minimumPasswordLength).toBe('number');

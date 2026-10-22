@@ -122,7 +122,7 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
             <option value="import">Import</option>
             <option value="export">Export</option>
             {isFullSiteAdmin && <option value="audit">Audit Log</option>}
-            {isFullSiteAdmin && <option value="security">Security</option>}
+            <option value="security">Security</option>
             <option value="settings">General Settings</option>
           </select>
         </div>
@@ -253,19 +253,17 @@ export const SiteAdminHorizontalNav: React.FC<SiteAdminHorizontalNavProps> = ({
         )}
 
         {/* Security */}
-        {isFullSiteAdmin && (
-          <button
-            ref={activeTab === 'security' ? activeTabRef : null}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'security'}
-            className={`site-admin-tab-btn ${activeTab === 'security' ? 'is-active' : ''}`}
-            onClick={() => onTabChange('security')}
-          >
-            <Shield size={16} aria-hidden="true" />
-            <span>Security</span>
-          </button>
-        )}
+        <button
+          ref={activeTab === 'security' ? activeTabRef : null}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'security'}
+          className={`site-admin-tab-btn ${activeTab === 'security' ? 'is-active' : ''}`}
+          onClick={() => onTabChange('security')}
+        >
+          <Shield size={16} aria-hidden="true" />
+          <span>Security</span>
+        </button>
 
         {/* General Settings */}
         <button

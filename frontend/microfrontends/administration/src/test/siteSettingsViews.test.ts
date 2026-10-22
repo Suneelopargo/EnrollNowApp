@@ -1,5 +1,7 @@
 // frontend/microfrontends/administration/src/test/siteSettingsViews.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   SecurityView,
   GeneralSettingsView,
@@ -8,6 +10,7 @@ import {
   ExportView,
   AuditLogView,
 } from '../components/SiteAdminViews';
+import { SiteAdminHorizontalNav } from '../components/SiteAdminHorizontalNav';
 import { securitySettingsApi, SecuritySettingsResponse } from '../../../../shared/api/securitySettingsApi';
 import { generalSettingsApi, GeneralSettingsResponse } from '../../../../shared/api/generalSettingsApi';
 
@@ -193,6 +196,36 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
       } catch (err: any) {
         expect(err.message).toBe('Network error');
       }
+    });
+  });
+
+  describe('SiteAdminHorizontalNav Security Tab Visibility', () => {
+    it('renders the Security tab for non-full site admins (e.g. Site Manager, Registry only access)', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SiteAdminHorizontalNav, {
+          activeTab: 'studies',
+          onTabChange: vi.fn(),
+          isFullSiteAdmin: false,
+        })
+      );
+
+      // Security tab MUST be present even when isFullSiteAdmin is false
+      expect(html).toContain('Security');
+      // Audit log remains restricted to full site admin
+      expect(html).not.toContain('Audit Log');
+    });
+
+    it('renders both Security and Audit Log tabs for Full Site Admin', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SiteAdminHorizontalNav, {
+          activeTab: 'studies',
+          onTabChange: vi.fn(),
+          isFullSiteAdmin: true,
+        })
+      );
+
+      expect(html).toContain('Security');
+      expect(html).toContain('Audit Log');
     });
   });
 });

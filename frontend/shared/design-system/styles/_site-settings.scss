@@ -749,3 +749,130 @@
   color: #64748b;
   margin-top: 4px;
 }
+
+// Global modal parity for Reset All Passwords
+.modal-container.sec-reset-passwords-global-modal {
+  max-width: 620px;
+  width: 100%;
+  background-color: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+
+  .modal-header {
+    background: #ffffff !important;
+    border-bottom: 1px solid #e5e5e5 !important;
+    padding: 14px 20px !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    h3 {
+      color: #337ab7 !important;
+      font-size: 18px !important;
+      font-weight: 500 !important;
+      margin: 0;
+      letter-spacing: normal;
+    }
+
+    button {
+      background: transparent !important;
+      border: none !important;
+      color: #888888 !important;
+      padding: 2px 6px !important;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: opacity 0.15s ease;
+
+      &:hover {
+        opacity: 1;
+        color: #000000 !important;
+      }
+    }
+  }
+
+  .modal-body {
+    padding: 20px !important;
+    color: #333333 !important;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+
+    .sec-modal-body-copy {
+      margin: 0;
+      color: #333333;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+  }
+
+  .modal-footer {
+    background-color: #ffffff !important;
+    border-top: 1px solid #e5e5e5 !important;
+    padding: 14px 20px !important;
+    display: block !important;
+    width: 100%;
+    box-sizing: border-box;
+
+    .sec-modal-footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .sec-btn-force-reset {
+      background-color: #d9534f;
+      border: 1px solid #d43f3a;
+      color: #ffffff;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 400;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+
+      &:hover:not(:disabled) {
+        background-color: #c9302c;
+        border-color: #ac2925;
+      }
+
+      &:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .sec-btn-minus-icon {
+        font-weight: bold;
+        font-size: 14px;
+        line-height: 1;
+      }
+    }
+
+    .sec-btn-leave-intact {
+      background-color: #ffffff;
+      border: 1px solid #cccccc;
+      color: #333333;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 400;
+      cursor: pointer;
+      margin-left: auto;
+      transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+
+      &:hover:not(:disabled) {
+        background-color: #e6e6e6;
+        border-color: #adadad;
+      }
+
+      &:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+    }
+  }
+}
+

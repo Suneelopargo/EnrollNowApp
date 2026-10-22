@@ -99,17 +99,61 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   onResendEnrollment,
   onResetPassword,
 }) => {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [sitePermissions, setSitePermissions] = useState('None');
-  const [studyRows, setStudyRows] = useState<StudyAssignmentState[]>([]);
-
   const resolvedSiteRoles: RoleOption[] =
     siteRoles && siteRoles.length > 0 ? siteRoles : [];
 
   const resolvedStudyRoles: RoleOption[] =
     studyRoles && studyRoles.length > 0 ? studyRoles : [];
+
+  const [firstName, setFirstName] = useState(() => {
+    if (!userToEdit) return '';
+    const parts = (userToEdit.name || '').trim().split(/\s+/);
+    return parts[0] || userToEdit.firstName || '';
+  });
+  const [lastName, setLastName] = useState(() => {
+    if (!userToEdit) return '';
+    const parts = (userToEdit.name || '').trim().split(/\s+/);
+    return parts.slice(1).join(' ') || userToEdit.lastName || '';
+  });
+  const [email, setEmail] = useState(() => userToEdit?.email || '');
+  const [sitePermissions, setSitePermissions] = useState<string>(() => {
+    if (!userToEdit) return 'None';
+    const rawSite = userToEdit.sitePermissionCode || userToEdit.sitePermissions;
+    return toSitePermissionLabel(rawSite) || 'None';
+  });
+  const [studyRows, setStudyRows] = useState<StudyAssignmentState[]>(() => {
+    if (!isOpen) return [];
+    const studyList = Array.isArray(availableStudies) ? availableStudies : [];
+    if (userToEdit) {
+      const assignmentsByStudyId = new Map<string, { role?: string | null; permission?: string | null }>();
+      const assignmentsByStudyName = new Map<string, { role?: string | null; permission?: string | null }>();
+      if (Array.isArray(userToEdit.studyAssignments)) {
+        for (const sa of userToEdit.studyAssignments) {
+          assignmentsByStudyId.set(sa.id, { role: sa.studyRole, permission: sa.studyPermission });
+          assignmentsByStudyName.set(sa.name, { role: sa.studyRole, permission: sa.studyPermission });
+        }
+      }
+      const assignedNameSet = new Set(userToEdit.studies || []);
+      return studyList.map((study) => {
+        const match = assignmentsByStudyId.get(study.id) || assignmentsByStudyName.get(study.name);
+        const isAssigned = !!match || assignedNameSet.has(study.name);
+        const rawPerm = match?.permission;
+        const uiPerm = rawPerm ? toStudyPermissionLabel(rawPerm) : 'RA';
+        return {
+          studyId: study.id,
+          studyName: study.name,
+          assigned: isAssigned,
+          permissions: uiPerm,
+        };
+      });
+    }
+    return studyList.map((study) => ({
+      studyId: study.id,
+      studyName: study.name,
+      assigned: false,
+      permissions: 'RA',
+    }));
+  });
 
   const sitePermissionOptions = useMemo(() => {
     return [...resolvedSiteRoles]
@@ -127,11 +171,19 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       }));
   }, [resolvedSiteRoles]);
 
-  const studyPermissionOptions = resolvedStudyRoles.map((r) => ({
-    code: r.code,
-    label: ROLE_CODE_TO_STUDY_PERMISSION[r.code] || r.name,
-    name: r.name,
-  }));
+  const studyPermissionOptions =
+    resolvedStudyRoles.length > 0
+      ? resolvedStudyRoles.map((r) => ({
+          code: r.code,
+          label: ROLE_CODE_TO_STUDY_PERMISSION[r.code] || r.name,
+          name: r.name,
+        }))
+      : [
+          { code: 'STUDY_RA', label: 'RA', name: 'RA' },
+          { code: 'STUDY_LEADER', label: 'Leader', name: 'Leader' },
+          { code: 'STUDY_ADMIN', label: 'Admin', name: 'Admin' },
+          { code: 'STUDY_READ_ONLY', label: 'Read Only', name: 'Read Only' },
+        ];
 
   const targetEditingSiteRoleCode = useMemo(() => {
     if (!userToEdit) return 'NONE';
@@ -267,7 +319,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           const match = assignmentsByStudyId.get(study.id) || assignmentsByStudyName.get(study.name);
           const isAssigned = !!match || assignedNameSet.has(study.name);
           const rawPerm = match?.permission;
-          const uiPerm = rawPerm ? toStudyPermissionLabel(rawPerm) : 'Admin';
+          const uiPerm = rawPerm ? toStudyPermissionLabel(rawPerm) : 'RA';
           return {
             studyId: study.id,
             studyName: study.name,
@@ -284,7 +336,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
             studyId: study.id,
             studyName: study.name,
             assigned: false,
-            permissions: 'Admin',
+            permissions: 'RA',
           }))
         );
       } else {
@@ -296,7 +348,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
               studyId: study.id,
               studyName: study.name,
               assigned: existing ? existing.assigned : false,
-              permissions: existing ? existing.permissions : 'Admin',
+              permissions: existing ? (existing.permissions || 'RA') : 'RA',
             };
           });
         });
@@ -332,9 +384,16 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     setStudyRows((prev) =>
       prev.map((row, idx) => {
         if (idx !== index) return row;
+        const willBeAssigned = !row.assigned;
+        if (!willBeAssigned) {
+          toast.warning(
+            `The user will be unassigned from all tasks, events, and sites in ${row.studyName}.`
+          );
+        }
         return {
           ...row,
-          assigned: !row.assigned,
+          assigned: willBeAssigned,
+          permissions: row.permissions || 'RA',
         };
       })
     );
@@ -342,10 +401,20 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
 
   const handleToggleAll = () => {
     const allChecked = studyRows.every((r) => r.assigned);
+    if (allChecked) {
+      studyRows.forEach((row) => {
+        if (row.assigned) {
+          toast.warning(
+            `The user will be unassigned from all tasks, events, and sites in ${row.studyName}.`
+          );
+        }
+      });
+    }
     setStudyRows((prev) =>
       prev.map((row) => ({
         ...row,
         assigned: !allChecked,
+        permissions: row.permissions || 'RA',
       }))
     );
   };
@@ -394,7 +463,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
       .map((r) => ({
         studyId: r.studyId,
         studyName: r.studyName,
-        permission: r.permissions || 'Admin',
+        permission: r.permissions || 'RA',
       }));
 
     const unassigned = studyRows
@@ -777,7 +846,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
                       {row.assigned ? (
                         <select
                           className="site-admin-study-select"
-                          value={row.permissions || 'Admin'}
+                          value={row.permissions || 'RA'}
                           onChange={(e) => handlePermissionChange(idx, e.target.value)}
                           aria-label={`Study permissions for ${row.studyName}`}
                         >

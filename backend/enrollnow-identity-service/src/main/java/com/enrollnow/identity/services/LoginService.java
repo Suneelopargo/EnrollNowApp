@@ -116,6 +116,10 @@ public class LoginService {
                                 tenantId,
                                 user.getId()));
 
+        if (securityState.isPasswordResetRequired()) {
+            throw new AccountLockedException("Your password has been locked. Please contact an EnrollNow Site Admin at your institution or use the Forgot Password link on the login page.");
+        }
+
         if ("LOCKED".equalsIgnoreCase(user.getStatus())
                 || securityState.getLockedAt() != null) {
 

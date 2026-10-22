@@ -1,17 +1,30 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.dtos.ForceResetResultDto;
 import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
-import com.enrollnow.identity.models.SecuritySettings;
-import com.enrollnow.identity.repositories.SecuritySettingsRepository;
+import com.enrollnow.identity.models.*;
+import com.enrollnow.identity.repositories.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.Base64;
+import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 
 @Service
 public class SecuritySettingsService {
+
+    private static final Logger log = LoggerFactory.getLogger(SecuritySettingsService.class);
 
     public static final int DEFAULT_MAX_FAILED_ATTEMPTS = 10;
     public static final boolean DEFAULT_PREVENT_CONCURRENT_SESSIONS = false;
@@ -27,12 +40,76 @@ public class SecuritySettingsService {
 
     private final SecuritySettingsRepository securitySettingsRepository;
     private final SiteAuthorizationService siteAuthorizationService;
+    private UserRepository userRepository;
+    private UserEmailRepository userEmailRepository;
+    private UserSecurityStateRepository userSecurityStateRepository;
+    private UserSessionService userSessionService;
+    private UserActionTokenRepository userActionTokenRepository;
+    private InvitationEmailService invitationEmailService;
+    private AuditEventRepository auditEventRepository;
 
     public SecuritySettingsService(
             SecuritySettingsRepository securitySettingsRepository,
             SiteAuthorizationService siteAuthorizationService) {
         this.securitySettingsRepository = securitySettingsRepository;
         this.siteAuthorizationService = siteAuthorizationService;
+    }
+
+    @Autowired
+    public SecuritySettingsService(
+            SecuritySettingsRepository securitySettingsRepository,
+            SiteAuthorizationService siteAuthorizationService,
+            @Autowired(required = false) UserRepository userRepository,
+            @Autowired(required = false) UserEmailRepository userEmailRepository,
+            @Autowired(required = false) UserSecurityStateRepository userSecurityStateRepository,
+            @Autowired(required = false) UserSessionService userSessionService,
+            @Autowired(required = false) UserActionTokenRepository userActionTokenRepository,
+            @Autowired(required = false) InvitationEmailService invitationEmailService,
+            @Autowired(required = false) AuditEventRepository auditEventRepository) {
+        this.securitySettingsRepository = securitySettingsRepository;
+        this.siteAuthorizationService = siteAuthorizationService;
+        this.userRepository = userRepository;
+        this.userEmailRepository = userEmailRepository;
+        this.userSecurityStateRepository = userSecurityStateRepository;
+        this.userSessionService = userSessionService;
+        this.userActionTokenRepository = userActionTokenRepository;
+        this.invitationEmailService = invitationEmailService;
+        this.auditEventRepository = auditEventRepository;
+    }
+
+    @Autowired(required = false)
+    public void setUserRepository(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Autowired(required = false)
+    public void setUserEmailRepository(UserEmailRepository userEmailRepository) {
+        this.userEmailRepository = userEmailRepository;
+    }
+
+    @Autowired(required = false)
+    public void setUserSecurityStateRepository(UserSecurityStateRepository userSecurityStateRepository) {
+        this.userSecurityStateRepository = userSecurityStateRepository;
+    }
+
+    @Autowired(required = false)
+    public void setUserSessionService(UserSessionService userSessionService) {
+        this.userSessionService = userSessionService;
+    }
+
+    @Autowired(required = false)
+    public void setUserActionTokenRepository(UserActionTokenRepository userActionTokenRepository) {
+        this.userActionTokenRepository = userActionTokenRepository;
+    }
+
+    @Autowired(required = false)
+    public void setInvitationEmailService(InvitationEmailService invitationEmailService) {
+        this.invitationEmailService = invitationEmailService;
+    }
+
+    @Autowired(required = false)
+    public void setAuditEventRepository(AuditEventRepository auditEventRepository) {
+        this.auditEventRepository = auditEventRepository;
     }
 
     @Transactional
@@ -48,9 +125,23 @@ public class SecuritySettingsService {
 
     @Transactional(readOnly = true)
     public PasswordPolicyDto getPublicPasswordPolicy(UUID tenantId) {
+        return getPublicPasswordPolicy(tenantId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public PasswordPolicyDto getPublicPasswordPolicy(UUID tenantId, String token) {
+        UUID effectiveTenantId = tenantId;
+        if (effectiveTenantId == null && token != null && !token.isBlank() && userActionTokenRepository != null) {
+            String tokenHash = hashToken(token.trim());
+            UserActionToken actionToken = userActionTokenRepository.findByTokenHash(tokenHash).orElse(null);
+            if (actionToken != null) {
+                effectiveTenantId = actionToken.getTenantId();
+            }
+        }
+
         SecuritySettings settings = null;
-        if (tenantId != null) {
-            settings = securitySettingsRepository.findByTenantId(tenantId).orElse(null);
+        if (effectiveTenantId != null) {
+            settings = securitySettingsRepository.findByTenantId(effectiveTenantId).orElse(null);
         }
 
         int minLength = (settings != null && settings.getMinimumPasswordLength() != null)
@@ -125,6 +216,113 @@ public class SecuritySettingsService {
 
         SecuritySettings saved = securitySettingsRepository.save(settings);
         return toDto(saved);
+    }
+
+    @Transactional
+    public ForceResetResultDto forcePasswordReset(UUID tenantId) {
+        siteAuthorizationService.requireTenantMatch(tenantId);
+        siteAuthorizationService.requireSecuritySettingsManage(tenantId);
+
+        UUID callerUserId = siteAuthorizationService.getAuthenticatedCaller()
+                .map(SiteAuthorizationService.CallerIdentity::userId)
+                .orElse(null);
+
+        if (userRepository == null || userSecurityStateRepository == null) {
+            throw new IllegalStateException("User repository not configured for force reset");
+        }
+
+        List<User> users = userRepository.findByTenantId(tenantId);
+        List<User> eligibleUsers = users.stream()
+                .filter(u -> !"DISABLED".equalsIgnoreCase(u.getStatus()))
+                .toList();
+
+        OffsetDateTime now = OffsetDateTime.now();
+        int emailsSent = 0;
+        int emailsFailed = 0;
+
+        for (User user : eligibleUsers) {
+            UserSecurityState state = userSecurityStateRepository
+                    .findByTenantIdAndUserId(tenantId, user.getId())
+                    .orElseGet(() -> {
+                        UserSecurityState ns = new UserSecurityState();
+                        ns.setTenantId(tenantId);
+                        ns.setUserId(user.getId());
+                        ns.setFailedLoginAttempts(0);
+                        return ns;
+                    });
+
+            state.setPasswordResetRequired(true);
+            state.setLockedAt(now);
+            state.setLockReason("PASSWORD_RESET_REQUIRED");
+            userSecurityStateRepository.save(state);
+
+            // Invalidate current sessions
+            if (userSessionService != null) {
+                userSessionService.revokeExistingSessions(tenantId, user.getId(), "PASSWORD_RESET_REQUIRED");
+            }
+
+            // Generate reset token and email
+            if (userActionTokenRepository != null && invitationEmailService != null && userEmailRepository != null) {
+                try {
+                    List<UserActionToken> existing = userActionTokenRepository
+                            .findByTenantIdAndUserIdAndTokenTypeAndUsedAtIsNull(tenantId, user.getId(), "PASSWORD_RESET");
+                    for (UserActionToken t : existing) {
+                        t.setUsedAt(now);
+                        userActionTokenRepository.save(t);
+                    }
+
+                    String rawToken = generateToken();
+                    UserActionToken resetToken = new UserActionToken();
+                    resetToken.setTenantId(tenantId);
+                    resetToken.setUserId(user.getId());
+                    resetToken.setTokenType("PASSWORD_RESET");
+                    resetToken.setTokenHash(hashToken(rawToken));
+                    resetToken.setExpiresAt(now.plusMinutes(30));
+                    userActionTokenRepository.save(resetToken);
+
+                    UserEmail primaryEmail = userEmailRepository
+                            .findByTenantIdAndUserIdAndPrimaryEmailTrue(tenantId, user.getId())
+                            .orElse(null);
+
+                    if (primaryEmail != null) {
+                        String recipientName = (user.getFirstName() != null ? user.getFirstName() : "")
+                                + " " + (user.getLastName() != null ? user.getLastName() : "");
+                        recipientName = recipientName.trim().isEmpty() ? "EnrollNow User" : recipientName.trim();
+
+                        invitationEmailService.sendPasswordReset(
+                                primaryEmail.getEmail(),
+                                recipientName,
+                                tenantId.toString(),
+                                rawToken
+                        );
+                        emailsSent++;
+                    }
+                } catch (Exception ex) {
+                    log.error("Failed to generate or send force reset email to user {}: {}", user.getId(), ex.getMessage(), ex);
+                    emailsFailed++;
+                }
+            }
+        }
+
+        // Record audit event
+        if (auditEventRepository != null) {
+            try {
+                AuditEvent audit = new AuditEvent();
+                audit.setTenantId(tenantId);
+                audit.setActorUserId(callerUserId);
+                audit.setEntityType("SECURITY_SETTINGS");
+                audit.setEntityId(tenantId);
+                audit.setAction("FORCE_RESET_ALL_PASSWORDS");
+                audit.setDescription("Administrator forced password reset for " + eligibleUsers.size() + " users in tenant");
+                audit.setSource("APPLICATION");
+                auditEventRepository.save(audit);
+            } catch (Exception ex) {
+                log.warn("Failed to record audit event for force reset: {}", ex.getMessage());
+            }
+        }
+
+        String msg = "Successfully forced password reset for " + eligibleUsers.size() + " users.";
+        return new ForceResetResultDto(eligibleUsers.size(), emailsSent, emailsFailed, msg);
     }
 
     @Transactional
@@ -216,5 +414,21 @@ public class SecuritySettingsService {
         dto.setUpdatedAt(entity.getUpdatedAt());
         dto.setUpdatedBy(entity.getUpdatedBy());
         return dto;
+    }
+
+    private String generateToken() {
+        byte[] randomBytes = new byte[32];
+        new SecureRandom().nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
+        }
     }
 }

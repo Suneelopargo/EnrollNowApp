@@ -574,22 +574,10 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
           />
         );
       case 'security':
-        return isFullSiteAdmin ? (
+        return (
           <SecurityView
             tenantId={currentUser?.tenantId}
             isFullSiteAdmin={isFullSiteAdmin}
-          />
-        ) : (
-          <UsersGrid
-            users={users}
-            loading={loadingUsers}
-            error={usersError}
-            onAddUser={handleOpenAddUser}
-            onEditUser={handleOpenEditUser}
-            onDeleteUser={handleDeleteUser}
-            onToggleStatus={handleToggleStatus}
-            onRefresh={handleRefresh}
-            onRetry={() => fetchUsers(false)}
           />
         );
       case 'settings':

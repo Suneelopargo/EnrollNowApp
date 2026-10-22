@@ -70,7 +70,8 @@ public class UserSessionService {
         userSessionRepository.save(session);
     }
 
-    private void revokeExistingSessions(
+    @Transactional
+    public void revokeExistingSessions(
             UUID tenantId,
             UUID userId,
             String reason) {

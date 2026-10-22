@@ -94,7 +94,9 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                             ? "Your session has ended because your account was logged in from another browser or device."
                             : ("INACTIVITY_TIMEOUT".equals(reason)
                             ? "Session expired due to inactivity."
-                            : "Session has expired or was revoked.");
+                            : ("PASSWORD_RESET_REQUIRED".equals(reason)
+                            ? "A password reset is required for your account. Please check your email or use Forgot Password."
+                            : "Session has expired or was revoked."));
 
                     response.getWriter().write(String.format("""
                             {

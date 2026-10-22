@@ -105,6 +105,29 @@ class PasswordPolicyValidatorTest {
     }
 
     @Test
+    void testValidatePassword_InsufficientStrengthForStrongPolicy() {
+        settings.setMinimumPasswordStrength("STRONG");
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(settings));
+
+        // Meets length (12), digit, symbol, mixed case, but predictable pattern makes zxcvbn score < 4
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                passwordPolicyValidator.validatePassword(tenantId, userId, "Password123!")
+        );
+        assertTrue(ex.getMessage().contains("This password is too weak. Check the password requirements"));
+    }
+
+    @Test
+    void testValidatePassword_PassesStrongPolicyWithHighEntropy() {
+        settings.setMinimumPasswordStrength("STRONG");
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(settings));
+
+        // High entropy, score 4
+        assertDoesNotThrow(() ->
+                passwordPolicyValidator.validatePassword(tenantId, userId, "K9#vL2$mQ8!zW5*p")
+        );
+    }
+
+    @Test
     void testValidatePassword_PasswordHistoryReused() {
         when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(settings));
 

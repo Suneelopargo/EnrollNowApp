@@ -18,6 +18,7 @@ import {
 } from '../../../../shared/api/securitySettingsApi';
 import { toast } from '../../../../shared/toaster';
 import { useFocusTrap } from '../../../../shared/accessibility/useFocusTrap';
+import { ResetAllPasswordsModal } from './ResetAllPasswordsModal';
 
 export interface SecurityViewProps {
   tenantId?: string;
@@ -143,6 +144,11 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
+
+  // Password Requirement Change Modal
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState<boolean>(false);
+  const [isForcingReset, setIsForcingReset] = useState<boolean>(false);
+
   const resetTrapRef = useFocusTrap<HTMLDivElement>({
     active: showResetModal,
     onEscape: () => setShowResetModal(false),
@@ -215,6 +221,18 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
     try {
       setSaving(true);
+
+      // Detect if password complexity requirements specifically changed
+      const passwordRequirementsChanged = Boolean(
+        savedSettings && (
+          formState.minimumPasswordLength !== savedSettings.minimumPasswordLength ||
+          formState.minimumPasswordStrength !== (savedSettings.minimumPasswordStrength || 'MODERATE').toUpperCase() ||
+          formState.requireDigit !== (savedSettings.requireDigit ?? true) ||
+          formState.requireSymbol !== (savedSettings.requireSymbol ?? true) ||
+          formState.requireMixedCase !== (savedSettings.requireMixedCase ?? true)
+        )
+      );
+
       const computedLogoutMinutes = unitAndValueToMinutes(
         formState.logoutAfterValue,
         formState.logoutAfterUnit
@@ -239,19 +257,44 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
       setFormState(mapResponseToForm(updated));
       setIsDirty(false);
       setErrors({});
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('enrollnow_security_policy_updated', { detail: updated }));
         if (updated?.inactivityLogoutMinutes) {
           localStorage.setItem('enrollnow_inactivity_minutes', String(updated.inactivityLogoutMinutes));
         }
       }
-      toast.success('Security settings updated successfully.');
+
+      toast.success('Security settings saved');
+
+      if (passwordRequirementsChanged) {
+        setShowPasswordResetModal(true);
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save security settings';
       toast.error(msg, { title: 'Save Failed' });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleForceReset = async () => {
+    try {
+      setIsForcingReset(true);
+      const res = await securitySettingsApi.forcePasswordReset(tenantId);
+      toast.success(res.message || 'All passwords reset! Reset links have been emailed to affected users.');
+      setShowPasswordResetModal(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to force reset passwords';
+      toast.error(msg, { title: 'Force Reset Failed' });
+    } finally {
+      setIsForcingReset(false);
+    }
+  };
+
+  const handleLeaveIntact = () => {
+    setShowPasswordResetModal(false);
+    toast.info('Existing passwords left intact. New requirements will apply on subsequent password changes.');
   };
 
   const handleDiscard = () => {
@@ -300,7 +343,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
 
   return (
     <div className="sec-view-wrapper">
-      {/* Clean Top Header Bar (Matching Legacy Security Settings Title & Reset Action) */}
+      {/* Clean Top Header Bar */}
       <div className="sec-header-bar">
         <div className="sec-header-title-row">
           <h2 className="sec-header-title">Security Settings</h2>
@@ -689,6 +732,14 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           </button>
         </div>
       </form>
+
+      {/* Force Reset Passwords Modal (Shown when Password Policy Changed) */}
+      <ResetAllPasswordsModal
+        isOpen={showPasswordResetModal}
+        onForceReset={handleForceReset}
+        onLeaveIntact={handleLeaveIntact}
+        isResetting={isForcingReset}
+      />
 
       {/* Reset to Default Settings Modal */}
       {showResetModal && (

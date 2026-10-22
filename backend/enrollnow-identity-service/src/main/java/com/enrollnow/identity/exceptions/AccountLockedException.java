@@ -5,4 +5,8 @@ public class AccountLockedException extends RuntimeException {
     public AccountLockedException() {
         super("User account is locked");
     }
+
+    public AccountLockedException(String message) {
+        super(message);
+    }
 }

@@ -95,7 +95,7 @@ export const ROLE_CODE_TO_STUDY_PERMISSION: Record<string, string> = {
 };
 
 export function normalizeStudyPermission(perm?: string | null): string {
-  if (!perm) return 'STUDY_ADMIN';
+  if (!perm) return 'STUDY_RA';
   const trimmed = perm.trim();
   if (STUDY_PERMISSION_TO_ROLE_CODE[trimmed]) {
     return STUDY_PERMISSION_TO_ROLE_CODE[trimmed];
@@ -109,7 +109,7 @@ export function normalizeStudyPermission(perm?: string | null): string {
 }
 
 export function toStudyPermissionLabel(roleCode?: string | null): string {
-  if (!roleCode) return 'Admin';
+  if (!roleCode) return 'RA';
   return ROLE_CODE_TO_STUDY_PERMISSION[roleCode] || roleCode;
 }
 
