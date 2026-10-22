@@ -4,9 +4,13 @@ import {
   createApiClient,
   setHeaderProvider,
   getAccessToken,
+  getStoredAuthUser,
+  getApiErrorMessage,
+  EnrollNowApiError,
   normalizeApiError,
   handleSessionExpired,
 } from './api-client';
+import { normalizePasswordPolicy } from './api/authApi';
 
 // Node.js environment storage & event mocking
 const storage: Record<string, string> = {};
@@ -285,6 +289,81 @@ describe('Central Axios API Client & Interceptors', () => {
       await expect(responseInterceptorErr(mockLoginError)).rejects.toThrow();
       // Token was not cleared because it was a login attempt failure
       expect(localStorage.getItem('enrollnow_token')).toBe('temp-token');
+    });
+  });
+
+  describe('Shared Auth User & Error Message Helpers', () => {
+    it('getStoredAuthUser safely parses stored JSON user and handles malformed or missing data', () => {
+      expect(getStoredAuthUser()).toBeNull();
+
+      localStorage.setItem('enrollnow_user', JSON.stringify({ id: 'u-1', email: 'admin@enrollnow.org' }));
+      expect(getStoredAuthUser<{ id: string; email: string }>()).toEqual({
+        id: 'u-1',
+        email: 'admin@enrollnow.org',
+      });
+
+      localStorage.setItem('enrollnow_user', '{malformed-json');
+      expect(getStoredAuthUser()).toBeNull();
+    });
+
+    it('getApiErrorMessage extracts nested ApiError, root message, or falls back cleanly', () => {
+      expect(
+        getApiErrorMessage({
+          response: { data: { error: { message: 'Nested ApiError message' }, message: 'Root message' } },
+        })
+      ).toBe('Nested ApiError message');
+
+      expect(
+        getApiErrorMessage({
+          response: { data: { message: 'Root ApiResponse message' } },
+        })
+      ).toBe('Root ApiResponse message');
+
+      expect(getApiErrorMessage(new Error('Standard error instance'))).toBe('Standard error instance');
+      expect(getApiErrorMessage(null, 'Custom fallback')).toBe('Custom fallback');
+
+      // Also extracts from EnrollNowApiError and preserves .response for callers inspecting err.response?.status / data
+      const normalized = normalizeApiError({
+        response: {
+          status: 409,
+          data: {
+            success: false,
+            message: 'Root conflict',
+            error: { code: 'CONFLICT', message: 'Email already exists' },
+          },
+        },
+      });
+      const apiErr = new EnrollNowApiError(normalized);
+      expect(apiErr.status).toBe(409);
+      expect(apiErr.response?.status).toBe(409);
+      expect(apiErr.response?.data?.error?.code).toBe('CONFLICT');
+      expect(getApiErrorMessage(apiErr)).toBe('Email already exists');
+    });
+
+    it('normalizePasswordPolicy applies canonical defaults and uppercases strength', () => {
+      expect(normalizePasswordPolicy({})).toEqual({
+        minimumPasswordLength: 10,
+        minimumPasswordStrength: 'MODERATE',
+        requireDigit: true,
+        requireSymbol: true,
+        requireMixedCase: true,
+      });
+
+      expect(
+        normalizePasswordPolicy({
+          minimumPasswordLength: 14,
+          minimumPasswordStrength: 'strong',
+          requireDigit: false,
+          requireSymbol: true,
+          requireMixedCase: false,
+        })
+      ).toEqual({
+        minimumPasswordLength: 14,
+        minimumPasswordStrength: 'STRONG',
+        requireDigit: false,
+        requireSymbol: true,
+        requireMixedCase: false,
+      });
     });
   });
 });

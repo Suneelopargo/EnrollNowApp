@@ -5,6 +5,7 @@ import { getRemoteDefinition } from './RemoteRegistry';
 import { useAuth } from '../auth/AuthContext';
 import { MfeContext } from '../../../shared/contracts';
 import { getApiBaseUrl } from '../../../shared/api-config';
+import { getAccessToken } from '../../../shared/api-client';
 import { telemetry } from '../../../shared/telemetry';
 import { MODULE_REGISTRY } from '../modules';
 
@@ -49,7 +50,7 @@ export const RemoteLoader: React.FC<RemoteLoaderProps> = ({ remoteId }) => {
       });
 
       if (eventType === 'LOGIN_SUCCESS') {
-        const authToken = payload?.token || localStorage.getItem('enrollnow_token');
+        const authToken = payload?.token || getAccessToken();
         let authUser = payload?.user;
         if (!authUser && payload?.username) {
           authUser = {

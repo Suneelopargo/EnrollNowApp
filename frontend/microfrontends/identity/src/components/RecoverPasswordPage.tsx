@@ -3,7 +3,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EnrollNowBrand } from './EnrollNowBrand';
+import { Footer } from '../../../../shared/design-system/components/Footer';
 import { authApi } from '../../../../shared/api/authApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { toast } from '../../../../shared/toaster';
 import { validators, validateField } from '../../../../shared/design-system/validation';
 
@@ -66,10 +68,10 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
       toast.success(msg);
       onSuccess?.();
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Unable to process password recovery request. Please try again or contact support.';
+      const msg = getApiErrorMessage(
+        err,
+        'Unable to process password recovery request. Please try again or contact support.'
+      );
       toast.error(msg, { title: 'Recovery Failed' });
     } finally {
       setLoading(false);
@@ -147,20 +149,7 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
       </div>
 
       {/* Footer Below Card */}
-      <footer className="enl-activation-footer">
-        <span className="enl-activation-copyright">© 2016 - 2026</span>
-        <a href="#enrollnow" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
-          EnrollNow
-        </a>
-        <span className="enl-activation-footer-divider">|</span>
-        <a href="#terms" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
-          Terms of Service
-        </a>
-        <span className="enl-activation-footer-divider">|</span>
-        <a href="#support" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
-          Support Center
-        </a>
-      </footer>
+      <Footer variant="auth-card" />
     </div>
   );
 };

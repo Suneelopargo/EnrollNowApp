@@ -1,5 +1,5 @@
 // frontend/shared/api/authApi.ts - Centralized Authentication API
-import { apiClient } from '../api-client';
+import { apiClient, getAccessToken, getStoredAuthUser } from '../api-client';
 import { getApiMode, getTenantId } from '../api-config';
 import { AuthUser, SiteRoleAssignmentSummary } from '../contracts';
 import { normalizeSiteRoleCode, toSitePermissionLabel } from './administrationApi';
@@ -58,6 +58,19 @@ export interface PasswordPolicy {
   requireDigit: boolean;
   requireSymbol: boolean;
   requireMixedCase: boolean;
+}
+
+/**
+ * Normalizes a backend PasswordPolicyResponse payload into a consistent frontend PasswordPolicy object.
+ */
+export function normalizePasswordPolicy(data: any): PasswordPolicy {
+  return {
+    minimumPasswordLength: data?.minimumPasswordLength ?? 10,
+    minimumPasswordStrength: (data?.minimumPasswordStrength || 'MODERATE').toUpperCase(),
+    requireDigit: data?.requireDigit ?? true,
+    requireSymbol: data?.requireSymbol ?? true,
+    requireMixedCase: data?.requireMixedCase ?? true,
+  };
 }
 
 export interface ResetPasswordResponse {
@@ -420,10 +433,9 @@ export const authApi = {
     const mode = getApiMode();
 
     if (mode === 'real') {
-      const storedUserRaw = typeof localStorage !== 'undefined' ? localStorage.getItem('enrollnow_user') : null;
-      if (storedUserRaw) {
+      const parsed = getStoredAuthUser<any>();
+      if (parsed) {
         try {
-          const parsed = JSON.parse(storedUserRaw);
           const tenantId = parsed.tenantId || getTenantId();
           const effectiveSiteId = siteId !== undefined ? siteId : parsed.siteId;
           if (tenantId && parsed.id) {
@@ -470,7 +482,7 @@ export const authApi = {
           }
         }
         try {
-          return deriveUserAccessFlags(JSON.parse(storedUserRaw));
+          return deriveUserAccessFlags(parsed);
         } catch {
           // ignore
         }
@@ -488,7 +500,7 @@ export const authApi = {
    * Uses X-Passive-Check: true so backend inactivity timer is not artificially reset.
    */
   async verifySessionStatus(): Promise<{ active: boolean; reason?: string; message?: string }> {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('enrollnow_token') : null;
+    const token = getAccessToken();
     if (!token) {
       return { active: false, reason: 'NO_TOKEN' };
     }
@@ -597,13 +609,7 @@ export const authApi = {
     if (!data) {
       throw new Error('Failed to load authoritative password policy');
     }
-    return {
-      minimumPasswordLength: data.minimumPasswordLength ?? 10,
-      minimumPasswordStrength: (data.minimumPasswordStrength || 'MODERATE').toUpperCase(),
-      requireDigit: data.requireDigit ?? true,
-      requireSymbol: data.requireSymbol ?? true,
-      requireMixedCase: data.requireMixedCase ?? true,
-    };
+    return normalizePasswordPolicy(data);
   },
 
   async resetPassword(payload: ResetPasswordRequest): Promise<ResetPasswordResponse> {

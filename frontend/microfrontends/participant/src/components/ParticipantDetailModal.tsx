@@ -234,24 +234,27 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             <div className="card record-detail__panel">
               <div className="card-header"><h3>Contact methods</h3><p>How this participant prefers to be reached.</p></div>
               <div className="record-detail__panel-content record-detail__overview-grid">
-                <div className="record-detail__field"><label className="form-label">Primary email</label>
+                <div className="record-detail__field"><label className="form-label" htmlFor="participant-primary-email">Primary email</label>
                   <input
+                    id="participant-primary-email"
                     type="email"
                     value={primaryEmail}
                     onChange={(e) => setPrimaryEmail(e.target.value)}
                     className="form-input"
                   />
                 </div>
-                <div className="record-detail__field"><label className="form-label">Phone number</label>
+                <div className="record-detail__field"><label className="form-label" htmlFor="participant-phone-number">Phone number</label>
                   <input
+                    id="participant-phone-number"
                     type="text"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="form-input"
                   />
                 </div>
-                <div className="record-detail__field record-detail__field--wide"><label className="form-label">Address</label>
+                <div className="record-detail__field record-detail__field--wide"><label className="form-label" htmlFor="participant-address">Address</label>
                   <input
+                    id="participant-address"
                     type="text"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
@@ -266,8 +269,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             <div className="card record-detail__panel">
               <div className="card-header"><h3>Demographics</h3><p>Participant demographic information.</p></div>
               <div className="record-detail__overview-grid">
-                <div className="record-detail__field"><label className="form-label">Sex / gender</label>
+                <div className="record-detail__field"><label className="form-label" htmlFor="participant-sex-gender">Sex / gender</label>
                   <select
+                    id="participant-sex-gender"
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                     className="form-select"
@@ -325,6 +329,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Add comment..."
+                    aria-label="Add comment"
                     className="form-textarea"
                   />
                   

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { authApi } from '../../../shared/api/authApi';
 import { toast } from '../../../shared/toaster';
+import { Footer } from '../../../shared/design-system/components/Footer';
 import { AuthErrorNotification, mapAuthError } from '../../../shared/auth/authErrorMapper';
 import '../../../shared/design-system/styles/index.scss';
 
@@ -399,34 +400,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
         {/* =============================================================== */}
         {/* 5. STRONG SYSTEM FOOTER BAR (CENTERED, CLINICAL PALETTE)        */}
         {/* =============================================================== */}
-        <footer className="enl-login-strong-footer" role="contentinfo">
-          <div className="enl-strong-footer-container enl-strong-footer-container--center">
-            <span>© 2016 - 2027 </span>
-            <a
-              href="#enrollnow"
-              className="enl-strong-footer-link"
-              onClick={(e) => e.preventDefault()}
-            >
-              EnrollNow
-            </a>
-            <span className="enl-strong-footer-sep" aria-hidden="true">|</span>
-            <a
-              href="#terms"
-              className="enl-strong-footer-link"
-              onClick={(e) => e.preventDefault()}
-            >
-              Terms of Service
-            </a>
-            <span className="enl-strong-footer-sep" aria-hidden="true">|</span>
-            <a
-              href="#support"
-              className="enl-strong-footer-link"
-              onClick={(e) => e.preventDefault()}
-            >
-              Support Center
-            </a>
-          </div>
-        </footer>
+        <Footer variant="auth" />
       </div>
     </div>
   </div>

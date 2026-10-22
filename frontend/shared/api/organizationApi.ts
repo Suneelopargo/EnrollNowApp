@@ -2,6 +2,7 @@
 import { apiClient } from '../api-client';
 
 export interface Site {
+  id?: string | number;
   siteCode: string;
   name: string;
   city: string;
@@ -14,14 +15,14 @@ export interface Site {
 }
 
 export const organizationApi = {
-  async getSites(): Promise<Site[]> {
-    const res = await apiClient.get('/api/v1/sites');
-    return res.data?.data || [];
+  async getSites(config?: any): Promise<Site[]> {
+    const res = await apiClient.get('/api/v1/sites', config);
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
 
-  async getSite(siteCode: string): Promise<Site> {
-    const res = await apiClient.get(`/api/v1/sites/${siteCode}`);
-    return res.data?.data;
+  async getSite(siteCode: string, config?: any): Promise<Site> {
+    const res = await apiClient.get(`/api/v1/sites/${siteCode}`, config);
+    return res.data?.data ?? res.data;
   },
 };
 

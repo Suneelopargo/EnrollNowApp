@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { getAccessToken } from '../../../shared/api-client';
 import { LoadingSpinner } from '../../../shared/design-system/components/LoadingSpinner';
 
 interface ProtectedRouteProps {
@@ -21,7 +22,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <LoadingSpinner message="Verifying session..." />;
   }
 
-  const hasStoredToken = Boolean(localStorage.getItem('enrollnow_token'));
+  const hasStoredToken = Boolean(getAccessToken());
   if (!isAuthenticated || !user) {
     if (hasStoredToken) {
       return <LoadingSpinner message="Loading workspace..." />;

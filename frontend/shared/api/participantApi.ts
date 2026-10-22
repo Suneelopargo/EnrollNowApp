@@ -17,17 +17,19 @@ export interface Participant {
 export const participantApi = {
   async getParticipants(config?: any): Promise<Participant[]> {
     const res = await apiClient.get('/api/v1/participants', { skipToast: true, ...config });
-    return res.data?.data || [];
+    return Array.isArray(res.data?.data)
+      ? res.data.data
+      : (Array.isArray(res.data) ? res.data : []);
   },
 
   async getParticipant(id: string | number, config?: any): Promise<Participant> {
     const res = await apiClient.get(`/api/v1/participants/${id}`, { skipToast: true, ...config });
-    return res.data?.data;
+    return res.data?.data ?? res.data;
   },
 
   async updateParticipantStatus(id: string | number, status: string): Promise<Participant> {
     const res = await apiClient.patch(`/api/v1/participants/${id}/status`, { status });
-    return res.data?.data;
+    return res.data?.data ?? res.data;
   },
 };
 

@@ -19,8 +19,24 @@ export const Card: React.FC<CardProps> = ({
   className = '',
   onClick,
 }) => {
+  const handleKeyDown = onClick
+    ? (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.target && e.currentTarget && e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }
+    : undefined;
+
   return (
-    <div className={`card ${className}`} onClick={onClick}>
+    <div
+      className={`card ${className}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={handleKeyDown}
+    >
       {(title || actions) && (
         <div className="card-header">
           <div>

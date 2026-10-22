@@ -7,7 +7,7 @@ import { Card } from '../../../shared/design-system/components/Card';
 import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { Building, Plus, MapPin, Network } from 'lucide-react';
-import { apiClient } from '../../../shared/api-client';
+import { organizationApi } from '../../../shared/api/organizationApi';
 
 export interface OrganizationModuleProps {
   context: MfeContext;
@@ -21,9 +21,9 @@ export const OrganizationModule: React.FC<OrganizationModuleProps> = ({ context 
     const fetchSites = async () => {
       setLoading(true);
       try {
-        const res = await apiClient.get('/api/v1/sites');
-        if (res.data?.data) {
-          setSites(res.data.data);
+        const data = await organizationApi.getSites();
+        if (Array.isArray(data) && data.length > 0) {
+          setSites(data);
         }
       } catch {
         // Fallback default site data
