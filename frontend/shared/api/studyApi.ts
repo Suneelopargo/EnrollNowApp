@@ -14,13 +14,13 @@ export interface Study {
 }
 
 export const studyApi = {
-  async getStudies(): Promise<Study[]> {
-    const res = await apiClient.get('/api/v1/studies');
+  async getStudies(config?: any): Promise<Study[]> {
+    const res = await apiClient.get('/api/v1/studies', { skipToast: true, ...config });
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
-  async getStudy(id: string | number): Promise<Study> {
-    const res = await apiClient.get(`/api/v1/studies/${id}`);
+  async getStudy(id: string | number, config?: any): Promise<Study> {
+    const res = await apiClient.get(`/api/v1/studies/${id}`, { skipToast: true, ...config });
     return res.data?.data;
   },
 

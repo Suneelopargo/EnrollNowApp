@@ -103,8 +103,8 @@ describe('administrationApi', () => {
       expect(toStudyPermissionLabel('STUDY_LEADER')).toBe('Leader');
       expect(toStudyPermissionLabel('STUDY_RA')).toBe('RA');
       expect(toStudyPermissionLabel('STUDY_READ_ONLY')).toBe('Read Only');
-      expect(toStudyPermissionLabel(null)).toBe('Admin');
-      expect(toStudyPermissionLabel(undefined)).toBe('Admin');
+      expect(toStudyPermissionLabel(null)).toBe('RA');
+      expect(toStudyPermissionLabel(undefined)).toBe('RA');
     });
 
     it('normalizes study permission input correctly', () => {
@@ -112,7 +112,7 @@ describe('administrationApi', () => {
       expect(normalizeStudyPermission('Leader')).toBe('STUDY_LEADER');
       expect(normalizeStudyPermission('RA')).toBe('STUDY_RA');
       expect(normalizeStudyPermission('Read Only')).toBe('STUDY_READ_ONLY');
-      expect(normalizeStudyPermission(null)).toBe('STUDY_ADMIN');
+      expect(normalizeStudyPermission(null)).toBe('STUDY_RA');
     });
   });
 

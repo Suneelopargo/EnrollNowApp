@@ -5,6 +5,7 @@ import { telemetry } from '../telemetry';
 import { mockAdapter } from '../mock-api/mockAdapter';
 import { toast } from '../toaster';
 import { loader } from '../loader';
+import { mapAuthError, AuthErrorNotification } from '../auth/authErrorMapper';
 
 export interface ApiHeaderContext {
   getToken?: () => string | null;
@@ -56,6 +57,14 @@ export interface CreateApiClientOptions {
 
 let activeHeaderProvider: ApiHeaderContext = {};
 const unauthorizedCallbacks = new Set<() => void>();
+let sessionExpiredToastDispatched = false;
+
+/**
+ * Resets the session-expired toast deduplication flag.
+ */
+export function resetSessionExpiredToastFlag(): void {
+  sessionExpiredToastDispatched = false;
+}
 
 /**
  * Register a dynamic header provider for tenant, organization, or custom header resolution.
@@ -265,6 +274,10 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         }
 
         config.url = url;
+
+        if (url.includes('/auth/login')) {
+          sessionExpiredToastDispatched = false;
+        }
       }
 
       // 1. Common Accept header
@@ -360,6 +373,13 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
       const normalized = normalizeApiError(error);
       const url = error.config?.url || '';
       const isLoginRequest = url.includes('/auth/login');
+      const isPublicAuthRequest =
+        isLoginRequest ||
+        url.includes('/auth/forgot-password') ||
+        url.includes('/auth/reset-password') ||
+        url.includes('/auth/activate') ||
+        url.includes('/auth/password-policy') ||
+        url.includes('/password-policy');
 
       // Telemetry error tracking
       telemetry.track({
@@ -376,12 +396,13 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
 
       // Centralized 401 Unauthorized handling
       if (normalized.status === 401) {
-        if (options.onUnauthorized) {
+        if (options.onUnauthorized && !isPublicAuthRequest) {
           options.onUnauthorized();
         }
 
         // Only expire session if it was an authenticated request, not failed credentials on login
-        if (!isLoginRequest) {
+        // Only expire session if it was an authenticated request, not public auth flows
+        if (!isPublicAuthRequest) {
           const resData = error.response?.data;
           const reason =
             resData?.reason ||
@@ -408,16 +429,71 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         Boolean((error as any)?.skipToast) ||
         Boolean((error as any)?.config?.skipToast) ||
         headerSkip;
-      if (!skipToast && !isLoginRequest) {
+
+      let mappedAuthError: AuthErrorNotification | undefined = undefined;
+
+      if (isLoginRequest) {
+        mappedAuthError = mapAuthError(
+          {
+            code: normalized.code,
+            message: normalized.message,
+            status: normalized.status,
+            response: error.response,
+            normalized,
+          },
+          { isLoginScreen: true }
+        );
+
+        if (!skipToast) {
+          toast.show(mappedAuthError.severity, mappedAuthError.description, {
+            title: mappedAuthError.title,
+            action: mappedAuthError.action
+              ? {
+                  label: mappedAuthError.action.label,
+                  onClick: () => {
+                    const route = mappedAuthError?.action?.route || '/forgot-password';
+                    if (typeof window !== 'undefined') {
+                      window.location.href = route;
+                    }
+                  },
+                }
+              : undefined,
+            duration: mappedAuthError.action
+              ? 15000
+              : mappedAuthError.description.length > 90
+              ? 15000
+              : undefined,
+          });
+        }
+      } else if (
+        (normalized.code === 'SESSION_EXPIRED' ||
+          normalized.code === 'TOKEN_EXPIRED' ||
+          error.response?.data?.reason === 'SESSION_EXPIRED' ||
+          normalized.message?.toLowerCase().includes('session expired') ||
+          normalized.message?.toLowerCase().includes('token has expired')) &&
+        !isPublicAuthRequest
+      ) {
+        // Authenticated session expired
+        if (!sessionExpiredToastDispatched && !skipToast) {
+          sessionExpiredToastDispatched = true;
+          toast.info('Your session has expired. Please sign in again.', {
+            title: 'Session expired',
+          });
+        }
+      } else if (!skipToast) {
         toast.error(normalized.message, {
           title: normalized.code || `Error (${normalized.status || 'Network'})`,
         });
       }
 
       const apiError = new EnrollNowApiError(normalized);
-      // Attach normalized info onto error object for backwards compatibility
+      // Attach normalized & mapped info onto error object for backwards compatibility
       error.normalized = normalized;
       error.apiError = apiError;
+      if (mappedAuthError) {
+        error.mappedAuthError = mappedAuthError;
+        (apiError as any).mappedAuthError = mappedAuthError;
+      }
 
       return Promise.reject(apiError);
     }

@@ -96,10 +96,10 @@ public class InvitationEmailService {
         String body =
                 buildEmailBody(
                         "Hello " + recipientName + ",",
-                        "We received a request to reset your password for your EnrollNow account. Please click the button below to reset your password. This link will expire in 30 minutes.",
+                        "You requested to reset your password. Please follow the link below to reset your password.",
                         "Reset Password",
                         resetUrl,
-                        "If you did not request a password reset, please ignore this email or contact support."
+                        "If you did not request this change, please contact your Site Administrator."
                 );
 
         sendEmail(recipientEmail, subject, body, accessToken);

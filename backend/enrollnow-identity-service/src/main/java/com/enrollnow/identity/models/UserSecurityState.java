@@ -37,6 +37,9 @@ public class UserSecurityState {
     @Column(name = "last_activity_at")
     private OffsetDateTime lastActivityAt;
 
+    @Column(name = "password_reset_required", nullable = false)
+    private boolean passwordResetRequired = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -123,6 +126,14 @@ public class UserSecurityState {
 
     public void setLastActivityAt(OffsetDateTime lastActivityAt) {
         this.lastActivityAt = lastActivityAt;
+    }
+
+    public boolean isPasswordResetRequired() {
+        return passwordResetRequired;
+    }
+
+    public void setPasswordResetRequired(boolean passwordResetRequired) {
+        this.passwordResetRequired = passwordResetRequired;
     }
 
     public OffsetDateTime getCreatedAt() {

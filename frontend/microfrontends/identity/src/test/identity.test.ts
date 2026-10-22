@@ -101,6 +101,31 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     warningSpy.mockRestore();
   });
 
+  it('fetches password policy from authApi and securitySettingsApi', async () => {
+    const { authApi } = await import('../../../../shared/api/authApi');
+    const { securitySettingsApi } = await import('../../../../shared/api/securitySettingsApi');
+
+    expect(typeof authApi.getPasswordPolicy).toBe('function');
+    expect(typeof securitySettingsApi.getPasswordPolicy).toBe('function');
+
+    const mockPolicy = {
+      minimumPasswordLength: 10,
+      minimumPasswordStrength: 'MODERATE',
+      requireDigit: true,
+      requireSymbol: true,
+      requireMixedCase: true,
+    };
+    vi.spyOn(authApi, 'getPasswordPolicy').mockResolvedValue(mockPolicy);
+
+    const policy = await authApi.getPasswordPolicy('11111111-1111-1111-1111-111111111111');
+    expect(policy).toBeDefined();
+    expect(typeof policy.minimumPasswordLength).toBe('number');
+    expect(typeof policy.minimumPasswordStrength).toBe('string');
+    expect(typeof policy.requireDigit).toBe('boolean');
+    expect(typeof policy.requireSymbol).toBe('boolean');
+    expect(typeof policy.requireMixedCase).toBe('boolean');
+  });
+
   it('provides validateActivationToken method on authApi', async () => {
     const { authApi } = await import('../../../../shared/api/authApi');
     expect(typeof authApi.validateActivationToken).toBe('function');
@@ -123,4 +148,5 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     errorSpy.mockRestore();
     warningSpy.mockRestore();
   });
+
 });

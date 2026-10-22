@@ -4,6 +4,8 @@ import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.models.UserPasswordHistory;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
 import com.enrollnow.identity.repositories.UserPasswordHistoryRepository;
+import com.nulabinc.zxcvbn.Strength;
+import com.nulabinc.zxcvbn.Zxcvbn;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,7 @@ public class PasswordPolicyValidator {
     private final SecuritySettingsRepository securitySettingsRepository;
     private final UserPasswordHistoryRepository userPasswordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Zxcvbn zxcvbn = new Zxcvbn();
 
     public PasswordPolicyValidator(
             SecuritySettingsRepository securitySettingsRepository,
@@ -64,10 +67,14 @@ public class PasswordPolicyValidator {
             throw new IllegalArgumentException("Password must contain mixed upper and lower case characters");
         }
 
-        if ("STRONG".equalsIgnoreCase(minStrength)) {
-            if (password.length() < Math.max(minLength, 12)) {
-                throw new IllegalArgumentException("Strong password must be at least 12 characters long");
-            }
+        int requiredScore = mapStrengthToScore(minStrength);
+        Strength evaluated = zxcvbn.measure(password, List.of("EnrollNow", "Enroll", "Ripple"));
+        int actualScore = evaluated.getScore();
+
+        if (actualScore < requiredScore) {
+            throw new IllegalArgumentException(
+                    "This password is too weak. Check the password requirements"
+            );
         }
 
         if (historyCount > 0 && userId != null) {
@@ -84,6 +91,24 @@ public class PasswordPolicyValidator {
                 }
             }
         }
+    }
+
+    public int evaluateScore(String password) {
+        if (password == null || password.isEmpty()) {
+            return 0;
+        }
+        return zxcvbn.measure(password, List.of("EnrollNow", "Enroll", "Ripple")).getScore();
+    }
+
+    public int mapStrengthToScore(String strengthLabel) {
+        if (strengthLabel == null) {
+            return 3;
+        }
+        return switch (strengthLabel.toUpperCase()) {
+            case "WEAK" -> 2;
+            case "STRONG" -> 4;
+            default -> 3; // MODERATE
+        };
     }
 
     public void recordPasswordChange(UUID tenantId, UUID userId, String encodedPassword) {

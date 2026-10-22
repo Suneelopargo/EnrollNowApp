@@ -72,6 +72,10 @@
   color: #ffffff;
 }
 
+.signin-title {
+  margin-bottom: 16px;
+}
+
 .enl-activation-welcome {
   margin: 0 0 4px 0;
   font-size: 19px;
@@ -83,13 +87,37 @@
 }
 
 .enl-activation-subtitle {
-  margin: 0 0 16px 0;
+  margin: 0;
   font-size: 15px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   color: #ffffff;
   line-height: 1.25;
+}
+
+.enl-activation-policy-loading {
+  font-size: 14px;
+  color: #94a3b8;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.enl-activation-retry-btn {
+  margin-top: 8px;
+  padding: 6px 14px;
+  background-color: #991b1b;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
 }
 
 .enl-activation-input-group {
@@ -109,7 +137,7 @@
   transition: all 150ms ease;
 
   &::placeholder {
-    color: #64748b;
+    color: #11387c;
     opacity: 0.85;
   }
 
@@ -146,6 +174,10 @@
   color: #ffffff;
   margin-bottom: 8px;
   line-height: 1.4;
+}
+
+.enl-activation-test-block {
+  margin-bottom: 14px;
 }
 
 .enl-activation-test-title {
@@ -239,18 +271,37 @@
 
 .enl-activation-reqs-list {
   margin: 0;
-  padding-left: 18px;
-  list-style-type: disc;
+  padding-left: 0;
+  list-style-type: none;
   font-size: 13px;
   color: #ffffff;
   line-height: 1.5;
 
   li {
-    margin-bottom: 2px;
-  }
+    margin-bottom: 3px;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
 
-  li.is-met {
-    font-weight: 700;
+    &.is-met {
+      color: #86efac;
+      font-weight: 600;
+    }
+
+    &.is-unmet {
+      color: #ffffff;
+      opacity: 0.9;
+    }
+
+    &.enl-req-all-met {
+      margin-top: 6px;
+      color: #86efac;
+      font-weight: 700;
+    }
+
+    .enl-req-indicator {
+      font-weight: bold;
+    }
   }
 }
 
@@ -374,4 +425,3 @@
     opacity: 0.7;
   }
 }
-

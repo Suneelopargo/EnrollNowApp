@@ -48,7 +48,11 @@ public class SecurityConfig {
                     "/api/v1/tenants/*/auth/forgot-password",
                     "/api/v1/tenants/*/auth/reset-password",
                     "/api/v1/tenants/*/auth/activate",
-                    "/api/v1/tenants/*/auth/activate/validate"
+                    "/api/v1/tenants/*/auth/activate/validate",
+                    "/api/v1/tenants/*/auth/password-policy",
+                    "/api/v1/auth/password-policy",
+                    "/api/v1/tenants/*/security-settings/password-policy",
+                    "/api/v1/security-settings/password-policy"
                 ).permitAll()
 
                 /*

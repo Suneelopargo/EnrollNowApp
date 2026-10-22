@@ -237,6 +237,29 @@ export const mockAdapter: AxiosAdapter = async (
     );
   }
 
+  // Public unauthenticated password-policy endpoint
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/password-policy$/) ||
+      path === '/api/v1/auth/password-policy' ||
+      path.match(/^\/api\/v1\/tenants\/[^/]+\/security-settings\/password-policy$/) ||
+      path === '/api/v1/security-settings/password-policy') &&
+    method === 'GET'
+  ) {
+    const sec = mockStore.getSecuritySettings() || {};
+    return createMockSuccessResponse(
+      config,
+      {
+        minimumPasswordLength: sec.minimumPasswordLength ?? 10,
+        minimumPasswordStrength: sec.minimumPasswordStrength ?? 'MODERATE',
+        requireDigit: sec.requireDigit ?? true,
+        requireSymbol: sec.requireSymbol ?? true,
+        requireMixedCase: sec.requireMixedCase ?? true,
+      },
+      200,
+      'Password policy retrieved successfully'
+    );
+  }
+
   // 3. For ALL other endpoints, enforce token authentication check
   const token = extractBearerToken(config);
   if (!token) {

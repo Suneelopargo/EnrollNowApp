@@ -20,13 +20,46 @@ export interface SecuritySettingsResponse {
   updatedBy?: string;
 }
 
+export interface ForceResetResult {
+  totalAffected: number;
+  emailsSent: number;
+  emailsFailed: number;
+  message: string;
+}
+
 export type UpdateSecuritySettingsPayload = Partial<SecuritySettingsResponse>;
 
 export const securitySettingsApi = {
-  getSecuritySettings: async (tenantId?: string): Promise<SecuritySettingsResponse> => {
+  getPasswordPolicy: async (tenantId?: string, token?: string): Promise<{
+    minimumPasswordLength: number;
+    minimumPasswordStrength: string;
+    requireDigit: boolean;
+    requireSymbol: boolean;
+    requireMixedCase: boolean;
+  }> => {
+    const tid = tenantId || getTenantId();
+    const url = tid
+      ? `/api/v1/tenants/${tid}/auth/password-policy`
+      : '/api/v1/security-settings/password-policy';
+    const params = token ? { token } : undefined;
+    const response = await apiClient.get<any>(url, { params, skipToast: true } as any);
+    const data = (response.data as any)?.data ?? response.data;
+    if (!data) {
+      throw new Error('Failed to load password policy');
+    }
+    return {
+      minimumPasswordLength: data.minimumPasswordLength ?? 10,
+      minimumPasswordStrength: (data.minimumPasswordStrength || 'MODERATE').toUpperCase(),
+      requireDigit: data.requireDigit ?? true,
+      requireSymbol: data.requireSymbol ?? true,
+      requireMixedCase: data.requireMixedCase ?? true,
+    };
+  },
+
+  getSecuritySettings: async (tenantId?: string, config?: any): Promise<SecuritySettingsResponse> => {
     const tid = tenantId || getTenantId();
     const url = tid ? `/api/v1/tenants/${tid}/security-settings` : '/api/v1/security-settings';
-    const response = await apiClient.get<SecuritySettingsResponse>(url);
+    const response = config ? await apiClient.get<SecuritySettingsResponse>(url, config) : await apiClient.get<SecuritySettingsResponse>(url);
     const data = (response.data as any)?.data ?? response.data;
     return data;
   },
@@ -38,6 +71,16 @@ export const securitySettingsApi = {
     const tid = tenantId || getTenantId();
     const url = tid ? `/api/v1/tenants/${tid}/security-settings` : '/api/v1/security-settings';
     const response = await apiClient.put<SecuritySettingsResponse>(url, payload);
+    const data = (response.data as any)?.data ?? response.data;
+    return data;
+  },
+
+  forcePasswordReset: async (tenantId?: string): Promise<ForceResetResult> => {
+    const tid = tenantId || getTenantId();
+    const url = tid
+      ? `/api/v1/tenants/${tid}/security-settings/force-password-reset`
+      : '/api/v1/security-settings/force-password-reset';
+    const response = await apiClient.post<ForceResetResult>(url, {});
     const data = (response.data as any)?.data ?? response.data;
     return data;
   },

@@ -95,7 +95,7 @@ export const ROLE_CODE_TO_STUDY_PERMISSION: Record<string, string> = {
 };
 
 export function normalizeStudyPermission(perm?: string | null): string {
-  if (!perm) return 'STUDY_ADMIN';
+  if (!perm) return 'STUDY_RA';
   const trimmed = perm.trim();
   if (STUDY_PERMISSION_TO_ROLE_CODE[trimmed]) {
     return STUDY_PERMISSION_TO_ROLE_CODE[trimmed];
@@ -109,7 +109,7 @@ export function normalizeStudyPermission(perm?: string | null): string {
 }
 
 export function toStudyPermissionLabel(roleCode?: string | null): string {
-  if (!roleCode) return 'Admin';
+  if (!roleCode) return 'RA';
   return ROLE_CODE_TO_STUDY_PERMISSION[roleCode] || roleCode;
 }
 
@@ -327,9 +327,9 @@ export const administrationApi = {
    * GET /api/v1/tenants/{tenantId}/users/{userId}/studies
    * Retrieves all active studies assigned to the user.
    */
-  async getUserStudies(userId: string | number, tenantId?: string): Promise<any[]> {
+  async getUserStudies(userId: string | number, tenantId?: string, config?: any): Promise<any[]> {
     const tid = resolveTenantId(tenantId);
-    const res = await apiClient.get(`/api/v1/tenants/${tid}/users/${userId}/studies`);
+    const res = await apiClient.get(`/api/v1/tenants/${tid}/users/${userId}/studies`, { skipToast: true, ...config });
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
@@ -409,9 +409,9 @@ export const administrationApi = {
    * GET /api/v1/tenants/{tenantId}/studies
    * Retrieves all active studies for the tenant from the backend.
    */
-  async getStudies(tenantId?: string): Promise<AvailableStudy[]> {
+  async getStudies(tenantId?: string, config?: any): Promise<AvailableStudy[]> {
     const tid = resolveTenantId(tenantId);
-    const res = await apiClient.get<AvailableStudy[]>(`/api/v1/tenants/${tid}/studies`);
+    const res = await apiClient.get<AvailableStudy[]>(`/api/v1/tenants/${tid}/studies`, { skipToast: true, ...config });
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
