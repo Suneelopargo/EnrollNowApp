@@ -3,6 +3,7 @@ import { Survey } from '../types/survey';
 import { SurveyRunner } from '../runner/SurveyRunner';
 import { X, Smartphone, Tablet, Monitor } from 'lucide-react';
 import { useFocusTrap } from '../../../../shared/accessibility/useFocusTrap';
+import { toast } from '../../../../shared/toaster';
 
 interface SurveyPreviewModalProps {
   survey: Survey;
@@ -116,7 +117,7 @@ export const SurveyPreviewModal: React.FC<SurveyPreviewModalProps> = ({
             <SurveyRunner
               survey={survey}
               onSubmit={async (answers) => {
-                alert('Test submission simulated successfully! Collected ' + answers.length + ' answer points.');
+                toast.info(`Test submission simulated successfully! Collected ${answers.length} answer points.`);
               }}
             />
           </div>

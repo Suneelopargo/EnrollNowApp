@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SurveyResponse, AiAssessment } from '../types/survey';
 import { surveyApi } from '../api/surveyApi';
+import { useFocusTrap } from '../../../../shared/accessibility/useFocusTrap';
 import { Eye, Sparkles, X, AlertTriangle, User, Download } from 'lucide-react';
 
 interface SurveyResponsesViewProps {
@@ -14,6 +15,11 @@ export const SurveyResponsesView: React.FC<SurveyResponsesViewProps> = ({ survey
   const [selectedResponse, setSelectedResponse] = useState<SurveyResponse | null>(null);
   const [aiAssessment, setAiAssessment] = useState<AiAssessment | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false);
+
+  const responseModalRef = useFocusTrap<HTMLDivElement>({
+    active: Boolean(selectedResponse),
+    onEscape: () => setSelectedResponse(null),
+  });
 
   const loadResponses = async () => {
     setIsLoading(true);
@@ -173,12 +179,25 @@ export const SurveyResponsesView: React.FC<SurveyResponsesViewProps> = ({ survey
 
       {/* Response Detail Modal */}
       {selectedResponse && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSelectedResponse(null);
+          }}
+        >
+          <div
+            ref={responseModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="survey-response-modal-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+          >
             {/* Header */}
             <div className="modal-title-bar p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 id="survey-response-modal-title" className="text-base font-bold text-slate-900">
                   Submission Detail #{selectedResponse.id}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -191,9 +210,10 @@ export const SurveyResponsesView: React.FC<SurveyResponsesViewProps> = ({ survey
               <button
                 type="button"
                 onClick={() => setSelectedResponse(null)}
+                aria-label="Close response details"
                 className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200 transition"
               >
-                <X size={18} />
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 

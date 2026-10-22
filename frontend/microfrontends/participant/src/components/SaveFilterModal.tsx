@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
 import { validateField, validators } from '../../../../shared/design-system/validation';
 
 interface SaveFilterModalProps {
@@ -51,32 +52,28 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
       )}
     >
       <form id="save-filter-form" onSubmit={handleSubmit} noValidate>
-        <div className="form-group">
-          <label className="form-label" htmlFor="saved-filter-name">
-            Filter Name <span className="form-required-marker" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="saved-filter-name"
-            type="text"
-            value={filterName}
-            onChange={(e) => {
-              setFilterName(e.target.value);
-              if (error) setError('');
-            }}
-            placeholder={!filterName && error ? error : 'Enter Filter Name'}
-            autoFocus
-            required
-            aria-required="true"
-            className="form-input"
-            aria-invalid={!!error}
-            aria-describedby={error ? 'saved-filter-name-error' : undefined}
-          />
-          {error && (
-            <div id="saved-filter-name-error" className="sr-only" role="alert">
-              {error}
-            </div>
+        <AccessibleField
+          id="saved-filter-name"
+          label="Filter Name"
+          required
+          value={filterName}
+          error={error}
+          placeholder="Enter Filter Name"
+        >
+          {(fieldProps) => (
+            <input
+              {...fieldProps}
+              type="text"
+              value={filterName}
+              onChange={(e) => {
+                setFilterName(e.target.value);
+                if (error) setError('');
+              }}
+              autoFocus
+              className="form-input"
+            />
           )}
-        </div>
+        </AccessibleField>
       </form>
     </Modal>
   );

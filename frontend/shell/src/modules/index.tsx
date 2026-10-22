@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { MfeContext } from '../../../shared/contracts';
 import { getApiBaseUrl } from '../../../shared/api-config';
+import { getAccessToken } from '../../../shared/api-client';
 import { telemetry } from '../../../shared/telemetry';
 import { ErrorBoundary } from '../../../shared/design-system/components/ErrorBoundary';
 import { LoadingSpinner } from '../../../shared/design-system/components/LoadingSpinner';
@@ -27,7 +28,7 @@ export function useMfeContext(moduleName: string): MfeContext {
         });
 
         if (eventType === 'LOGIN_SUCCESS') {
-          const authToken = payload?.token || localStorage.getItem('enrollnow_token');
+          const authToken = payload?.token || getAccessToken();
           let authUser = payload?.user;
           if (!authUser && payload?.username) {
             authUser = {

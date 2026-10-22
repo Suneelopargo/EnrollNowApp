@@ -1,5 +1,6 @@
 // frontend/shared/confirmation/confirmationManager.ts - Global Confirmation Modal Manager
 import { ConfirmationDialogState, ConfirmationOptions, ConfirmationIntent } from './types';
+import { getApiErrorMessage } from '../api-client';
 
 type ConfirmationListener = (state: ConfirmationDialogState | null) => void;
 
@@ -205,10 +206,7 @@ class ConfirmationManager {
           if (resolve) resolve(true);
         }
       } catch (err: any) {
-        const errorMsg =
-          err?.response?.data?.message ||
-          err?.message ||
-          'Operation failed. Please try again.';
+        const errorMsg = getApiErrorMessage(err, 'Operation failed. Please try again.');
         this.currentState.isLoading = false;
         this.currentState.errorMessage = errorMsg;
         this.notify();

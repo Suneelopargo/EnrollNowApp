@@ -21,6 +21,10 @@ public interface UserEmailRepository extends JpaRepository<UserEmail, UUID> {
             UUID userId
     );
 
+    List<UserEmail> findByTenantIdAndPrimaryEmailTrue(
+            UUID tenantId
+    );
+
     List<UserEmail> findByTenantIdAndUserId(
             UUID tenantId,
             UUID userId

@@ -30,8 +30,9 @@ export class EnrollNowApiError extends Error {
   public details?: string[];
   public correlationId?: string;
   public raw?: any;
+  public response?: any;
 
-  constructor(normalized: NormalizedApiError) {
+  constructor(normalized: NormalizedApiError, response?: any) {
     super(normalized.message);
     this.name = 'EnrollNowApiError';
     this.status = normalized.status;
@@ -39,6 +40,7 @@ export class EnrollNowApiError extends Error {
     this.details = normalized.details;
     this.correlationId = normalized.correlationId;
     this.raw = normalized.raw;
+    this.response = response ?? (normalized.raw !== undefined ? { status: normalized.status, data: normalized.raw } : undefined);
     Object.setPrototypeOf(this, EnrollNowApiError.prototype);
   }
 }
@@ -108,6 +110,51 @@ export function getAccessToken(): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Centralized authenticated user session retrieval from localStorage 'enrollnow_user'.
+ * Safely parses JSON and returns null when unauthenticated or malformed.
+ */
+export function getStoredAuthUser<T = Record<string, any>>(): T | null {
+  if (typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function') {
+    try {
+      const raw = localStorage.getItem('enrollnow_user');
+      if (!raw || !raw.trim()) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? (parsed as T) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extracts a clean user-facing error message from an EnrollNowApiError, AxiosError,
+ * backend ApiResponse/ApiError payload, or standard Error instance.
+ */
+export function getApiErrorMessage(
+  error: unknown,
+  fallbackMessage: string = 'An unexpected error occurred. Please try again.'
+): string {
+  if (!error) return fallbackMessage;
+  if (typeof error === 'string') return error.trim() || fallbackMessage;
+
+  const err = error as any;
+  const candidate =
+    err?.response?.data?.error?.message ||
+    err?.response?.data?.message ||
+    err?.raw?.error?.message ||
+    err?.raw?.message ||
+    err?.normalized?.message ||
+    err?.apiError?.message ||
+    err?.message;
+
+  if (typeof candidate === 'string' && candidate.trim().length > 0) {
+    return candidate.trim();
+  }
+  return fallbackMessage;
 }
 
 /**
@@ -486,7 +533,7 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         });
       }
 
-      const apiError = new EnrollNowApiError(normalized);
+      const apiError = new EnrollNowApiError(normalized, error?.response);
       // Attach normalized & mapped info onto error object for backwards compatibility
       error.normalized = normalized;
       error.apiError = apiError;

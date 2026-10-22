@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.common.security.SecurityTokenHelper;
 import com.enrollnow.identity.dtos.ForceResetResultDto;
 import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
@@ -11,13 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.OffsetDateTime;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -132,7 +127,7 @@ public class SecuritySettingsService {
     public PasswordPolicyDto getPublicPasswordPolicy(UUID tenantId, String token) {
         UUID effectiveTenantId = tenantId;
         if (effectiveTenantId == null && token != null && !token.isBlank() && userActionTokenRepository != null) {
-            String tokenHash = hashToken(token.trim());
+            String tokenHash = SecurityTokenHelper.hashToken(token.trim());
             UserActionToken actionToken = userActionTokenRepository.findByTokenHash(tokenHash).orElse(null);
             if (actionToken != null) {
                 effectiveTenantId = actionToken.getTenantId();
@@ -271,12 +266,12 @@ public class SecuritySettingsService {
                         userActionTokenRepository.save(t);
                     }
 
-                    String rawToken = generateToken();
+                    String rawToken = SecurityTokenHelper.generateSecureToken();
                     UserActionToken resetToken = new UserActionToken();
                     resetToken.setTenantId(tenantId);
                     resetToken.setUserId(user.getId());
                     resetToken.setTokenType("PASSWORD_RESET");
-                    resetToken.setTokenHash(hashToken(rawToken));
+                    resetToken.setTokenHash(SecurityTokenHelper.hashToken(rawToken));
                     resetToken.setExpiresAt(now.plusMinutes(30));
                     userActionTokenRepository.save(resetToken);
 
@@ -414,21 +409,5 @@ public class SecuritySettingsService {
         dto.setUpdatedAt(entity.getUpdatedAt());
         dto.setUpdatedBy(entity.getUpdatedBy());
         return dto;
-    }
-
-    private String generateToken() {
-        byte[] randomBytes = new byte[32];
-        new SecureRandom().nextBytes(randomBytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-    }
-
-    private String hashToken(String token) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is not available", ex);
-        }
     }
 }

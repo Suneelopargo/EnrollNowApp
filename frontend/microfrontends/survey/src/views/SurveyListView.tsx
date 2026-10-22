@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SurveyListItem } from '../types/survey';
 import { surveyApi } from '../api/surveyApi';
+import { requestConfirmation } from '../../../../shared/confirmation';
 import {
   Search,
   Plus,
@@ -56,7 +57,13 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
   };
 
   const handleArchive = async (id: number) => {
-    if (!window.confirm('Are you sure you want to archive this survey?')) return;
+    const confirmed = await requestConfirmation({
+      title: 'Archive Survey',
+      message: 'Are you sure you want to archive this survey?',
+      intent: 'warning',
+      confirmText: 'Archive Survey',
+    });
+    if (!confirmed) return;
     try {
       await surveyApi.archiveSurvey(id);
       loadSurveys();
@@ -66,7 +73,13 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to permanently delete this survey?')) return;
+    const confirmed = await requestConfirmation({
+      title: 'Delete Survey',
+      message: 'Are you sure you want to permanently delete this survey?',
+      intent: 'danger',
+      confirmText: 'Delete Survey',
+    });
+    if (!confirmed) return;
     try {
       await surveyApi.deleteSurvey(id);
       loadSurveys();
@@ -127,21 +140,23 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
-          <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-2.5 text-slate-400" aria-hidden="true" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by title or survey code..."
+            aria-label="Search surveys by title or survey code"
             className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto" role="group" aria-label="Filter surveys by status">
           {['ALL', 'PUBLISHED', 'DRAFT', 'ARCHIVED'].map((st) => (
             <button
               key={st}
               type="button"
+              aria-pressed={statusFilter === st}
               onClick={() => setStatusFilter(st)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 statusFilter === st
@@ -221,12 +236,13 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
                             type="button"
                             onClick={() => handleCopyLink(survey.publicToken)}
                             title="Copy Public Link"
+                            aria-label={`Copy public link for ${survey.title}`}
                             className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
                           >
                             {copiedToken === survey.publicToken ? (
-                              <Check size={15} className="text-emerald-600" />
+                              <Check size={15} className="text-emerald-600" aria-hidden="true" />
                             ) : (
-                              <Globe size={15} />
+                              <Globe size={15} aria-hidden="true" />
                             )}
                           </button>
                         )}
@@ -235,36 +251,40 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
                           type="button"
                           onClick={() => onViewAnalytics(survey.id)}
                           title="Analytics"
+                          aria-label={`View analytics for ${survey.title}`}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition"
                         >
-                          <BarChart2 size={15} />
+                          <BarChart2 size={15} aria-hidden="true" />
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleExportCsv(survey.id)}
                           title="Export CSV Responses"
+                          aria-label={`Export CSV responses for ${survey.title}`}
                           className="p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-slate-100 transition"
                         >
-                          <Download size={15} />
+                          <Download size={15} aria-hidden="true" />
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleDuplicate(survey.id)}
                           title="Duplicate Survey"
+                          aria-label={`Duplicate ${survey.title}`}
                           className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
                         >
-                          <Copy size={15} />
+                          <Copy size={15} aria-hidden="true" />
                         </button>
 
                         <button
                           type="button"
                           onClick={() => onEditSurvey(survey.id)}
                           title="Edit Survey"
+                          aria-label={`Edit ${survey.title}`}
                           className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
                         >
-                          <Edit2 size={15} />
+                          <Edit2 size={15} aria-hidden="true" />
                         </button>
 
                         {survey.status !== 'ARCHIVED' && (
@@ -272,9 +292,10 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
                             type="button"
                             onClick={() => handleArchive(survey.id)}
                             title="Archive Survey"
+                            aria-label={`Archive ${survey.title}`}
                             className="p-1.5 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-slate-100 transition"
                           >
-                            <Archive size={15} />
+                            <Archive size={15} aria-hidden="true" />
                           </button>
                         )}
 
@@ -282,9 +303,10 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
                           type="button"
                           onClick={() => handleDelete(survey.id)}
                           title="Delete Survey"
+                          aria-label={`Delete ${survey.title}`}
                           className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={15} aria-hidden="true" />
                         </button>
                       </div>
                     </td>

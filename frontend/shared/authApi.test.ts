@@ -50,12 +50,14 @@ if (typeof (globalThis as any).CustomEvent === 'undefined') {
   };
 }
 
-vi.mock('./api-client', () => {
+vi.mock('./api-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api-client')>();
   const mockClient = {
     get: vi.fn(),
     post: vi.fn(),
   };
   return {
+    ...actual,
     apiClient: mockClient,
     defaultApiClient: mockClient,
     default: mockClient,

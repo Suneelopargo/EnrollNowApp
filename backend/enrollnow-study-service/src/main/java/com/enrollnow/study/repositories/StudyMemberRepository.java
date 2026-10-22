@@ -1,6 +1,5 @@
 package com.enrollnow.study.repositories;
 
-
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.models.StudyMemberId;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,5 +19,9 @@ public interface StudyMemberRepository extends JpaRepository<StudyMember, StudyM
     List<StudyMember> findByTenantIdAndIdUserIdAndActiveTrue(
             UUID tenantId,
             UUID userId
+    );
+
+    List<StudyMember> findByTenantIdAndActiveTrue(
+            UUID tenantId
     );
 }

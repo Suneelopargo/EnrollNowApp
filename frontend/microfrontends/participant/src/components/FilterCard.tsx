@@ -45,9 +45,10 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           type="button"
           onClick={() => onRemove(index)}
           title="Remove Filter"
+          aria-label={`Remove filter rule ${index + 1}`}
           className="filter-card-remove"
         >
-          <X size={14} strokeWidth={2.5} />
+          <X size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
       </div>
 
@@ -56,6 +57,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           <select
             value={filter.field || 'age'}
             onChange={(e) => handleFieldChange(e.target.value)}
+            aria-label={`Filter rule ${index + 1} field`}
             className="filter-select filter-select--field"
           >
             {filterFieldOptions.map((f) => (
@@ -68,6 +70,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
             size={14}
             color="#6b7280"
             className="filter-card-chevron"
+            aria-hidden="true"
           />
         </div>
 
@@ -75,6 +78,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           <select
             value={filter.operator || 'equal to'}
             onChange={(e) => handleOperatorChange(e.target.value)}
+            aria-label={`Filter rule ${index + 1} operator`}
             className="filter-select filter-select--operator"
           >
             {operatorOptions.map((op) => (
@@ -87,6 +91,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
             size={14}
             color="#6b7280"
             className="filter-card-chevron"
+            aria-hidden="true"
           />
         </div>
       </div>
@@ -97,6 +102,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           value={filter.value || ''}
           onChange={(e) => handleValueChange(e.target.value)}
           placeholder={currentFieldConfig.placeholder || 'Enter value...'}
+          aria-label={`Filter rule ${index + 1} value`}
           className="filter-card-value-input"
         />
       </div>

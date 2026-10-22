@@ -10,7 +10,10 @@ import {
 import { SiteAdminUser } from '../types/admin';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { toast } from '../../../../shared/toaster';
+import { getStoredAuthUser } from '../../../../shared/api-client';
+import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
 import {
+  AvailableStudy,
   toStudyPermissionLabel,
   toSitePermissionLabel,
   normalizeSiteRoleCode,
@@ -19,12 +22,7 @@ import {
   RoleResponse,
 } from '../../../../shared/api/administrationApi';
 
-export interface AvailableStudy {
-  id: string;
-  name: string;
-  studyCode?: string;
-  description?: string;
-}
+export type { AvailableStudy };
 
 export interface RoleOption {
   code: string;
@@ -202,22 +200,15 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     ) {
       return true;
     }
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const raw = localStorage.getItem('enrollnow_user');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.id && String(userToEdit.id) === String(parsed.id)) return true;
-          if (
-            parsed?.email &&
-            userToEdit.email &&
-            userToEdit.email.trim().toLowerCase() === parsed.email.trim().toLowerCase()
-          ) {
-            return true;
-          }
-        }
-      } catch {
-        // ignore
+    const storedUser = getStoredAuthUser<any>();
+    if (storedUser) {
+      if (storedUser.id && String(userToEdit.id) === String(storedUser.id)) return true;
+      if (
+        storedUser.email &&
+        userToEdit.email &&
+        userToEdit.email.trim().toLowerCase() === storedUser.email.trim().toLowerCase()
+      ) {
+        return true;
       }
     }
     return false;
@@ -710,77 +701,65 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         ) : (
           /* Add User Mode: First Name, Last Name, Email, Site Permissions */
           <div className="site-admin-form-grid">
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-first-name">
-                First Name <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-first-name"
-                type="text"
-                placeholder={!firstName && errors.firstName ? errors.firstName : 'Enter First Name'}
-                className="form-input"
-                value={firstName}
-                onChange={(e) => handleChange('firstName', e.target.value, setFirstName)}
-                onBlur={() => handleBlur('firstName')}
-                aria-invalid={!!errors.firstName}
-                aria-describedby={errors.firstName ? 'site-admin-first-name-error' : undefined}
-                required
-                aria-required="true"
-              />
-              {errors.firstName && (
-                <div id="site-admin-first-name-error" className="sr-only" role="alert">
-                  {errors.firstName}
-                </div>
+            <AccessibleField
+              id="site-admin-first-name"
+              label="First Name"
+              required
+              value={firstName}
+              error={errors.firstName}
+              placeholder="Enter First Name"
+            >
+              {(fieldProps) => (
+                <input
+                  {...fieldProps}
+                  type="text"
+                  className="form-input"
+                  value={firstName}
+                  onChange={(e) => handleChange('firstName', e.target.value, setFirstName)}
+                  onBlur={() => handleBlur('firstName')}
+                />
               )}
-            </div>
+            </AccessibleField>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-last-name">
-                Last Name <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-last-name"
-                type="text"
-                placeholder={!lastName && errors.lastName ? errors.lastName : 'Enter Last Name'}
-                className="form-input"
-                value={lastName}
-                onChange={(e) => handleChange('lastName', e.target.value, setLastName)}
-                onBlur={() => handleBlur('lastName')}
-                aria-invalid={!!errors.lastName}
-                aria-describedby={errors.lastName ? 'site-admin-last-name-error' : undefined}
-                required
-                aria-required="true"
-              />
-              {errors.lastName && (
-                <div id="site-admin-last-name-error" className="sr-only" role="alert">
-                  {errors.lastName}
-                </div>
+            <AccessibleField
+              id="site-admin-last-name"
+              label="Last Name"
+              required
+              value={lastName}
+              error={errors.lastName}
+              placeholder="Enter Last Name"
+            >
+              {(fieldProps) => (
+                <input
+                  {...fieldProps}
+                  type="text"
+                  className="form-input"
+                  value={lastName}
+                  onChange={(e) => handleChange('lastName', e.target.value, setLastName)}
+                  onBlur={() => handleBlur('lastName')}
+                />
               )}
-            </div>
+            </AccessibleField>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="site-admin-email">
-                Email <span className="form-required-marker" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="site-admin-email"
-                type="email"
-                placeholder={!email && errors.email ? errors.email : 'Enter Email'}
-                className="form-input"
-                value={email}
-                onChange={(e) => handleChange('email', e.target.value, setEmail)}
-                onBlur={() => handleBlur('email')}
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? 'site-admin-email-error' : undefined}
-                required
-                aria-required="true"
-              />
-              {errors.email && (
-                <div id="site-admin-email-error" className="sr-only" role="alert">
-                  {errors.email}
-                </div>
+            <AccessibleField
+              id="site-admin-email"
+              label="Email"
+              required
+              value={email}
+              error={errors.email}
+              placeholder="Enter Email"
+            >
+              {(fieldProps) => (
+                <input
+                  {...fieldProps}
+                  type="email"
+                  className="form-input"
+                  value={email}
+                  onChange={(e) => handleChange('email', e.target.value, setEmail)}
+                  onBlur={() => handleBlur('email')}
+                />
               )}
-            </div>
+            </AccessibleField>
 
             <div className="form-group">
               <label className="form-label" htmlFor="site-admin-site-permissions">

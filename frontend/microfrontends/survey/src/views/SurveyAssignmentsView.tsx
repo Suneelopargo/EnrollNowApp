@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SurveyAssignment, SurveyListItem } from '../types/survey';
 import { surveyApi } from '../api/surveyApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { UserPlus, Search, CheckCircle, Clock, Copy, Check, Send } from 'lucide-react';
 
 export const SurveyAssignmentsView: React.FC = () => {
@@ -52,7 +53,7 @@ export const SurveyAssignmentsView: React.FC = () => {
       await loadData();
     } catch (err: any) {
       console.error('Failed to assign survey:', err);
-      setErrorMsg(err?.response?.data?.message || 'Failed to create assignment.');
+      setErrorMsg(getApiErrorMessage(err, 'Failed to create assignment.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -91,10 +92,11 @@ export const SurveyAssignmentsView: React.FC = () => {
 
         <form onSubmit={handleAssign} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Select Published Survey <span className="text-red-500">*</span>
+            <label htmlFor="assignment-survey-select" className="block text-xs font-semibold text-slate-700 mb-1">
+              Select Published Survey <span className="text-red-500" aria-hidden="true">*</span>
             </label>
             <select
+              id="assignment-survey-select"
               required
               value={selectedSurveyId}
               onChange={(e) => setSelectedSurveyId(e.target.value ? Number(e.target.value) : '')}
@@ -112,10 +114,11 @@ export const SurveyAssignmentsView: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Participant User ID <span className="text-red-500">*</span>
+            <label htmlFor="assignment-user-id-input" className="block text-xs font-semibold text-slate-700 mb-1">
+              Participant User ID <span className="text-red-500" aria-hidden="true">*</span>
             </label>
             <input
+              id="assignment-user-id-input"
               type="text"
               required
               value={userIdInput}
@@ -131,14 +134,14 @@ export const SurveyAssignmentsView: React.FC = () => {
               disabled={isSubmitting || !selectedSurveyId || !userIdInput.trim()}
               className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <Send size={14} />
+              <Send size={14} aria-hidden="true" />
               <span>{isSubmitting ? 'Assigning...' : 'Assign Questionnaire'}</span>
             </button>
           </div>
         </form>
 
         {errorMsg && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+          <div role="alert" className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
             {errorMsg}
           </div>
         )}
@@ -151,12 +154,13 @@ export const SurveyAssignmentsView: React.FC = () => {
             Active Assignments ({filteredAssignments.length})
           </div>
           <div className="relative w-full sm:w-72">
-            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" aria-hidden="true" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by participant or title..."
+              aria-label="Search assignments by participant or survey title"
               className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>

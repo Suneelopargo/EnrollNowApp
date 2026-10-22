@@ -50,9 +50,10 @@ export const SurveyAnalyticsView: React.FC<SurveyAnalyticsViewProps> = ({ survey
             <button
               type="button"
               onClick={onBack}
+              aria-label="Back to surveys"
               className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} aria-hidden="true" />
             </button>
           )}
           <div>

@@ -35,6 +35,7 @@ const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
       <input
         type="checkbox"
         checked={isSelected}
+        aria-label={`Select participant ${params.data?.name || params.data?.id || ''}`.trim()}
         onChange={(e) => {
           e.stopPropagation();
           params.node.setSelected(e.target.checked, false);
@@ -508,9 +509,10 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             type="button"
             onClick={onRefresh}
             title="All Users"
+            aria-label="Show all participants"
             className="btn btn-secondary"
           >
-            <Users size={16} />
+            <Users size={16} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -594,9 +596,10 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             <button
               type="button"
               onClick={() => setIsDropdownOpen(false)}
+              aria-label="Close study filter"
               className="text-gray-400 hover:text-gray-600 p-0.5 cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
 
@@ -606,6 +609,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
               value={filterSearchQuery}
               onChange={(e) => setFilterSearchQuery(e.target.value)}
               placeholder="Search items..."
+              aria-label="Search study filter items"
               className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-gray-50"
             />
             {filterSearchQuery && (

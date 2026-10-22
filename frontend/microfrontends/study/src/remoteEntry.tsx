@@ -3,7 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MfeContext } from '../../../shared/contracts';
 import { Plus, Upload, X } from 'lucide-react';
-import { apiClient } from '../../../shared/api-client';
+import { dashboardApi } from '../../../shared/api/dashboardApi';
+import { participantApi } from '../../../shared/api/participantApi';
+import { studyApi } from '../../../shared/api/studyApi';
+import { useFocusTrap } from '../../../shared/accessibility/useFocusTrap';
 
 export interface StudyModuleProps {
   context: MfeContext;
@@ -18,6 +21,10 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
   const [studyFormError, setStudyFormError] = useState<string | null>(null);
   const [studyForm, setStudyForm] = useState({ shortName: '', templateId: '' });
   const importInputRef = useRef<HTMLInputElement>(null);
+  const addStudyDialogRef = useFocusTrap<HTMLElement>({
+    active: showAddStudy,
+    onEscape: () => setShowAddStudy(false),
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const selectedStudyId = new URLSearchParams(location.search).get('studyId');
@@ -35,15 +42,15 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       setLoading(true);
       try {
         const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
-          apiClient.get('/api/v1/studies', { skipToast: true } as any),
-          apiClient.get('/api/v1/dashboard/overview', { skipToast: true } as any),
-          apiClient.get('/api/v1/participants', { skipToast: true } as any),
+          studyApi.getStudies(),
+          dashboardApi.getOverview({ skipToast: true } as any),
+          participantApi.getParticipants({ skipToast: true } as any),
         ]);
-        const registryStudies = studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value.data?.data)
-          ? studiesRes.value.data.data
+        const registryStudies = studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value)
+          ? studiesRes.value
           : [];
         const overviewStudies = overviewRes.status === 'fulfilled'
-          ? overviewRes.value.data?.data?.recentStudies || []
+          ? overviewRes.value?.recentStudies || []
           : [];
         const getStudyIdentifiers = (study: any) => [study.id, study.studyId, study.protocolId, study.protocolNumber]
           .filter((value) => value !== undefined && value !== null).map(String);
@@ -59,8 +66,8 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
           };
         });
         setStudies(mergedStudies);
-        if (participantsRes.status === 'fulfilled' && Array.isArray(participantsRes.value.data?.data)) {
-          setParticipants(participantsRes.value.data.data);
+        if (participantsRes.status === 'fulfilled' && Array.isArray(participantsRes.value)) {
+          setParticipants(participantsRes.value);
         }
       } catch {
         // Keep the study selection screen available when an endpoint is unavailable.
@@ -127,8 +134,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       status: 'ACTIVE',
     };
     try {
-      const res = await apiClient.post('/api/v1/studies', payload);
-      const created = res.data?.data || payload;
+      const created = (await studyApi.createStudy(payload)) || payload;
       setStudies((current) => [{
         ...created,
         protocolId: created.protocolId ?? created.protocolNumber ?? created.id ?? `ST-${Date.now()}`,
@@ -164,8 +170,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
         targetEnrollment: Math.max(1, Number(imported.targetEnrollment ?? imported.targetParticipants) || 100),
         status: 'ACTIVE',
       };
-      const res = await apiClient.post('/api/v1/studies', payload);
-      const created = res.data?.data || payload;
+      const created = (await studyApi.createStudy(payload)) || payload;
       setStudies((current) => [{
         ...created,
         protocolId: created.protocolId ?? created.protocolNumber ?? created.id ?? `ST-${Date.now()}`,
@@ -281,7 +286,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
         <div className="study-form-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setShowAddStudy(false);
         }}>
-          <section className="study-form-dialog" role="dialog" aria-modal="true" aria-labelledby="add-study-title">
+          <section ref={addStudyDialogRef} className="study-form-dialog" role="dialog" aria-modal="true" aria-labelledby="add-study-title">
             <div className="study-form-dialog__heading">
               <h2 id="add-study-title">Add Study</h2>
               <button type="button" className="study-form-dialog__close" onClick={() => setShowAddStudy(false)} aria-label="Close add study form"><X size={18} /></button>
@@ -309,7 +314,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
                 <button type="button" className="study-form-dialog__import" onClick={() => importInputRef.current?.click()} disabled={isSavingStudy}>
                   <Upload size={15} /> Import Study
                 </button>
-                <input ref={importInputRef} className="study-form-dialog__file-input" type="file" accept="application/json,.json" onChange={handleImportStudy} />
+                <input ref={importInputRef} className="study-form-dialog__file-input" type="file" accept="application/json,.json" aria-label="Import study JSON file" onChange={handleImportStudy} />
               </div>
             </form>
           </section>

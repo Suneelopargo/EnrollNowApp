@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { EnrollNowBrand } from './EnrollNowBrand';
+import { Footer } from '../../../../shared/design-system/components/Footer';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
 import { usePasswordValidation } from './usePasswordValidation';
@@ -290,20 +291,7 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
       </div>
 
       {/* Footer Below Card */}
-      <footer className="enl-activation-footer">
-        <span className="enl-activation-copyright">© 2016 - 2026</span>
-        <a href="#enrollnow" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
-          EnrollNow
-        </a>
-        <span className="enl-activation-footer-divider">|</span>
-        <a href="#terms" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
-          Terms of Service
-        </a>
-        <span className="enl-activation-footer-divider">|</span>
-        <a href="#support" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
-          Support Center
-        </a>
-      </footer>
+      <Footer variant="auth-card" />
     </div>
   );
 };

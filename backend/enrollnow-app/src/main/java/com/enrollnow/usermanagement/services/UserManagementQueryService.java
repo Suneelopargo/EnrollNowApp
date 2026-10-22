@@ -26,13 +26,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+/**
+ * High-performance query service for Administrative User Management views.
+ * Resolves user summaries, site permissions, and study access while preventing N+1 database queries
+ * via batch fetching and in-memory indexing.
+ */
 @Service
 public class UserManagementQueryService {
 
@@ -88,8 +96,18 @@ public class UserManagementQueryService {
 
     @Transactional(readOnly = true)
     public List<UserListItemResponse> getUsers(UUID tenantId, UUID requestedSiteId) {
+        if (tenantId == null) {
+            return Collections.emptyList();
+        }
+
+        List<User> users = userRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        if (users.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         OffsetDateTime now = OffsetDateTime.now();
+
+        // 1. Resolve default tenant site id
         UUID defaultTenantSiteId = requestedSiteId;
         if (defaultTenantSiteId == null && siteRepository != null) {
             defaultTenantSiteId = siteRepository
@@ -98,63 +116,90 @@ public class UserManagementQueryService {
                     .orElseGet(() -> siteRepository.findFirstByTenantId(tenantId).map(Site::getId).orElse(null));
         }
 
-        List<User> users = userRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
-        List<UserListItemResponse> response = new ArrayList<>();
+        // 2. Batch load primary emails for tenant
+        Map<UUID, String> primaryEmailsByUserId = userEmailRepository
+                .findByTenantIdAndPrimaryEmailTrue(tenantId)
+                .stream()
+                .filter(e -> e.getUserId() != null && e.getEmail() != null)
+                .collect(Collectors.toMap(
+                        UserEmail::getUserId,
+                        UserEmail::getEmail,
+                        (existing, replacement) -> existing,
+                        LinkedHashMap::new
+                ));
+
+        // 3. Batch load all active roles for in-memory O(1) lookup
+        Map<UUID, Role> rolesById = roleRepository.findAll()
+                .stream()
+                .filter(r -> r.getId() != null)
+                .collect(Collectors.toMap(
+                        Role::getId,
+                        Function.identity(),
+                        (existing, replacement) -> existing,
+                        LinkedHashMap::new
+                ));
+
+        // 4. Batch load all active user role assignments for tenant
+        List<UserRoleAssignment> allAssignments = userRoleAssignmentRepository.findByTenantIdAndActiveTrue(tenantId);
+        Map<UUID, List<UserRoleAssignment>> assignmentsByUserId = allAssignments.stream()
+                .filter(a -> a.getUserId() != null)
+                .collect(Collectors.groupingBy(UserRoleAssignment::getUserId));
+
+        // 5. Batch load all active study memberships for tenant
+        List<StudyMember> allMemberships = studyMemberRepository.findByTenantIdAndActiveTrue(tenantId);
+        Map<UUID, List<StudyMember>> membershipsByUserId = allMemberships.stream()
+                .filter(m -> m.getId() != null && m.getId().getUserId() != null)
+                .collect(Collectors.groupingBy(m -> m.getId().getUserId()));
+
+        // 6. Batch load all studies for tenant
+        Map<UUID, Study> studiesById = studyRepository.findByTenantId(tenantId)
+                .stream()
+                .filter(s -> s.getId() != null)
+                .collect(Collectors.toMap(
+                        Study::getId,
+                        Function.identity(),
+                        (existing, replacement) -> existing,
+                        LinkedHashMap::new
+                ));
+
+        List<UserListItemResponse> response = new ArrayList<>(users.size());
 
         for (User user : users) {
+            UUID userId = user.getId();
 
             UserListItemResponse item = new UserListItemResponse();
-
-            item.setId(user.getId());
+            item.setId(userId);
             item.setFirstName(user.getFirstName());
             item.setLastName(user.getLastName());
             item.setTitle(user.getTitle());
             item.setStatus(user.getStatus());
             item.setCreatedAt(user.getCreatedAt());
 
-            UserEmail primaryEmail =
-                    userEmailRepository
-                            .findByTenantIdAndUserIdAndPrimaryEmailTrue(
-                                    tenantId,
-                                    user.getId())
-                            .orElse(null);
-
+            String primaryEmail = primaryEmailsByUserId.get(userId);
             if (primaryEmail != null) {
-                item.setPrimaryEmail(primaryEmail.getEmail());
+                item.setPrimaryEmail(primaryEmail);
             }
 
+            List<UserRoleAssignment> userAssignments = assignmentsByUserId.getOrDefault(userId, Collections.emptyList());
+
+            // Resolve site permissions
             String sitePermission = "NONE";
             UUID resolvedUserSiteId = requestedSiteId != null ? requestedSiteId : defaultTenantSiteId;
-
-            List<UserRoleAssignment> siteAssignments =
-                    requestedSiteId != null
-                            ? userRoleAssignmentRepository.findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
-                                    tenantId,
-                                    user.getId(),
-                                    requestedSiteId
-                            )
-                            : userRoleAssignmentRepository.findByTenantIdAndUserIdAndSiteIdIsNotNullAndActiveTrue(
-                                    tenantId,
-                                    user.getId()
-                            );
-
             int highestPriority = 0;
-            for (UserRoleAssignment assignment : siteAssignments) {
+
+            for (UserRoleAssignment assignment : userAssignments) {
                 if (!SitePermissionService.isAssignmentEffective(assignment, now)) {
                     continue;
                 }
-                if (assignment.getTeamId() != null || assignment.getStudyId() != null) {
+                if (assignment.getTeamId() != null || assignment.getStudyId() != null || assignment.getSiteId() == null) {
+                    continue;
+                }
+                if (requestedSiteId != null && !requestedSiteId.equals(assignment.getSiteId())) {
                     continue;
                 }
 
-                Role role =
-                        roleRepository
-                                .findById(assignment.getRoleId())
-                                .orElse(null);
-
-                if (role != null
-                        && role.isActive()
-                        && "SITE".equalsIgnoreCase(role.getScopeType())) {
+                Role role = rolesById.get(assignment.getRoleId());
+                if (role != null && role.isActive() && "SITE".equalsIgnoreCase(role.getScopeType())) {
                     int priority = SitePermissionService.siteRolePriority(role.getCode());
                     if (priority > highestPriority) {
                         highestPriority = priority;
@@ -167,35 +212,26 @@ public class UserManagementQueryService {
             item.setSiteId(resolvedUserSiteId);
             item.setSitePermission(sitePermission);
 
+            // Resolve study roles and permissions
             Map<UUID, String> studyRoles = new LinkedHashMap<>();
             Map<UUID, String> studyPermissions = new LinkedHashMap<>();
 
-            // 1. Collect from study_members table
-            List<StudyMember> memberships =
-                    studyMemberRepository
-                            .findByTenantIdAndIdUserIdAndActiveTrue(
-                                    tenantId,
-                                    user.getId());
-
+            // A. From study_members
+            List<StudyMember> memberships = membershipsByUserId.getOrDefault(userId, Collections.emptyList());
             for (StudyMember membership : memberships) {
-                UUID sId = membership.getId().getStudyId();
-                studyRoles.put(sId, membership.getStudyRole());
+                if (membership.getId() != null && membership.getId().getStudyId() != null) {
+                    studyRoles.put(membership.getId().getStudyId(), membership.getStudyRole());
+                }
             }
 
-            // 2. Collect from user_role_assignments table
-            List<UserRoleAssignment> userRoleAssignments =
-                    userRoleAssignmentRepository
-                            .findByTenantIdAndUserIdAndActiveTrue(
-                                    tenantId,
-                                    user.getId());
-
-            for (UserRoleAssignment assignment : userRoleAssignments) {
+            // B. From user_role_assignments
+            for (UserRoleAssignment assignment : userAssignments) {
                 if (!SitePermissionService.isAssignmentEffective(assignment, now)) {
                     continue;
                 }
                 UUID sId = assignment.getStudyId();
                 if (sId != null) {
-                    Role role = roleRepository.findById(assignment.getRoleId()).orElse(null);
+                    Role role = rolesById.get(assignment.getRoleId());
                     if (role != null && role.isActive() && "STUDY".equalsIgnoreCase(role.getScopeType())) {
                         studyPermissions.putIfAbsent(sId, role.getCode());
                         studyRoles.putIfAbsent(sId, role.getName() != null ? role.getName() : "Study Member");
@@ -207,56 +243,35 @@ public class UserManagementQueryService {
             allStudyIds.addAll(studyRoles.keySet());
             allStudyIds.addAll(studyPermissions.keySet());
 
-            List<UserStudyAccessResponse> studies = new ArrayList<>();
-
+            List<UserStudyAccessResponse> studies = new ArrayList<>(allStudyIds.size());
             for (UUID studyId : allStudyIds) {
-                Study study =
-                        studyRepository
-                                .findByTenantIdAndId(tenantId, studyId)
-                                .or(() -> studyRepository.findById(studyId))
-                                .orElse(null);
-
-                String studyName = study != null ? study.getName() : "Assigned Study (" + studyId.toString().substring(0, Math.min(8, studyId.toString().length())).toUpperCase() + ")";
+                Study study = studiesById.get(studyId);
+                String studyName = study != null ? study.getName()
+                        : "Assigned Study (" + studyId.toString().substring(0, Math.min(8, studyId.toString().length())).toUpperCase() + ")";
                 String sRole = studyRoles.get(studyId);
                 String sPerm = studyPermissions.get(studyId);
 
                 if (sPerm == null) {
-                    List<UserRoleAssignment> assignments =
-                            userRoleAssignmentRepository
-                                    .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
-                                            tenantId,
-                                            user.getId(),
-                                            studyId);
-
-                    for (UserRoleAssignment assignment : assignments) {
+                    for (UserRoleAssignment assignment : userAssignments) {
                         if (!SitePermissionService.isAssignmentEffective(assignment, now)) {
                             continue;
                         }
-
-                        Role role =
-                                roleRepository
-                                        .findById(assignment.getRoleId())
-                                        .orElse(null);
-
-                        if (role != null
-                                && role.isActive()
-                                && "STUDY".equalsIgnoreCase(role.getScopeType())) {
-
-                            sPerm = role.getCode();
-                            break;
+                        if (studyId.equals(assignment.getStudyId())) {
+                            Role role = rolesById.get(assignment.getRoleId());
+                            if (role != null && role.isActive() && "STUDY".equalsIgnoreCase(role.getScopeType())) {
+                                sPerm = role.getCode();
+                                break;
+                            }
                         }
                     }
                 }
 
-                UserStudyAccessResponse studyResponse =
-                        new UserStudyAccessResponse(
-                                studyId,
-                                studyName,
-                                sRole != null ? sRole : "Study Member",
-                                sPerm
-                        );
-
-                studies.add(studyResponse);
+                studies.add(new UserStudyAccessResponse(
+                        studyId,
+                        studyName,
+                        sRole != null ? sRole : "Study Member",
+                        sPerm
+                ));
             }
 
             item.setStudies(studies);

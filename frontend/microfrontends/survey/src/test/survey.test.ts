@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { SurveyModule } from '../remoteEntry';
 import { QUESTION_TYPES } from '../constants/questionTypes';
 import { SURVEY_TEMPLATES } from '../constants/templates';
+import { surveyApi, createSurveyApiClient } from '../api/surveyApi';
+import { surveyApi as sharedSurveyApi } from '../../../../shared/api/surveyApi';
 
 describe('Survey MFE Remote Entry & Core Subsystem', () => {
   it('exports SurveyModule as a valid React component', () => {
@@ -69,5 +71,20 @@ describe('Survey MFE Remote Entry & Core Subsystem', () => {
     expect(mockRules[0].condition).toBe('is');
     expect(mockRules[0].thenAction).toBe('SHOW_QUESTION');
     expect(mockRules[0].thenQuestionId).toBe(2);
+  });
+
+  it('re-exports the authoritative shared surveyApi client and avoids double /api/api prefix in export URLs', () => {
+    expect(surveyApi).toBe(sharedSurveyApi);
+    const client = createSurveyApiClient();
+    expect(client.getSurveys).toBe(client.listSurveys);
+    expect(client.getSurveyResponses).toBe(client.listResponses);
+    expect(client.getSurveyAssignments).toBe(client.listAssignments);
+    expect(client.getDashboardData).toBe(client.getDashboard);
+    expect(client.generateLogicWithAi).toBe(client.suggestLogicAi);
+    expect(client.assessResponseWithAi).toBe(client.assessResponseAi);
+
+    const exportUrl = client.exportResponsesCsvUrl(42);
+    expect(exportUrl).toContain('/api/v1/surveys/42/responses/export');
+    expect(exportUrl).not.toContain('/api/api/');
   });
 });
