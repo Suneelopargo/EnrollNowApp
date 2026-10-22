@@ -365,15 +365,35 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
         </div>
 
         {isEditable && (
-          <button
-            type="button"
-            className="sec-btn-reset-top"
-            onClick={handleResetToDefaults}
-            disabled={saving || isResetting}
-          >
-            <RotateCcw size={14} aria-hidden="true" />
-            <span>Reset to Default Settings</span>
-          </button>
+          <div className="sec-header-actions-group">
+            <button
+              type="button"
+              className="sec-btn-save-main"
+              onClick={handleSave}
+              disabled={!isDirty || saving || !isEditable}
+            >
+              <Save size={14} aria-hidden="true" />
+              <span>{saving ? 'Saving...' : 'Save Settings'}</span>
+            </button>
+            <button
+              type="button"
+              className="sec-btn-discard-main"
+              onClick={handleDiscard}
+              disabled={!isDirty || saving}
+            >
+              <Undo2 size={14} aria-hidden="true" />
+              <span>Discard Changes</span>
+            </button>
+            <button
+              type="button"
+              className="sec-btn-reset-top"
+              onClick={handleResetToDefaults}
+              disabled={saving || isResetting}
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              <span>Reset to Default Settings</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -718,27 +738,6 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Bottom Action Bar (Save Settings / Discard Changes) */}
-        <div className="sec-bottom-action-bar">
-          <button
-            type="submit"
-            className="sec-btn-save-main"
-            disabled={!isDirty || saving || !isEditable}
-          >
-            <Save size={15} aria-hidden="true" />
-            <span>{saving ? 'Saving...' : 'Save Settings'}</span>
-          </button>
-          <button
-            type="button"
-            className="sec-btn-discard-main"
-            onClick={handleDiscard}
-            disabled={!isDirty || saving}
-          >
-            <Undo2 size={15} aria-hidden="true" />
-            <span>Discard Changes</span>
-          </button>
         </div>
       </form>
     </div>

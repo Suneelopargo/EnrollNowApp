@@ -15,7 +15,10 @@ export interface AuthErrorNotification {
   secondaryHelp?: string;
 }
 
-export function mapAuthError(error: any): AuthErrorNotification {
+export function mapAuthError(
+  error: any,
+  options?: { isLoginScreen?: boolean }
+): AuthErrorNotification {
   const code = (
     error?.code ||
     error?.normalized?.code ||
@@ -24,6 +27,12 @@ export function mapAuthError(error: any): AuthErrorNotification {
     error?.reason ||
     ''
   ).toUpperCase();
+
+  const isLoginScreen = Boolean(
+    options?.isLoginScreen ||
+    error?.isLoginScreen ||
+    error?.config?.url?.includes('/auth/login')
+  );
 
   const rawMessage = (
     error?.response?.data?.message ||
@@ -46,10 +55,11 @@ export function mapAuthError(error: any): AuthErrorNotification {
     return {
       code: 'ACCOUNT_LOCKED_MAX_ATTEMPTS',
       title: 'Account locked',
-      description:
-        rawMessage.length > 20
-          ? rawMessage
-          : 'You have exceeded the allowed number of failed login attempts. Your account has been locked. Please contact the EnrollNow administrator at your institution to unlock your account. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
+      description: isLoginScreen
+        ? 'Too many unsuccessful sign-in attempts.\nContact your institution administrator for help unlocking your account.'
+        : rawMessage.length > 20
+        ? rawMessage
+        : 'You have exceeded the allowed number of failed login attempts. Your account has been locked. Please contact the EnrollNow administrator at your institution to unlock your account. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
       severity: 'error',
       requiresInlineAlert: false,
     };
@@ -92,10 +102,11 @@ export function mapAuthError(error: any): AuthErrorNotification {
     return {
       code: 'ACCOUNT_DISABLED_TEMPORARY',
       title: 'Account temporarily disabled',
-      description:
-        rawMessage.length > 20
-          ? rawMessage
-          : 'Your account has been temporarily disabled. Please contact the EnrollNow administrator at your institution to enable it. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
+      description: isLoginScreen
+        ? 'Your account has been temporarily disabled.\nContact your institution administrator for assistance.'
+        : rawMessage.length > 20
+        ? rawMessage
+        : 'Your account has been temporarily disabled. Please contact the EnrollNow administrator at your institution to enable it. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
       severity: 'error',
       requiresInlineAlert: false,
     };

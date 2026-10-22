@@ -433,13 +433,16 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
       let mappedAuthError: AuthErrorNotification | undefined = undefined;
 
       if (isLoginRequest) {
-        mappedAuthError = mapAuthError({
-          code: normalized.code,
-          message: normalized.message,
-          status: normalized.status,
-          response: error.response,
-          normalized,
-        });
+        mappedAuthError = mapAuthError(
+          {
+            code: normalized.code,
+            message: normalized.message,
+            status: normalized.status,
+            response: error.response,
+            normalized,
+          },
+          { isLoginScreen: true }
+        );
 
         if (!skipToast) {
           toast.show(mappedAuthError.severity, mappedAuthError.description, {

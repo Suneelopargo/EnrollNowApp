@@ -134,7 +134,7 @@ export class InactivityManager {
 
   public async fetchServerPolicy(): Promise<void> {
     try {
-      const settings = await securitySettingsApi.getSecuritySettings(this.tenantId);
+      const settings = await securitySettingsApi.getSecuritySettings(this.tenantId, { skipToast: true } as any);
       if (settings?.inactivityLogoutMinutes && settings.inactivityLogoutMinutes > 0) {
         this.setTimeoutMinutes(settings.inactivityLogoutMinutes);
       }

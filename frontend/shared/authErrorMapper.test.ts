@@ -88,6 +88,17 @@ describe('authErrorMapper', () => {
       expect(result.requiresInlineAlert).toBe(false);
       expect(result.action).toBeUndefined();
     });
+
+    it('maps to concise two-line message on login screen', () => {
+      const result = mapAuthError(
+        { code: 'ACCOUNT_DISABLED_TEMPORARY' },
+        { isLoginScreen: true }
+      );
+      expect(result.description).toBe(
+        'Your account has been temporarily disabled.\nContact your institution administrator for assistance.'
+      );
+      expect(result.description.split('\n')).toHaveLength(2);
+    });
   });
 
   describe('D. Permanent account disablement', () => {

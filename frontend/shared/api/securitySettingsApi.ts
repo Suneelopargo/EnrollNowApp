@@ -56,10 +56,10 @@ export const securitySettingsApi = {
     };
   },
 
-  getSecuritySettings: async (tenantId?: string): Promise<SecuritySettingsResponse> => {
+  getSecuritySettings: async (tenantId?: string, config?: any): Promise<SecuritySettingsResponse> => {
     const tid = tenantId || getTenantId();
     const url = tid ? `/api/v1/tenants/${tid}/security-settings` : '/api/v1/security-settings';
-    const response = await apiClient.get<SecuritySettingsResponse>(url);
+    const response = config ? await apiClient.get<SecuritySettingsResponse>(url, config) : await apiClient.get<SecuritySettingsResponse>(url);
     const data = (response.data as any)?.data ?? response.data;
     return data;
   },
