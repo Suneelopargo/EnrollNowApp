@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.common.security.SecurityTokenHelper;
 import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 import com.enrollnow.identity.models.UserActionToken;
 import com.enrollnow.identity.dtos.ActivateAccountRequest;
@@ -16,13 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.OffsetDateTime;
-import java.util.Base64;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -89,7 +84,7 @@ public class UserInvitationService {
             userActionTokenRepository.save(token);
         }
 
-        String rawToken = generateToken();
+        String rawToken = SecurityTokenHelper.generateSecureToken();
 
         UserActionToken activationToken =
                 new UserActionToken();
@@ -98,7 +93,7 @@ public class UserInvitationService {
         activationToken.setUserId(userId);
         activationToken.setTokenType(TOKEN_TYPE);
         activationToken.setTokenHash(
-                hashToken(rawToken)
+                SecurityTokenHelper.hashToken(rawToken)
         );
         activationToken.setExpiresAt(
                 now.plusDays(TOKEN_EXPIRY_DAYS)
@@ -109,43 +104,6 @@ public class UserInvitationService {
         );
 
         return rawToken;
-    }
-
-    private String generateToken() {
-
-        byte[] randomBytes = new byte[32];
-
-        new SecureRandom().nextBytes(randomBytes);
-
-        return Base64.getUrlEncoder()
-                .withoutPadding()
-                .encodeToString(randomBytes);
-    }
-
-    private String hashToken(String token) {
-
-        try {
-
-            MessageDigest digest =
-                    MessageDigest.getInstance("SHA-256");
-
-            byte[] hash =
-                    digest.digest(
-                            token.getBytes(
-                                    StandardCharsets.UTF_8
-                            )
-                    );
-
-            return HexFormat.of()
-                    .formatHex(hash);
-
-        } catch (NoSuchAlgorithmException ex) {
-
-            throw new IllegalStateException(
-                    "SHA-256 is not available",
-                    ex
-            );
-        }
     }
     
     @Transactional
@@ -210,7 +168,7 @@ public class UserInvitationService {
         }
 
         String tokenHash =
-                hashToken(request.getToken());
+                SecurityTokenHelper.hashToken(request.getToken());
 
         UserActionToken activationToken =
                 userActionTokenRepository
@@ -340,7 +298,7 @@ public class UserInvitationService {
 
         OffsetDateTime now = OffsetDateTime.now();
 
-        String tokenHash = hashToken(token.trim());
+        String tokenHash = SecurityTokenHelper.hashToken(token.trim());
 
         UserActionToken activationToken =
                 userActionTokenRepository

@@ -8,6 +8,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * @deprecated Legacy principal class retained only for backward compatibility with {@link CommonJwtAuthenticationFilter}.
+ */
+@Deprecated(since = "1.0.0", forRemoval = true)
 public class UserPrincipal implements UserDetails {
 
     private final Long id;
