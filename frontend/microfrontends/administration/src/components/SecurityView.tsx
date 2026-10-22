@@ -17,8 +17,7 @@ import {
   SecuritySettingsResponse,
 } from '../../../../shared/api/securitySettingsApi';
 import { toast } from '../../../../shared/toaster';
-import { useFocusTrap } from '../../../../shared/accessibility/useFocusTrap';
-import { ResetAllPasswordsModal } from './ResetAllPasswordsModal';
+import { confirmation } from '../../../../shared/confirmation';
 
 export interface SecurityViewProps {
   tenantId?: string;
@@ -145,18 +144,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [isDirty, setIsDirty] = useState<boolean>(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [isResetting, setIsResetting] = useState<boolean>(false);
-
-  // Password Requirement Change Modal
-  const [showPasswordResetModal, setShowPasswordResetModal] = useState<boolean>(false);
-  const [isForcingReset, setIsForcingReset] = useState<boolean>(false);
-
-  const resetTrapRef = useFocusTrap<HTMLDivElement>({
-    active: showResetModal,
-    onEscape: () => setShowResetModal(false),
-    returnFocus: true,
-  });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -271,7 +259,31 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
       toast.success('Security settings saved');
 
       if (passwordRequirementsChanged) {
-        setShowPasswordResetModal(true);
+        confirmation.confirm({
+          title: 'Reset Password for All Users in Team',
+          message:
+            "You just changed the password requirements for the team. New passwords will have to comply with the new requirements, but current passwords can't be checked. You can choose to reset all passwords in the team, or do nothing and wait for users to create new passwords.",
+          intent: 'danger',
+          confirmText: 'Force reset all passwords',
+          cancelText: 'Leave existing passwords intact',
+          loadingText: 'Resetting All Passwords...',
+          onConfirm: async () => {
+            try {
+              const res = await securitySettingsApi.forcePasswordReset(tenantId);
+              toast.success(
+                res.message || 'All passwords reset! Reset links have been emailed to affected users.'
+              );
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message || err?.message || 'Failed to force reset passwords';
+              toast.error(msg, { title: 'Force Reset Failed' });
+              throw err;
+            }
+          },
+          onCancel: () => {
+            // No info toast when closed/cancelled per user requirement
+          },
+        });
       }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Failed to save security settings';
@@ -279,25 +291,6 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleForceReset = async () => {
-    try {
-      setIsForcingReset(true);
-      const res = await securitySettingsApi.forcePasswordReset(tenantId);
-      toast.success(res.message || 'All passwords reset! Reset links have been emailed to affected users.');
-      setShowPasswordResetModal(false);
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to force reset passwords';
-      toast.error(msg, { title: 'Force Reset Failed' });
-    } finally {
-      setIsForcingReset(false);
-    }
-  };
-
-  const handleLeaveIntact = () => {
-    setShowPasswordResetModal(false);
-    toast.info('Existing passwords left intact. New requirements will apply on subsequent password changes.');
   };
 
   const handleDiscard = () => {
@@ -309,28 +302,41 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
     }
   };
 
-  const handleResetToDefaults = async () => {
-    try {
-      setIsResetting(true);
-      const reset = await securitySettingsApi.resetToDefaultSecuritySettings(tenantId);
-      setSavedSettings(reset);
-      setFormState(mapResponseToForm(reset));
-      setIsDirty(false);
-      setErrors({});
-      setShowResetModal(false);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('enrollnow_security_policy_updated', { detail: reset }));
-        if (reset?.inactivityLogoutMinutes) {
-          localStorage.setItem('enrollnow_inactivity_minutes', String(reset.inactivityLogoutMinutes));
+  const handleResetToDefaults = () => {
+    confirmation.confirm({
+      title: 'Reset to Default Settings',
+      message:
+        'Are you sure you want to reset all security settings to the recommended default values? This action cannot be undone.',
+      intent: 'warning',
+      confirmText: 'Reset to Defaults',
+      cancelText: 'Cancel',
+      loadingText: 'Resetting...',
+      onConfirm: async () => {
+        try {
+          setIsResetting(true);
+          const reset = await securitySettingsApi.resetToDefaultSecuritySettings(tenantId);
+          setSavedSettings(reset);
+          setFormState(mapResponseToForm(reset));
+          setIsDirty(false);
+          setErrors({});
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('enrollnow_security_policy_updated', { detail: reset })
+            );
+            if (reset?.inactivityLogoutMinutes) {
+              localStorage.setItem('enrollnow_inactivity_minutes', String(reset.inactivityLogoutMinutes));
+            }
+          }
+          toast.success('Security settings reset to recommended defaults.');
+        } catch (err: any) {
+          const msg = err?.response?.data?.message || err?.message || 'Failed to reset settings';
+          toast.error(msg, { title: 'Reset Failed' });
+          throw err;
+        } finally {
+          setIsResetting(false);
         }
-      }
-      toast.success('Security settings reset to recommended defaults.');
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to reset settings';
-      toast.error(msg, { title: 'Reset Failed' });
-    } finally {
-      setIsResetting(false);
-    }
+      },
+    });
   };
 
   if (loading) {
@@ -362,7 +368,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           <button
             type="button"
             className="sec-btn-reset-top"
-            onClick={() => setShowResetModal(true)}
+            onClick={handleResetToDefaults}
             disabled={saving || isResetting}
           >
             <RotateCcw size={14} aria-hidden="true" />
@@ -735,79 +741,6 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           </button>
         </div>
       </form>
-
-      {/* Force Reset Passwords Modal (Shown when Password Policy Changed) */}
-      <ResetAllPasswordsModal
-        isOpen={showPasswordResetModal}
-        onForceReset={handleForceReset}
-        onLeaveIntact={handleLeaveIntact}
-        isResetting={isForcingReset}
-      />
-
-      {/* Reset to Default Settings Modal */}
-      {showResetModal && (
-        <div
-          className="sec-modal-overlay"
-          role="presentation"
-        >
-          <div
-            ref={resetTrapRef}
-            className="sec-modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-modal-title"
-            tabIndex={-1}
-          >
-            <button
-              type="button"
-              className="sec-modal-close-btn"
-              onClick={() => setShowResetModal(false)}
-              aria-label="Close dialog"
-            >
-              <X size={18} aria-hidden="true" />
-            </button>
-
-            <div className="sec-modal-alert-icon-wrap">
-              <AlertCircle size={30} aria-hidden="true" />
-            </div>
-
-            <h3 id="reset-modal-title" className="sec-modal-heading">
-              Reset to Default Settings
-            </h3>
-
-            <p className="sec-modal-body-text">
-              Are you sure you want to reset all security settings to the recommended default values?<br />
-              This action cannot be undone.
-            </p>
-
-            <div className="sec-modal-btn-row">
-              <button
-                type="button"
-                className="sec-modal-btn-cancel"
-                onClick={() => setShowResetModal(false)}
-                disabled={isResetting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="sec-modal-btn-confirm"
-                onClick={handleResetToDefaults}
-                disabled={isResetting}
-              >
-                {isResetting ? (
-                  <>
-                    <Clock className="animate-spin" size={14} style={{ display: 'inline', marginRight: 6 }} />
-                    <span>Resetting...</span>
-                  </>
-                ) : (
-                  <span>Reset to Defaults</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
