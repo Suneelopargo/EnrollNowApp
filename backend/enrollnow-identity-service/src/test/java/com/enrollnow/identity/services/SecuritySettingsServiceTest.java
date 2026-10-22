@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
 import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
@@ -180,5 +181,42 @@ class SecuritySettingsServiceTest {
         assertThrows(AccessDeniedException.class, () ->
                 securitySettingsService.updateSecuritySettings(tenantId, dto)
         );
+    }
+
+    @Test
+    void testGetPublicPasswordPolicy_ReturnsConfiguredSettings() {
+        SecuritySettings existing = new SecuritySettings();
+        existing.setTenantId(tenantId);
+        existing.setMinimumPasswordLength(14);
+        existing.setMinimumPasswordStrength("STRONG");
+        existing.setRequireDigit(true);
+        existing.setRequireSymbol(false);
+        existing.setRequireMixedCase(true);
+
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.of(existing));
+
+        PasswordPolicyDto policy = securitySettingsService.getPublicPasswordPolicy(tenantId);
+
+        assertNotNull(policy);
+        assertEquals(14, policy.getMinimumPasswordLength());
+        assertEquals("STRONG", policy.getMinimumPasswordStrength());
+        assertTrue(policy.getRequireDigit());
+        assertFalse(policy.getRequireSymbol());
+        assertTrue(policy.getRequireMixedCase());
+        verify(siteAuthorizationService, never()).requireSiteAdminAccess(any(), any());
+    }
+
+    @Test
+    void testGetPublicPasswordPolicy_ReturnsDefaultsWhenNotFound() {
+        when(securitySettingsRepository.findByTenantId(tenantId)).thenReturn(Optional.empty());
+
+        PasswordPolicyDto policy = securitySettingsService.getPublicPasswordPolicy(tenantId);
+
+        assertNotNull(policy);
+        assertEquals(SecuritySettingsService.DEFAULT_MINIMUM_PASSWORD_LENGTH, policy.getMinimumPasswordLength());
+        assertEquals(SecuritySettingsService.DEFAULT_MINIMUM_PASSWORD_STRENGTH, policy.getMinimumPasswordStrength());
+        assertTrue(policy.getRequireDigit());
+        assertTrue(policy.getRequireSymbol());
+        assertTrue(policy.getRequireMixedCase());
     }
 }

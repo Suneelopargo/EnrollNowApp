@@ -9,13 +9,6 @@ export interface ResetPasswordPageProps {
   onSuccess?: () => void;
 }
 
-const SCORE_DESCRIPTIONS: Record<number, string> = {
-  0: 'Very Weak',
-  1: 'Very Weak',
-  2: 'Weak',
-  3: 'Moderate',
-  4: 'Strong',
-};
 
 function formatCrackDuration(seconds: number): string {
   if (seconds <= 0 || isNaN(seconds) || seconds < 60) return 'a few seconds';
@@ -44,6 +37,43 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<{
+    minimumPasswordLength: number;
+    minimumPasswordStrength: string;
+    requireDigit: boolean;
+    requireSymbol: boolean;
+    requireMixedCase: boolean;
+  }>({
+    minimumPasswordLength: 8,
+    minimumPasswordStrength: 'MODERATE',
+    requireDigit: true,
+    requireSymbol: true,
+    requireMixedCase: true,
+  });
+
+  // Load authoritative security settings password rules for tenant
+  useEffect(() => {
+    let isMounted = true;
+    authApi
+      .getPasswordPolicy(tenantId)
+      .then((res) => {
+        if (isMounted && res) {
+          setPolicy({
+            minimumPasswordLength: res.minimumPasswordLength ?? 8,
+            minimumPasswordStrength: (res.minimumPasswordStrength || 'MODERATE').toUpperCase(),
+            requireDigit: res.requireDigit ?? true,
+            requireSymbol: res.requireSymbol ?? true,
+            requireMixedCase: res.requireMixedCase ?? true,
+          });
+        }
+      })
+      .catch(() => {
+        // Fallback default policy remains active
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId]);
 
   // Notify if password reset token is missing from URL
   useEffect(() => {
@@ -81,17 +111,29 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
   }, [password]);
 
   // Test #2: Password Requirements
-  const meetsMinChars = password.length >= 10;
+  const minLength = policy.minimumPasswordLength || 8;
+  const meetsMinChars = password.length >= minLength;
   const meetsRequireNumber = /[0-9]/.test(password);
   const meetsRequireSymbol = /[^0-9A-Za-z]/.test(password);
   const meetsMixCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
 
-  const test2Passed = meetsMinChars && meetsRequireNumber && meetsRequireSymbol && meetsMixCase;
-  const test1Passed = strengthResult.score >= 3; // Moderate or better
+  const test2Passed =
+    meetsMinChars &&
+    (!policy.requireDigit || meetsRequireNumber) &&
+    (!policy.requireSymbol || meetsRequireSymbol) &&
+    (!policy.requireMixedCase || meetsMixCase);
+
+  const requiredScore =
+    policy.minimumPasswordStrength === 'STRONG'
+      ? 4
+      : policy.minimumPasswordStrength === 'WEAK'
+      ? 2
+      : 3;
+  const test1Passed = strengthResult.score >= requiredScore;
+
   const overallPassed = test1Passed && test2Passed;
   const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
   const isFormValid = Boolean(token) && overallPassed && passwordsMatch;
-  const isButtonDisabled = loading || Boolean(successMessage) || !isFormValid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,12 +144,12 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
     }
 
     if (!password) {
-      toast.error('Please enter a new password.');
+      toast.error('Please enter a password.');
       return;
     }
 
     if (!confirmPassword) {
-      toast.error('Please confirm your new password.');
+      toast.error('Please confirm your password.');
       return;
     }
 
@@ -117,7 +159,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
     }
 
     if (!overallPassed) {
-      toast.error('Please ensure your password meets all requirements and achieves Moderate or Strong rating.');
+      toast.error('The password does not match all requirements.');
       return;
     }
 
@@ -183,8 +225,8 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
 
         {/* Dark Navy Card Body */}
         <div className="enl-activation-body">
-          <h2 className="enl-activation-welcome">RESET PASSWORD</h2>
-          <div className="enl-activation-subtitle">ENTER YOUR NEW PASSWORD</div>
+          <h2 className="enl-activation-welcome">RESET YOUR PASSWORD</h2>
+
 
           <form onSubmit={handleSubmit}>
             {/* New Password Field */}
@@ -193,7 +235,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
                 id="reset-password-input"
                 type="password"
                 className={`enl-activation-input ${password ? 'is-filled' : ''}`}
-                placeholder="New Password"
+                placeholder="Your Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading || Boolean(successMessage)}
@@ -208,7 +250,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
                 id="reset-confirm-password-input"
                 type="password"
                 className={`enl-activation-input ${confirmPassword ? 'is-filled' : ''}`}
-                placeholder="Confirm New Password"
+                placeholder="Confirm your Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={loading || Boolean(successMessage)}
@@ -219,11 +261,13 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
             {/* Validation Feedback & Requirements */}
             <div className="enl-activation-meter-group">
               <div className="enl-activation-overall-status">
-                Overall: {overallPassed ? 'Password passed all tests' : 'Password requires attention'}
+                {overallPassed
+                  ? 'The password meets all requirements from both tests.'
+                  : 'The password does not match all requirements.'}
               </div>
 
-              {/* Test #1: Progress Meter Bar */}
-              <div className="enl-activation-test-title">Test #1: Progress Meter Bar</div>
+              {/* Test #1: Strength */}
+              <div className="enl-activation-test-title">Password Validation Test #1: Strength</div>
               <div className="enl-activation-meter-container">
                 <div className="enl-activation-meter-bg">
                   <div
@@ -236,38 +280,29 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
               </div>
 
               <div className="enl-activation-crack-time">
-                Time required to crack: <strong>{password ? strengthResult.crackTime : '—'}</strong>
+                It would take {password ? strengthResult.crackTime : 'a few seconds'} to crack this password.
               </div>
 
-              {password && strengthResult.suggestions.length > 0 && (
-                <div className="enl-activation-suggestions">
-                  <div className="enl-activation-suggestions-label">Suggestions:</div>
-                  <ul>
-                    {strengthResult.suggestions.map((s, idx) => (
-                      <li key={idx}>{s}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
 
-              <div className="enl-activation-strength-status">
-                Current: <strong>{password ? SCORE_DESCRIPTIONS[strengthResult.score] : '—'}</strong> (requires Moderate or Strong)
-              </div>
 
               {/* Test #2: Password Requirements */}
-              <div className="enl-activation-test-title">Test #2: Password Requirements</div>
+              <div className="enl-activation-test-title">
+                Password Validation Test #2: Password Requirements
+              </div>
               <div className="enl-activation-reqs-intro">
-                {test2Passed ? 'Password passed requirements test' : 'Password must have:'}
+                {test2Passed
+                  ? 'The password requirements have been met for this test.'
+                  : 'Your password must contain the following:'}
               </div>
               <ul className="enl-activation-reqs-list">
                 {test2Passed ? (
-                  <li className="is-met">Password met all requirements</li>
+                  <li className="is-met">The password requirements have been met for this test.</li>
                 ) : (
                   <>
-                    {!meetsMinChars && <li>10 or more characters.</li>}
-                    {!meetsRequireNumber && <li>At least one digit (number).</li>}
-                    {!meetsRequireSymbol && <li>At least one symbol (special character).</li>}
-                    {!meetsMixCase && <li>Mixed upper and lower case characters.</li>}
+                    {!meetsMinChars && <li>A minimum length of {minLength} characters.</li>}
+                    {policy.requireDigit && !meetsRequireNumber && <li>At least one digit (number).</li>}
+                    {policy.requireSymbol && !meetsRequireSymbol && <li>At least one symbol (special character).</li>}
+                    {policy.requireMixedCase && !meetsMixCase && <li>Mixed upper and lower case characters.</li>}
                   </>
                 )}
               </ul>
@@ -282,14 +317,14 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
           </form>
         </div>
 
-        {/* Reset Password Submit Button (Disabled until all validations match) */}
+        {/* Set Password Submit Button */}
         <button
           type="button"
           className="enl-activation-submit-btn"
           onClick={handleSubmit}
-          disabled={isButtonDisabled}
+          disabled={loading || Boolean(successMessage)}
         >
-          {loading ? 'Resetting Password...' : 'Reset Password'}
+          {loading ? 'Setting Password...' : 'Set Password'}
         </button>
       </div>
 

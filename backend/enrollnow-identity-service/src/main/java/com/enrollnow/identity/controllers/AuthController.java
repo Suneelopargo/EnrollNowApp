@@ -7,7 +7,9 @@ import com.enrollnow.identity.dtos.LoginResponse;
 import com.enrollnow.identity.services.LoginService;
 import com.enrollnow.identity.services.PasswordRecoveryService;
 import com.enrollnow.identity.services.UserInvitationService;
+import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.ResetPasswordRequest;
+import com.enrollnow.identity.services.SecuritySettingsService;
 import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 
 import jakarta.validation.Valid;
@@ -24,15 +26,18 @@ public class AuthController {
     private final LoginService loginService;
     private final PasswordRecoveryService passwordRecoveryService;
     private final UserInvitationService userInvitationService;
+    private final SecuritySettingsService securitySettingsService;
 
     public AuthController(
             LoginService loginService,
             PasswordRecoveryService passwordRecoveryService,
-            UserInvitationService userInvitationService) {
+            UserInvitationService userInvitationService,
+            SecuritySettingsService securitySettingsService) {
 
         this.loginService = loginService;
         this.passwordRecoveryService = passwordRecoveryService;
         this.userInvitationService = userInvitationService;
+        this.securitySettingsService = securitySettingsService;
     }
 
     @PostMapping("/login")
@@ -42,6 +47,13 @@ public class AuthController {
 
         return ResponseEntity.ok(
                 loginService.authenticate(tenantId, request)
+        );
+    }
+
+    @GetMapping("/password-policy")
+    public ResponseEntity<PasswordPolicyDto> getPasswordPolicy(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(
+                securitySettingsService.getPublicPasswordPolicy(tenantId)
         );
     }
 

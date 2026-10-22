@@ -44,6 +44,40 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<{
+    minimumPasswordLength: number;
+    minimumPasswordStrength: string;
+    requireDigit: boolean;
+    requireSymbol: boolean;
+    requireMixedCase: boolean;
+  }>({
+    minimumPasswordLength: 10,
+    minimumPasswordStrength: 'MODERATE',
+    requireDigit: true,
+    requireSymbol: true,
+    requireMixedCase: true,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    authApi
+      .getPasswordPolicy(tenantId)
+      .then((res) => {
+        if (isMounted && res) {
+          setPolicy({
+            minimumPasswordLength: res.minimumPasswordLength ?? 10,
+            minimumPasswordStrength: (res.minimumPasswordStrength || 'MODERATE').toUpperCase(),
+            requireDigit: res.requireDigit ?? true,
+            requireSymbol: res.requireSymbol ?? true,
+            requireMixedCase: res.requireMixedCase ?? true,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId]);
 
   // Validate activation token on mount; if already used, redirect to /login with warning
   useEffect(() => {
@@ -118,13 +152,32 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
   }, [password]);
 
   // Test #2: Password Requirements
-  const meetsMinChars = password.length >= 10;
+  const minLength = policy.minimumPasswordLength || 10;
+  const meetsMinChars = password.length >= minLength;
   const meetsRequireNumber = /[0-9]/.test(password);
   const meetsRequireSymbol = /[^0-9A-Za-z]/.test(password);
   const meetsMixCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
 
-  const test2Passed = meetsMinChars && meetsRequireNumber && meetsRequireSymbol && meetsMixCase;
-  const test1Passed = strengthResult.score >= 3; // Moderate or better
+  const test2Passed =
+    meetsMinChars &&
+    (!policy.requireDigit || meetsRequireNumber) &&
+    (!policy.requireSymbol || meetsRequireSymbol) &&
+    (!policy.requireMixedCase || meetsMixCase);
+
+  const requiredScore =
+    policy.minimumPasswordStrength === 'STRONG'
+      ? 4
+      : policy.minimumPasswordStrength === 'WEAK'
+      ? 2
+      : 3;
+  const test1Passed = strengthResult.score >= requiredScore;
+  const requiredStrengthLabel =
+    policy.minimumPasswordStrength === 'STRONG'
+      ? 'Strong'
+      : policy.minimumPasswordStrength === 'WEAK'
+      ? 'Weak, Moderate or Strong'
+      : 'Moderate or Strong';
+
   const overallPassed = test1Passed && test2Passed;
   const passwordsMatch = Boolean(password && confirmPassword && password === confirmPassword);
   const isFormValid = Boolean(token) && overallPassed && passwordsMatch;
@@ -305,7 +358,7 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
               )}
 
               <div className="enl-activation-strength-status">
-                Your password must be Moderate strength or better. Your strength is:{' '}
+                Your password must be {requiredStrengthLabel} or better. Your strength is:{' '}
                 <strong>{password ? `${SCORE_DESCRIPTIONS[strengthResult.score]}.` : '—'}</strong>
               </div>
             </div>
@@ -323,10 +376,10 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
                   </li>
                 ) : (
                   <>
-                    {!meetsMinChars && <li>A minimum length of 10 characters.</li>}
-                    {!meetsRequireNumber && <li>At least one digit (number).</li>}
-                    {!meetsRequireSymbol && <li>At least one symbol (special character).</li>}
-                    {!meetsMixCase && <li>Mixed upper and lower case characters.</li>}
+                    {!meetsMinChars && <li>A minimum length of {minLength} characters.</li>}
+                    {policy.requireDigit && !meetsRequireNumber && <li>At least one digit (number).</li>}
+                    {policy.requireSymbol && !meetsRequireSymbol && <li>At least one symbol (special character).</li>}
+                    {policy.requireMixedCase && !meetsMixCase && <li>Mixed upper and lower case characters.</li>}
                   </>
                 )}
               </ul>

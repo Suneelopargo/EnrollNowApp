@@ -52,6 +52,14 @@ export interface ResetPasswordRequest {
   newPassword: string;
 }
 
+export interface PasswordPolicy {
+  minimumPasswordLength: number;
+  minimumPasswordStrength: 'WEAK' | 'MODERATE' | 'STRONG' | string;
+  requireDigit: boolean;
+  requireSymbol: boolean;
+  requireMixedCase: boolean;
+}
+
 export interface ResetPasswordResponse {
   message?: string;
 }
@@ -559,6 +567,36 @@ export const authApi = {
    * Resets password using token received via email.
    * Calls POST /api/v1/tenants/{tenantId}/auth/reset-password
    */
+  /**
+   * Retrieves password requirements policy for a tenant.
+   * Calls GET /api/v1/tenants/{tenantId}/auth/password-policy
+   */
+  async getPasswordPolicy(tenantId?: string): Promise<PasswordPolicy> {
+    const tid = tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
+    try {
+      const res = await apiClient.get<PasswordPolicy>(
+        `/api/v1/tenants/${tid}/auth/password-policy`,
+        { skipToast: true } as any
+      );
+      const data = (res.data as any)?.data ?? res.data;
+      return {
+        minimumPasswordLength: data?.minimumPasswordLength ?? 10,
+        minimumPasswordStrength: data?.minimumPasswordStrength ?? 'MODERATE',
+        requireDigit: data?.requireDigit ?? true,
+        requireSymbol: data?.requireSymbol ?? true,
+        requireMixedCase: data?.requireMixedCase ?? true,
+      };
+    } catch {
+      return {
+        minimumPasswordLength: 10,
+        minimumPasswordStrength: 'MODERATE',
+        requireDigit: true,
+        requireSymbol: true,
+        requireMixedCase: true,
+      };
+    }
+  },
+
   async resetPassword(payload: ResetPasswordRequest): Promise<ResetPasswordResponse> {
     const tenantId = payload.tenantId || getTenantId() || '11111111-1111-1111-1111-111111111111';
     const body = {

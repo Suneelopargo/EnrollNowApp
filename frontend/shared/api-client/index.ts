@@ -360,6 +360,13 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
       const normalized = normalizeApiError(error);
       const url = error.config?.url || '';
       const isLoginRequest = url.includes('/auth/login');
+      const isPublicAuthRequest =
+        isLoginRequest ||
+        url.includes('/auth/forgot-password') ||
+        url.includes('/auth/reset-password') ||
+        url.includes('/auth/activate') ||
+        url.includes('/auth/password-policy') ||
+        url.includes('/password-policy');
 
       // Telemetry error tracking
       telemetry.track({
@@ -376,12 +383,13 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
 
       // Centralized 401 Unauthorized handling
       if (normalized.status === 401) {
-        if (options.onUnauthorized) {
+        if (options.onUnauthorized && !isPublicAuthRequest) {
           options.onUnauthorized();
         }
 
         // Only expire session if it was an authenticated request, not failed credentials on login
-        if (!isLoginRequest) {
+        // Only expire session if it was an authenticated request, not public auth flows
+        if (!isPublicAuthRequest) {
           const resData = error.response?.data;
           const reason =
             resData?.reason ||

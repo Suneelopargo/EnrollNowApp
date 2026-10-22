@@ -1,5 +1,6 @@
 package com.enrollnow.identity.controllers;
 
+import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
 import com.enrollnow.identity.services.SecuritySettingsService;
 import com.enrollnow.identity.services.SiteAuthorizationService;
@@ -35,6 +36,12 @@ public class SecuritySettingsController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         return ResponseEntity.ok(securitySettingsService.getSecuritySettings(effectiveTenantId));
+    }
+
+    @GetMapping("/password-policy")
+    public ResponseEntity<PasswordPolicyDto> getPasswordPolicy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId) {
+        return ResponseEntity.ok(securitySettingsService.getPublicPasswordPolicy(tenantId));
     }
 
     @PutMapping

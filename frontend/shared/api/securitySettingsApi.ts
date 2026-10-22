@@ -23,6 +23,38 @@ export interface SecuritySettingsResponse {
 export type UpdateSecuritySettingsPayload = Partial<SecuritySettingsResponse>;
 
 export const securitySettingsApi = {
+  getPasswordPolicy: async (tenantId?: string): Promise<{
+    minimumPasswordLength: number;
+    minimumPasswordStrength: string;
+    requireDigit: boolean;
+    requireSymbol: boolean;
+    requireMixedCase: boolean;
+  }> => {
+    const tid = tenantId || getTenantId();
+    try {
+      const url = tid
+        ? `/api/v1/tenants/${tid}/auth/password-policy`
+        : '/api/v1/security-settings/password-policy';
+      const response = await apiClient.get<any>(url, { skipToast: true } as any);
+      const data = (response.data as any)?.data ?? response.data;
+      return {
+        minimumPasswordLength: data?.minimumPasswordLength ?? 10,
+        minimumPasswordStrength: data?.minimumPasswordStrength ?? 'MODERATE',
+        requireDigit: data?.requireDigit ?? true,
+        requireSymbol: data?.requireSymbol ?? true,
+        requireMixedCase: data?.requireMixedCase ?? true,
+      };
+    } catch {
+      return {
+        minimumPasswordLength: 10,
+        minimumPasswordStrength: 'MODERATE',
+        requireDigit: true,
+        requireSymbol: true,
+        requireMixedCase: true,
+      };
+    }
+  },
+
   getSecuritySettings: async (tenantId?: string): Promise<SecuritySettingsResponse> => {
     const tid = tenantId || getTenantId();
     const url = tid ? `/api/v1/tenants/${tid}/security-settings` : '/api/v1/security-settings';

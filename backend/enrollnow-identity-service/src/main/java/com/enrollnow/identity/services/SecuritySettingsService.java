@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
 import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
@@ -43,6 +44,32 @@ public class SecuritySettingsService {
                 .orElseGet(() -> createDefaultSettings(tenantId, null));
 
         return toDto(settings);
+    }
+
+    @Transactional(readOnly = true)
+    public PasswordPolicyDto getPublicPasswordPolicy(UUID tenantId) {
+        SecuritySettings settings = null;
+        if (tenantId != null) {
+            settings = securitySettingsRepository.findByTenantId(tenantId).orElse(null);
+        }
+
+        int minLength = (settings != null && settings.getMinimumPasswordLength() != null)
+                ? settings.getMinimumPasswordLength()
+                : DEFAULT_MINIMUM_PASSWORD_LENGTH;
+        String minStrength = (settings != null && settings.getMinimumPasswordStrength() != null)
+                ? settings.getMinimumPasswordStrength()
+                : DEFAULT_MINIMUM_PASSWORD_STRENGTH;
+        boolean requireDigit = settings == null || settings.isRequireDigit();
+        boolean requireSymbol = settings == null || settings.isRequireSymbol();
+        boolean requireMixedCase = settings == null || settings.isRequireMixedCase();
+
+        return new PasswordPolicyDto(
+                minLength,
+                minStrength,
+                requireDigit,
+                requireSymbol,
+                requireMixedCase
+        );
     }
 
     @Transactional
