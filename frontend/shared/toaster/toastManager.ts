@@ -76,7 +76,12 @@ class ToastManager {
 
     // 2. Determine duration: sticky/critical notifications have duration = 0 (manual dismiss only)
     const isSticky = options.sticky === true || options.critical === true || options.duration === 0;
-    const duration = isSticky ? 0 : (options.duration !== undefined ? options.duration : DEFAULT_TOAST_DURATIONS[type]);
+    let computedDuration = options.duration !== undefined ? options.duration : DEFAULT_TOAST_DURATIONS[type];
+    // Automatically scale reading duration for long messages (e.g. legacy multi-sentence instructions)
+    if (options.duration === undefined && message && message.length > 90) {
+      computedDuration = Math.max(computedDuration, 12000);
+    }
+    const duration = isSticky ? 0 : computedDuration;
 
     // 3. Stacking limit: Retire oldest non-sticky toast if reaching MAX_CONCURRENT_TOASTS
     while (this.toasts.length >= MAX_CONCURRENT_TOASTS) {
@@ -104,6 +109,7 @@ class ToastManager {
       duration,
       timestamp: Date.now(),
       sticky: isSticky,
+      action: options.action,
     };
 
     this.toasts.push(item);

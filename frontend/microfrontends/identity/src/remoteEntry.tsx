@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { authApi } from '../../../shared/api/authApi';
 import { toast } from '../../../shared/toaster';
+import { AuthErrorNotification, mapAuthError } from '../../../shared/auth/authErrorMapper';
 import '../../../shared/design-system/styles/index.scss';
 
 // Reusable Code-Driven Marketing & Brand Components
@@ -59,6 +60,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [recoveryAlert, setRecoveryAlert] = useState<AuthErrorNotification | null>(null);
 
   useEffect(() => {
     let warningMsg: string | null = null;
@@ -98,6 +100,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
     }
 
     setLoading(true);
+    setRecoveryAlert(null);
 
     try {
       const { user, token } = await authApi.login({
@@ -124,7 +127,18 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
         window.location.href = '/dashboard';
       }
     } catch (err: any) {
-      if (!err?.normalized && !err?.response) {
+      const mapped: AuthErrorNotification | null =
+        err?.mappedAuthError ||
+        err?.apiError?.mappedAuthError ||
+        (err ? mapAuthError(err) : null);
+
+      if (mapped?.requiresInlineAlert) {
+        setRecoveryAlert(mapped);
+      } else {
+        setRecoveryAlert(null);
+      }
+
+      if (!err?.normalized && !err?.response && !err?.mappedAuthError) {
         const fallbackMsg =
           err?.message ||
           'Invalid username or password. Please verify your credentials.';
@@ -201,6 +215,38 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     Sign in to your workspace
                   </p>
                 </div>
+
+                {/* Persistent Accessible Inline Recovery Alert (e.g. Mandatory Password Reset) */}
+                {recoveryAlert && (
+                  <div className="enl-login-recovery-alert" role="alert" aria-live="polite">
+                    <div className="enl-recovery-alert-icon">
+                      <AlertCircle size={18} aria-hidden="true" />
+                    </div>
+                    <div className="enl-recovery-alert-content">
+                      <strong className="enl-recovery-alert-title">{recoveryAlert.title}</strong>
+                      <p className="enl-recovery-alert-desc">{recoveryAlert.description}</p>
+                      {recoveryAlert.secondaryHelp && (
+                        <p className="enl-recovery-alert-help">{recoveryAlert.secondaryHelp}</p>
+                      )}
+                      {recoveryAlert.action && (
+                        <button
+                          type="button"
+                          className="enl-recovery-alert-action"
+                          onClick={() => {
+                            const targetRoute = recoveryAlert.action?.route || '/forgot-password';
+                            if (context.navigate) {
+                              context.navigate(targetRoute);
+                            } else {
+                              window.location.href = targetRoute;
+                            }
+                          }}
+                        >
+                          {recoveryAlert.action.label}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
               {/* Form Fields */}
               <form onSubmit={handleSubmit} className="enl-card-form">

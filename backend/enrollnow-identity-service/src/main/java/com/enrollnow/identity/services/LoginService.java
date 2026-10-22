@@ -103,8 +103,14 @@ public class LoginService {
                                 userEmail.getUserId())
                         .orElseThrow(InvalidCredentialsException::new);
 
-        if ("DISABLED".equalsIgnoreCase(user.getStatus())) {
-            throw new AccountDisabledException();
+        String userStatus = user.getStatus() != null ? user.getStatus().trim().toUpperCase(Locale.ROOT) : "ACTIVE";
+
+        if ("PERMANENTLY_DISABLED".equals(userStatus) || "HARD_LOCKED".equals(userStatus)) {
+            throw new AccountDisabledException("ACCOUNT_DISABLED_PERMANENT", AccountDisabledException.PERMANENT_DISABLED_MESSAGE);
+        }
+
+        if ("DISABLED".equals(userStatus) || "TEMPORARILY_DISABLED".equals(userStatus) || "INACTIVE".equals(userStatus)) {
+            throw new AccountDisabledException("ACCOUNT_DISABLED_TEMPORARY", AccountDisabledException.DEFAULT_DISABLED_MESSAGE);
         }
 
         UserSecurityState securityState =
@@ -117,13 +123,48 @@ public class LoginService {
                                 user.getId()));
 
         if (securityState.isPasswordResetRequired()) {
-            throw new AccountLockedException("Your password has been locked. Please contact an EnrollNow Site Admin at your institution or use the Forgot Password link on the login page.");
+            throw new AccountLockedException(
+                    "PASSWORD_RESET_REQUIRED",
+                    "Your password has been locked. Please contact an EnrollNow Site Admin at your institution or use the Forgot Password link on the login page.",
+                    "PASSWORD_RESET_REQUIRED"
+            );
         }
 
         if ("LOCKED".equalsIgnoreCase(user.getStatus())
                 || securityState.getLockedAt() != null) {
 
-            throw new AccountLockedException();
+            String lockReason = securityState.getLockReason();
+            if ("MAX_FAILED_LOGIN_ATTEMPTS".equalsIgnoreCase(lockReason)) {
+                throw new AccountLockedException(
+                        "ACCOUNT_LOCKED_MAX_ATTEMPTS",
+                        "You have exceeded the allowed number of failed login attempts. Your account has been locked. Please contact the EnrollNow administrator at your institution to unlock your account. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.",
+                        "MAX_FAILED_LOGIN_ATTEMPTS"
+                );
+            } else if ("PASSWORD_RESET_REQUIRED".equalsIgnoreCase(lockReason) || "PASSWORD_LOCK".equalsIgnoreCase(lockReason)) {
+                throw new AccountLockedException(
+                        "PASSWORD_RESET_REQUIRED",
+                        "Your password has been locked. Please contact an EnrollNow Site Admin at your institution or use the Forgot Password link on the login page.",
+                        lockReason
+                );
+            } else if ("PASSWORD_EXPIRED".equalsIgnoreCase(lockReason)) {
+                throw new AccountLockedException(
+                        "PASSWORD_EXPIRED",
+                        "Your password has expired. Please contact an EnrollNow Site Admin at your institution or use the Forgot Password link on the login page.",
+                        "PASSWORD_EXPIRED"
+                );
+            } else if ("INACTIVITY_LOCK".equalsIgnoreCase(lockReason)) {
+                throw new AccountLockedException(
+                        "ACCOUNT_LOCKED_INACTIVITY",
+                        "Your account has been locked due to inactivity. Please contact the EnrollNow administrator at your institution to enable it.",
+                        "INACTIVITY_LOCK"
+                );
+            } else {
+                throw new AccountLockedException(
+                        "ACCOUNT_LOCKED_DEFAULT",
+                        "Your account is locked. Please contact the EnrollNow administrator at your institution",
+                        lockReason
+                );
+            }
         }
 
         SecuritySettings securitySettings = securitySettingsRepository
@@ -147,7 +188,11 @@ public class LoginService {
                     user.setStatus("LOCKED");
                     userRepository.save(user);
                     userSecurityStateRepository.save(securityState);
-                    throw new AccountLockedException();
+                    throw new AccountLockedException(
+                            "ACCOUNT_LOCKED_INACTIVITY",
+                            "Your account has been locked due to inactivity. Please contact the EnrollNow administrator at your institution to enable it.",
+                            "INACTIVITY_LOCK"
+                    );
                 }
             }
 
@@ -162,7 +207,11 @@ public class LoginService {
                     user.setStatus("LOCKED");
                     userRepository.save(user);
                     userSecurityStateRepository.save(securityState);
-                    throw new AccountLockedException();
+                    throw new AccountLockedException(
+                            "PASSWORD_EXPIRED",
+                            "Your password has expired. Please contact an EnrollNow Site Admin at your institution or use the Forgot Password link on the login page.",
+                            "PASSWORD_EXPIRED"
+                    );
                 }
             }
         }

@@ -62,11 +62,35 @@ export const mockAuthApi = {
       (userRecord.user as any)?.status === 'Disabled' ||
       (userRecord as any).disabled
     ) {
+      const isPermanent = (userRecord as any).permanentlyDisabled;
       return createMockErrorResponse(
         config,
         403,
-        'Your account has been temporarily disabled. Please contact the EnrollNow administrator at your institution to enable it. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
-        'ACCOUNT_DISABLED'
+        isPermanent
+          ? 'Your account has been permanently disabled. Please contact the EnrollNow administrator at your institution for assistance.'
+          : 'Your account has been temporarily disabled. Please contact the EnrollNow administrator at your institution to enable it. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
+        isPermanent ? 'ACCOUNT_DISABLED_PERMANENT' : 'ACCOUNT_DISABLED_TEMPORARY'
+      );
+    }
+
+    if ((userRecord as any).passwordResetRequired) {
+      return createMockErrorResponse(
+        config,
+        423,
+        'Your password has been locked. You must reset your password using Forgot Password before you can log in. If you need assistance, contact the Site Admin at your institution.',
+        'PASSWORD_RESET_REQUIRED'
+      );
+    }
+
+    if ((userRecord as any).locked) {
+      const lockReason = (userRecord as any).lockReason || 'ACCOUNT_LOCKED_MAX_ATTEMPTS';
+      return createMockErrorResponse(
+        config,
+        423,
+        lockReason === 'ACCOUNT_LOCKED_MAX_ATTEMPTS'
+          ? 'You have exceeded the allowed number of failed login attempts. Your account has been locked. Please contact the EnrollNow administrator at your institution to get your account unlocked.'
+          : 'Your account is locked. Please contact the EnrollNow administrator at your institution to get your account unlocked.',
+        lockReason
       );
     }
 

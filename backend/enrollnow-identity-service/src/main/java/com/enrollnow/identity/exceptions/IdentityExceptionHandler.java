@@ -113,6 +113,7 @@ public class IdentityExceptionHandler {
         body.put("timestamp", OffsetDateTime.now());
         body.put("status", HttpStatus.UNAUTHORIZED.value());
         body.put("error", HttpStatus.UNAUTHORIZED.getReasonPhrase());
+        body.put("code", "INVALID_CREDENTIALS");
         body.put("message", ex.getMessage());
 
         return ResponseEntity
@@ -128,6 +129,7 @@ public class IdentityExceptionHandler {
         body.put("timestamp", OffsetDateTime.now());
         body.put("status", HttpStatus.FORBIDDEN.value());
         body.put("error", HttpStatus.FORBIDDEN.getReasonPhrase());
+        body.put("code", ex.getCode());
         body.put("message", ex.getMessage());
 
         return ResponseEntity
@@ -143,6 +145,10 @@ public class IdentityExceptionHandler {
         body.put("timestamp", OffsetDateTime.now());
         body.put("status", HttpStatus.LOCKED.value());
         body.put("error", HttpStatus.LOCKED.getReasonPhrase());
+        body.put("code", ex.getCode());
+        if (ex.getReason() != null) {
+            body.put("reason", ex.getReason());
+        }
         body.put("message", ex.getMessage());
 
         return ResponseEntity
