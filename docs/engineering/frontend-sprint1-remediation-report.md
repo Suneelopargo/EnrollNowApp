@@ -13,7 +13,7 @@ An independent, file-by-file source code inspection and final review of the Enro
 - **Sprint 2 Readiness Verdict:** **READY FOR SPRINT 2**
 - **Overall Verification Summary:**
   - `cd frontend && npm run typecheck`: **VERIFIED** (12/12 TypeScript workspaces passed with 0 errors)
-  - `cd frontend && npm run test`: **VERIFIED** (13/13 test workspaces passed — **31 test files, 271 passing tests**)
+  - `cd frontend && npm run test`: **VERIFIED** (13/13 test workspaces passed — **31 test files, 272 passing tests**)
   - `cd frontend && npm run build --workspaces --if-present`: **VERIFIED** (14/14 workspaces built cleanly)
 
 ---
@@ -22,10 +22,11 @@ An independent, file-by-file source code inspection and final review of the Enro
 
 During the final source-code verification pass, four discrepancies/gaps were identified between the initial remediation report claims and the actual source code. All four were remediated and covered by new regression tests during this review:
 
-### Finding 1 — Interactive `<Card>` Keyboard Handler Bubbling from Nested Interactive Children
-- **Location:** `frontend/shared/design-system/components/Card.tsx` (lines 22–30)
-- **Issue Found:** When `onClick` was passed to `<Card>`, `handleKeyDown` intercepted `Enter` and `Space` keydown events without checking `e.target !== e.currentTarget`. If a clickable card contained a nested interactive child (e.g., an action button or input inside `actions` or `children`), pressing `Enter` or `Space` on the child would bubble up and trigger a duplicate `onClick()` activation on the card.
-- **Remediation Applied:** Added `if (e.target && e.currentTarget && e.target !== e.currentTarget) return;` at the top of `handleKeyDown` in `Card.tsx`, and added a dedicated regression test in `frontend/shared/design-system.test.ts`.
+### Finding 1 — Interactive `<Card>` Click & Keyboard Event Bubbling from Nested Interactive Children
+- **Location:** `frontend/shared/design-system/components/Card.tsx` (lines 13–149)
+- **Issue Found:** When `onClick` was passed to `<Card>`, the outer container assigned `onClick={onClick}` directly and `handleKeyDown` originally did not guard against nested interactive descendants (`button`, `a`, `input`, `select`, `textarea`, `label`, `summary`, `[role="button"]`, or header `actions`). Clicking or pressing `Enter`/`Space` on a nested button or control inside a clickable card could bubble up and trigger both the child action and the card action.
+- **Accessibility & Usage Inspection:** Inspected all `<Card>` usages across `frontend/microfrontends/dashboard/src/remoteEntry.tsx` (charts with legend buttons, screening funnel buttons, `Active Study Protocols` with header `actions` button, and `Operational Microservices` with nested `role="button"` quick-launch cards) and `frontend/microfrontends/organization/src/remoteEntry.tsx`. None of those composite container cards pass `onClick`, so `role="button"` and `tabIndex={0}` are omitted on them (`role={onClick ? 'button' : undefined}`).
+- **Remediation Applied:** Added `isNestedInteractiveTarget` and `handleClick` in `Card.tsx` (alongside `data-card-actions="true"` on the header actions slot and `handleKeyDown` guards) so clicks and keyboard activations on nested interactive controls never trigger the card's `onClick`, while clicks on non-interactive card content (`<h3>`, `<p>`, `.card-body`) and direct `Enter`/`Space` keydowns on the focused card execute `onClick()` once. Added regression tests in `frontend/shared/design-system.test.ts`.
 - **Status:** **VERIFIED**
 
 ### Finding 2 — `EnrollNowApiError` Missing `.response` Reference & `getApiErrorMessage` Missing `.raw` Inspection
@@ -70,7 +71,7 @@ During the final source-code verification pass, four discrepancies/gaps were ide
 | **3. Authentication & Session Handling** | **VERIFIED** | `getAccessToken()` and `getStoredAuthUser()` in `frontend/shared/api-client/index.ts` are used across `shell`, `shared/api/authApi.ts`, and `administration`. `handleSessionExpired` clears storage and dispatches `enrollnow_auth_change` without redirect loops. Public auth endpoints (`/auth/login`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/activate`, `/password-policy`) do not trigger false session-expired toasts on 401. |
 | **4. Accessibility & UI Behavior (Code/Unit Level)** | **VERIFIED** | `AccessibleField` adopted across `AddUserModal`, `AddParticipantModal`, and `SaveFilterModal`. `Card` and Dashboard quick-launch cards support keyboard `Enter`/`Space` without nested child bubbling. `useFocusTrap` wired into Dashboard drill-down modal, Study Add Study dialog, and Survey Response detail modal. `window.confirm` and `alert` replaced with `requestConfirmation` and `toast.info`. |
 | **4b. Accessibility (Live Browser Screen Reader & Contrast Audit)** | **PARTIALLY VERIFIED** | Programmatic ARIA semantics, `htmlFor`/`id` bindings, `role="dialog"`, `useFocusTrap` DOM behavior, and keyboard handlers are verified via Vitest unit tests (`accessibility.test.ts`, `design-system.test.ts`, `KeyboardShortcutsHelp.test.ts`). Live assistive-technology screen-reader announcements (NVDA/JAWS/VoiceOver) and computed CSS pixel contrast ratios require browser E2E inspection outside Node/Vitest. |
-| **5. Automated Verification (`typecheck`, `test`, `build`)** | **VERIFIED** | `npm run typecheck` (12/12 workspaces), `npm run test` (31 test files, 271 passing tests), and `npm run build --workspaces --if-present` (14/14 workspaces) all succeed with exit code 0. |
+| **5. Automated Verification (`typecheck`, `test`, `build`)** | **VERIFIED** | `npm run typecheck` (12/12 workspaces), `npm run test` (31 test files, 272 passing tests), and `npm run build --workspaces --if-present` (14/14 workspaces) all succeed with exit code 0. |
 
 ---
 
@@ -79,7 +80,7 @@ During the final source-code verification pass, four discrepancies/gaps were ide
 | Check Command | Baseline (Pre-Remediation) | Initial Remediation Pass | Final Code Review Pass | Status |
 |---|---|---|---|---|
 | `cd frontend && npm run typecheck` | PASS (12/12 workspaces) | PASS (12/12 workspaces) | **PASS (12/12 workspaces)** | **VERIFIED** |
-| `cd frontend && npm run test` | PASS (31 files, 263 tests) | PASS (31 files, 270 tests) | **PASS (31 files, 271 tests)** | **VERIFIED** |
+| `cd frontend && npm run test` | PASS (31 files, 263 tests) | PASS (31 files, 270 tests) | **PASS (31 files, 272 tests)** | **VERIFIED** |
 | `cd frontend && npm run build --workspaces --if-present` | PASS (14/14 workspaces) | PASS (14/14 workspaces) | **PASS (14/14 workspaces)** | **VERIFIED** |
 
 ---
@@ -96,7 +97,7 @@ During the final source-code verification pass, four discrepancies/gaps were ide
 - `frontend/shared/api/dashboardApi.ts` — Added optional `config` parameter and safe response unwrapping to `getOverview`.
 - `frontend/shared/api/participantApi.ts` — Added safe array/object response unwrapping to `getParticipants`/`getParticipant`/`updateParticipantStatus`.
 - `frontend/shared/confirmation/confirmationManager.ts` — Used `getApiErrorMessage` in `handleConfirm`.
-- `frontend/shared/design-system/components/Card.tsx` — Added `role="button"`, `tabIndex={0}`, and `Enter`/`Space` keyboard handler with `e.target !== e.currentTarget` child-bubbling guard when `onClick` is provided.
+- `frontend/shared/design-system/components/Card.tsx` — Added `role="button"`, `tabIndex={0}`, `handleClick`, `handleKeyDown`, and `isNestedInteractiveTarget` child-bubbling guards when `onClick` is provided.
 - `frontend/shared/design-system/components/Footer.tsx` — Added `'app-shell' | 'auth' | 'auth-card'` variant support.
 - `frontend/shared/index.ts` — Exported `./design-system/validation` and `./supportLinks`.
 - `frontend/shared/api-client.test.ts`, `frontend/shared/authApi.test.ts`, `frontend/shared/design-system.test.ts` — Added unit and regression tests for `getStoredAuthUser`, `getApiErrorMessage`, `EnrollNowApiError.response`, `normalizePasswordPolicy`, interactive `Card` (including child keydown bubbling guard), and `Footer` variants.

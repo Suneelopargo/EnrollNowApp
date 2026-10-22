@@ -164,6 +164,81 @@ describe('Design System SCSS Components', () => {
       });
       expect(onClick).toHaveBeenCalledTimes(1);
     });
+
+    it('triggers card onClick on ordinary non-interactive card content clicks and ignores clicks from nested buttons, controls, or header actions', () => {
+      const onCardClick = vi.fn();
+      const onNestedButtonClick = vi.fn();
+      const element = Card({
+        title: 'Protocol Card',
+        subtitle: 'Phase II Trial',
+        actions: React.createElement(
+          'button',
+          { type: 'button', onClick: onNestedButtonClick },
+          'View All'
+        ),
+        children: React.createElement('p', null, 'Non-interactive body copy'),
+        onClick: onCardClick,
+      }) as React.ReactElement<any>;
+
+      const cardNode = { tagName: 'DIV', role: 'button' };
+      const titleNode = { tagName: 'H3', parentElement: cardNode };
+      const bodyParagraphNode = {
+        tagName: 'P',
+        parentElement: { tagName: 'DIV', className: 'card-body', parentElement: cardNode },
+      };
+
+      // 1. Ordinary clicks on card container, title, and body copy trigger onCardClick once each
+      element.props.onClick({ target: cardNode, currentTarget: cardNode });
+      expect(onCardClick).toHaveBeenCalledTimes(1);
+
+      element.props.onClick({ target: titleNode, currentTarget: cardNode });
+      expect(onCardClick).toHaveBeenCalledTimes(2);
+
+      element.props.onClick({ target: bodyParagraphNode, currentTarget: cardNode });
+      expect(onCardClick).toHaveBeenCalledTimes(3);
+
+      // 2. Click on a nested button or an icon/span inside a nested button does NOT trigger onCardClick
+      const nestedButtonNode = { tagName: 'BUTTON', parentElement: cardNode };
+      const nestedButtonIconSpan = { tagName: 'SPAN', parentElement: nestedButtonNode };
+
+      onNestedButtonClick();
+      element.props.onClick({ target: nestedButtonNode, currentTarget: cardNode });
+      element.props.onClick({ target: nestedButtonIconSpan, currentTarget: cardNode });
+      expect(onNestedButtonClick).toHaveBeenCalledTimes(1);
+      expect(onCardClick).toHaveBeenCalledTimes(3);
+
+      // 3. Click on nested link, input, role="button" child, or header actions wrapper does NOT trigger onCardClick
+      const nestedLinkNode = { tagName: 'A', parentElement: cardNode };
+      const nestedInputNode = { tagName: 'INPUT', parentElement: cardNode };
+      const nestedRoleButtonNode = { tagName: 'DIV', role: 'button', parentElement: cardNode };
+      const headerActionsChildNode = {
+        tagName: 'SPAN',
+        parentElement: {
+          tagName: 'DIV',
+          dataset: { cardActions: 'true' },
+          parentElement: cardNode,
+        },
+      };
+
+      element.props.onClick({ target: nestedLinkNode, currentTarget: cardNode });
+      element.props.onClick({ target: nestedInputNode, currentTarget: cardNode });
+      element.props.onClick({ target: nestedRoleButtonNode, currentTarget: cardNode });
+      element.props.onClick({ target: headerActionsChildNode, currentTarget: cardNode });
+      expect(onCardClick).toHaveBeenCalledTimes(3);
+
+      // 4. Keyboard activation on nested button (keydown + synthesized click bubbling) runs only nested button action
+      const preventDefault = vi.fn();
+      element.props.onKeyDown({
+        key: 'Enter',
+        target: nestedButtonNode,
+        currentTarget: cardNode,
+        preventDefault,
+      });
+      onNestedButtonClick();
+      element.props.onClick({ target: nestedButtonNode, currentTarget: cardNode });
+      expect(onNestedButtonClick).toHaveBeenCalledTimes(2);
+      expect(onCardClick).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('Footer Component Variants (App Shell, Auth, Auth Card)', () => {
