@@ -1,5 +1,5 @@
 // frontend/microfrontends/participant/src/components/AddParticipantModal.tsx - Add Participant Modal Dialog
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
@@ -19,6 +19,25 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
   
   const [firstNameError, setFirstNameError] = useState('');
   const [lastNameError, setLastNameError] = useState('');
+
+  const handleReset = useCallback(() => {
+    setFirstName('');
+    setMiddleName('');
+    setLastName('');
+    setFirstNameError('');
+    setLastNameError('');
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      handleReset();
+    }
+  }, [isOpen, handleReset]);
+
+  const handleClose = useCallback(() => {
+    handleReset();
+    onClose();
+  }, [handleReset, onClose]);
 
   if (!isOpen) return null;
 
@@ -82,19 +101,6 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
     onClose();
   };
 
-  const handleReset = () => {
-    setFirstName('');
-    setMiddleName('');
-    setLastName('');
-    setFirstNameError('');
-    setLastNameError('');
-  };
-
-  const handleClose = () => {
-    handleReset();
-    onClose();
-  };
-
   return (
     <Modal
       isOpen={isOpen}
@@ -127,7 +133,6 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
                 setFirstName(e.target.value);
                 if (firstNameError) setFirstNameError('');
               }}
-              autoFocus
               className="form-input"
             />
           )}

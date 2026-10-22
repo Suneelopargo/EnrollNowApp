@@ -116,6 +116,8 @@ interface ParticipantGridProps {
   onOpenDetail?: (participant: ParticipantRecord) => void;
   onDeleteParticipant?: (participant: ParticipantRecord) => void;
   onAssignStudyToSelected?: (participantIds: string[], studyName: string) => void;
+  isLoading?: boolean;
+  onExportServerCsv?: () => void;
   totalCount?: number;
   searchTerm?: string;
   setSearchTerm?: (term: string) => void;
@@ -132,12 +134,15 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   onOpenDetail,
   onDeleteParticipant,
   onAssignStudyToSelected,
+  isLoading = false,
+  onExportServerCsv,
   searchTerm = '',
   setSearchTerm,
   selectedStudies = [],
   setSelectedStudies,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
+  const [gridSearchTerm, setGridSearchTerm] = useState(searchTerm || '');
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
   const [studyToAssign, setStudyToAssign] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -147,6 +152,32 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const studyFilterButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize internal quick-filter text if external searchTerm changes (e.g. clear filters)
+  useEffect(() => {
+    if (searchTerm !== undefined && searchTerm !== gridSearchTerm) {
+      setGridSearchTerm(searchTerm);
+      gridApi?.setGridOption('quickFilterText', searchTerm);
+    }
+  }, [searchTerm, gridApi]);
+
+  const handleSearchChange = (value: string) => {
+    setGridSearchTerm(value);
+    gridApi?.setGridOption('quickFilterText', value);
+  };
+
+  const handleClearSearch = () => {
+    setGridSearchTerm('');
+    gridApi?.setGridOption('quickFilterText', '');
+    setSearchTerm?.('');
+  };
+
+  const onGridReady = useCallback((params: { api: GridApi<ParticipantRecord> }) => {
+    setGridApi(params.api);
+    if (gridSearchTerm) {
+      params.api.setGridOption('quickFilterText', gridSearchTerm);
+    }
+  }, [gridSearchTerm]);
 
   const availableStudyList = useMemo(() => {
     const list = new Set<string>();
@@ -265,6 +296,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       resizable: false,
       cellRenderer: CheckboxCellRenderer,
       cellClass: 'p-0 flex items-center justify-center',
+      getQuickFilterText: () => '',
     },
     {
       headerName: 'Name',
@@ -285,6 +317,10 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       autoHeight: true,
       cellRenderer: StudiesCellRenderer,
       cellClass: 'flex items-center',
+      getQuickFilterText: (params) => {
+        if (!params.value || !Array.isArray(params.value)) return '';
+        return params.value.map((s: StudyItem) => s?.name || '').join(' ');
+      },
     },
     {
       headerName: 'Sex/Gender',
@@ -327,6 +363,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       resizable: false,
       cellRenderer: ParticipantActionsRenderer,
       cellClass: 'p-0 flex items-center justify-center',
+      getQuickFilterText: () => '',
     }
   ], [selectedStudies]);
 
@@ -364,6 +401,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 
   const exportFileName = `participants-${new Date().toISOString().slice(0, 10)}`;
   const exportCsv = () => {
+    if (onExportServerCsv) {
+      onExportServerCsv();
+      setIsExportMenuOpen(false);
+      return;
+    }
     gridApi?.exportDataAsCsv({
       fileName: `${exportFileName}.csv`,
       columnKeys: ['name', 'studies', 'gender', 'age', 'lastContact'],
@@ -443,17 +485,19 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <div className="data-grid-toolbar__search">
             <input
               type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm?.(e.target.value)}
+              value={gridSearchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search participants..."
+              aria-label="Search participants"
               className="form-input"
             />
-            {searchTerm && (
+            {gridSearchTerm && (
               <button
                 type="button"
-                onClick={() => setSearchTerm?.('')}
+                onClick={handleClearSearch}
                 className="btn btn-ghost btn-sm"
                 title="Clear"
+                aria-label="Clear search"
               >
                 <X size={14} />
               </button>
@@ -677,9 +721,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       )}
 
       <DataGrid
+          loading={isLoading}
           rowData={participants}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
+          quickFilterText={gridSearchTerm}
           context={{ onOpenDetail, onDeleteParticipant }}
           onCellClicked={(params) => {
             if (params.column?.getColId() === 'expand' && params.data) {
@@ -702,7 +748,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           }}
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
           onSelectionChanged={onSelectionChanged}
-          onGridReady={(event) => setGridApi(event.api)}
+          onGridReady={onGridReady}
           rowHeight={64}
           headerHeight={44}
           pagination={true}

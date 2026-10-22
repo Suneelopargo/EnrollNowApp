@@ -1,0 +1,923 @@
+package com.enrollnow.participant.services;
+
+import com.enrollnow.participant.dtos.*;
+import com.enrollnow.participant.models.*;
+import com.enrollnow.participant.repositories.*;
+import com.enrollnow.study.models.Study;
+import com.enrollnow.study.repositories.StudyRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.Period;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class ParticipantRegistryService {
+
+    private static final Logger log = LoggerFactory.getLogger(ParticipantRegistryService.class);
+    private static final DateTimeFormatter DISPLAY_DT_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a");
+    private static final DateTimeFormatter LAST_CONTACT_FMT = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm a");
+
+    private final ParticipantRepository participantRepository;
+    private final ParticipantIdentifierRepository identifierRepository;
+    private final ParticipantContactRepository contactRepository;
+    private final ParticipantAddressRepository addressRepository;
+    private final ParticipantPreferenceRepository preferenceRepository;
+    private final ParticipantStatusHistoryRepository statusHistoryRepository;
+    private final StudyCandidateRepository candidateRepository;
+    private final StudyEnrollmentRepository enrollmentRepository;
+    private final StudyRepository studyRepository;
+    private final ObjectMapper objectMapper;
+
+    public ParticipantRegistryService(
+            ParticipantRepository participantRepository,
+            ParticipantIdentifierRepository identifierRepository,
+            ParticipantContactRepository contactRepository,
+            ParticipantAddressRepository addressRepository,
+            ParticipantPreferenceRepository preferenceRepository,
+            ParticipantStatusHistoryRepository statusHistoryRepository,
+            StudyCandidateRepository candidateRepository,
+            StudyEnrollmentRepository enrollmentRepository,
+            StudyRepository studyRepository,
+            ObjectMapper objectMapper) {
+        this.participantRepository = participantRepository;
+        this.identifierRepository = identifierRepository;
+        this.contactRepository = contactRepository;
+        this.addressRepository = addressRepository;
+        this.preferenceRepository = preferenceRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.candidateRepository = candidateRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.studyRepository = studyRepository;
+        this.objectMapper = objectMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public RegistryPagedResponse<RegistryParticipantDto> searchParticipants(
+            UUID tenantId,
+            UUID siteId,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> selectedStudies,
+            List<CustomFilterRuleDto> customFilters,
+            int page,
+            int pageSize,
+            String sortBy,
+            String sortDirection) {
+
+        // 1. Fetch participants for tenant
+        List<Participant> participants = participantRepository.findByTenantId(tenantId);
+        if (siteId != null) {
+            participants = participants.stream()
+                    .filter(p -> siteId.equals(p.getSiteId()))
+                    .collect(Collectors.toList());
+        }
+
+        if (participants.isEmpty()) {
+            return new RegistryPagedResponse<>(Collections.emptyList(), 0, page, pageSize);
+        }
+
+        List<UUID> participantIds = participants.stream().map(Participant::getId).collect(Collectors.toList());
+
+        // 2. Batch load related entities for this tenant
+        Map<UUID, List<ParticipantIdentifier>> identifiersMap = identifierRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                .stream().collect(Collectors.groupingBy(ParticipantIdentifier::getParticipantId));
+
+        Map<UUID, List<ParticipantContact>> contactsMap = contactRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                .stream().collect(Collectors.groupingBy(ParticipantContact::getParticipantId));
+
+        Map<UUID, List<ParticipantAddress>> addressesMap = addressRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                .stream().collect(Collectors.groupingBy(ParticipantAddress::getParticipantId));
+
+        Map<UUID, ParticipantPreference> preferencesMap = preferenceRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                .stream().collect(Collectors.toMap(ParticipantPreference::getParticipantId, p -> p, (a, b) -> a));
+
+        Map<UUID, List<StudyCandidate>> candidatesMap = candidateRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                .stream().collect(Collectors.groupingBy(StudyCandidate::getParticipantId));
+
+        Map<UUID, List<StudyEnrollment>> enrollmentsMap = enrollmentRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                .stream().collect(Collectors.groupingBy(StudyEnrollment::getParticipantId));
+
+        // Studies lookup map
+        Map<UUID, Study> studiesMap = studyRepository.findByTenantId(tenantId)
+                .stream().collect(Collectors.toMap(Study::getId, s -> s, (a, b) -> a));
+
+        // 3. Assemble DTOs
+        List<RegistryParticipantDto> dtos = participants.stream()
+                .map(p -> buildDto(p,
+                        identifiersMap.getOrDefault(p.getId(), Collections.emptyList()),
+                        contactsMap.getOrDefault(p.getId(), Collections.emptyList()),
+                        addressesMap.getOrDefault(p.getId(), Collections.emptyList()),
+                        preferencesMap.get(p.getId()),
+                        candidatesMap.getOrDefault(p.getId(), Collections.emptyList()),
+                        enrollmentsMap.getOrDefault(p.getId(), Collections.emptyList()),
+                        studiesMap))
+                .collect(Collectors.toList());
+
+        // 4. Filter: search term
+        if (searchTerm != null && !searchTerm.trim().isEmpty()) {
+            String lowerSearch = searchTerm.trim().toLowerCase();
+            dtos = dtos.stream().filter(p -> matchesSearch(p, lowerSearch)).collect(Collectors.toList());
+        }
+
+        // 5. Filter: contactability
+        if (contactFilter != null && !contactFilter.equalsIgnoreCase("all") && !contactFilter.equalsIgnoreCase("show_everyone")) {
+            boolean contactWanted = contactFilter.equalsIgnoreCase("yes");
+            dtos = dtos.stream().filter(p -> Boolean.valueOf(contactWanted).equals(p.getContactForFutureStudies())).collect(Collectors.toList());
+        }
+
+        // 6. Filter: availability
+        if (availableFilter != null && !availableFilter.equalsIgnoreCase("all")) {
+            boolean availWanted = availableFilter.equalsIgnoreCase("yes");
+            dtos = dtos.stream().filter(p -> Boolean.valueOf(availWanted).equals(p.getAvailableToAddStudy())).collect(Collectors.toList());
+        }
+
+        // 7. Filter: selected studies
+        if (selectedStudies != null && !selectedStudies.isEmpty()) {
+            Set<String> studyFilterSet = selectedStudies.stream().map(String::toLowerCase).collect(Collectors.toSet());
+            dtos = dtos.stream().filter(p -> {
+                if (p.getStudies() == null || p.getStudies().isEmpty()) return false;
+                return p.getStudies().stream().anyMatch(s -> studyFilterSet.contains(s.getName().toLowerCase()));
+            }).collect(Collectors.toList());
+        }
+
+        // 8. Filter: custom filters
+        if (customFilters != null && !customFilters.isEmpty()) {
+            for (CustomFilterRuleDto rule : customFilters) {
+                if (rule.getField() != null && !rule.getField().isBlank() && rule.getOperator() != null) {
+                    dtos = dtos.stream().filter(p -> applyCustomRule(p, rule)).collect(Collectors.toList());
+                }
+            }
+        }
+
+        // 9. Sorting
+        Comparator<RegistryParticipantDto> comparator = getComparator(sortBy, sortDirection);
+        dtos.sort(comparator);
+
+        // 10. Pagination
+        long totalCount = dtos.size();
+        int safePage = Math.max(0, page);
+        int safePageSize = pageSize > 0 ? pageSize : 25;
+        int fromIndex = Math.min(safePage * safePageSize, (int) totalCount);
+        int toIndex = Math.min(fromIndex + safePageSize, (int) totalCount);
+
+        List<RegistryParticipantDto> pagedList = dtos.subList(fromIndex, toIndex);
+
+        return new RegistryPagedResponse<>(pagedList, totalCount, safePage, safePageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RegistryParticipantDto> getAllMatchingParticipants(
+            UUID tenantId,
+            UUID siteId,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> selectedStudies,
+            List<CustomFilterRuleDto> customFilters) {
+        RegistryPagedResponse<RegistryParticipantDto> response = searchParticipants(
+                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, 0, Integer.MAX_VALUE, "name", "asc");
+        return response.getItems();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<RegistryParticipantDto> getParticipantById(UUID tenantId, UUID participantId) {
+        return participantRepository.findByTenantIdAndId(tenantId, participantId).map(p -> {
+            List<ParticipantIdentifier> identifiers = identifierRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            List<ParticipantAddress> addresses = addressRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            ParticipantPreference pref = preferenceRepository.findByTenantIdAndParticipantId(tenantId, participantId).orElse(null);
+            List<StudyCandidate> candidates = candidateRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            List<StudyEnrollment> enrollments = enrollmentRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            Map<UUID, Study> studiesMap = studyRepository.findByTenantId(tenantId)
+                    .stream().collect(Collectors.toMap(Study::getId, s -> s, (a, b) -> a));
+
+            return buildDto(p, identifiers, contacts, addresses, pref, candidates, enrollments, studiesMap);
+        });
+    }
+
+    @Transactional
+    public RegistryParticipantDto createParticipant(UUID tenantId, UUID siteId, UUID userId, CreateParticipantRequest request) {
+        Participant participant = new Participant();
+        participant.setTenantId(tenantId);
+        participant.setSiteId(siteId);
+        participant.setFirstName(request.getFirstName());
+        participant.setMiddleName(request.getMiddleName());
+        participant.setLastName(request.getLastName());
+        participant.setPreferredName(request.getPreferredName());
+        participant.setStatus(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE");
+
+        if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
+            participant.setDateOfBirth(parseDate(request.getDateOfBirth()));
+        }
+
+        participant.setSexAtBirth(request.getSexAtBirth());
+        participant.setGenderIdentity(request.getGenderIdentity());
+
+        Map<String, Object> attributes = new HashMap<>();
+        if (request.getTags() != null) {
+            attributes.put("tags", request.getTags());
+        }
+        if (request.getFamilyRole() != null) {
+            attributes.put("familyRole", request.getFamilyRole());
+        }
+        if (request.getGuardianName() != null) {
+            attributes.put("guardianName", request.getGuardianName());
+        }
+        if (request.getEthnicity() != null) {
+            attributes.put("ethnicity", request.getEthnicity());
+        }
+        if (request.getRace() != null) {
+            attributes.put("race", request.getRace());
+        }
+        try {
+            participant.setCustomAttributes(objectMapper.writeValueAsString(attributes));
+        } catch (Exception e) {
+            participant.setCustomAttributes("{}");
+        }
+
+        participant.setCreatedBy(userId);
+        participant.setUpdatedBy(userId);
+        participant.setCreatedAt(OffsetDateTime.now());
+        participant.setUpdatedAt(OffsetDateTime.now());
+
+        Participant saved = participantRepository.save(participant);
+
+        // Save Global/MRN Identifier
+        ParticipantIdentifier identifier = new ParticipantIdentifier();
+        identifier.setTenantId(tenantId);
+        identifier.setParticipantId(saved.getId());
+        identifier.setIdentifierType("GLOBAL_ID");
+        identifier.setIdentifierValue("PART-" + saved.getId().toString().substring(0, 8).toUpperCase());
+        identifier.setPrimaryIdentifier(true);
+        identifierRepository.save(identifier);
+
+        // Save Contact
+        if (request.getPrimaryEmail() != null && !request.getPrimaryEmail().isBlank()) {
+            ParticipantContact emailContact = new ParticipantContact();
+            emailContact.setTenantId(tenantId);
+            emailContact.setParticipantId(saved.getId());
+            emailContact.setContactType("EMAIL");
+            emailContact.setContactValue(request.getPrimaryEmail());
+            emailContact.setPrimaryContact(true);
+            contactRepository.save(emailContact);
+        }
+
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            ParticipantContact phoneContact = new ParticipantContact();
+            phoneContact.setTenantId(tenantId);
+            phoneContact.setParticipantId(saved.getId());
+            phoneContact.setContactType("PHONE");
+            phoneContact.setContactValue(request.getPhone());
+            phoneContact.setPrimaryContact(request.getPrimaryEmail() == null);
+            contactRepository.save(phoneContact);
+        }
+
+        // Save Address
+        if ((request.getAddressLine1() != null && !request.getAddressLine1().isBlank()) ||
+                (request.getCity() != null && !request.getCity().isBlank())) {
+            ParticipantAddress address = new ParticipantAddress();
+            address.setTenantId(tenantId);
+            address.setParticipantId(saved.getId());
+            address.setAddressType("HOME");
+            address.setAddressLine1(request.getAddressLine1());
+            address.setAddressLine2(request.getAddressLine2());
+            address.setCity(request.getCity());
+            address.setStateRegion(request.getState());
+            address.setPostalCode(request.getPostalCode());
+            address.setCountryCode(request.getCountry() != null && request.getCountry().length() <= 3 ? request.getCountry() : "USA");
+            address.setPrimaryAddress(true);
+            addressRepository.save(address);
+        }
+
+        // Save Preference
+        ParticipantPreference pref = new ParticipantPreference();
+        pref.setTenantId(tenantId);
+        pref.setParticipantId(saved.getId());
+        pref.setDoNotContact(request.getContactForFutureStudies() != null ? !request.getContactForFutureStudies() : false);
+        pref.setPreferredLanguage(request.getPrimaryLanguage() != null ? request.getPrimaryLanguage() : "English");
+        preferenceRepository.save(pref);
+
+        // Optional Study Assignment
+        if (request.getStudyId() != null && !request.getStudyId().isBlank()) {
+            try {
+                UUID studyUuid = UUID.fromString(request.getStudyId());
+                StudyCandidate candidate = new StudyCandidate();
+                candidate.setTenantId(tenantId);
+                candidate.setStudyId(studyUuid);
+                candidate.setParticipantId(saved.getId());
+                candidate.setStatus("REFERRED");
+                candidate.setActive(true);
+                candidate.setCreatedAt(OffsetDateTime.now());
+                candidate.setCreatedBy(userId);
+                candidate.setUpdatedAt(OffsetDateTime.now());
+                candidate.setUpdatedBy(userId);
+                candidateRepository.save(candidate);
+            } catch (Exception e) {
+                log.warn("Invalid studyId {} provided during participant creation", request.getStudyId());
+            }
+        }
+
+        return getParticipantById(tenantId, saved.getId()).orElseThrow();
+    }
+
+    @Transactional
+    public RegistryParticipantDto updateParticipant(UUID tenantId, UUID participantId, UUID userId, UpdateParticipantRequest request) {
+        Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
+                .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+
+        if (request.getFirstName() != null) participant.setFirstName(request.getFirstName());
+        if (request.getMiddleName() != null) participant.setMiddleName(request.getMiddleName());
+        if (request.getLastName() != null) participant.setLastName(request.getLastName());
+        if (request.getPreferredName() != null) participant.setPreferredName(request.getPreferredName());
+        if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
+            participant.setDateOfBirth(parseDate(request.getDateOfBirth()));
+        }
+        if (request.getSexAtBirth() != null) participant.setSexAtBirth(request.getSexAtBirth());
+        if (request.getGenderIdentity() != null) participant.setGenderIdentity(request.getGenderIdentity());
+        if (request.getStatus() != null) participant.setStatus(request.getStatus().toUpperCase());
+
+        // Update custom attributes
+        Map<String, Object> attrs = parseCustomAttributes(participant.getCustomAttributes());
+        if (request.getTags() != null) attrs.put("tags", request.getTags());
+        if (request.getFamilyRole() != null) attrs.put("familyRole", request.getFamilyRole());
+        if (request.getGuardianName() != null) attrs.put("guardianName", request.getGuardianName());
+        if (request.getEthnicity() != null) attrs.put("ethnicity", request.getEthnicity());
+        if (request.getRace() != null) attrs.put("race", request.getRace());
+        try {
+            participant.setCustomAttributes(objectMapper.writeValueAsString(attrs));
+        } catch (Exception e) {
+            // retain existing
+        }
+
+        participant.setUpdatedBy(userId);
+        participant.setUpdatedAt(OffsetDateTime.now());
+        participantRepository.save(participant);
+
+        // Update Preference if provided
+        if (request.getContactForFutureStudies() != null || request.getPrimaryLanguage() != null) {
+            ParticipantPreference pref = preferenceRepository.findByTenantIdAndParticipantId(tenantId, participantId)
+                    .orElseGet(() -> {
+                        ParticipantPreference p = new ParticipantPreference();
+                        p.setTenantId(tenantId);
+                        p.setParticipantId(participantId);
+                        return p;
+                    });
+            if (request.getContactForFutureStudies() != null) {
+                pref.setDoNotContact(!request.getContactForFutureStudies());
+            }
+            if (request.getPrimaryLanguage() != null) {
+                pref.setPreferredLanguage(request.getPrimaryLanguage());
+            }
+            preferenceRepository.save(pref);
+        }
+
+        // Update Address if provided
+        if (request.getCity() != null || request.getState() != null || request.getPostalCode() != null || request.getAddressLine1() != null) {
+            List<ParticipantAddress> addresses = addressRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            ParticipantAddress address = addresses.stream().filter(ParticipantAddress::isPrimaryAddress).findFirst()
+                    .orElseGet(() -> {
+                        ParticipantAddress a = new ParticipantAddress();
+                        a.setTenantId(tenantId);
+                        a.setParticipantId(participantId);
+                        a.setAddressType("HOME");
+                        a.setPrimaryAddress(true);
+                        return a;
+                    });
+            if (request.getAddressLine1() != null) address.setAddressLine1(request.getAddressLine1());
+            if (request.getAddressLine2() != null) address.setAddressLine2(request.getAddressLine2());
+            if (request.getCity() != null) address.setCity(request.getCity());
+            if (request.getState() != null) address.setStateRegion(request.getState());
+            if (request.getPostalCode() != null) address.setPostalCode(request.getPostalCode());
+            addressRepository.save(address);
+        }
+
+        // Update Contact Phone if provided
+        if (request.getPhone() != null) {
+            List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            ParticipantContact phoneContact = contacts.stream().filter(c -> "PHONE".equalsIgnoreCase(c.getContactType())).findFirst()
+                    .orElseGet(() -> {
+                        ParticipantContact c = new ParticipantContact();
+                        c.setTenantId(tenantId);
+                        c.setParticipantId(participantId);
+                        c.setContactType("PHONE");
+                        c.setPrimaryContact(false);
+                        return c;
+                    });
+            phoneContact.setContactValue(request.getPhone());
+            contactRepository.save(phoneContact);
+        }
+
+        // Update Contact Email if provided
+        if (request.getPrimaryEmail() != null) {
+            List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            ParticipantContact emailContact = contacts.stream().filter(c -> "EMAIL".equalsIgnoreCase(c.getContactType())).findFirst()
+                    .orElseGet(() -> {
+                        ParticipantContact c = new ParticipantContact();
+                        c.setTenantId(tenantId);
+                        c.setParticipantId(participantId);
+                        c.setContactType("EMAIL");
+                        c.setPrimaryContact(true);
+                        return c;
+                    });
+            emailContact.setContactValue(request.getPrimaryEmail());
+            contactRepository.save(emailContact);
+        }
+
+        return getParticipantById(tenantId, participantId).orElseThrow();
+    }
+
+    @Transactional
+    public void updateParticipantStatus(UUID tenantId, UUID participantId, UUID userId, String status) {
+        Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
+                .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+
+        String oldStatus = participant.getStatus();
+        participant.setStatus(status.toUpperCase());
+        participant.setUpdatedBy(userId);
+        participant.setUpdatedAt(OffsetDateTime.now());
+        participantRepository.save(participant);
+
+        ParticipantStatusHistory history = new ParticipantStatusHistory();
+        history.setTenantId(tenantId);
+        history.setParticipantId(participantId);
+        history.setPreviousStatus(oldStatus);
+        history.setNewStatus(status.toUpperCase());
+        history.setChangedBy(userId);
+        history.setChangedAt(OffsetDateTime.now());
+        statusHistoryRepository.save(history);
+    }
+
+    @Transactional
+    public void deleteParticipant(UUID tenantId, UUID participantId, UUID userId) {
+        Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
+                .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+        participant.setStatus("DELETED");
+        participant.setUpdatedBy(userId);
+        participant.setUpdatedAt(OffsetDateTime.now());
+        participantRepository.save(participant);
+
+        ParticipantStatusHistory history = new ParticipantStatusHistory();
+        history.setTenantId(tenantId);
+        history.setParticipantId(participantId);
+        history.setPreviousStatus(participant.getStatus());
+        history.setNewStatus("DELETED");
+        history.setReason("Participant deleted by user");
+        history.setChangedBy(userId);
+        history.setChangedAt(OffsetDateTime.now());
+        statusHistoryRepository.save(history);
+    }
+
+    @Transactional
+    public void assignStudy(UUID tenantId, UUID userId, AssignStudyRequest request) {
+        List<UUID> targetIds = new ArrayList<>();
+        if (request.getParticipantIds() != null && !request.getParticipantIds().isEmpty()) {
+            targetIds.addAll(request.getParticipantIds());
+        } else if (request.getParticipantId() != null) {
+            targetIds.add(request.getParticipantId());
+        }
+
+        if (targetIds.isEmpty()) {
+            throw new IllegalArgumentException("No participant specified for study assignment");
+        }
+
+        Study study = null;
+        if (request.getStudyId() != null) {
+            study = studyRepository.findByTenantIdAndId(tenantId, request.getStudyId()).orElse(null);
+        }
+        if (study == null && request.getStudyName() != null && !request.getStudyName().isBlank()) {
+            study = studyRepository.findByTenantId(tenantId).stream()
+                    .filter(s -> s.getName().equalsIgnoreCase(request.getStudyName().trim()))
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (study == null) {
+            throw new IllegalArgumentException("Study not found");
+        }
+
+        UUID effectiveStudyId = study.getId();
+        String status = request.getStatus() != null ? request.getStatus().toUpperCase() : "REFERRED";
+
+        for (UUID pId : targetIds) {
+            if (!participantRepository.existsById(pId)) continue;
+
+            if ("ENROLLED".equalsIgnoreCase(status)) {
+                StudyEnrollment enrollment = enrollmentRepository.findByTenantIdAndStudyIdAndParticipantId(
+                        tenantId, effectiveStudyId, pId)
+                        .orElseGet(() -> {
+                            StudyEnrollment e = new StudyEnrollment();
+                            e.setTenantId(tenantId);
+                            e.setStudyId(effectiveStudyId);
+                            e.setParticipantId(pId);
+                            e.setStudyParticipantId("SP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+                            e.setEnrolledAt(OffsetDateTime.now());
+                            e.setCreatedBy(userId);
+                            return e;
+                        });
+                enrollment.setStatus("ENROLLED");
+                enrollment.setActive(true);
+                enrollmentRepository.save(enrollment);
+            } else {
+                StudyCandidate candidate = candidateRepository.findByTenantIdAndStudyIdAndParticipantId(
+                        tenantId, effectiveStudyId, pId)
+                        .orElseGet(() -> {
+                            StudyCandidate c = new StudyCandidate();
+                            c.setTenantId(tenantId);
+                            c.setStudyId(effectiveStudyId);
+                            c.setParticipantId(pId);
+                            c.setCreatedAt(OffsetDateTime.now());
+                            c.setCreatedBy(userId);
+                            return c;
+                        });
+                candidate.setStatus(status);
+                candidate.setStatusReason(request.getNotes());
+                candidate.setActive(true);
+                candidate.setUpdatedAt(OffsetDateTime.now());
+                candidate.setUpdatedBy(userId);
+                candidateRepository.save(candidate);
+            }
+        }
+    }
+
+    private RegistryParticipantDto buildDto(
+            Participant p,
+            List<ParticipantIdentifier> identifiers,
+            List<ParticipantContact> contacts,
+            List<ParticipantAddress> addresses,
+            ParticipantPreference pref,
+            List<StudyCandidate> candidates,
+            List<StudyEnrollment> enrollments,
+            Map<UUID, Study> studiesMap) {
+
+        RegistryParticipantDto dto = new RegistryParticipantDto();
+        dto.setId(p.getId().toString());
+        String fullName = ((p.getFirstName() != null ? p.getFirstName() : "") + " " +
+                (p.getLastName() != null ? p.getLastName() : "")).trim();
+        dto.setName(fullName);
+        dto.setFirstName(p.getFirstName());
+        dto.setLastName(p.getLastName());
+        dto.setStatus(p.getStatus() != null ? capitalize(p.getStatus()) : "Active");
+
+        // DOB & Age
+        if (p.getDateOfBirth() != null) {
+            int age = Period.between(p.getDateOfBirth(), LocalDate.now()).getYears();
+            dto.setAge(String.valueOf(age));
+            dto.setAgeNumeric(age);
+            dto.setBirthMonth(p.getDateOfBirth().getMonth().name());
+        } else {
+            dto.setAge("N/A");
+            dto.setAgeNumeric(null);
+        }
+
+        dto.setGender(p.getSexAtBirth() != null ? p.getSexAtBirth() : (p.getGenderIdentity() != null ? p.getGenderIdentity() : "Unspecified"));
+
+        // Identifiers
+        identifiers.stream().filter(i -> "GLOBAL_ID".equalsIgnoreCase(i.getIdentifierType())).findFirst()
+                .ifPresentOrElse(i -> dto.setGlobalId(i.getIdentifierValue()),
+                        () -> dto.setGlobalId(p.getId().toString().substring(0, 8).toUpperCase()));
+
+        // Contacts
+        String primaryEmail = null;
+        String secondaryEmail = null;
+        String phone = null;
+        for (ParticipantContact c : contacts) {
+            if ("EMAIL".equalsIgnoreCase(c.getContactType())) {
+                if (c.isPrimaryContact() && primaryEmail == null) {
+                    primaryEmail = c.getContactValue();
+                } else if (secondaryEmail == null) {
+                    secondaryEmail = c.getContactValue();
+                }
+            } else if ("PHONE".equalsIgnoreCase(c.getContactType())) {
+                if (phone == null || c.isPrimaryContact()) {
+                    phone = c.getContactValue();
+                }
+            }
+        }
+        dto.setPhone(phone != null ? phone : "");
+
+        // Addresses
+        ParticipantAddress primaryAddr = addresses.stream().filter(ParticipantAddress::isPrimaryAddress).findFirst()
+                .orElse(addresses.isEmpty() ? null : addresses.get(0));
+
+        if (primaryAddr != null) {
+            dto.setCity(primaryAddr.getCity() != null ? primaryAddr.getCity() : "");
+            dto.setState(primaryAddr.getStateRegion() != null ? primaryAddr.getStateRegion() : "");
+            dto.setZipcode(primaryAddr.getPostalCode() != null ? primaryAddr.getPostalCode() : "");
+        } else {
+            dto.setCity("");
+            dto.setState("");
+            dto.setZipcode("");
+        }
+
+        // Studies
+        Set<UUID> participantStudyIds = new HashSet<>();
+        candidates.stream().filter(StudyCandidate::isActive).forEach(c -> participantStudyIds.add(c.getStudyId()));
+        enrollments.stream().filter(StudyEnrollment::isActive).forEach(e -> participantStudyIds.add(e.getStudyId()));
+
+        List<StudyItemDto> studyItems = new ArrayList<>();
+        boolean canParticipateInOtherStudies = true;
+
+        for (UUID sId : participantStudyIds) {
+            Study study = studiesMap.get(sId);
+            if (study != null) {
+                studyItems.add(new StudyItemDto(study.getName(), true));
+                if (!study.isArchived() && !study.isAllowParticipationInOtherStudies()) {
+                    canParticipateInOtherStudies = false;
+                }
+            }
+        }
+        dto.setStudies(studyItems);
+
+        // Contactability & Availability
+        boolean contactForFuture = pref == null || !pref.isDoNotContact();
+        dto.setContactForFutureStudies(contactForFuture);
+        dto.setAvailableToAddStudy(canParticipateInOtherStudies);
+
+        // Timestamps & Display strings
+        dto.setDateCreated(p.getCreatedAt() != null ? p.getCreatedAt().format(DISPLAY_DT_FMT) : "");
+        dto.setTimezone("America/New_York (EDT)");
+
+        // Last Contact date from candidate
+        OffsetDateTime lastContact = candidates.stream()
+                .map(StudyCandidate::getLastContactAt)
+                .filter(Objects::nonNull)
+                .max(OffsetDateTime::compareTo)
+                .orElse(p.getUpdatedAt() != null ? p.getUpdatedAt() : OffsetDateTime.now());
+
+        dto.setLastContact("Recent");
+        dto.setGlobalDateOfLastContact(lastContact.format(LAST_CONTACT_FMT));
+
+        // Parse Custom Attributes
+        Map<String, Object> customAttrs = parseCustomAttributes(p.getCustomAttributes());
+        List<String> tags = new ArrayList<>();
+        if (customAttrs.get("tags") instanceof List) {
+            List<?> list = (List<?>) customAttrs.get("tags");
+            tags = list.stream().map(Object::toString).collect(Collectors.toList());
+        }
+        dto.setTags(tags);
+        dto.setFamilyId(customAttrs.getOrDefault("familyId", "FAM-10001").toString());
+
+        // ContactMethods DTO
+        String fullAddress = primaryAddr != null
+                ? (primaryAddr.getAddressLine1() != null ? primaryAddr.getAddressLine1() + ", " : "") +
+                (primaryAddr.getCity() != null ? primaryAddr.getCity() + ", " : "") +
+                (primaryAddr.getStateRegion() != null ? primaryAddr.getStateRegion() + " " : "") +
+                (primaryAddr.getPostalCode() != null ? primaryAddr.getPostalCode() : "")
+                : "";
+
+        ContactMethodsDto cm = new ContactMethodsDto(
+                primaryEmail,
+                secondaryEmail,
+                phone,
+                fullAddress.trim(),
+                pref != null && pref.isAllowEmail() ? "Email" : "Phone"
+        );
+        dto.setContactMethods(cm);
+
+        // Demographics DTO
+        DemographicsDto demo = new DemographicsDto(
+                p.getDateOfBirth() != null ? p.getDateOfBirth().toString() : "",
+                dto.getGender(),
+                customAttrs.getOrDefault("ethnicity", "Not Disclosed").toString(),
+                customAttrs.getOrDefault("race", "Not Disclosed").toString(),
+                pref != null && pref.getPreferredLanguage() != null ? pref.getPreferredLanguage() : "English"
+        );
+        dto.setDemographics(demo);
+
+        // FamilyInfo DTO
+        FamilyInfoDto family = new FamilyInfoDto(
+                customAttrs.getOrDefault("familyRole", "Proband").toString(),
+                1,
+                "PED-101",
+                customAttrs.getOrDefault("guardianName", "N/A").toString()
+        );
+        dto.setFamily(family);
+
+        dto.setVariables(Collections.emptyList());
+
+        return dto;
+    }
+
+    private boolean matchesSearch(RegistryParticipantDto p, String lower) {
+        if (p.getName() != null && p.getName().toLowerCase().contains(lower)) return true;
+        if (p.getPhone() != null && p.getPhone().toLowerCase().contains(lower)) return true;
+        if (p.getCity() != null && p.getCity().toLowerCase().contains(lower)) return true;
+        if (p.getState() != null && p.getState().toLowerCase().contains(lower)) return true;
+        if (p.getZipcode() != null && p.getZipcode().toLowerCase().contains(lower)) return true;
+        if (p.getGlobalId() != null && p.getGlobalId().toLowerCase().contains(lower)) return true;
+        if (p.getContactMethods() != null) {
+            if (p.getContactMethods().getPrimaryEmail() != null && p.getContactMethods().getPrimaryEmail().toLowerCase().contains(lower)) return true;
+        }
+        return false;
+    }
+
+    private boolean applyCustomRule(RegistryParticipantDto p, CustomFilterRuleDto rule) {
+        String field = rule.getField().toLowerCase().trim();
+        String op = rule.getOperator().toLowerCase().trim();
+        String targetVal = rule.getValue() != null ? rule.getValue().trim() : "";
+
+        String actualVal = getFieldValue(p, field);
+
+        switch (op) {
+            case "equal to":
+            case "equals":
+            case "=":
+                if ("birthmonth".equals(field)) {
+                    return matchesBirthMonth(p.getBirthMonth(), targetVal);
+                }
+                if ("age".equals(field)) {
+                    return p.getAgeNumeric() != null && targetVal.equals(String.valueOf(p.getAgeNumeric()));
+                }
+                return actualVal != null && actualVal.equalsIgnoreCase(targetVal);
+
+            case "not equal to":
+            case "not_equals":
+            case "!=":
+                if ("birthmonth".equals(field)) {
+                    return !matchesBirthMonth(p.getBirthMonth(), targetVal);
+                }
+                if ("age".equals(field)) {
+                    return p.getAgeNumeric() == null || !targetVal.equals(String.valueOf(p.getAgeNumeric()));
+                }
+                return actualVal == null || !actualVal.equalsIgnoreCase(targetVal);
+
+            case "contains":
+                return actualVal != null && actualVal.toLowerCase().contains(targetVal.toLowerCase());
+
+            case "does not contain":
+            case "not_contains":
+                return actualVal == null || !actualVal.toLowerCase().contains(targetVal.toLowerCase());
+
+            case "starts with":
+            case "starts_with":
+                return actualVal != null && actualVal.toLowerCase().startsWith(targetVal.toLowerCase());
+
+            case "ends with":
+            case "ends_with":
+                return actualVal != null && actualVal.toLowerCase().endsWith(targetVal.toLowerCase());
+
+            case "greater than":
+            case ">":
+                if ("age".equals(field)) {
+                    try {
+                        int threshold = Integer.parseInt(targetVal);
+                        return p.getAgeNumeric() != null && p.getAgeNumeric() > threshold;
+                    } catch (NumberFormatException ignored) {}
+                }
+                return actualVal != null && actualVal.compareToIgnoreCase(targetVal) > 0;
+
+            case "less than":
+            case "<":
+                if ("age".equals(field)) {
+                    try {
+                        int threshold = Integer.parseInt(targetVal);
+                        return p.getAgeNumeric() != null && p.getAgeNumeric() < threshold;
+                    } catch (NumberFormatException ignored) {}
+                }
+                return actualVal != null && actualVal.compareToIgnoreCase(targetVal) < 0;
+
+            case "is empty":
+                return actualVal == null || actualVal.isBlank();
+
+            case "is not empty":
+                return actualVal != null && !actualVal.isBlank();
+
+            case "between":
+                if ("age".equals(field) && p.getAgeNumeric() != null) {
+                    try {
+                        String[] parts = targetVal.split("[,-]");
+                        if (parts.length == 2) {
+                            int low = Integer.parseInt(parts[0].trim());
+                            int high = Integer.parseInt(parts[1].trim());
+                            return p.getAgeNumeric() >= low && p.getAgeNumeric() <= high;
+                        }
+                    } catch (Exception ignored) {}
+                }
+                return true;
+
+            default:
+                return true;
+        }
+    }
+
+    private String getFieldValue(RegistryParticipantDto p, String field) {
+        switch (field) {
+            case "name":
+                return p.getName();
+            case "firstname":
+            case "first_name":
+                return p.getFirstName();
+            case "lastname":
+            case "last_name":
+                return p.getLastName();
+            case "gender":
+            case "sex":
+                return p.getGender();
+            case "age":
+                return p.getAgeNumeric() != null ? String.valueOf(p.getAgeNumeric()) : "";
+            case "status":
+                return p.getStatus();
+            case "city":
+                return p.getCity();
+            case "state":
+                return p.getState();
+            case "zipcode":
+            case "zip":
+            case "postalcode":
+                return p.getZipcode();
+            case "phone":
+            case "phonenumber":
+                return p.getPhone();
+            case "birthmonth":
+                return p.getBirthMonth();
+            case "datecreated":
+                return p.getDateCreated();
+            case "tags":
+                return p.getTags() != null ? String.join(",", p.getTags()) : "";
+            default:
+                return "";
+        }
+    }
+
+    private Comparator<RegistryParticipantDto> getComparator(String sortBy, String sortDirection) {
+        boolean asc = !"desc".equalsIgnoreCase(sortDirection);
+        Comparator<RegistryParticipantDto> cmp;
+
+        if (sortBy == null) sortBy = "name";
+
+        switch (sortBy.toLowerCase()) {
+            case "age":
+                cmp = Comparator.comparing(p -> p.getAgeNumeric() != null ? p.getAgeNumeric() : -1);
+                break;
+            case "gender":
+                cmp = Comparator.comparing(p -> p.getGender() != null ? p.getGender() : "", String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "status":
+                cmp = Comparator.comparing(p -> p.getStatus() != null ? p.getStatus() : "", String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "datecreated":
+                cmp = Comparator.comparing(p -> p.getDateCreated() != null ? p.getDateCreated() : "", String.CASE_INSENSITIVE_ORDER);
+                break;
+            case "name":
+            default:
+                cmp = Comparator.comparing(p -> p.getName() != null ? p.getName() : "", String.CASE_INSENSITIVE_ORDER);
+                break;
+        }
+
+        return asc ? cmp : cmp.reversed();
+    }
+
+    private Map<String, Object> parseCustomAttributes(String json) {
+        if (json == null || json.isBlank()) return new HashMap<>();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
+    }
+
+    private LocalDate parseDate(String val) {
+        try {
+            if (val.contains("-")) {
+                return LocalDate.parse(val);
+            }
+            if (val.contains("/")) {
+                String[] parts = val.split("/");
+                if (parts.length == 3) {
+                    if (parts[2].length() == 4) { // MM/dd/yyyy
+                        return LocalDate.of(Integer.parseInt(parts[2]), Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private boolean matchesBirthMonth(String actualMonth, String targetVal) {
+        if (actualMonth == null || targetVal == null) return false;
+        if (actualMonth.equalsIgnoreCase(targetVal)) return true;
+        try {
+            int monthNum = Integer.parseInt(targetVal);
+            if (monthNum >= 1 && monthNum <= 12) {
+                String expected = java.time.Month.of(monthNum).name();
+                return actualMonth.equalsIgnoreCase(expected);
+            }
+        } catch (NumberFormatException ignored) {}
+        return actualMonth.toLowerCase().startsWith(targetVal.toLowerCase());
+    }
+
+    private String capitalize(String str) {
+        if (str == null || str.isEmpty()) return "";
+        return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
+    }
+}

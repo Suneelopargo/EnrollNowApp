@@ -45,6 +45,13 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
   const containerRef = useRef<T | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
 
+  // Keep latest callback references in refs so changing handlers does not re-trigger focus trapping effects
+  const onEscapeRef = useRef(onEscape);
+  onEscapeRef.current = onEscape;
+
+  const initialFocusRefRef = useRef(initialFocusRef);
+  initialFocusRefRef.current = initialFocusRef;
+
   useEffect(() => {
     if (!active) return;
 
@@ -65,10 +72,20 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
     // 2. Acquire ancestor-safe background inert
     const releaseInert = inertBackground ? acquireInertBackground(container) : undefined;
 
-    // 3. Focus first focusable element, autofocus target, or container
+    // 3. Focus first focusable element, autofocus target, or container (only if focus is not already inside)
     const focusTimer = setTimeout(() => {
-      if (initialFocusRef?.current && document.body.contains(initialFocusRef.current)) {
-        initialFocusRef.current.focus();
+      // If user or browser already placed focus on an element inside the container, do not steal focus
+      if (
+        typeof document !== 'undefined' &&
+        document.activeElement &&
+        container.contains(document.activeElement) &&
+        document.activeElement !== container
+      ) {
+        return;
+      }
+
+      if (initialFocusRefRef.current?.current && document.body.contains(initialFocusRefRef.current.current)) {
+        initialFocusRefRef.current.current.focus();
         return;
       }
 
@@ -94,10 +111,10 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
     // 4. Handle Tab / Shift+Tab keyboard focus containment
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (onEscape) {
+        if (onEscapeRef.current) {
           e.preventDefault();
           e.stopPropagation();
-          onEscape();
+          onEscapeRef.current();
         }
         return;
       }
@@ -177,7 +194,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
         }, 10);
       }
     };
-  }, [active, onEscape, initialFocusRef, returnFocus, lockScroll, inertBackground, fallbackFocusSelector]);
+  }, [active, returnFocus, lockScroll, inertBackground, fallbackFocusSelector]);
 
   return containerRef;
 }
