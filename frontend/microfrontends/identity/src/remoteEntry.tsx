@@ -58,7 +58,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -88,14 +87,13 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     // Exact entered credentials — NO hardcoded test fallback
     const loginUser = username.trim();
     const loginPass = password;
 
     if (!loginUser || !loginPass) {
-      setError('Please enter your email and password.');
+      toast.warning('Please enter your email and password.');
       return;
     }
 
@@ -126,11 +124,12 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
         window.location.href = '/dashboard';
       }
     } catch (err: any) {
-      setError(
-        err.message ||
-          err.normalized?.message ||
-          'Invalid username or password. Please verify your credentials.'
-      );
+      if (!err?.normalized && !err?.response) {
+        const fallbackMsg =
+          err?.message ||
+          'Invalid username or password. Please verify your credentials.';
+        toast.error(fallbackMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -203,14 +202,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                   </p>
                 </div>
 
-              {/* Error Alert */}
-              {error && (
-                <div id="enl-login-error" className="enl-error-alert" role="alert" aria-live="assertive" aria-atomic="true">
-                  <AlertCircle size={15} aria-hidden="true" />
-                  <span>{error}</span>
-                </div>
-              )}
-
               {/* Form Fields */}
               <form onSubmit={handleSubmit} className="enl-card-form">
                 {/* Email Address */}
@@ -230,8 +221,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       autoComplete="username"
                       required
                       aria-required="true"
-                      aria-invalid={!!error}
-                      aria-describedby={error ? 'enl-login-error' : undefined}
                     />
                   </div>
                 </div>
@@ -253,8 +242,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       autoComplete="current-password"
                       required
                       aria-required="true"
-                      aria-invalid={!!error}
-                      aria-describedby={error ? 'enl-login-error' : undefined}
                     />
                     <button
                       type="button"

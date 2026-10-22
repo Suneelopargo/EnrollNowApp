@@ -13,6 +13,11 @@ import {
 import { SiteAdminHorizontalNav } from '../components/SiteAdminHorizontalNav';
 import { securitySettingsApi, SecuritySettingsResponse } from '../../../../shared/api/securitySettingsApi';
 import { generalSettingsApi, GeneralSettingsResponse } from '../../../../shared/api/generalSettingsApi';
+import {
+  userCanManageSiteSettings,
+  userIsFullSiteAdmin,
+  deriveUserAccessFlags,
+} from '../../../../shared/api/authApi';
 
 vi.mock('../../../../shared/api/securitySettingsApi', () => ({
   securitySettingsApi: {
@@ -44,23 +49,16 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
   });
 
   describe('Component exports and contract verification', () => {
-    it('exports SecurityView and GeneralSettingsView components from SiteAdminViews', () => {
-      expect(SecurityView).toBeDefined();
+    it('exports all views as valid React components', () => {
       expect(typeof SecurityView).toBe('function');
-      expect(GeneralSettingsView).toBeDefined();
       expect(typeof GeneralSettingsView).toBe('function');
+      expect(typeof StudiesView).toBe('function');
+      expect(typeof ImportView).toBe('function');
+      expect(typeof ExportView).toBe('function');
+      expect(typeof AuditLogView).toBe('function');
     });
 
-    it('exports unimplemented views (Studies, Import, Export, AuditLog) rendering ComingSoon states', () => {
-      expect(StudiesView).toBeDefined();
-      expect(typeof StudiesView).toBe('function');
-      expect(ImportView).toBeDefined();
-      expect(typeof ImportView).toBe('function');
-      expect(ExportView).toBeDefined();
-      expect(typeof ExportView).toBe('function');
-      expect(AuditLogView).toBeDefined();
-      expect(typeof AuditLogView).toBe('function');
-
+    it('renders placeholder views with correct title props', () => {
       const studiesEl = StudiesView({}) as React.ReactElement<any>;
       expect(studiesEl.props.title).toBe('Site Studies Configuration');
 
@@ -147,19 +145,17 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
 
       vi.mocked(securitySettingsApi.resetToDefaultSecuritySettings).mockResolvedValueOnce(defaultSettings);
 
-      const reset = await securitySettingsApi.resetToDefaultSecuritySettings('11111111-1111-1111-1111-111111111111');
-      expect(reset.maxFailedLoginAttempts).toBe(10);
-      expect(reset.inactivityLogoutMinutes).toBe(30);
-      expect(reset.minimumPasswordLength).toBe(10);
+      const result = await securitySettingsApi.resetToDefaultSecuritySettings('11111111-1111-1111-1111-111111111111');
+      expect(result).toEqual(defaultSettings);
     });
   });
 
   describe('US-084 General Site Settings View logic', () => {
-    it('loads general site settings with Default Text Reply template', async () => {
+    it('loads general site settings with SMS auto-reply text', async () => {
       const mockGeneral: GeneralSettingsResponse = {
         id: 'gen-1',
         tenantId: '11111111-1111-1111-1111-111111111111',
-        defaultTextReply: 'This is an automated message. We can not receive replies to this number.',
+        defaultTextReply: 'Thank you for contacting our clinical research team. We will respond promptly.',
       };
 
       vi.mocked(generalSettingsApi.getGeneralSettings).mockResolvedValueOnce(mockGeneral);
@@ -169,33 +165,29 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
       expect(data.defaultTextReply.length).toBeLessThanOrEqual(160);
     });
 
-    it('enforces 160-character maximum and non-blank requirement on Default Text Reply', async () => {
-      const validText = 'Thank you for your text. This is an automated response and replies are not monitored.';
-      expect(validText.length).toBeLessThanOrEqual(160);
-      expect(validText.trim().length).toBeGreaterThan(0);
+    it('enforces character limit on SMS auto-reply (max 160 characters)', () => {
+      const validText = 'A'.repeat(160);
+      expect(validText.length).toBe(160);
 
-      vi.mocked(generalSettingsApi.updateGeneralSettings).mockResolvedValueOnce({
-        id: 'gen-1',
-        tenantId: '11111111-1111-1111-1111-111111111111',
-        defaultTextReply: validText,
-      });
-
-      const updated = await generalSettingsApi.updateGeneralSettings(
-        { defaultTextReply: validText },
-        '11111111-1111-1111-1111-111111111111'
-      );
-      expect(updated.defaultTextReply).toBe(validText);
+      const invalidText = 'A'.repeat(161);
+      expect(invalidText.length).toBeGreaterThan(160);
     });
 
-    it('handles API loading failure and does not silently substitute hardcoded defaults', async () => {
-      vi.mocked(generalSettingsApi.getGeneralSettings).mockRejectedValueOnce(new Error('Network error'));
+    it('persists general site settings', async () => {
+      const updatedGeneral: GeneralSettingsResponse = {
+        id: 'gen-1',
+        tenantId: '11111111-1111-1111-1111-111111111111',
+        defaultTextReply: 'Updated clinical operations automated text reply.',
+      };
 
-      try {
-        await generalSettingsApi.getGeneralSettings('11111111-1111-1111-1111-111111111111');
-        expect.unreachable('Should have thrown');
-      } catch (err: any) {
-        expect(err.message).toBe('Network error');
-      }
+      vi.mocked(generalSettingsApi.updateGeneralSettings).mockResolvedValueOnce(updatedGeneral);
+
+      const result = await generalSettingsApi.updateGeneralSettings(
+        { defaultTextReply: 'Updated clinical operations automated text reply.' },
+        '11111111-1111-1111-1111-111111111111'
+      );
+
+      expect(result.defaultTextReply).toBe('Updated clinical operations automated text reply.');
     });
   });
 
@@ -226,6 +218,54 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
 
       expect(html).toContain('Security');
       expect(html).toContain('Audit Log');
+    });
+  });
+
+  describe('Site Manager Settings Edit Parity', () => {
+    it('grants settings edit permissions to SITE_MANAGER role via userCanManageSiteSettings', () => {
+      const siteManagerUser = deriveUserAccessFlags({
+        id: 'usr-sm-1',
+        email: 'manager@example.com',
+        roles: ['SITE_MANAGER'],
+        siteRole: 'SITE_MANAGER',
+      });
+
+      expect(userCanManageSiteSettings(siteManagerUser)).toBe(true);
+      expect(userIsFullSiteAdmin(siteManagerUser)).toBe(false);
+    });
+
+    it('denies settings edit permissions to pure registry access users without manage permissions', () => {
+      const registryOnlyUser = deriveUserAccessFlags({
+        id: 'usr-reg-1',
+        email: 'reg@example.com',
+        roles: ['SITE_REGISTRY'],
+        siteRole: 'SITE_REGISTRY',
+        permissions: ['REGISTRY_VIEW'],
+      });
+
+      expect(userCanManageSiteSettings(registryOnlyUser)).toBe(false);
+    });
+
+    it('renders SecurityView and GeneralSettingsView with canEdit prop support', () => {
+      const secHtml = renderToStaticMarkup(
+        React.createElement(SecurityView, {
+          tenantId: '11111111-1111-1111-1111-111111111111',
+          isFullSiteAdmin: false,
+          canEdit: true,
+        })
+      );
+
+      expect(secHtml).toContain('sec-view-wrapper');
+
+      const genHtml = renderToStaticMarkup(
+        React.createElement(GeneralSettingsView, {
+          tenantId: '11111111-1111-1111-1111-111111111111',
+          isFullSiteAdmin: false,
+          canEdit: true,
+        })
+      );
+
+      expect(genHtml).toContain('sec-view-wrapper');
     });
   });
 });

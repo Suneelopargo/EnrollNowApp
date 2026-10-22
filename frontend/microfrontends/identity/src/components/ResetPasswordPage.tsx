@@ -227,13 +227,6 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
               />
             </>
           )}
-
-          {/* Success Banner */}
-          {successMessage && (
-            <div className="enl-activation-alert is-success" role="status">
-              {successMessage}
-            </div>
-          )}
         </form>
 
         {/* Set Password Submit Button */}

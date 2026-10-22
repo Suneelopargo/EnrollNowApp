@@ -23,6 +23,7 @@ import { ResetAllPasswordsModal } from './ResetAllPasswordsModal';
 export interface SecurityViewProps {
   tenantId?: string;
   isFullSiteAdmin?: boolean;
+  canEdit?: boolean;
 }
 
 type TimeUnit = 'days' | 'weeks' | 'months' | 'years';
@@ -119,7 +120,9 @@ function mapResponseToForm(resp: SecuritySettingsResponse): FormState {
 export const SecurityView: React.FC<SecurityViewProps> = ({
   tenantId,
   isFullSiteAdmin = true,
+  canEdit,
 }) => {
+  const isEditable = canEdit !== undefined ? canEdit : isFullSiteAdmin;
   const [formState, setFormState] = useState<FormState>({
     lockAfterNAttempts: 10,
     preventConcurrentSessions: false,
@@ -355,7 +358,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           )}
         </div>
 
-        {isFullSiteAdmin && (
+        {isEditable && (
           <button
             type="button"
             className="sec-btn-reset-top"
@@ -403,7 +406,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.lockAfterNAttempts ? 'is-invalid' : ''}`}
                     value={formState.lockAfterNAttempts}
                     onChange={(e) => updateField('lockAfterNAttempts', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <span className="sec-unit-suffix">attempts</span>
                 </div>
@@ -428,7 +431,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     type="checkbox"
                     checked={formState.preventConcurrentSessions}
                     onChange={(e) => updateField('preventConcurrentSessions', e.target.checked)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <span className="sec-toggle-slider" />
                 </label>
@@ -451,13 +454,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.logoutAfterValue ? 'is-invalid' : ''}`}
                     value={formState.logoutAfterValue}
                     onChange={(e) => updateField('logoutAfterValue', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <select
                     className="sec-dropdown-select"
                     value={formState.logoutAfterUnit}
                     onChange={(e) => updateField('logoutAfterUnit', e.target.value as LogoutUnit)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                     aria-label="Logout after inactivity unit"
                   >
                     {LOGOUT_UNIT_OPTIONS.map((opt) => (
@@ -488,13 +491,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.inactivityLockValue ? 'is-invalid' : ''}`}
                     value={formState.inactivityLockValue}
                     onChange={(e) => updateField('inactivityLockValue', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <select
                     className="sec-dropdown-select"
                     value={formState.inactivityLockUnit}
                     onChange={(e) => updateField('inactivityLockUnit', e.target.value as TimeUnit)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                     aria-label="Lock after inactivity unit"
                   >
                     {TIME_UNIT_OPTIONS.map((opt) => (
@@ -552,13 +555,13 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.passwordExpiryValue ? 'is-invalid' : ''}`}
                     value={formState.passwordExpiryValue}
                     onChange={(e) => updateField('passwordExpiryValue', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <select
                     className="sec-dropdown-select"
                     value={formState.passwordExpiryUnit}
                     onChange={(e) => updateField('passwordExpiryUnit', e.target.value as TimeUnit)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                     aria-label="Password expiration unit"
                   >
                     {TIME_UNIT_OPTIONS.map((opt) => (
@@ -590,7 +593,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.preventLastNPasswords ? 'is-invalid' : ''}`}
                     value={formState.preventLastNPasswords}
                     onChange={(e) => updateField('preventLastNPasswords', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                   <span className="sec-unit-suffix">previous passwords</span>
                 </div>
@@ -631,7 +634,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                     className={`sec-number-input ${errors.minimumPasswordLength ? 'is-invalid' : ''}`}
                     value={formState.minimumPasswordLength}
                     onChange={(e) => updateField('minimumPasswordLength', parseInt(e.target.value, 10) || 0)}
-                    disabled={!isFullSiteAdmin || saving}
+                    disabled={!isEditable || saving}
                   />
                 </div>
                 {errors.minimumPasswordLength && (
@@ -653,7 +656,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                   style={{ width: '220px' }}
                   value={formState.minimumPasswordStrength}
                   onChange={(e) => updateField('minimumPasswordStrength', e.target.value)}
-                  disabled={!isFullSiteAdmin || saving}
+                  disabled={!isEditable || saving}
                 >
                   {PASSWORD_STRENGTH_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -672,7 +675,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                       type="checkbox"
                       checked={formState.requireDigit}
                       onChange={(e) => updateField('requireDigit', e.target.checked)}
-                      disabled={!isFullSiteAdmin || saving}
+                      disabled={!isEditable || saving}
                       aria-label="Require at least one digit"
                     />
                     <span className="sec-toggle-slider" />
@@ -686,7 +689,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                       type="checkbox"
                       checked={formState.requireSymbol}
                       onChange={(e) => updateField('requireSymbol', e.target.checked)}
-                      disabled={!isFullSiteAdmin || saving}
+                      disabled={!isEditable || saving}
                       aria-label="Require at least one symbol"
                     />
                     <span className="sec-toggle-slider" />
@@ -700,7 +703,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                       type="checkbox"
                       checked={formState.requireMixedCase}
                       onChange={(e) => updateField('requireMixedCase', e.target.checked)}
-                      disabled={!isFullSiteAdmin || saving}
+                      disabled={!isEditable || saving}
                       aria-label="Require mixed case"
                     />
                     <span className="sec-toggle-slider" />
@@ -716,7 +719,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           <button
             type="submit"
             className="sec-btn-save-main"
-            disabled={!isDirty || saving || !isFullSiteAdmin}
+            disabled={!isDirty || saving || !isEditable}
           >
             <Save size={15} aria-hidden="true" />
             <span>{saving ? 'Saving...' : 'Save Settings'}</span>

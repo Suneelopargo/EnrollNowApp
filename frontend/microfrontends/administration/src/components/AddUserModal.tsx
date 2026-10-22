@@ -456,6 +456,33 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         }
         return;
       }
+    } else {
+      // Edit mode: validate firstName and lastName
+      setTouched((prev) => ({ ...prev, firstName: true, lastName: true }));
+      const editSchema = {
+        firstName: FORM_VALIDATION_SCHEMA.firstName,
+        lastName: FORM_VALIDATION_SCHEMA.lastName,
+      };
+      const validationErrors = validateForm(
+        { firstName, lastName },
+        editSchema
+      );
+
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        const fieldIds: Record<string, string> = {
+          firstName: 'site-admin-first-name',
+          lastName: 'site-admin-last-name',
+        };
+        const firstInvalid = ['firstName', 'lastName'].find(
+          (k) => validationErrors[k as keyof typeof validationErrors]
+        );
+        if (firstInvalid && fieldIds[firstInvalid]) {
+          const el = document.getElementById(fieldIds[firstInvalid]);
+          el?.focus();
+        }
+        return;
+      }
     }
 
     const assigned = studyRows
@@ -562,6 +589,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         className="btn site-admin-btn-save"
         onClick={handleSubmit}
         disabled={isSubmitting}
+        title="Save"
       >
         <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
         <span>{isSubmitting ? 'Saving...' : 'Save'}</span>
@@ -572,6 +600,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         className="btn site-admin-btn-resend"
         onClick={handleResendEnrollment}
         disabled={isSubmitting}
+        title="Resend Enroll Email"
       >
         <Send size={15} aria-hidden="true" />
         <span>Resend Enrollment Email</span>
@@ -582,6 +611,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         className="btn site-admin-btn-reset-pw"
         onClick={handleResetPassword}
         disabled={isSubmitting}
+        title="Reset the user's password"
       >
         <KeyRound size={15} aria-hidden="true" />
         <span>Reset Password</span>
@@ -593,6 +623,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           className="btn site-admin-btn-unlock"
           onClick={handleUnlockAccount}
           disabled={isSubmitting}
+          title="Unlock account"
         >
           <Lock size={15} aria-hidden="true" />
           <span>Unlock Account</span>
@@ -603,6 +634,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           className="btn site-admin-btn-lock"
           onClick={handleLockAccount}
           disabled={isSubmitting}
+          title="Lock account"
         >
           <Lock size={15} aria-hidden="true" />
           <span>Lock Account</span>
@@ -641,15 +673,64 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="site-admin-modal-form" noValidate>
         {isEditMode ? (
-          /* Edit User Mode Field Layout: Email (Static), Site Permissions */
+          /* Edit User Mode Field Layout: First Name, Last Name, Email (Static), Site Permissions */
           <div className="site-admin-form-grid">
             <div className="form-group">
+              <label className="form-label" htmlFor="site-admin-first-name">
+                First Name <span className="form-required-marker" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="site-admin-first-name"
+                type="text"
+                placeholder={!firstName && errors.firstName ? errors.firstName : 'Enter First Name'}
+                className="form-input"
+                value={firstName}
+                onChange={(e) => handleChange('firstName', e.target.value, setFirstName)}
+                onBlur={() => handleBlur('firstName')}
+                aria-invalid={!!errors.firstName}
+                aria-describedby={errors.firstName ? 'site-admin-first-name-error' : undefined}
+                required
+                aria-required="true"
+              />
+              {errors.firstName && (
+                <div id="site-admin-first-name-error" className="sr-only" role="alert">
+                  {errors.firstName}
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="site-admin-last-name">
+                Last Name <span className="form-required-marker" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="site-admin-last-name"
+                type="text"
+                placeholder={!lastName && errors.lastName ? errors.lastName : 'Enter Last Name'}
+                className="form-input"
+                value={lastName}
+                onChange={(e) => handleChange('lastName', e.target.value, setLastName)}
+                onBlur={() => handleBlur('lastName')}
+                aria-invalid={!!errors.lastName}
+                aria-describedby={errors.lastName ? 'site-admin-last-name-error' : undefined}
+                required
+                aria-required="true"
+              />
+              {errors.lastName && (
+                <div id="site-admin-last-name-error" className="sr-only" role="alert">
+                  {errors.lastName}
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
               <label className="form-label" htmlFor="site-admin-email-static">
-                Email <small className="text-muted">(Immutable per contract)</small>
+                Email
               </label>
               <input
                 id="site-admin-email-static"
                 type="email"
+                placeholder="Enter Email"
                 className="form-input"
                 value={email}
                 disabled

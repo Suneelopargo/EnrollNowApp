@@ -327,9 +327,9 @@ export const administrationApi = {
    * GET /api/v1/tenants/{tenantId}/users/{userId}/studies
    * Retrieves all active studies assigned to the user.
    */
-  async getUserStudies(userId: string | number, tenantId?: string): Promise<any[]> {
+  async getUserStudies(userId: string | number, tenantId?: string, config?: any): Promise<any[]> {
     const tid = resolveTenantId(tenantId);
-    const res = await apiClient.get(`/api/v1/tenants/${tid}/users/${userId}/studies`);
+    const res = await apiClient.get(`/api/v1/tenants/${tid}/users/${userId}/studies`, { skipToast: true, ...config });
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
@@ -409,9 +409,9 @@ export const administrationApi = {
    * GET /api/v1/tenants/{tenantId}/studies
    * Retrieves all active studies for the tenant from the backend.
    */
-  async getStudies(tenantId?: string): Promise<AvailableStudy[]> {
+  async getStudies(tenantId?: string, config?: any): Promise<AvailableStudy[]> {
     const tid = resolveTenantId(tenantId);
-    const res = await apiClient.get<AvailableStudy[]>(`/api/v1/tenants/${tid}/studies`);
+    const res = await apiClient.get<AvailableStudy[]>(`/api/v1/tenants/${tid}/studies`, { skipToast: true, ...config });
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 

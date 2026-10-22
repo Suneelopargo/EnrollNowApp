@@ -602,20 +602,6 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
       </div>
 
       <div className="site-admin-users-card-body">
-        {error && (
-          <div className="site-admin-error-banner" role="alert">
-            <div className="site-admin-error-msg">
-              <strong>Backend Integration Error:</strong>
-              <span>{error}</span>
-            </div>
-            {onRetry && (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
-                Retry
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Global DataGrid */}
         <DataGrid
           loading={loading}

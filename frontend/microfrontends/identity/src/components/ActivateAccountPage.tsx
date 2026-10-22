@@ -276,13 +276,6 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
               />
             </>
           )}
-
-          {/* Success Banner */}
-          {successMessage && (
-            <div className="enl-activation-alert is-success" role="status">
-              {successMessage}
-            </div>
-          )}
         </form>
 
         {/* Set Password Submit Button */}

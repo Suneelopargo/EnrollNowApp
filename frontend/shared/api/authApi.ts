@@ -90,7 +90,9 @@ const CANONICAL_ROLE_PERMISSIONS: Record<string, string[]> = {
     'SITE_USERS_VIEW',
     'SITE_USERS_MANAGE',
     'SITE_IMPORT_EXPORT',
+    'SITE_SECURITY_MANAGE',
     'SITE_SETTINGS_VIEW',
+    'SITE_SETTINGS_MANAGE',
   ],
   SITE_REGISTRY: [
     'REGISTRY_VIEW',
@@ -289,6 +291,19 @@ export function userIsFullSiteAdmin(user: AuthUser | null | undefined): boolean 
     userHasRole(user, 'ROLE_SUPER_ADMIN') ||
     userHasRole(user, 'ADMIN') ||
     Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_ADMIN_USERS_MANAGE'))
+  );
+}
+
+export function userCanManageSiteSettings(user: AuthUser | null | undefined): boolean {
+  if (!user) return false;
+  return (
+    userIsFullSiteAdmin(user) ||
+    userHasRole(user, 'SITE_ADMIN') ||
+    userHasRole(user, 'SITE_MANAGER') ||
+    userHasRole(user, 'ROLE_SUPER_ADMIN') ||
+    userHasRole(user, 'ADMIN') ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_SECURITY_MANAGE')) ||
+    Boolean(user.permissions?.some((p) => p.toUpperCase() === 'SITE_SETTINGS_MANAGE'))
   );
 }
 

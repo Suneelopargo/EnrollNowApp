@@ -35,9 +35,9 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       setLoading(true);
       try {
         const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
-          apiClient.get('/api/v1/studies'),
-          apiClient.get('/api/v1/dashboard/overview'),
-          apiClient.get('/api/v1/participants'),
+          apiClient.get('/api/v1/studies', { skipToast: true } as any),
+          apiClient.get('/api/v1/dashboard/overview', { skipToast: true } as any),
+          apiClient.get('/api/v1/participants', { skipToast: true } as any),
         ]);
         const registryStudies = studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value.data?.data)
           ? studiesRes.value.data.data

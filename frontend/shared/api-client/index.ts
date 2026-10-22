@@ -416,9 +416,9 @@ export function attachInterceptors(instance: AxiosInstance, options: CreateApiCl
         Boolean((error as any)?.skipToast) ||
         Boolean((error as any)?.config?.skipToast) ||
         headerSkip;
-      if (!skipToast && !isLoginRequest) {
+      if (!skipToast) {
         toast.error(normalized.message, {
-          title: normalized.code || `Error (${normalized.status || 'Network'})`,
+          title: isLoginRequest ? undefined : (normalized.code || `Error (${normalized.status || 'Network'})`),
         });
       }
 

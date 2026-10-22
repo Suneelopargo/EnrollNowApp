@@ -57,6 +57,19 @@ export const mockAuthApi = {
       );
     }
 
+    if (
+      (userRecord.user as any)?.status === 'Inactive' ||
+      (userRecord.user as any)?.status === 'Disabled' ||
+      (userRecord as any).disabled
+    ) {
+      return createMockErrorResponse(
+        config,
+        403,
+        'Your account has been temporarily disabled. Please contact the EnrollNow administrator at your institution to enable it. If you are a Site Administrator, please contact EnrollNow customer support to get your account unlocked.',
+        'ACCOUNT_DISABLED'
+      );
+    }
+
     const responseData = {
       accessToken: userRecord.token,
       token: userRecord.token,

@@ -16,12 +16,15 @@ import { toast } from '../../../../shared/toaster';
 export interface GeneralSettingsViewProps {
   tenantId?: string;
   isFullSiteAdmin?: boolean;
+  canEdit?: boolean;
 }
 
 export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
   tenantId,
   isFullSiteAdmin = true,
+  canEdit,
 }) => {
+  const isEditable = canEdit !== undefined ? canEdit : isFullSiteAdmin;
   const [defaultTextReply, setDefaultTextReply] = useState<string>('');
   const [savedReply, setSavedReply] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -164,7 +167,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
               placeholder="Default response must not be blank"
               value={defaultTextReply}
               onChange={handleChange}
-              disabled={!isFullSiteAdmin || saving}
+              disabled={!isEditable || saving}
               aria-invalid={!!validationError}
               aria-describedby="default-text-reply-help default-text-reply-error"
             />
@@ -198,7 +201,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
             <button
               type="submit"
               className="sec-btn-save-main"
-              disabled={!isDirty || saving || !defaultTextReply.trim() || !isFullSiteAdmin}
+              disabled={!isDirty || saving || !defaultTextReply.trim() || !isEditable}
             >
               <Save size={15} aria-hidden="true" />
               <span>{saving ? 'Saving...' : 'Save Settings'}</span>
