@@ -1,2 +1,5 @@
 uploads/
-docs/
+docs/*
+!docs/engineering/
+!docs/qa/
+!docs/*.md

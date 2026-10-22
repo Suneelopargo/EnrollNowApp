@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.security.core.AuthenticationException;
@@ -34,18 +33,19 @@ public class GlobalExceptionHandler {
             code = "ACCOUNT_INACTIVE";
             message = "Account is inactive or disabled. Contact system administrator.";
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiResponse.error(new ApiError(code, message)));
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), code, message));
         }
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error(new ApiError(code, message)));
+                .body(ApiResponse.error(HttpStatus.UNAUTHORIZED.value(), code, message));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(AccessDeniedException ex) {
         log.warn("Access denied: {}", ex.getMessage());
+        String msg = ex.getMessage() != null ? ex.getMessage() : "Access denied: You do not have permission to access this resource";
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error(new ApiError("ACCESS_DENIED", "Access denied: You do not have permission to access this resource")));
+                .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "ACCESS_DENIED", msg));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -55,28 +55,29 @@ public class GlobalExceptionHandler {
             details.add(error.getField() + ": " + error.getDefaultMessage());
         }
         log.warn("Validation error: {}", details);
+        ApiError apiError = new ApiError("VALIDATION_ERROR", "Validation failed for one or more fields", details);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiResponse.error(new ApiError("VALIDATION_ERROR", "Validation failed for one or more fields", details)));
+                .body(ApiResponse.error(HttpStatus.UNPROCESSABLE_ENTITY.value(), apiError));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.warn("Illegal argument: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(new ApiError("BAD_REQUEST", ex.getMessage())));
+                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "BAD_REQUEST", ex.getMessage()));
     }
 
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error(new ApiError("NOT_FOUND", ex.getMessage())));
+                .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "NOT_FOUND", ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         log.error("Unhandled internal server error occurred", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(new ApiError("INTERNAL_SERVER_ERROR", "An unexpected error occurred. Please contact administrator.")));
+                .body(ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_SERVER_ERROR", "An unexpected error occurred. Please contact administrator."));
     }
 }

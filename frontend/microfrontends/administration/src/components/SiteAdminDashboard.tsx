@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation } from '../../../../shared/confirmation';
-import { apiClient } from '../../../../shared/api-client';
+import { getApiErrorMessage, getStoredAuthUser } from '../../../../shared/api-client';
+import { organizationApi } from '../../../../shared/api/organizationApi';
 import { MfeContext, AuthUser } from '../../../../shared/contracts';
 import { deriveUserAccessFlags, userIsFullSiteAdmin, userCanManageSiteSettings } from '../../../../shared/api/authApi';
 import {
@@ -44,15 +45,8 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
     if (context?.user) {
       return deriveUserAccessFlags(context.user);
     }
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const raw = localStorage.getItem('enrollnow_user');
-        return raw ? deriveUserAccessFlags(JSON.parse(raw)) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
+    const stored = getStoredAuthUser<AuthUser>();
+    return stored ? deriveUserAccessFlags(stored) : null;
   }, [context?.user]);
 
   const isFullSiteAdmin = useMemo(() => {
@@ -85,11 +79,10 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
       return;
     }
     let mounted = true;
-    apiClient
-      .get<any>('/api/v1/sites', { skipToast: true } as any)
-      .then((res) => {
+    organizationApi
+      .getSites({ skipToast: true } as any)
+      .then((list) => {
         if (!mounted) return;
-        const list = Array.isArray(res?.data) ? res.data : res?.data?.data;
         if (Array.isArray(list) && list.length > 0 && list[0]?.id) {
           setDefaultSiteId(String(list[0].id));
         }
@@ -160,10 +153,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
         setUsers([]);
       }
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to load user directory from backend.';
+      const msg = getApiErrorMessage(err, 'Failed to load user directory from backend.');
       setUsersError(msg);
       setUsers([]);
       toast.error(msg, { title: 'User Directory Error' });
@@ -249,7 +239,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
                 });
               } catch (siteErr: any) {
                 console.error('Failed to update site permission:', siteErr);
-                const sMsg = siteErr?.response?.data?.message || siteErr?.message || 'Access error';
+                const sMsg = getApiErrorMessage(siteErr, 'Access error');
                 toast.warning(`Site permission '${newSitePerm}' could not be updated: ${sMsg}`);
               }
             }
@@ -265,7 +255,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
                 });
               } catch (studyErr: any) {
                 console.error(`Failed to assign study ${s.studyName}:`, studyErr);
-                const sMsg = studyErr?.response?.data?.message || studyErr?.message || 'Access error';
+                const sMsg = getApiErrorMessage(studyErr, 'Access error');
                 toast.warning(`Study access to '${s.studyName}' could not be granted: ${sMsg}`);
               }
             }
@@ -290,7 +280,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
           setUserToEdit(null);
         } catch (err: any) {
           const status = err?.response?.status;
-          const rawMsg = err?.response?.data?.message || err?.message || '';
+          const rawMsg = getApiErrorMessage(err, '');
           const isEmailConflict =
             status === 409 ||
             rawMsg.toLowerCase().includes('already exist') ||
@@ -331,7 +321,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
                 });
               } catch (siteErr: any) {
                 console.error('Failed to assign site permission:', siteErr);
-                const sMsg = siteErr?.response?.data?.message || siteErr?.message || 'Access error';
+                const sMsg = getApiErrorMessage(siteErr, 'Access error');
                 toast.warning(`User created, but site permission '${sitePerm}' could not be granted: ${sMsg}`);
               }
             }
@@ -347,7 +337,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
                 });
               } catch (studyErr: any) {
                 console.error(`Failed to assign study ${s.studyName}:`, studyErr);
-                const sMsg = studyErr?.response?.data?.message || studyErr?.message || 'Access error';
+                const sMsg = getApiErrorMessage(studyErr, 'Access error');
                 toast.warning(`User created, but study access to '${s.studyName}' could not be granted: ${sMsg}`);
               }
             }
@@ -361,7 +351,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
               invitationSent = true;
             } catch (invErr: any) {
               console.error('Failed to send invitation email:', invErr);
-              const invMsg = invErr?.response?.data?.message || invErr?.message || 'Email delivery failed.';
+              const invMsg = getApiErrorMessage(invErr, 'Email delivery failed.');
               toast.warning(`User created, but invitation email could not be sent: ${invMsg}`);
             }
           }
@@ -376,7 +366,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
           setUserToEdit(null);
         } catch (err: any) {
           const status = err?.response?.status;
-          const rawMsg = err?.response?.data?.message || err?.message || '';
+          const rawMsg = getApiErrorMessage(err, '');
           const isEmailConflict =
             status === 409 ||
             rawMsg.toLowerCase().includes('already exist') ||
@@ -405,7 +395,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
         setIsAddUserModalOpen(false);
         setUserToEdit(null);
       } catch (err: any) {
-        const msg = err?.response?.data?.message || err?.message || 'Failed to deactivate user.';
+        const msg = getApiErrorMessage(err, 'Failed to deactivate user.');
         toast.error(msg, { title: 'Lock Failed' });
       }
     },
@@ -421,7 +411,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
         setIsAddUserModalOpen(false);
         setUserToEdit(null);
       } catch (err: any) {
-        const msg = err?.response?.data?.message || err?.message || 'Failed to unlock user.';
+        const msg = getApiErrorMessage(err, 'Failed to unlock user.');
         toast.error(msg, { title: 'Unlock Failed' });
       }
     },
@@ -433,10 +423,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
       await administrationApi.sendUserInvitation(user.id);
       toast.success(`Enrollment invitation sent to ${user.email}.`);
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to send enrollment invitation.';
+      const msg = getApiErrorMessage(err, 'Failed to send enrollment invitation.');
       toast.error(msg, { title: 'Invitation Failed' });
     }
   }, []);
@@ -446,10 +433,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
       await administrationApi.requestPasswordReset(user.email);
       toast.success(`Password reset instructions sent to ${user.email}.`);
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to send password reset request.';
+      const msg = getApiErrorMessage(err, 'Failed to send password reset request.');
       toast.error(msg, { title: 'Reset Failed' });
     }
   }, []);
@@ -469,10 +453,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
             await fetchUsers(true);
             toast.warning(`User '${user.name}' deactivated (status: Disabled).`);
           } catch (err: any) {
-            const msg =
-              err?.response?.data?.message ||
-              err?.message ||
-              'Failed to deactivate user.';
+            const msg = getApiErrorMessage(err, 'Failed to deactivate user.');
             toast.error(msg, { title: 'Deactivation Failed' });
           }
         },
@@ -499,10 +480,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
               await fetchUsers(true);
               toast.warning(`User account for '${user.name}' has been locked.`);
             } catch (err: any) {
-              const msg =
-                err?.response?.data?.message ||
-                err?.message ||
-                'Failed to lock user.';
+              const msg = getApiErrorMessage(err, 'Failed to lock user.');
               toast.error(msg, { title: 'Lock Failed' });
             }
           },
@@ -522,10 +500,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
               await fetchUsers(true);
               toast.success(`User '${user.name}' has been unlocked.`);
             } catch (err: any) {
-              const msg =
-                err?.response?.data?.message ||
-                err?.message ||
-                'Failed to unlock user.';
+              const msg = getApiErrorMessage(err, 'Failed to unlock user.');
               toast.error(msg, { title: 'Unlock Failed' });
             }
           },

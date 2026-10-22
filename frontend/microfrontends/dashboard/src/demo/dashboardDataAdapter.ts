@@ -1,5 +1,7 @@
 // frontend/microfrontends/dashboard/src/demo/dashboardDataAdapter.ts - Centralized Dashboard Data Provider & Demo Adapter
 import { apiClient } from '../../../../shared/api-client';
+import { studyApi } from '../../../../shared/api/studyApi';
+import { participantApi } from '../../../../shared/api/participantApi';
 import demoData from './dashboard-demo-data.json';
 
 export type DashboardDataMode = 'demo' | 'live' | 'coming_soon' | 'error';
@@ -131,10 +133,7 @@ export async function loadDashboardData(): Promise<DashboardDataResult> {
 
     // Fetch tenant studies to complement overview if available
     try {
-      const studiesRes = await apiClient.get('/api/v1/studies', { skipToast: true } as any);
-      const allStudies = Array.isArray(studiesRes.data)
-        ? studiesRes.data
-        : (studiesRes.data?.data || []);
+      const allStudies = await studyApi.getStudies({ skipToast: true } as any);
 
       if (Array.isArray(allStudies) && allStudies.length > 0) {
         const overviewById = new Map<string, any>();
@@ -176,10 +175,7 @@ export async function loadDashboardData(): Promise<DashboardDataResult> {
     // Fetch participants for drill-down
     let participants: any[] = [];
     try {
-      const participantsRes = await apiClient.get('/api/v1/participants', { skipToast: true } as any);
-      participants = Array.isArray(participantsRes.data?.data)
-        ? participantsRes.data.data
-        : (Array.isArray(participantsRes.data) ? participantsRes.data : []);
+      participants = await participantApi.getParticipants({ skipToast: true } as any);
     } catch {
       participants = [];
     }

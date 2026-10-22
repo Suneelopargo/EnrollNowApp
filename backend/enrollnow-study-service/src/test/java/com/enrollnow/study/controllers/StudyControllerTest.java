@@ -77,6 +77,41 @@ class StudyControllerTest {
     }
 
     @Test
+    void getStudies_withTenantIdInPath_nonSiteAdmin_filtersToAssignedStudies() {
+        UserEffectivePermissionsResponse effective = new UserEffectivePermissionsResponse();
+        effective.setUserId(userId);
+        effective.setSiteRole("SITE_MANAGER");
+        effective.setCanManageSiteAdmins(false);
+        when(siteAuthorizationService.getCallerEffectivePermissions(tenantId, null)).thenReturn(Optional.of(effective));
+
+        Study study1 = new Study();
+        study1.setId(studyId);
+        study1.setStudyCode("REG_AD_MCI");
+        study1.setName("REG - AD/MCI");
+        study1.setArchived(false);
+
+        Study study2 = new Study();
+        study2.setId(otherStudyId);
+        study2.setStudyCode("REG_HIV");
+        study2.setName("REG - HIV");
+        study2.setArchived(false);
+
+        when(studyRepository.findByTenantIdAndArchivedFalse(tenantId)).thenReturn(List.of(study1, study2));
+
+        MyStudyResponse assigned = new MyStudyResponse(studyId, "REG_AD_MCI", "REG - AD/MCI", "Coordinator", "STUDY_ADMIN");
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+
+        ResponseEntity<ApiResponse<List<StudySummaryResponse>>> response =
+                studyController.getStudies(tenantId, false);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(1, response.getBody().getData().size());
+        assertEquals("REG_AD_MCI", response.getBody().getData().get(0).getStudyCode());
+        verify(siteAuthorizationService).requireTenantMatch(tenantId);
+    }
+
+    @Test
     void getStudies_withoutTenantIdInPath_resolvesCallerTenantFromAuthContext() {
         SiteAuthorizationService.CallerIdentity caller =
                 new SiteAuthorizationService.CallerIdentity(userId, tenantId);

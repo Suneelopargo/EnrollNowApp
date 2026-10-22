@@ -46,6 +46,7 @@ public class GeneralSettingsController {
 
     private UUID resolveTenantId(UUID pathTenantId) {
         if (pathTenantId != null) {
+            siteAuthorizationService.requireTenantMatch(pathTenantId);
             return pathTenantId;
         }
         return siteAuthorizationService.getAuthenticatedCaller()

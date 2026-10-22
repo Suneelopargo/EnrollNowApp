@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Survey } from '../types/survey';
 import { surveyApi } from '../api/surveyApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { Step1Metadata } from './Step1Metadata';
 import { Step2AiTemplates } from './Step2AiTemplates';
 import { Step3Design } from './Step3Design';
@@ -127,7 +128,7 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
       }, 1500);
     } catch (err: any) {
       console.error('Failed to save survey', err);
-      setErrorMessage(err?.response?.data?.message || 'Failed to save survey.');
+      setErrorMessage(getApiErrorMessage(err, 'Failed to save survey.'));
     } finally {
       setIsSaving(false);
     }
@@ -159,9 +160,10 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
             <button
               type="button"
               onClick={onCancel}
+              aria-label="Back to surveys"
               className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} aria-hidden="true" />
             </button>
           )}
           <div>
@@ -198,12 +200,12 @@ export const SurveyBuilder: React.FC<SurveyBuilderProps> = ({
 
       {/* Notifications */}
       {errorMessage && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
+        <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
           {errorMessage}
         </div>
       )}
       {successMessage && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-medium">
+        <div role="status" className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-medium">
           {successMessage}
         </div>
       )}

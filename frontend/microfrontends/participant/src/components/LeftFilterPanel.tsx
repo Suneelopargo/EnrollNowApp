@@ -46,16 +46,20 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
     >
       {/* Filter 1: Participant can be contacted for future studies? */}
       <div className="flex flex-col gap-1.5">
-        <label
+        <span
+          id="participant-contact-filter-label"
           className="text-xs font-medium text-gray-700 leading-tight filter-group-label"
         >
           Participant can be contacted for future studies?
-        </label>
+        </span>
         <div
+          role="group"
+          aria-labelledby="participant-contact-filter-label"
           className="grid grid-cols-3 rounded border border-gray-300 text-xs overflow-hidden segmented-control-grid"
         >
           <button
             type="button"
+            aria-pressed={contactFilter === 'all'}
             onClick={() => setContactFilter('all')}
             className={`segmented-btn ${contactFilter === 'all' ? 'active' : ''}`}
           >
@@ -63,6 +67,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={contactFilter === 'yes'}
             onClick={() => setContactFilter('yes')}
             className={`segmented-btn ${contactFilter === 'yes' ? 'active' : ''}`}
           >
@@ -70,6 +75,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={contactFilter === 'no'}
             onClick={() => setContactFilter('no')}
             className={`segmented-btn ${contactFilter === 'no' ? 'active' : ''}`}
           >
@@ -80,16 +86,20 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
 
       {/* Filter 2: Participant available to add to study? */}
       <div className="flex flex-col gap-1.5">
-        <label
+        <span
+          id="participant-available-filter-label"
           className="text-xs font-medium text-gray-700 leading-tight filter-group-label"
         >
           Participant available to add to study?
-        </label>
+        </span>
         <div
+          role="group"
+          aria-labelledby="participant-available-filter-label"
           className="grid grid-cols-3 rounded border border-gray-300 text-xs overflow-hidden segmented-control-grid"
         >
           <button
             type="button"
+            aria-pressed={availableFilter === 'all'}
             onClick={() => setAvailableFilter('all')}
             className={`segmented-btn ${availableFilter === 'all' ? 'active' : ''}`}
           >
@@ -97,6 +107,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={availableFilter === 'yes'}
             onClick={() => setAvailableFilter('yes')}
             className={`segmented-btn ${availableFilter === 'yes' ? 'active' : ''}`}
           >
@@ -104,6 +115,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
           </button>
           <button
             type="button"
+            aria-pressed={availableFilter === 'no'}
             onClick={() => setAvailableFilter('no')}
             className={`segmented-btn ${availableFilter === 'no' ? 'active' : ''}`}
           >
@@ -195,8 +207,9 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
                   }}
                   className="btn-delete-saved"
                   title="Delete saved search"
+                  aria-label={`Delete saved search ${search.name}`}
                 >
-                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                  <Trash2 className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />
                 </button>
               </div>
             ))}

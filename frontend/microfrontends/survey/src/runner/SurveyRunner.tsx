@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Survey } from '../types/survey';
 import { QuestionRenderer } from './QuestionRenderer';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { CheckCircle2, ChevronRight, ChevronLeft, Send, ShieldCheck } from 'lucide-react';
 
 export interface SurveyRunnerProps {
@@ -137,7 +138,7 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({
       await onSubmit(payload, userEmail || undefined);
       setIsCompleted(true);
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.message || err.message || 'Failed to submit survey.');
+      setErrorMessage(getApiErrorMessage(err, 'Failed to submit survey.'));
     } finally {
       setIsSubmitting(false);
     }

@@ -10,6 +10,7 @@ import { DataTable } from '../../../shared/design-system/components/DataTable';
 import { DataGrid, type ColDef, type GridApi } from '../../../shared/design-system/components/DataGrid';
 import { StatusBadge } from '../../../shared/design-system/components/StatusBadge';
 import { ComingSoon } from '../../../shared/design-system/components/ComingSoon';
+import { useFocusTrap } from '../../../shared/accessibility/useFocusTrap';
 import {
   loadDashboardData,
   isDashboardDemoMode,
@@ -176,15 +177,6 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
     };
   }, [retryTrigger]);
 
-  useEffect(() => {
-    if (!selectedDrilldown) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedDrilldown(null);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [selectedDrilldown]);
-
   const openDrilldown = (chart: 'status' | 'phase' | 'participants', key: string) => {
     setQuickSearch('');
     setGridApi(null);
@@ -197,6 +189,11 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
     setQuickSearch('');
     setExportMenuOpen(false);
   };
+
+  const drilldownModalRef = useFocusTrap<HTMLElement>({
+    active: Boolean(selectedDrilldown),
+    onEscape: closeDrilldown,
+  });
 
   const dashboardStudies = recentStudies;
   const studyProgress = dashboardStudies.slice(0, 4).map((study) => {
@@ -621,6 +618,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
               if (event.target === event.currentTarget) closeDrilldown();
             }}>
               <section
+                ref={drilldownModalRef}
                 className="executive-drilldown-modal"
                 role="dialog"
                 aria-modal="true"
@@ -779,7 +777,15 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
               <div className="quick-launch-grid">
                 <div
                   className="card quick-launch-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => context.navigate('/participants')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      context.navigate('/participants');
+                    }
+                  }}
                 >
                   <div className="quick-launch-title launch-blue">
                     <Users size={18} />
@@ -790,7 +796,15 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
 
                 <div
                   className="card quick-launch-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => context.navigate('/recruitment')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      context.navigate('/recruitment');
+                    }
+                  }}
                 >
                   <div className="quick-launch-title launch-green">
                     <Activity size={18} />
@@ -801,7 +815,15 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
 
                 <div
                   className="card quick-launch-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => context.navigate('/surveys')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      context.navigate('/surveys');
+                    }
+                  }}
                 >
                   <div className="quick-launch-title launch-cyan">
                     <FileText size={18} />
@@ -812,7 +834,15 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
 
                 <div
                   className="card quick-launch-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => context.navigate('/organization')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      context.navigate('/organization');
+                    }
+                  }}
                 >
                   <div className="quick-launch-title launch-yellow">
                     <Building size={18} />

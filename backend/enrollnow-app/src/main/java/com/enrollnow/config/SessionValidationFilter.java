@@ -1,13 +1,16 @@
 package com.enrollnow.config;
 
+import com.enrollnow.common.core.ApiResponse;
 import com.enrollnow.identity.exceptions.SessionRevokedException;
 import com.enrollnow.identity.services.SessionValidationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -21,11 +24,20 @@ import java.util.UUID;
 public class SessionValidationFilter extends OncePerRequestFilter {
 
     private final SessionValidationService sessionValidationService;
+    private final ObjectMapper objectMapper;
 
     public SessionValidationFilter(
             SessionValidationService sessionValidationService) {
+        this(sessionValidationService, new ObjectMapper());
+    }
+
+    @Autowired
+    public SessionValidationFilter(
+            SessionValidationService sessionValidationService,
+            @Autowired(required = false) ObjectMapper objectMapper) {
 
         this.sessionValidationService = sessionValidationService;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     @Override
@@ -81,14 +93,6 @@ public class SessionValidationFilter extends OncePerRequestFilter {
 
                 } catch (SessionRevokedException ex) {
 
-                    response.setStatus(
-                            HttpServletResponse.SC_UNAUTHORIZED
-                    );
-
-                    response.setContentType(
-                            "application/json"
-                    );
-
                     String reason = ex.getReason() != null ? ex.getReason() : "REVOKED";
                     String message = "NEW_LOGIN".equals(reason)
                             ? "Your session has ended because your account was logged in from another browser or device."
@@ -98,34 +102,22 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                             ? "A password reset is required for your account. Please check your email or use Forgot Password."
                             : "Session has expired or was revoked."));
 
-                    response.getWriter().write(String.format("""
-                            {
-                              "error": "Unauthorized",
-                              "message": "%s",
-                              "reason": "%s"
-                            }
-                            """, message, reason));
+                    writeUnauthorizedResponse(
+                            response,
+                            "SESSION_REVOKED",
+                            message,
+                            reason
+                    );
 
                     return;
 
                 } catch (Exception ex) {
 
-                    response.setStatus(
-                            HttpServletResponse.SC_UNAUTHORIZED
-                    );
-
-                    response.setContentType(
-                            "application/json"
-                    );
-
-                    response.getWriter().write(
-                            """
-                            {
-                              "error": "Unauthorized",
-                              "message": "Session is invalid, expired, or revoked",
-                              "reason": "INVALID_SESSION"
-                            }
-                            """
+                    writeUnauthorizedResponse(
+                            response,
+                            "INVALID_SESSION",
+                            "Session is invalid, expired, or revoked",
+                            "INVALID_SESSION"
                     );
 
                     return;
@@ -137,5 +129,22 @@ public class SessionValidationFilter extends OncePerRequestFilter {
                 request,
                 response
         );
+    }
+
+    private void writeUnauthorizedResponse(
+            HttpServletResponse response,
+            String code,
+            String message,
+            String reason) throws IOException {
+
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        ApiResponse<Void> body = ApiResponse.error(
+                HttpServletResponse.SC_UNAUTHORIZED,
+                code,
+                message,
+                reason
+        );
+        response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }

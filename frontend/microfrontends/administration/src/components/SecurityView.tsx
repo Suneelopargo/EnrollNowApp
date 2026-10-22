@@ -16,6 +16,7 @@ import {
   securitySettingsApi,
   SecuritySettingsResponse,
 } from '../../../../shared/api/securitySettingsApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { toast } from '../../../../shared/toaster';
 import { confirmation } from '../../../../shared/confirmation';
 
@@ -155,7 +156,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
       setIsDirty(false);
       setErrors({});
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to load security settings';
+      const msg = getApiErrorMessage(err, 'Failed to load security settings');
       toast.error(msg, { title: 'Security Settings Error' });
     } finally {
       setLoading(false);
@@ -274,8 +275,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
                 res.message || 'All passwords reset! Reset links have been emailed to affected users.'
               );
             } catch (err: any) {
-              const msg =
-                err?.response?.data?.message || err?.message || 'Failed to force reset passwords';
+              const msg = getApiErrorMessage(err, 'Failed to force reset passwords');
               toast.error(msg, { title: 'Force Reset Failed' });
               throw err;
             }
@@ -286,7 +286,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
         });
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save security settings';
+      const msg = getApiErrorMessage(err, 'Failed to save security settings');
       toast.error(msg, { title: 'Save Failed' });
     } finally {
       setSaving(false);
@@ -329,7 +329,7 @@ export const SecurityView: React.FC<SecurityViewProps> = ({
           }
           toast.success('Security settings reset to recommended defaults.');
         } catch (err: any) {
-          const msg = err?.response?.data?.message || err?.message || 'Failed to reset settings';
+          const msg = getApiErrorMessage(err, 'Failed to reset settings');
           toast.error(msg, { title: 'Reset Failed' });
           throw err;
         } finally {

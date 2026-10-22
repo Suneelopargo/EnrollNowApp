@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Survey } from '../types/survey';
 import { SURVEY_TEMPLATES } from '../constants/templates';
 import { surveyApi } from '../api/surveyApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 
 interface Step2AiTemplatesProps {
   onApplyTemplate: (templateData: Partial<Survey>) => void;
@@ -27,7 +28,7 @@ export const Step2AiTemplates: React.FC<Step2AiTemplatesProps> = ({ onApplyTempl
       });
     } catch (err: any) {
       console.error('Failed to generate survey with AI:', err);
-      setError(err?.response?.data?.message || 'Failed to generate survey. Please try again.');
+      setError(getApiErrorMessage(err, 'Failed to generate survey. Please try again.'));
     } finally {
       setIsGenerating(false);
     }
@@ -57,10 +58,11 @@ export const Step2AiTemplates: React.FC<Step2AiTemplatesProps> = ({ onApplyTempl
             rows={3}
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
+            aria-label="AI clinical survey prompt"
             placeholder="e.g. Create a 10-question oncology patient reported outcome survey evaluating treatment tolerability, nausea, fatigue Likert scale, and conditional questions for severe pain..."
             className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end">
             <button
               type="button"

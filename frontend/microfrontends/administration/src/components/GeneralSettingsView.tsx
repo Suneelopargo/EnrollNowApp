@@ -11,6 +11,7 @@ import {
 import {
   generalSettingsApi,
 } from '../../../../shared/api/generalSettingsApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { toast } from '../../../../shared/toaster';
 
 export interface GeneralSettingsViewProps {
@@ -42,7 +43,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
       setIsDirty(false);
       setValidationError(null);
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to load general settings';
+      const msg = getApiErrorMessage(err, 'Failed to load general settings');
       toast.error(msg, { title: 'General Settings Error' });
     } finally {
       setLoading(false);
@@ -94,7 +95,7 @@ export const GeneralSettingsView: React.FC<GeneralSettingsViewProps> = ({
       setValidationError(null);
       toast.success('General site settings saved successfully.');
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save settings';
+      const msg = getApiErrorMessage(err, 'Failed to save settings');
       toast.error(msg, { title: 'Save Failed' });
     } finally {
       setSaving(false);

@@ -21,6 +21,10 @@ public interface UserRoleAssignmentRepository
             UUID userId
     );
 
+    List<UserRoleAssignment> findByTenantIdAndActiveTrue(
+            UUID tenantId
+    );
+
     List<UserRoleAssignment> findByTenantIdAndSiteIdAndActiveTrue(
             UUID tenantId,
             UUID siteId
@@ -66,8 +70,6 @@ public interface UserRoleAssignmentRepository
             UUID roleId,
             UUID siteId
     );
-
-
 
     boolean existsByTenantIdAndUserIdAndRoleIdAndSiteIdIsNullAndTeamIdIsNullAndStudyIdIsNullAndActiveTrue(
             UUID tenantId,

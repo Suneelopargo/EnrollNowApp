@@ -1,5 +1,6 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.common.security.SecurityTokenHelper;
 import com.enrollnow.identity.exceptions.SessionRevokedException;
 import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.models.UserSecurityState;
@@ -12,11 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
-import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -65,7 +62,7 @@ public class SessionValidationService {
             UUID userId,
             boolean touchActivity) {
 
-        String tokenHash = hashToken(rawAccessToken);
+        String tokenHash = SecurityTokenHelper.hashToken(rawAccessToken);
 
         UserSession session =
                 userSessionRepository
@@ -173,29 +170,6 @@ public class SessionValidationService {
         if (touchActivity) {
             session.setLastActivityAt(now);
             userSessionRepository.save(session);
-        }
-    }
-
-    private String hashToken(String token) {
-
-        try {
-
-            MessageDigest digest =
-                    MessageDigest.getInstance("SHA-256");
-
-            byte[] hash =
-                    digest.digest(
-                            token.getBytes(StandardCharsets.UTF_8)
-                    );
-
-            return HexFormat.of().formatHex(hash);
-
-        } catch (NoSuchAlgorithmException ex) {
-
-            throw new IllegalStateException(
-                    "SHA-256 is not available",
-                    ex
-            );
         }
     }
 }

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
 import { validateForm, validators } from '../../../../shared/design-system/validation';
 import { ParticipantRecord } from '../types/participant';
 
@@ -109,32 +110,28 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
       )}
     >
       <form id="add-participant-form" onSubmit={handleSubmit} noValidate>
-        <div className="form-group">
-          <label className="form-label" htmlFor="participant-first-name">
-            First Name <span className="form-required-marker" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="participant-first-name"
-            type="text"
-            value={firstName}
-            onChange={(e) => {
-              setFirstName(e.target.value);
-              if (firstNameError) setFirstNameError('');
-            }}
-            placeholder={!firstName && firstNameError ? firstNameError : 'Enter First Name'}
-            autoFocus
-            required
-            aria-required="true"
-            className="form-input"
-            aria-invalid={!!firstNameError}
-            aria-describedby={firstNameError ? 'participant-first-name-error' : undefined}
-          />
-          {firstNameError && (
-            <div id="participant-first-name-error" className="sr-only" role="alert">
-              {firstNameError}
-            </div>
+        <AccessibleField
+          id="participant-first-name"
+          label="First Name"
+          required
+          value={firstName}
+          error={firstNameError}
+          placeholder="Enter First Name"
+        >
+          {(fieldProps) => (
+            <input
+              {...fieldProps}
+              type="text"
+              value={firstName}
+              onChange={(e) => {
+                setFirstName(e.target.value);
+                if (firstNameError) setFirstNameError('');
+              }}
+              autoFocus
+              className="form-input"
+            />
           )}
-        </div>
+        </AccessibleField>
 
         <div className="form-group">
           <label className="form-label" htmlFor="participant-middle-name">Middle Name</label>
@@ -148,31 +145,27 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label" htmlFor="participant-last-name">
-            Last Name <span className="form-required-marker" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="participant-last-name"
-            type="text"
-            value={lastName}
-            onChange={(e) => {
-              setLastName(e.target.value);
-              if (lastNameError) setLastNameError('');
-            }}
-            placeholder={!lastName && lastNameError ? lastNameError : 'Enter Last Name'}
-            required
-            aria-required="true"
-            className="form-input"
-            aria-invalid={!!lastNameError}
-            aria-describedby={lastNameError ? 'participant-last-name-error' : undefined}
-          />
-          {lastNameError && (
-            <div id="participant-last-name-error" className="sr-only" role="alert">
-              {lastNameError}
-            </div>
+        <AccessibleField
+          id="participant-last-name"
+          label="Last Name"
+          required
+          value={lastName}
+          error={lastNameError}
+          placeholder="Enter Last Name"
+        >
+          {(fieldProps) => (
+            <input
+              {...fieldProps}
+              type="text"
+              value={lastName}
+              onChange={(e) => {
+                setLastName(e.target.value);
+                if (lastNameError) setLastNameError('');
+              }}
+              className="form-input"
+            />
           )}
-        </div>
+        </AccessibleField>
       </form>
     </Modal>
   );

@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import zxcvbn from 'zxcvbn';
 import { authApi, PasswordPolicy } from '../../../../shared/api/authApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 
 export interface UsePasswordValidationOptions {
   tenantId?: string;
@@ -45,7 +46,7 @@ export function usePasswordValidation({ tenantId, token }: UsePasswordValidation
       const res = await authApi.getPasswordPolicy(tenantId, token);
       setPolicy(res);
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Could not load password requirements policy.';
+      const msg = getApiErrorMessage(err, 'Could not load password requirements policy.');
       setPolicyError(msg);
       setPolicy(null);
     } finally {

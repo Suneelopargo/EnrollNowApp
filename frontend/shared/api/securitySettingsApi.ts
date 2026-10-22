@@ -1,6 +1,7 @@
 // frontend/shared/api/securitySettingsApi.ts - Authoritative Site Security Settings API
 import { apiClient } from '../api-client';
 import { getTenantId } from '../api-config';
+import { normalizePasswordPolicy, PasswordPolicy } from './authApi';
 
 export interface SecuritySettingsResponse {
   id?: string;
@@ -30,13 +31,7 @@ export interface ForceResetResult {
 export type UpdateSecuritySettingsPayload = Partial<SecuritySettingsResponse>;
 
 export const securitySettingsApi = {
-  getPasswordPolicy: async (tenantId?: string, token?: string): Promise<{
-    minimumPasswordLength: number;
-    minimumPasswordStrength: string;
-    requireDigit: boolean;
-    requireSymbol: boolean;
-    requireMixedCase: boolean;
-  }> => {
+  getPasswordPolicy: async (tenantId?: string, token?: string): Promise<PasswordPolicy> => {
     const tid = tenantId || getTenantId();
     const url = tid
       ? `/api/v1/tenants/${tid}/auth/password-policy`
@@ -47,13 +42,7 @@ export const securitySettingsApi = {
     if (!data) {
       throw new Error('Failed to load password policy');
     }
-    return {
-      minimumPasswordLength: data.minimumPasswordLength ?? 10,
-      minimumPasswordStrength: (data.minimumPasswordStrength || 'MODERATE').toUpperCase(),
-      requireDigit: data.requireDigit ?? true,
-      requireSymbol: data.requireSymbol ?? true,
-      requireMixedCase: data.requireMixedCase ?? true,
-    };
+    return normalizePasswordPolicy(data);
   },
 
   getSecuritySettings: async (tenantId?: string, config?: any): Promise<SecuritySettingsResponse> => {

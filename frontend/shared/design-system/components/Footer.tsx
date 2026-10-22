@@ -2,17 +2,70 @@
 import React from 'react';
 
 export interface FooterProps {
-  variant?: 'app-shell' | 'auth';
+  variant?: 'app-shell' | 'auth' | 'auth-card';
   className?: string;
   showStatus?: boolean;
   showLinks?: boolean;
 }
 
 export const Footer: React.FC<FooterProps> = ({
+  variant = 'app-shell',
   className = '',
 }) => {
+  if (variant === 'auth') {
+    return (
+      <footer className={`enl-login-strong-footer ${className}`.trim()} role="contentinfo">
+        <div className="enl-strong-footer-container enl-strong-footer-container--center">
+          <span>&copy; 2016 - 2027 </span>
+          <a
+            href="#enrollnow"
+            className="enl-strong-footer-link"
+            onClick={(e) => e.preventDefault()}
+          >
+            EnrollNow
+          </a>
+          <span className="enl-strong-footer-sep" aria-hidden="true">|</span>
+          <a
+            href="#terms"
+            className="enl-strong-footer-link"
+            onClick={(e) => e.preventDefault()}
+          >
+            Terms of Service
+          </a>
+          <span className="enl-strong-footer-sep" aria-hidden="true">|</span>
+          <a
+            href="#support"
+            className="enl-strong-footer-link"
+            onClick={(e) => e.preventDefault()}
+          >
+            Support Center
+          </a>
+        </div>
+      </footer>
+    );
+  }
+
+  if (variant === 'auth-card') {
+    return (
+      <footer className={`enl-activation-footer ${className}`.trim()} role="contentinfo">
+        <span className="enl-activation-copyright">&copy; 2016 - 2026</span>
+        <a href="#enrollnow" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
+          EnrollNow
+        </a>
+        <span className="enl-activation-footer-divider" aria-hidden="true">|</span>
+        <a href="#terms" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
+          Terms of Service
+        </a>
+        <span className="enl-activation-footer-divider" aria-hidden="true">|</span>
+        <a href="#support" className="enl-activation-footer-link" onClick={(e) => e.preventDefault()}>
+          Support Center
+        </a>
+      </footer>
+    );
+  }
+
   return (
-    <footer className={`app-footer ${className}`} role="contentinfo">
+    <footer className={`app-footer ${className}`.trim()} role="contentinfo">
       <div className="footer-container footer-container--center">
         <span>&copy; 2016 - 2027 </span>
         <a
