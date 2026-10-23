@@ -27,4 +27,6 @@ public interface TeamStudyRepository
             UUID teamId,
             UUID studyId
     );
+
+    void deleteByIdStudyId(UUID studyId);
 }

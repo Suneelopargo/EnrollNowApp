@@ -145,10 +145,10 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
     <div className="participant-grid__row-actions">
       <button
         type="button"
-        className="participant-grid__row-action"
+        className="participant-grid__row-action site-admin-tooltip-btn"
         onClick={handleEdit}
         onKeyDown={handleKeyDown}
-        title="Edit user details"
+        data-tooltip="Edit user details"
         aria-label={`Edit ${user.name}`}
       >
         <Pencil size={15} aria-hidden="true" />
@@ -160,10 +160,10 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
           isUserActive
             ? 'participant-grid__row-action--warning'
             : 'participant-grid__row-action--success'
-        }`}
+        } site-admin-tooltip-btn`}
         onClick={handleToggleStatus}
         onKeyDown={handleKeyDown}
-        title={isUserActive ? 'Lock user' : 'Unlock user'}
+        data-tooltip={isUserActive ? 'Lock user' : 'Unlock user'}
         aria-label={isUserActive ? `Lock ${user.name}` : `Unlock ${user.name}`}
       >
         {isUserActive ? (

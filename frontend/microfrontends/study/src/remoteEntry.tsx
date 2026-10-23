@@ -10,6 +10,7 @@ import { toast } from '../../../shared/toaster';
 import { confirmation } from '../../../shared/confirmation';
 import { getApiErrorMessage } from '../../../shared/api-client';
 import { useFocusTrap } from '../../../shared/accessibility/useFocusTrap';
+import { AddStudyModal } from '../../../shared/design-system/components/AddStudyModal';
 
 export interface StudyModuleProps {
   context: MfeContext;
@@ -382,72 +383,15 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
         </section>
       )}
 
-      {showAddStudy && (
-        <div className="study-form-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setShowAddStudy(false);
-        }}>
-          <section ref={addStudyDialogRef} className="study-form-dialog" role="dialog" aria-modal="true" aria-labelledby="add-study-title">
-            <div className="study-form-dialog__heading">
-              <h2 id="add-study-title">Add Study</h2>
-              <button type="button" className="study-form-dialog__close" onClick={() => setShowAddStudy(false)} aria-label="Close add study form"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCreateStudy}>
-              <label>
-                <span>Short Study Name</span>
-                <input
-                  id="short-study-name"
-                  required
-                  maxLength={15}
-                  placeholder="max length 15 characters"
-                  value={studyForm.shortName}
-                  onChange={(event) => {
-                    const val = event.target.value;
-                    setStudyForm((current) => ({ ...current, shortName: val }));
-                    if (studyFormError) setStudyFormError(null);
-                  }}
-                />
-              </label>
-              <label>
-                <span>Copy From Existing Study</span>
-                <select
-                  aria-label="Select study to copy"
-                  value={studyForm.templateId}
-                  onChange={(event) => setStudyForm((current) => ({ ...current, templateId: event.target.value }))}
-                >
-                  <option value="">{eligibleTemplates.length === 0 ? 'No existing studies available to copy' : 'Select a template (optional)'}</option>
-                  {eligibleTemplates.map((study) => {
-                    const id = study.id ?? study.studyId ?? study.protocolId;
-                    return <option key={id} value={String(id)}>{study.title || study.name}</option>;
-                  })}
-                </select>
-              </label>
-              {studyFormError && <p className="study-form-dialog__error" role="alert">{studyFormError}</p>}
-              <div className="study-form-dialog__actions">
-                <button type="submit" className="btn btn-primary" disabled={isSavingStudy}>
-                  <Plus size={15} /> {isSavingStudy ? 'Submitting…' : 'Submit'}
-                </button>
-                <button
-                  id="import-study-btn"
-                  type="button"
-                  className="study-form-dialog__import"
-                  onClick={handleImportButtonClick}
-                  disabled={isSavingStudy}
-                >
-                  <Upload size={15} /> {isSavingStudy ? 'Importing…' : 'Import Study'}
-                </button>
-                <input
-                  ref={importInputRef}
-                  className="study-form-dialog__file-input"
-                  type="file"
-                  accept="application/json,.json"
-                  aria-label="Import study JSON file"
-                  onChange={handleImportStudy}
-                />
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
+      <AddStudyModal
+        isOpen={showAddStudy}
+        onClose={() => setShowAddStudy(false)}
+        studies={tableData}
+        onStudyCreated={(newId) => {
+          fetchStudies();
+          navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
+        }}
+      />
     </div>
   );
 };

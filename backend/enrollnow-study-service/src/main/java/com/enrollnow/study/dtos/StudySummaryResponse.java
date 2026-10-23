@@ -1,5 +1,8 @@
 package com.enrollnow.study.dtos;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class StudySummaryResponse {
@@ -12,6 +15,10 @@ public class StudySummaryResponse {
 
     private Integer sampleSize;
     private Integer enrolled;
+
+    private LocalDate startDate;
+    private LocalDate endDate;
+    private List<StudyAdminSummary> admins = new ArrayList<>();
 
     public StudySummaryResponse() {
     }
@@ -98,5 +105,45 @@ public class StudySummaryResponse {
 
     public void setEnrolled(Integer enrolled) {
         this.enrolled = enrolled;
+    }
+
+    public LocalDate getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
+    public LocalDate getRecruitmentStartDate() {
+        return startDate;
+    }
+
+    public void setRecruitmentStartDate(LocalDate startDate) {
+        this.startDate = startDate;
+    }
+
+    public LocalDate getEndDate() {
+        return endDate;
+    }
+
+    public void setEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
+
+    public LocalDate getRecruitmentEndDate() {
+        return endDate;
+    }
+
+    public void setRecruitmentEndDate(LocalDate endDate) {
+        this.endDate = endDate;
+    }
+
+    public List<StudyAdminSummary> getAdmins() {
+        return admins != null ? admins : new ArrayList<>();
+    }
+
+    public void setAdmins(List<StudyAdminSummary> admins) {
+        this.admins = admins != null ? admins : new ArrayList<>();
     }
 }

@@ -405,8 +405,7 @@ export const TopNavigation: React.FC = () => {
                             type="button"
                             className="enl-study-module-menu-item"
                             onClick={() => {
-                              activateTab('studies');
-                              navigate('/studies?action=add');
+                              activateTab('admin', { search: '?tab=studies&action=add' });
                               setIsStudyActionsOpen(false);
                             }}
                           >

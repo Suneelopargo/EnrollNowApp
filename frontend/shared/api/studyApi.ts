@@ -1,6 +1,14 @@
 // frontend/shared/api/studyApi.ts - Centralized Study Management API
 import { apiClient } from '../api-client';
 
+export interface StudyAdmin {
+  userId: string;
+  name: string;
+  email: string;
+  initials: string;
+  role?: string;
+}
+
 export interface Study {
   id?: string | number;
   studyId?: string;
@@ -18,6 +26,11 @@ export interface Study {
   enrolled?: number;
   archived?: boolean;
   status: string;
+  startDate?: string;
+  recruitmentStartDate?: string;
+  endDate?: string;
+  recruitmentEndDate?: string;
+  admins?: StudyAdmin[];
   [key: string]: any;
 }
 
@@ -36,7 +49,9 @@ export interface ImportStudyResult {
 }
 
 export const studyApi = {
-  async getStudies(config?: any): Promise<Study[]> {
+  async getStudies(paramsOrConfig?: any): Promise<Study[]> {
+    const isConfig = paramsOrConfig && (paramsOrConfig.params || paramsOrConfig.headers || paramsOrConfig.skipToast !== undefined);
+    const config = isConfig ? paramsOrConfig : { params: paramsOrConfig };
     const res = await apiClient.get('/api/v1/studies', { skipToast: true, ...config });
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
@@ -80,6 +95,16 @@ export const studyApi = {
 
   async updateStudy(id: string | number, study: Partial<Study>, config?: any): Promise<Study> {
     const res = await apiClient.put(`/api/v1/studies/${id}`, study, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async archiveStudy(id: string | number, config?: any): Promise<Study> {
+    const res = await apiClient.post(`/api/v1/studies/${id}/archive`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async restoreStudy(id: string | number, config?: any): Promise<Study> {
+    const res = await apiClient.post(`/api/v1/studies/${id}/restore`, {}, config);
     return (res.data as any)?.data ?? res.data;
   },
 

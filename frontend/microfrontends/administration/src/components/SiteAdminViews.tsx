@@ -1,22 +1,15 @@
 // frontend/microfrontends/administration/src/components/SiteAdminViews.tsx - Sub-views for Site Administration Dashboard
 import React from 'react';
-import { BookOpen, Upload, Download, Shield } from 'lucide-react';
+import { Upload, Download, Shield } from 'lucide-react';
 import { ExportSubOption } from '../types/admin';
 import { ComingSoon } from '../../../../shared/design-system/components/ComingSoon';
+import { ManageStudiesView, ManageStudiesViewProps } from './ManageStudiesView';
 
 // ---------------------------------------------------------------------------
 // Studies View
 // ---------------------------------------------------------------------------
-export const StudiesView: React.FC = () => {
-  return (
-    <ComingSoon
-      title="Site Studies Configuration"
-      subtitle="Clinical trial allocations, coordinator role assignments, and protocol milestone coordination"
-      description="Site study management workflows are currently scheduled for upcoming Sprint deployment. Live study protocols are accessible from the top navigation Studies workspace."
-      targetRelease="Scheduled Sprint Release"
-      icon={BookOpen}
-    />
-  );
+export const StudiesView: React.FC<ManageStudiesViewProps> = (props) => {
+  return <ManageStudiesView {...props} />;
 };
 
 // ---------------------------------------------------------------------------

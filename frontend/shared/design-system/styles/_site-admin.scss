@@ -1124,6 +1124,46 @@
   }
 }
 
+// When inside the first row of AG Grid, flip tooltip downwards so it doesn't get clipped by the header/filter row
+.ag-row[row-index="0"],
+.ag-row-first,
+.ag-row:first-child {
+  .site-admin-tooltip-btn[data-tooltip] {
+    &::before {
+      bottom: auto;
+      top: calc(100% + 8px);
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: auto;
+      top: calc(100% + 3px);
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 0 5px 5px 5px;
+      border-style: solid;
+      border-color: transparent transparent #2b2b2b transparent;
+    }
+  }
+}
+
+// Ensure AG Grid cells and rows do not clip CSS tooltips
+.site-admin-tooltip-cell,
+.ag-cell:has(.site-admin-tooltip-btn) {
+  overflow: visible !important;
+}
+
+.ag-row:has(.site-admin-tooltip-btn:hover),
+.ag-row:hover:has(.site-admin-tooltip-btn) {
+  z-index: 50 !important;
+}
+
+.ag-cell:has(.site-admin-tooltip-btn:hover),
+.site-admin-tooltip-cell:hover {
+  z-index: 55 !important;
+}
+
 .site-admin-modal-footer-add {
   display: flex;
   align-items: center;

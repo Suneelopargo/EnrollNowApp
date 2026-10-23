@@ -22,6 +22,8 @@ public interface StudyRepository extends JpaRepository<Study, UUID> {
 
     List<Study> findByTenantIdAndArchivedFalse(UUID tenantId);
 
+    List<Study> findByTenantIdAndArchivedTrue(UUID tenantId);
+
     boolean existsByTenantIdAndStudyCode(
             UUID tenantId,
             String studyCode

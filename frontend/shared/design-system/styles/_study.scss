@@ -194,6 +194,11 @@
     color: #38556c;
     font: inherit;
   }
+
+  input[aria-invalid='true'] {
+    border-color: #d93025;
+    background-color: #fff9f9;
+  }
 }
 
 .study-form-dialog__heading {

@@ -24,4 +24,17 @@ public interface StudyMemberRepository extends JpaRepository<StudyMember, StudyM
     List<StudyMember> findByTenantIdAndActiveTrue(
             UUID tenantId
     );
+
+    List<StudyMember> findByTenantIdAndIdStudyId(
+            UUID tenantId,
+            UUID studyId
+    );
+
+    List<StudyMember> findByIdStudyId(
+            UUID studyId
+    );
+
+    void deleteByIdStudyId(
+            UUID studyId
+    );
 }

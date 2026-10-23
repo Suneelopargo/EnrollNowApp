@@ -59,8 +59,6 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
     });
 
     it('renders placeholder views with correct title props', () => {
-      const studiesEl = StudiesView({}) as React.ReactElement<any>;
-      expect(studiesEl.props.title).toBe('Site Studies Configuration');
 
       const importEl = ImportView({}) as React.ReactElement<any>;
       expect(importEl.props.title).toBe('Data Intake & Batch Import');

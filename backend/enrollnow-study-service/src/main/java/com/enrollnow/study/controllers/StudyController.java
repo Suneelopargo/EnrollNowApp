@@ -52,14 +52,14 @@ public class StudyController {
         this(new StudyService(studyRepository, myStudiesService), siteAuthorizationService, null);
     }
 
-    @Autowired
     public StudyController(
             StudyService studyService,
-            @Autowired(required = false) SiteAuthorizationService siteAuthorizationService
+            SiteAuthorizationService siteAuthorizationService
     ) {
         this(studyService, siteAuthorizationService, null);
     }
 
+    @Autowired
     public StudyController(
             StudyService studyService,
             SiteAuthorizationService siteAuthorizationService,
@@ -70,10 +70,18 @@ public class StudyController {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
+    public ResponseEntity<ApiResponse<List<StudySummaryResponse>>> getStudies(
+            UUID tenantId,
+            boolean includeArchived
+    ) {
+        return getStudies(tenantId, includeArchived, null);
+    }
+
     @GetMapping({"/tenants/{tenantId}/studies", "/studies"})
     public ResponseEntity<ApiResponse<List<StudySummaryResponse>>> getStudies(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
-            @RequestParam(required = false, defaultValue = "false") boolean includeArchived
+            @RequestParam(required = false, defaultValue = "false") boolean includeArchived,
+            @RequestParam(required = false) String status
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
 
@@ -92,6 +100,7 @@ public class StudyController {
         List<StudySummaryResponse> response = studyService.getStudies(
                 effectiveTenantId,
                 includeArchived,
+                status,
                 callerUserId,
                 canManageSiteAdmins
         );
@@ -145,18 +154,18 @@ public class StudyController {
         UUID callerUserId = resolveCallerUserId();
         CopyStudyRequest request = mapToCopyRequest(payload);
 
-        StudySummaryResponse saved = studyService.copyStudy(effectiveTenantId, request, callerUserId);
+        StudySummaryResponse cloned = studyService.copyStudy(effectiveTenantId, request, callerUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Study copied successfully", saved));
+                .body(ApiResponse.success("Study copied successfully", cloned));
     }
 
     @PostMapping(
             value = {"/tenants/{tenantId}/studies/import", "/studies/import"},
-            consumes = {MediaType.APPLICATION_JSON_VALUE}
+            consumes = MediaType.APPLICATION_JSON_VALUE
     )
     public ResponseEntity<ApiResponse<ImportStudyResponse>> importStudyJson(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
-            @RequestBody Map<String, Object> payload
+            @RequestBody(required = false) Map<String, Object> payload
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         if (siteAuthorizationService != null) {
@@ -165,27 +174,31 @@ public class StudyController {
 
         UUID callerUserId = resolveCallerUserId();
 
-        String studyName = null;
-        Map<String, Object> studyData = null;
+        if (payload == null || payload.isEmpty()) {
+            throw new InvalidStudyException("Request body must provide JSON study import data.");
+        }
 
-        if (payload.containsKey("studyName")) {
-            studyName = String.valueOf(payload.get("studyName"));
-            if (payload.get("studyData") instanceof Map<?, ?> map) {
-                studyData = (Map<String, Object>) map;
-            } else if (payload.get("data") instanceof Map<?, ?> map) {
-                studyData = (Map<String, Object>) map;
-            } else {
-                studyData = payload;
-            }
-        } else if (payload.containsKey("shortName")) {
-            studyName = String.valueOf(payload.get("shortName"));
-            studyData = payload;
-        } else if (payload.containsKey("name")) {
-            studyName = String.valueOf(payload.get("name"));
-            studyData = payload;
+        String studyName = payload.get("studyName") != null ? String.valueOf(payload.get("studyName"))
+                : payload.get("shortName") != null ? String.valueOf(payload.get("shortName"))
+                : payload.get("name") != null ? String.valueOf(payload.get("name")) : null;
+
+        Map<String, Object> studyData = null;
+        if (payload.get("studyData") instanceof Map<?, ?> sm) {
+            studyData = (Map<String, Object>) sm;
+        } else if (payload.get("data") instanceof Map<?, ?> dm) {
+            studyData = (Map<String, Object>) dm;
         } else {
             studyData = payload;
-            studyName = "Imported Study";
+        }
+
+        if (studyName == null && studyData.get("study") instanceof Map<?, ?> stMap && stMap.get("name") != null) {
+            studyName = String.valueOf(stMap.get("name")).trim();
+        } else if (studyName == null && studyData.get("studyName") != null) {
+            studyName = String.valueOf(studyData.get("studyName")).trim();
+        }
+
+        if (studyName == null || studyName.isBlank()) {
+            throw new InvalidStudyException("Must provide a study name to import a new study.");
         }
 
         ImportStudyResponse response = studyService.importStudy(effectiveTenantId, studyName, studyData, callerUserId);
@@ -195,7 +208,7 @@ public class StudyController {
 
     @PostMapping(
             value = {"/tenants/{tenantId}/studies/import", "/studies/import"},
-            consumes = {MediaType.MULTIPART_FORM_DATA_VALUE}
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<ApiResponse<ImportStudyResponse>> importStudyMultipart(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
@@ -258,6 +271,63 @@ public class StudyController {
         try {
             StudySummaryResponse updated = studyService.updateStudy(effectiveTenantId, studyId, request);
             return ResponseEntity.ok(ApiResponse.success("Study updated successfully", updated));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/archive", "/studies/{studyId}/archive"})
+    public ResponseEntity<ApiResponse<StudySummaryResponse>> archiveStudy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        try {
+            StudySummaryResponse archived = studyService.archiveStudy(effectiveTenantId, studyId);
+            return ResponseEntity.ok(ApiResponse.success("Study archived successfully", archived));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/restore", "/studies/{studyId}/restore"})
+    public ResponseEntity<ApiResponse<StudySummaryResponse>> restoreStudy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        try {
+            StudySummaryResponse restored = studyService.restoreStudy(effectiveTenantId, studyId);
+            return ResponseEntity.ok(ApiResponse.success("Study restored successfully", restored));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/tenants/{tenantId}/studies/{studyId}", "/studies/{studyId}"})
+    public ResponseEntity<ApiResponse<Void>> deleteStudy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        try {
+            studyService.deleteStudy(effectiveTenantId, studyId);
+            return ResponseEntity.ok(ApiResponse.success("Study deleted successfully", null));
         } catch (StudyNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
