@@ -334,4 +334,32 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
 
     expect(html).toBe('');
   });
+
+  it('renders LeftFilterPanel with Add Filter and Search buttons', async () => {
+    const { LeftFilterPanel } = await import('../components/LeftFilterPanel');
+    const onAddFilter = vi.fn();
+    const onSearch = vi.fn();
+    const html = renderToStaticMarkup(
+      React.createElement(LeftFilterPanel, {
+        contactFilter: 'all',
+        setContactFilter: vi.fn(),
+        availableFilter: 'all',
+        setAvailableFilter: vi.fn(),
+        searchTerm: '',
+        setSearchTerm: vi.fn(),
+        customFilters: [],
+        onAddFilter,
+        onUpdateFilter: vi.fn(),
+        onRemoveFilter: vi.fn(),
+        onClearFilters: vi.fn(),
+        onSaveFilter: vi.fn(),
+        onSearch,
+      })
+    );
+
+    expect(html).toContain('Add Filter');
+    expect(html).toContain('Clear Filters');
+    expect(html).toContain('Save Filter');
+    expect(html).toContain('Search');
+  });
 });

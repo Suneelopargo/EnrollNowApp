@@ -43,6 +43,26 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     toast[type](msg);
   };
 
+  // Keep latest filter values in a ref so fetchParticipants does not recreate
+  // on every filter input/addition, preventing unwanted background triggers.
+  const filterStateRef = useRef({
+    searchTerm,
+    contactFilter,
+    availableFilter,
+    selectedStudies,
+    customFilters,
+  });
+
+  useEffect(() => {
+    filterStateRef.current = {
+      searchTerm,
+      contactFilter,
+      availableFilter,
+      selectedStudies,
+      customFilters,
+    };
+  }, [searchTerm, contactFilter, availableFilter, selectedStudies, customFilters]);
+
   // Fetch Saved Searches from backend API
   const fetchSavedSearches = useCallback(async () => {
     try {
@@ -65,17 +85,29 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   }, []);
 
   // Fetch Participants from backend API
-  const fetchParticipants = useCallback(async (quiet = false) => {
+  const fetchParticipants = useCallback(async (quiet = false, overrideFilters?: {
+    contactFilter?: 'all' | 'yes' | 'no';
+    availableFilter?: 'all' | 'yes' | 'no';
+    searchTerm?: string;
+    selectedStudies?: string[];
+    customFilters?: CustomFilterRule[];
+  }) => {
     if (!quiet) setIsLoading(true);
     try {
+      const activeContact = overrideFilters?.contactFilter ?? filterStateRef.current.contactFilter;
+      const activeAvailable = overrideFilters?.availableFilter ?? filterStateRef.current.availableFilter;
+      const activeSearch = overrideFilters?.searchTerm ?? filterStateRef.current.searchTerm;
+      const activeStudies = overrideFilters?.selectedStudies ?? filterStateRef.current.selectedStudies;
+      const activeCustom = overrideFilters?.customFilters ?? filterStateRef.current.customFilters;
+
       const params: RegistrySearchParams = {
         tenantId,
         siteId,
-        searchTerm: searchTerm.trim() || undefined,
-        contactFilter,
-        availableFilter,
-        studies: selectedStudies.length > 0 ? selectedStudies : undefined,
-        customFiltersJson: customFilters.length > 0 ? JSON.stringify(customFilters) : undefined,
+        searchTerm: activeSearch.trim() || undefined,
+        contactFilter: activeContact,
+        availableFilter: activeAvailable,
+        studies: activeStudies.length > 0 ? activeStudies : undefined,
+        customFiltersJson: activeCustom.length > 0 ? JSON.stringify(activeCustom) : undefined,
         page: 0,
         pageSize: 500,
       };
@@ -136,7 +168,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       setError(null);
 
       // Keep baseline for study list dropdown when unfiltered
-      const isUnfiltered = !searchTerm && contactFilter === 'all' && availableFilter === 'all' && selectedStudies.length === 0 && customFilters.length === 0;
+      const isUnfiltered = !activeSearch && activeContact === 'all' && activeAvailable === 'all' && activeStudies.length === 0 && activeCustom.length === 0;
       setAllParticipants((prev) => (isUnfiltered || prev.length === 0 ? mapped : prev));
       setSelectedParticipantId((prev) => prev || (mapped.length > 0 ? mapped[0].id : ''));
     } catch (err: any) {
@@ -147,26 +179,13 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     } finally {
       if (!quiet) setIsLoading(false);
     }
-  }, [tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters]);
+  }, [tenantId, siteId]);
 
-  // Initial Load
+  // Initial Load only on mount / tenant-site context change
   useEffect(() => {
     fetchParticipants();
     fetchSavedSearches();
   }, [fetchParticipants, fetchSavedSearches]);
-
-  // Debounced Re-query when sidebar filters change
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      fetchParticipants(true);
-    }, 250);
-
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [contactFilter, availableFilter, selectedStudies, customFilters, fetchParticipants]);
 
   const selectedParticipant = useMemo(() => {
     return participants.find((p) => p.id === selectedParticipantId) || participants[0] || null;
@@ -258,6 +277,13 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     setAvailableFilter('all');
     setSelectedStudies([]);
     setCustomFilters([]);
+    fetchParticipants(false, {
+      searchTerm: '',
+      contactFilter: 'all',
+      availableFilter: 'all',
+      selectedStudies: [],
+      customFilters: [],
+    });
     showNotification('All filters have been reset.');
   };
 
@@ -317,17 +343,30 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
 
   const handleSelectSavedSearch = (saved: SavedSearch) => {
     if (!saved) return;
-    setContactFilter(saved.contactFilter || 'all');
-    setAvailableFilter(saved.availableFilter || 'all');
-    setSearchTerm(saved.searchTerm || '');
-    setSelectedStudies(saved.selectedStudies || []);
-    setCustomFilters(saved.customFilters || []);
+    const nextContact = saved.contactFilter || 'all';
+    const nextAvailable = saved.availableFilter || 'all';
+    const nextSearch = saved.searchTerm || '';
+    const nextStudies = saved.selectedStudies || [];
+    const nextCustom = saved.customFilters || [];
+
+    setContactFilter(nextContact);
+    setAvailableFilter(nextAvailable);
+    setSearchTerm(nextSearch);
+    setSelectedStudies(nextStudies);
+    setCustomFilters(nextCustom);
+
+    fetchParticipants(false, {
+      contactFilter: nextContact,
+      availableFilter: nextAvailable,
+      searchTerm: nextSearch,
+      selectedStudies: nextStudies,
+      customFilters: nextCustom,
+    });
     showNotification(`Applied saved search "${saved.name}".`);
   };
 
   const handleSearch = () => {
     fetchParticipants(false);
-    showNotification(`Filtered registry: ${participants.length} participant(s) found.`);
   };
 
   const handleOpenDetail = (participant: ParticipantRecord) => {
