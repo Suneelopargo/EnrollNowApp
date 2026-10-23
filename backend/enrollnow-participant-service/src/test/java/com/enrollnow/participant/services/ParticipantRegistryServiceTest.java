@@ -11,6 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -209,6 +214,100 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void searchParticipants_usesDatabaseSpecificationQueryPath_whenRepositoryReturnsPage() {
+        Participant p1 = createMockParticipant(UUID.randomUUID(), "David", "Tennant", LocalDate.of(1971, 4, 10), "ACTIVE");
+        Page<Participant> mockPage = new PageImpl<>(List.of(p1));
+
+        when(participantRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(mockPage);
+
+        RegistryPagedResponse<RegistryParticipantDto> response = service.searchParticipants(
+                tenantId, siteId, null, "all", "all", null, null, 0, 25, "name", "asc"
+        );
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getFirstName()).isEqualTo("David");
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        verify(participantRepository).findAll(any(Specification.class), any(Pageable.class));
+        // Verifies tenant-wide in-memory fetch is bypassed when specification query returns results
+        verify(participantRepository, never()).findByTenantId(tenantId);
+    }
+
+    @Test
+    void searchParticipants_supportsBetweenAndNotBetweenRangeOperators() {
+        Participant p1 = createMockParticipant(UUID.randomUUID(), "Alice", "Young", LocalDate.of(1995, 1, 1), "ACTIVE"); // ~31
+        Participant p2 = createMockParticipant(UUID.randomUUID(), "Bob", "Middle", LocalDate.of(1980, 1, 1), "ACTIVE"); // ~46
+        Participant p3 = createMockParticipant(UUID.randomUUID(), "Charlie", "Old", LocalDate.of(1950, 1, 1), "ACTIVE"); // ~76
+
+        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2, p3));
+
+        CustomFilterRuleDto betweenRule = new CustomFilterRuleDto("1", "age", "between", "", "40", "50", null, "");
+        RegistryPagedResponse<RegistryParticipantDto> responseBetween = service.searchParticipants(
+                tenantId, siteId, null, "all", "all", null, List.of(betweenRule), 0, 10, "name", "asc"
+        );
+        assertThat(responseBetween.getItems()).hasSize(1);
+        assertThat(responseBetween.getItems().get(0).getFirstName()).isEqualTo("Bob");
+
+        CustomFilterRuleDto notBetweenRule = new CustomFilterRuleDto("2", "age", "not between", "", "40", "50", null, "");
+        RegistryPagedResponse<RegistryParticipantDto> responseNotBetween = service.searchParticipants(
+                tenantId, siteId, null, "all", "all", null, List.of(notBetweenRule), 0, 10, "name", "asc"
+        );
+        assertThat(responseNotBetween.getItems()).hasSize(2);
+        assertThat(responseNotBetween.getItems()).extracting(RegistryParticipantDto::getFirstName)
+                .containsExactlyInAnyOrder("Alice", "Charlie");
+    }
+
+    @Test
+    void searchParticipants_supportsMultiSelectValues() {
+        Participant p1 = createMockParticipant(UUID.randomUUID(), "Alice", "Female", LocalDate.of(1990, 1, 1), "ACTIVE");
+        p1.setSexAtBirth("Female");
+        Participant p2 = createMockParticipant(UUID.randomUUID(), "Bob", "Male", LocalDate.of(1990, 1, 1), "ACTIVE");
+        p2.setSexAtBirth("Male");
+        Participant p3 = createMockParticipant(UUID.randomUUID(), "Charlie", "Other", LocalDate.of(1990, 1, 1), "ACTIVE");
+        p3.setSexAtBirth("Other");
+
+        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2, p3));
+
+        CustomFilterRuleDto multiRule = new CustomFilterRuleDto("1", "gender", "equal to", "", "", "", List.of("Female", "Other"), "");
+        RegistryPagedResponse<RegistryParticipantDto> response = service.searchParticipants(
+                tenantId, siteId, null, "all", "all", null, List.of(multiRule), 0, 10, "name", "asc"
+        );
+        assertThat(response.getItems()).hasSize(2);
+        assertThat(response.getItems()).extracting(RegistryParticipantDto::getFirstName)
+                .containsExactlyInAnyOrder("Alice", "Charlie");
+    }
+
+    @Test
+    void searchParticipants_supportsAssignedAndNotAssignedOperators() {
+        Participant p1 = createMockParticipant(UUID.randomUUID(), "Alice", "WithCity", LocalDate.of(1990, 1, 1), "ACTIVE");
+        Participant p2 = createMockParticipant(UUID.randomUUID(), "Bob", "NoCity", LocalDate.of(1990, 1, 1), "ACTIVE");
+
+        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2));
+
+        ParticipantAddress addr1 = new ParticipantAddress();
+        addr1.setParticipantId(p1.getId());
+        addr1.setTenantId(tenantId);
+        addr1.setCity("Philadelphia");
+        addr1.setPrimaryAddress(true);
+
+        when(addressRepository.findByTenantIdAndParticipantIdIn(eq(tenantId), any())).thenReturn(List.of(addr1));
+
+        CustomFilterRuleDto assignedRule = new CustomFilterRuleDto("1", "city", "has any value", "", "");
+        RegistryPagedResponse<RegistryParticipantDto> response1 = service.searchParticipants(
+                tenantId, siteId, null, "all", "all", null, List.of(assignedRule), 0, 10, "name", "asc"
+        );
+        assertThat(response1.getItems()).hasSize(1);
+        assertThat(response1.getItems().get(0).getFirstName()).isEqualTo("Alice");
+
+        CustomFilterRuleDto notAssignedRule = new CustomFilterRuleDto("2", "city", "has no value", "", "");
+        RegistryPagedResponse<RegistryParticipantDto> response2 = service.searchParticipants(
+                tenantId, siteId, null, "all", "all", null, List.of(notAssignedRule), 0, 10, "name", "asc"
+        );
+        assertThat(response2.getItems()).hasSize(1);
+        assertThat(response2.getItems().get(0).getFirstName()).isEqualTo("Bob");
+    }
+
+    @Test
     void createParticipant_createsChildEntities() {
         CreateParticipantRequest request = new CreateParticipantRequest();
         request.setFirstName("Charlie");
@@ -320,6 +419,36 @@ class ParticipantRegistryServiceTest {
                 tenantId, null, null, "all", "all", null, null, 0, 10, "name", "asc"
         );
         assertThat(tenantWideResponse.getItems()).hasSize(3);
+    }
+
+    @Test
+    void searchParticipants_usesDatabaseSpecificationExecutor_whenJpaAvailable() {
+        UUID id1 = UUID.randomUUID();
+        Participant p1 = createMockParticipant(id1, "Diana", "Prince", LocalDate.of(1984, 10, 25), "ACTIVE");
+        Page<Participant> mockPage = new PageImpl<>(List.of(p1), PageRequest.of(0, 25), 1);
+
+        when(participantRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(mockPage);
+        when(studyRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        RegistryPagedResponse<RegistryParticipantDto> response = service.searchParticipants(
+                tenantId, siteId, "Diana", "all", "all", null, null, 0, 25, "name", "asc"
+        );
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getName()).isEqualTo("Diana Prince");
+
+        // Verify that database-level specification query was executed
+        verify(participantRepository).findAll(any(Specification.class), any(Pageable.class));
+
+        // Verify that tenant-wide in-memory fallback was NOT invoked
+        verify(participantRepository, never()).findByTenantId(any());
+
+        // Verify that related entity batch lookups were constrained only to the single ID on the page
+        verify(identifierRepository).findByTenantIdAndParticipantIdIn(tenantId, List.of(id1));
+        verify(contactRepository).findByTenantIdAndParticipantIdIn(tenantId, List.of(id1));
+        verify(addressRepository).findByTenantIdAndParticipantIdIn(tenantId, List.of(id1));
     }
 
     @Test

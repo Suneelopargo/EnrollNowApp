@@ -10,6 +10,7 @@ import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
 import { ParticipantRecord, CustomFilterRule, SavedSearch } from '../types/participant';
+import { validateFilterRule } from '../constants/filterMetadata';
 
 export interface RegistryDashboardProps {
   context?: MfeContext;
@@ -238,6 +239,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       field: 'age',
       operator: 'equal to',
       value: '',
+      minValue: '',
+      maxValue: '',
+      values: [],
     };
     setCustomFilters((prev) => [...prev, newFilter]);
   };
@@ -366,6 +370,13 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   };
 
   const handleSearch = () => {
+    for (const filter of customFilters) {
+      const valResult = validateFilterRule(filter);
+      if (!valResult.isValid) {
+        showNotification(valResult.error || 'Please provide valid filter criteria.', 'warning');
+        return;
+      }
+    }
     fetchParticipants(false);
   };
 

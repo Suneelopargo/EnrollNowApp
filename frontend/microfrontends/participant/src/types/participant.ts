@@ -76,19 +76,31 @@ export interface ParticipantRecord {
   variables?: ParticipantVariable[];
 }
 
+export type FilterFieldType = 'text' | 'number' | 'select' | 'multiselect' | 'date';
+
+export interface FilterOptionItem {
+  value: string;
+  label: string;
+}
+
 export interface FilterFieldOption {
   id: string;
   label: string;
   placeholder: string;
-  type: 'text' | 'number' | 'select' | 'date';
+  type: FilterFieldType;
+  options?: FilterOptionItem[];
 }
 
 export interface CustomFilterRule {
   id: string;
   field: string;
   operator: string;
-  value: string;
+  value?: string;
+  minValue?: string;
+  maxValue?: string;
+  values?: string[];
   placeholder?: string;
+  [key: string]: any;
 }
 
 export interface SavedSearch {

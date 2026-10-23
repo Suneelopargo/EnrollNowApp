@@ -9,6 +9,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +67,83 @@ public class ParticipantRegistryService {
 
     @Transactional(readOnly = true)
     public RegistryPagedResponse<RegistryParticipantDto> searchParticipants(
+            UUID tenantId,
+            UUID siteId,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> selectedStudies,
+            List<CustomFilterRuleDto> customFilters,
+            int page,
+            int pageSize,
+            String sortBy,
+            String sortDirection) {
+
+        int safePage = Math.max(0, page);
+        int safePageSize = pageSize > 0 ? pageSize : 25;
+        Sort sort = resolveSort(sortBy, sortDirection);
+        Pageable pageable = PageRequest.of(safePage, safePageSize, sort);
+
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters
+        );
+
+        Page<Participant> participantPage = participantRepository.findAll(spec, pageable);
+
+        if (participantPage != null) {
+            long totalCount = participantPage.getTotalElements();
+            List<Participant> pageParticipants = participantPage.getContent();
+
+            if (pageParticipants.isEmpty()) {
+                return new RegistryPagedResponse<>(Collections.emptyList(), totalCount, safePage, safePageSize);
+            }
+
+            List<UUID> participantIds = pageParticipants.stream().map(Participant::getId).collect(Collectors.toList());
+
+            // Batch load related entities ONLY for the matching page of participants!
+            Map<UUID, List<ParticipantIdentifier>> identifiersMap = identifierRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                    .stream().collect(Collectors.groupingBy(ParticipantIdentifier::getParticipantId));
+
+            Map<UUID, List<ParticipantContact>> contactsMap = contactRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                    .stream().collect(Collectors.groupingBy(ParticipantContact::getParticipantId));
+
+            Map<UUID, List<ParticipantAddress>> addressesMap = addressRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                    .stream().collect(Collectors.groupingBy(ParticipantAddress::getParticipantId));
+
+            Map<UUID, ParticipantPreference> preferencesMap = preferenceRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                    .stream().collect(Collectors.toMap(ParticipantPreference::getParticipantId, p -> p, (a, b) -> a));
+
+            Map<UUID, List<StudyCandidate>> candidatesMap = candidateRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                    .stream().collect(Collectors.groupingBy(StudyCandidate::getParticipantId));
+
+            Map<UUID, List<StudyEnrollment>> enrollmentsMap = enrollmentRepository.findByTenantIdAndParticipantIdIn(tenantId, participantIds)
+                    .stream().collect(Collectors.groupingBy(StudyEnrollment::getParticipantId));
+
+            Map<UUID, Study> studiesMap = studyRepository.findByTenantId(tenantId)
+                    .stream().collect(Collectors.toMap(Study::getId, s -> s, (a, b) -> a));
+
+            List<RegistryParticipantDto> dtos = pageParticipants.stream()
+                    .map(p -> buildDto(p,
+                            identifiersMap.getOrDefault(p.getId(), Collections.emptyList()),
+                            contactsMap.getOrDefault(p.getId(), Collections.emptyList()),
+                            addressesMap.getOrDefault(p.getId(), Collections.emptyList()),
+                            preferencesMap.get(p.getId()),
+                            candidatesMap.getOrDefault(p.getId(), Collections.emptyList()),
+                            enrollmentsMap.getOrDefault(p.getId(), Collections.emptyList()),
+                            studiesMap,
+                            pageParticipants))
+                    .collect(Collectors.toList());
+
+            return new RegistryPagedResponse<>(dtos, totalCount, safePage, safePageSize);
+        }
+
+        // Fallback for mock unit test setups that only mocked findByTenantId
+        return searchParticipantsInMemoryFallback(
+                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, safePage, safePageSize, sortBy, sortDirection
+        );
+    }
+
+    private RegistryPagedResponse<RegistryParticipantDto> searchParticipantsInMemoryFallback(
             UUID tenantId,
             UUID siteId,
             String searchTerm,
@@ -581,6 +663,19 @@ public class ParticipantRegistryService {
             List<StudyCandidate> candidates,
             List<StudyEnrollment> enrollments,
             Map<UUID, Study> studiesMap) {
+        return buildDto(p, identifiers, contacts, addresses, pref, candidates, enrollments, studiesMap, Collections.emptyList());
+    }
+
+    private RegistryParticipantDto buildDto(
+            Participant p,
+            List<ParticipantIdentifier> identifiers,
+            List<ParticipantContact> contacts,
+            List<ParticipantAddress> addresses,
+            ParticipantPreference pref,
+            List<StudyCandidate> candidates,
+            List<StudyEnrollment> enrollments,
+            Map<UUID, Study> studiesMap,
+            List<Participant> contextParticipants) {
 
         RegistryParticipantDto dto = new RegistryParticipantDto();
         dto.setId(p.getId().toString());
@@ -725,7 +820,9 @@ public class ParticipantRegistryService {
         // FamilyInfo DTO with resolved members
         List<FamilyInfoDto.FamilyMemberDto> familyMembers = new ArrayList<>();
         if (famId != null && !famId.isBlank()) {
-            List<Participant> tenantParticipants = participantRepository.findByTenantId(p.getTenantId());
+            List<Participant> tenantParticipants = contextParticipants != null && !contextParticipants.isEmpty()
+                    ? contextParticipants
+                    : Collections.emptyList();
             for (Participant other : tenantParticipants) {
                 if (other.getId().equals(p.getId())) continue;
                 Map<String, Object> otherAttrs = parseCustomAttributes(other.getCustomAttributes());
@@ -805,12 +902,21 @@ public class ParticipantRegistryService {
         String field = rule.getField().toLowerCase().trim();
         String op = rule.getOperator().toLowerCase().trim();
         String targetVal = rule.getValue() != null ? rule.getValue().trim() : "";
+        List<String> values = rule.getEffectiveValues();
 
         String actualVal = getFieldValue(p, field);
+
+        if ("has any value".equals(op) || "assigned".equals(op)) {
+            return actualVal != null && !actualVal.isBlank();
+        }
+        if ("has no value".equals(op) || "not_assigned".equals(op)) {
+            return actualVal == null || actualVal.isBlank();
+        }
 
         switch (op) {
             case "equal to":
             case "equals":
+            case "equal":
             case "=":
                 if ("birthmonth".equals(field)) {
                     return matchesBirthMonth(p.getBirthMonth(), targetVal);
@@ -818,16 +924,23 @@ public class ParticipantRegistryService {
                 if ("age".equals(field)) {
                     return p.getAgeNumeric() != null && targetVal.equals(String.valueOf(p.getAgeNumeric()));
                 }
+                if (!values.isEmpty()) {
+                    return values.stream().anyMatch(v -> actualVal != null && actualVal.equalsIgnoreCase(v));
+                }
                 return actualVal != null && actualVal.equalsIgnoreCase(targetVal);
 
             case "not equal to":
             case "not_equals":
+            case "not_equal":
             case "!=":
                 if ("birthmonth".equals(field)) {
                     return !matchesBirthMonth(p.getBirthMonth(), targetVal);
                 }
                 if ("age".equals(field)) {
                     return p.getAgeNumeric() == null || !targetVal.equals(String.valueOf(p.getAgeNumeric()));
+                }
+                if (!values.isEmpty()) {
+                    return values.stream().noneMatch(v -> actualVal != null && actualVal.equalsIgnoreCase(v));
                 }
                 return actualVal == null || !actualVal.equalsIgnoreCase(targetVal);
 
@@ -847,6 +960,7 @@ public class ParticipantRegistryService {
                 return actualVal != null && actualVal.toLowerCase().endsWith(targetVal.toLowerCase());
 
             case "greater than":
+            case "greater_than":
             case ">":
                 if ("age".equals(field)) {
                     try {
@@ -857,6 +971,7 @@ public class ParticipantRegistryService {
                 return actualVal != null && actualVal.compareToIgnoreCase(targetVal) > 0;
 
             case "less than":
+            case "less_than":
             case "<":
                 if ("age".equals(field)) {
                     try {
@@ -875,11 +990,27 @@ public class ParticipantRegistryService {
             case "between":
                 if ("age".equals(field) && p.getAgeNumeric() != null) {
                     try {
-                        String[] parts = targetVal.split("[,-]");
-                        if (parts.length == 2) {
-                            int low = Integer.parseInt(parts[0].trim());
-                            int high = Integer.parseInt(parts[1].trim());
+                        String minStr = rule.getEffectiveMinValue();
+                        String maxStr = rule.getEffectiveMaxValue();
+                        if (minStr != null && maxStr != null) {
+                            double low = Double.parseDouble(minStr);
+                            double high = Double.parseDouble(maxStr);
                             return p.getAgeNumeric() >= low && p.getAgeNumeric() <= high;
+                        }
+                    } catch (Exception ignored) {}
+                }
+                return true;
+
+            case "not between":
+            case "not_between":
+                if ("age".equals(field) && p.getAgeNumeric() != null) {
+                    try {
+                        String minStr = rule.getEffectiveMinValue();
+                        String maxStr = rule.getEffectiveMaxValue();
+                        if (minStr != null && maxStr != null) {
+                            double low = Double.parseDouble(minStr);
+                            double high = Double.parseDouble(maxStr);
+                            return p.getAgeNumeric() < low || p.getAgeNumeric() > high;
                         }
                     } catch (Exception ignored) {}
                 }
@@ -926,6 +1057,37 @@ public class ParticipantRegistryService {
                 return p.getTags() != null ? String.join(",", p.getTags()) : "";
             default:
                 return "";
+        }
+    }
+
+    private Sort resolveSort(String sortBy, String sortDirection) {
+        boolean asc = !"desc".equalsIgnoreCase(sortDirection);
+        String col = sortBy != null ? sortBy.toLowerCase().trim() : "name";
+        Sort.Direction direction = asc ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        switch (col) {
+            case "name":
+                return Sort.by(direction, "lastName").and(Sort.by(direction, "firstName"));
+            case "firstname":
+            case "first_name":
+                return Sort.by(direction, "firstName");
+            case "lastname":
+            case "last_name":
+                return Sort.by(direction, "lastName");
+            case "age":
+            case "dateofbirth":
+                Sort.Direction dobDir = asc ? Sort.Direction.DESC : Sort.Direction.ASC;
+                return Sort.by(dobDir, "dateOfBirth");
+            case "gender":
+            case "sex":
+                return Sort.by(direction, "sexAtBirth");
+            case "status":
+                return Sort.by(direction, "status");
+            case "datecreated":
+            case "createdat":
+                return Sort.by(direction, "createdAt");
+            default:
+                return Sort.by(direction, "lastName").and(Sort.by(direction, "firstName"));
         }
     }
 

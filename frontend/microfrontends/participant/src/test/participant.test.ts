@@ -362,4 +362,153 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).toContain('Save Filter');
     expect(html).toContain('Search');
   });
+
+  it('renders FilterCard with single input for age equal operator', async () => {
+    const { FilterCard } = await import('../components/FilterCard');
+    const filter = {
+      id: 'f-1',
+      field: 'age',
+      operator: 'equal to',
+      value: '35',
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter,
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('Age');
+    expect(html).toContain('equal to');
+    expect(html).toContain('value="35"');
+  });
+
+  it('renders FilterCard with dual range inputs when operator is between', async () => {
+    const { FilterCard } = await import('../components/FilterCard');
+    const filter = {
+      id: 'f-2',
+      field: 'age',
+      operator: 'between',
+      minValue: '20',
+      maxValue: '40',
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter,
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('filter-card-range-inputs');
+    expect(html).toContain('value="20"');
+    expect(html).toContain('value="40"');
+  });
+
+  it('renders FilterCard with date picker for dateCreated and lastContact', async () => {
+    const { FilterCard } = await import('../components/FilterCard');
+    const filter = {
+      id: 'f-3',
+      field: 'dateCreated',
+      operator: 'equal to',
+      value: '2026-10-23',
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter,
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('type="date"');
+    expect(html).toContain('value="2026-10-23"');
+  });
+
+  it('renders FilterCard with multi-select options for gender, ethnicity, race, and birthMonth', async () => {
+    const { FilterCard } = await import('../components/FilterCard');
+    const filter = {
+      id: 'f-4',
+      field: 'gender',
+      operator: 'equal to',
+      values: ['Male', 'Female'],
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter,
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('Male');
+    expect(html).toContain('Female');
+    expect(html).toContain('✓');
+  });
+
+  it('validates filter rules correctly via validateFilterRule', async () => {
+    const { validateFilterRule } = await import('../constants/filterMetadata');
+
+    // Valid rule
+    const validRule = { id: '1', field: 'age', operator: 'equal to', value: '30' };
+    expect(validateFilterRule(validRule).isValid).toBe(true);
+
+    // Missing value
+    const emptyRule = { id: '2', field: 'age', operator: 'equal to', value: '' };
+    expect(validateFilterRule(emptyRule).isValid).toBe(false);
+
+    // Valid range
+    const validRange = { id: '3', field: 'age', operator: 'between', minValue: '20', maxValue: '30' };
+    expect(validateFilterRule(validRange).isValid).toBe(true);
+
+    // Inverted range
+    const invertedRange = { id: '4', field: 'age', operator: 'between', minValue: '50', maxValue: '20' };
+    expect(validateFilterRule(invertedRange).isValid).toBe(false);
+
+    // Missing range endpoint
+    const missingMax = { id: '5', field: 'age', operator: 'between', minValue: '20', maxValue: '' };
+    expect(validateFilterRule(missingMax).isValid).toBe(false);
+
+    // Special no-value operator (has any value)
+    const assignedRule = { id: '6', field: 'custom_123', operator: 'has any value' };
+    expect(validateFilterRule(assignedRule).isValid).toBe(true);
+
+    // Date range valid and inverted
+    const validDateRange = { id: '7', field: 'dateCreated', operator: 'between', minValue: '2026-01-01', maxValue: '2026-12-31' };
+    expect(validateFilterRule(validDateRange).isValid).toBe(true);
+    const invertedDateRange = { id: '8', field: 'dateCreated', operator: 'between', minValue: '2026-12-31', maxValue: '2026-01-01' };
+    expect(validateFilterRule(invertedDateRange).isValid).toBe(false);
+
+    // Multi-select empty vs non-empty
+    const emptyMulti = { id: '9', field: 'gender', operator: 'equal to', values: [] };
+    expect(validateFilterRule(emptyMulti).isValid).toBe(false);
+    const validMulti = { id: '10', field: 'gender', operator: 'equal to', values: ['Male'] };
+    expect(validateFilterRule(validMulti).isValid).toBe(true);
+  });
+
+  it('renders FilterCard with no-value informational notice when operator is has any value or has no value', async () => {
+    const { FilterCard } = await import('../components/FilterCard');
+    const filter = {
+      id: 'f-assigned',
+      field: 'custom_status',
+      operator: 'has any value',
+      value: '',
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter,
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('filter-card-no-value-notice');
+    expect(html).toContain('No value input needed');
+  });
 });

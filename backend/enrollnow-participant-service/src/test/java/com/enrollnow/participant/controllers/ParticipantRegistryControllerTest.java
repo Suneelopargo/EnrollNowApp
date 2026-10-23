@@ -71,6 +71,33 @@ class ParticipantRegistryControllerTest {
     }
 
     @Test
+    void getParticipants_parsesCustomFiltersJsonWithRangeAndMultiSelect() {
+        RegistryPagedResponse<RegistryParticipantDto> pagedResponse =
+                new RegistryPagedResponse<>(Collections.emptyList(), 0, 0, 25);
+
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(registryService.searchParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), eq(0), eq(25), any(), any()))
+                .thenReturn(pagedResponse);
+
+        String json = "[{\"id\":\"1\",\"field\":\"age\",\"operator\":\"between\",\"minValue\":\"20\",\"maxValue\":\"40\"}," +
+                "{\"id\":\"2\",\"field\":\"gender\",\"operator\":\"equal to\",\"values\":[\"Male\",\"Female\"]}]";
+
+        ResponseEntity<RegistryPagedResponse<RegistryParticipantDto>> response =
+                controller.getParticipants(null, null, null, null, "all", "all", null, json, 0, 25, "name", "asc");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(registryService).searchParticipants(
+                eq(tenantId), isNull(), isNull(), eq("all"), eq("all"), isNull(),
+                argThat(rules -> rules.size() == 2 &&
+                        "age".equals(rules.get(0).getField()) &&
+                        "20".equals(rules.get(0).getMinValue()) &&
+                        rules.get(1).getValues().contains("Male")),
+                eq(0), eq(25), eq("name"), eq("asc")
+        );
+    }
+
+    @Test
     void getParticipant_returnsOkWhenFound() {
         UUID partId = UUID.randomUUID();
         RegistryParticipantDto p = new RegistryParticipantDto();
