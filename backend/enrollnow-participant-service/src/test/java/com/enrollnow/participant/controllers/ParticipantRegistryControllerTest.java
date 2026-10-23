@@ -169,6 +169,25 @@ class ParticipantRegistryControllerTest {
     }
 
     @Test
+    void checkDuplicate_returnsDuplicatesList() {
+        RegistryParticipantDto p = new RegistryParticipantDto();
+        p.setId(UUID.randomUUID().toString());
+        p.setFirstName("Alice");
+        p.setLastName("Walker");
+
+        when(registryService.findDuplicatesByName(tenantId, "Alice", "Walker"))
+                .thenReturn(List.of(p));
+
+        ResponseEntity<List<RegistryParticipantDto>> response =
+                controller.checkDuplicate("Alice", "Walker", tenantId, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).hasSize(1);
+        assertThat(response.getBody().get(0).getFirstName()).isEqualTo("Alice");
+        verify(registryService).findDuplicatesByName(tenantId, "Alice", "Walker");
+    }
+
+    @Test
     void exportRegistry_rejectsUnauthorizedAccess() {
         doThrow(new AccessDeniedException("Access denied: Registry access requires SITE_REGISTRY, SITE_MANAGER, or SITE_ADMIN role"))
                 .when(siteAuthorizationService).requireRegistryAccess(tenantId, null);

@@ -27,7 +27,12 @@ public class UpdateParticipantRequest {
     private String primaryLanguage;
     private String familyRole;
     private String guardianName;
+    private String familyId;
+    private String globalId;
+    private String timezone;
+    private String globalDateOfLastContact;
     private List<String> tags;
+    private List<ParticipantVariableDto> variables;
 
     public UpdateParticipantRequest() {
     }
@@ -224,11 +229,51 @@ public class UpdateParticipantRequest {
         this.guardianName = guardianName;
     }
 
+    public String getFamilyId() {
+        return familyId;
+    }
+
+    public void setFamilyId(String familyId) {
+        this.familyId = familyId;
+    }
+
+    public String getGlobalId() {
+        return globalId;
+    }
+
+    public void setGlobalId(String globalId) {
+        this.globalId = globalId;
+    }
+
+    public String getTimezone() {
+        return timezone;
+    }
+
+    public void setTimezone(String timezone) {
+        this.timezone = timezone;
+    }
+
+    public String getGlobalDateOfLastContact() {
+        return globalDateOfLastContact;
+    }
+
+    public void setGlobalDateOfLastContact(String globalDateOfLastContact) {
+        this.globalDateOfLastContact = globalDateOfLastContact;
+    }
+
     public List<String> getTags() {
         return tags;
     }
 
     public void setTags(List<String> tags) {
         this.tags = tags;
+    }
+
+    public List<ParticipantVariableDto> getVariables() {
+        return variables;
+    }
+
+    public void setVariables(List<ParticipantVariableDto> variables) {
+        this.variables = variables;
     }
 }

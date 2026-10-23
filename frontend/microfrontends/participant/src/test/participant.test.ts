@@ -6,6 +6,7 @@ import { ParticipantModule } from '../remoteEntry';
 import { ParticipantGrid } from '../components/ParticipantGrid';
 import { AddParticipantModal } from '../components/AddParticipantModal';
 import { SaveFilterModal } from '../components/SaveFilterModal';
+import { ParticipantDetailModal } from '../components/ParticipantDetailModal';
 import { participantApi } from '../../../../shared/api/participantApi';
 import { apiClient } from '../../../../shared/api-client';
 
@@ -239,8 +240,8 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
             id: '1',
             name: 'John Doe',
             gender: 'Male',
-            age: 30,
-            studies: [{ id: 's1', name: 'Cardio Study' }],
+            age: '30',
+            studies: [{ name: 'Cardio Study' }],
             lastContact: '2026-01-01',
           },
         ],
@@ -249,5 +250,88 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).toContain('Search participants...');
     expect(html).toContain('data-grid-toolbar__search');
     expect(html).toContain('Add Participant');
+  });
+
+  it('checks for duplicate participants via participantApi.checkDuplicates', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: [{ id: 'p-1', firstName: 'John', lastName: 'Doe', name: 'John Doe' }],
+    } as any);
+
+    const duplicates = await participantApi.checkDuplicates('John', 'Doe');
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/participants/check-duplicate', expect.objectContaining({
+      params: { firstName: 'John', lastName: 'Doe' },
+    }));
+    expect(duplicates.length).toBe(1);
+    expect(duplicates[0].name).toBe('John Doe');
+    getSpy.mockRestore();
+  });
+
+  it('renders ParticipantDetailModal with participant identity, contact methods, family, and variables in the modal', () => {
+    const testParticipant = {
+      id: 'p-101',
+      name: 'Eleanor Vance',
+      firstName: 'Eleanor',
+      lastName: 'Vance',
+      status: 'Active',
+      familyId: 'FAM-2001',
+      globalId: 'GLB-9988',
+      timezone: 'America/New_York (EDT)',
+      tags: ['Pediatric', 'Cohort A'],
+      contactForFutureStudies: true,
+      age: '12',
+      gender: 'Female',
+      contactMethods: {
+        primaryEmail: 'eleanor@example.org',
+        phone: '+1 555-1234',
+        address: '42 Main St',
+        preferredMethod: 'Email',
+      },
+      demographics: {
+        dob: '05/12/2014',
+        gender: 'Female',
+        ethnicity: 'Not Hispanic',
+        race: 'Caucasian',
+        primaryLanguage: 'English',
+      },
+      family: {
+        familyRole: 'Proband',
+        members: [
+          { id: 'p-101', name: 'Eleanor Vance', age: '12', sex: 'Female' },
+          { id: 'p-102', name: 'Thomas Vance', age: '45', sex: 'Male' },
+        ],
+      },
+      variables: [
+        { id: 'v-1', name: 'IQ Score', value: '115', type: 'Number', lastUpdated: '10/20/2026' },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(ParticipantDetailModal, {
+        isOpen: true,
+        participant: testParticipant,
+        onClose: vi.fn(),
+        onSave: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('Participant Details');
+    expect(html).toContain('Eleanor Vance');
+    expect(html).toContain('GLB-9988');
+    expect(html).toContain('FAM-2001');
+    expect(html).toContain('Contact For Future Studies?');
+    expect(html).toContain('Save Changes');
+  });
+
+  it('does not render ParticipantDetailModal when isOpen is false', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ParticipantDetailModal, {
+        isOpen: false,
+        participant: null,
+        onClose: vi.fn(),
+        onSave: vi.fn(),
+      })
+    );
+
+    expect(html).toBe('');
   });
 });

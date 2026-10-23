@@ -113,6 +113,20 @@ public class ParticipantRegistryController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/participants/check-duplicate")
+    public ResponseEntity<List<RegistryParticipantDto>> checkDuplicate(
+            @RequestParam String firstName,
+            @RequestParam String lastName,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId) {
+
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        List<RegistryParticipantDto> duplicates = registryService.findDuplicatesByName(resolvedTenantId, firstName, lastName);
+        return ResponseEntity.ok(duplicates);
+    }
+
     @GetMapping("/participants/{id}")
     public ResponseEntity<RegistryParticipantDto> getParticipant(
             @PathVariable UUID id,

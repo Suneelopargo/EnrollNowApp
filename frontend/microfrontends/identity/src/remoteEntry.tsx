@@ -59,9 +59,13 @@ export interface IdentityModuleProps {
 export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recoveryAlert, setRecoveryAlert] = useState<AuthErrorNotification | null>(null);
+
+  const isFormValid = username.trim().length > 0 && password.length > 0;
 
   useEffect(() => {
     let warningMsg: string | null = null;
@@ -91,14 +95,24 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Exact entered credentials — NO hardcoded test fallback
-    const loginUser = username.trim();
-    const loginPass = password;
+    let hasError = false;
+    if (!username.trim()) {
+      setUsernameError('Email address is required');
+      hasError = true;
+    }
+    if (!password) {
+      setPasswordError('Password is required');
+      hasError = true;
+    }
 
-    if (!loginUser || !loginPass) {
+    if (hasError || !isFormValid) {
       toast.warning('Please enter your email and password.');
       return;
     }
+
+    // Exact entered credentials — NO hardcoded test fallback
+    const loginUser = username.trim();
+    const loginPass = password;
 
     setLoading(true);
     setRecoveryAlert(null);
@@ -262,14 +276,29 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       id="email-input"
                       type="text"
                       className="enl-field-input"
-                      placeholder="Enter your email address"
+                      placeholder={usernameError && !username ? usernameError : 'Enter your email address'}
                       value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      onChange={(e) => {
+                        setUsername(e.target.value);
+                        if (usernameError) setUsernameError('');
+                      }}
+                      onBlur={() => {
+                        if (!username.trim()) {
+                          setUsernameError('Email address is required');
+                        }
+                      }}
                       autoComplete="username"
                       required
                       aria-required="true"
+                      aria-invalid={!!usernameError}
+                      aria-describedby={usernameError ? 'email-input-error' : undefined}
                     />
                   </div>
+                  {usernameError && (
+                    <div id="email-input-error" className="sr-only" role="alert">
+                      {usernameError}
+                    </div>
+                  )}
                 </div>
 
                 {/* Password */}
@@ -283,12 +312,22 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       id="password-input"
                       type={showPassword ? 'text' : 'password'}
                       className="enl-field-input"
-                      placeholder="Enter your password"
+                      placeholder={passwordError && !password ? passwordError : 'Enter your password'}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      onBlur={() => {
+                        if (!password) {
+                          setPasswordError('Password is required');
+                        }
+                      }}
                       autoComplete="current-password"
                       required
                       aria-required="true"
+                      aria-invalid={!!passwordError}
+                      aria-describedby={passwordError ? 'password-input-error' : undefined}
                     />
                     <button
                       type="button"
@@ -300,6 +339,11 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                     </button>
                   </div>
+                  {passwordError && (
+                    <div id="password-input-error" className="sr-only" role="alert">
+                      {passwordError}
+                    </div>
+                  )}
                 </div>
 
                 {/* Options Row */}
@@ -325,7 +369,8 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 <button
                   type="submit"
                   className="enl-login-btn"
-                  disabled={loading}
+                  disabled={loading || !isFormValid}
+                  aria-disabled={loading || !isFormValid}
                 >
                   {loading ? (
                     <span>Signing in...</span>

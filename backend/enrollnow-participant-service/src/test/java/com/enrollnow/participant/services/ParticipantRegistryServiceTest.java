@@ -322,6 +322,19 @@ class ParticipantRegistryServiceTest {
         assertThat(tenantWideResponse.getItems()).hasSize(3);
     }
 
+    @Test
+    void findDuplicatesByName_returnsMatchingParticipants() {
+        Participant p = createMockParticipant(UUID.randomUUID(), "Alice", "Walker", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(tenantId, "Alice", "Walker"))
+                .thenReturn(List.of(p));
+        when(participantRepository.findByTenantIdAndId(tenantId, p.getId()))
+                .thenReturn(Optional.of(p));
+
+        List<RegistryParticipantDto> duplicates = service.findDuplicatesByName(tenantId, "Alice", "Walker");
+        assertThat(duplicates).hasSize(1);
+        assertThat(duplicates.get(0).getFirstName()).isEqualTo("Alice");
+    }
+
     private Participant createMockParticipant(UUID id, String firstName, String lastName, LocalDate dob, String status) {
         Participant p = new Participant();
         p.setId(id);

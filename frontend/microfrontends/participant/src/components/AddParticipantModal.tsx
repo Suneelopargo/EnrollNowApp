@@ -1,9 +1,10 @@
 // frontend/microfrontends/participant/src/components/AddParticipantModal.tsx - Add Participant Modal Dialog
 import React, { useState, useCallback, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, AlertTriangle, Loader2 } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
 import { validateForm, validators } from '../../../../shared/design-system/validation';
+import { participantApi } from '../../../../shared/api/participantApi';
 import { ParticipantRecord } from '../types/participant';
 
 interface AddParticipantModalProps {
@@ -19,6 +20,8 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
   
   const [firstNameError, setFirstNameError] = useState('');
   const [lastNameError, setLastNameError] = useState('');
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<{ count: number; name: string } | null>(null);
 
   const handleReset = useCallback(() => {
     setFirstName('');
@@ -26,6 +29,8 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
     setLastName('');
     setFirstNameError('');
     setLastNameError('');
+    setIsCheckingDuplicate(false);
+    setDuplicateWarning(null);
   }, []);
 
   useEffect(() => {
@@ -41,19 +46,7 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const validationErrors = validateForm(
-      { firstName, lastName },
-      {
-        firstName: [validators.required('First Name'), validators.personName('First Name')],
-        lastName: [validators.required('Last Name'), validators.personName('Last Name')],
-      },
-    );
-    setFirstNameError(validationErrors.firstName || '');
-    setLastNameError(validationErrors.lastName || '');
-    if (Object.keys(validationErrors).length > 0) return;
-
+  const executeAdd = () => {
     const fullName = `${firstName.trim()} ${middleName.trim() ? middleName.trim() + ' ' : ''}${lastName.trim()}`;
 
     const newParticipant: ParticipantRecord = {
@@ -101,6 +94,40 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
     onClose();
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const validationErrors = validateForm(
+      { firstName, lastName },
+      {
+        firstName: [validators.required('First Name'), validators.personName('First Name')],
+        lastName: [validators.required('Last Name'), validators.personName('Last Name')],
+      },
+    );
+    setFirstNameError(validationErrors.firstName || '');
+    setLastNameError(validationErrors.lastName || '');
+    if (Object.keys(validationErrors).length > 0) return;
+
+    // Perform duplicate check before adding
+    setIsCheckingDuplicate(true);
+    try {
+      const duplicates = await participantApi.checkDuplicates(firstName.trim(), lastName.trim());
+      if (duplicates && duplicates.length > 0) {
+        setDuplicateWarning({
+          count: duplicates.length,
+          name: `${firstName.trim()} ${lastName.trim()}`,
+        });
+        setIsCheckingDuplicate(false);
+        return;
+      }
+    } catch {
+      // If duplicate check endpoint fails or is unavailable, allow continuing
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
+
+    executeAdd();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -108,14 +135,71 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
       title="Add Participant"
       footer={(
         <>
-          <button type="submit" form="add-participant-form" className="btn btn-primary">
-            <Plus size={16} /> Add Participant
+          <button
+            type="submit"
+            form="add-participant-form"
+            className="btn btn-primary"
+            disabled={isCheckingDuplicate}
+          >
+            {isCheckingDuplicate ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Checking...
+              </>
+            ) : (
+              <>
+                <Plus size={16} /> Add Participant
+              </>
+            )}
           </button>
           <button type="button" onClick={handleClose} className="btn btn-secondary">Cancel</button>
         </>
       )}
     >
       <form id="add-participant-form" onSubmit={handleSubmit} noValidate>
+        {duplicateWarning && (
+          <div
+            className="alert alert-warning"
+            role="alert"
+            style={{
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.75rem',
+              padding: '0.85rem 1rem',
+              backgroundColor: '#fffbeb',
+              border: '1px solid #fcd34d',
+              borderRadius: '6px',
+            }}
+          >
+            <AlertTriangle size={20} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <strong style={{ color: '#92400e', display: 'block', marginBottom: '0.25rem' }}>
+                Potential Duplicate Participant
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#b45309' }}>
+                Found {duplicateWarning.count} existing participant(s) named &ldquo;{duplicateWarning.name}&rdquo;.
+                Would you like to proceed with creating another participant?
+              </p>
+              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={executeAdd}
+                >
+                  Proceed Anyway
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setDuplicateWarning(null)}
+                >
+                  Review Name
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <AccessibleField
           id="participant-first-name"
           label="First Name"
@@ -132,6 +216,7 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
               onChange={(e) => {
                 setFirstName(e.target.value);
                 if (firstNameError) setFirstNameError('');
+                if (duplicateWarning) setDuplicateWarning(null);
               }}
               className="form-input"
             />
@@ -166,6 +251,7 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
               onChange={(e) => {
                 setLastName(e.target.value);
                 if (lastNameError) setLastNameError('');
+                if (duplicateWarning) setDuplicateWarning(null);
               }}
               className="form-input"
             />

@@ -122,9 +122,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           gender: p.gender || 'Unspecified',
           primaryLanguage: 'English',
         },
-        family: p.family || {
-          familyRole: 'Proband',
-          membersCount: 1,
+        family: {
+          familyRole: p.family?.familyRole || 'Proband',
+          membersCount: p.family?.membersCount ?? (p.family?.members?.length || 1),
+          pedigreeTreeId: p.family?.pedigreeTreeId,
+          guardianName: p.family?.guardianName,
+          members: Array.isArray(p.family?.members) ? p.family.members : [],
         },
         variables: Array.isArray(p.variables) ? p.variables : [],
       }));
@@ -347,6 +350,11 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           sexAtBirth: updatedParticipant.gender,
           contactForFutureStudies: updatedParticipant.contactForFutureStudies,
           tags: updatedParticipant.tags,
+          familyId: updatedParticipant.familyId,
+          globalId: updatedParticipant.globalId,
+          timezone: updatedParticipant.timezone,
+          globalDateOfLastContact: updatedParticipant.globalDateOfLastContact,
+          variables: updatedParticipant.variables,
         },
         {
           params: { tenantId, siteId },
@@ -506,6 +514,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         onClose={() => setDetailModalState({ isOpen: false, participant: null })}
         participant={detailModalState.participant}
         onSave={handleSaveDetail}
+        onSelectParticipantById={(id) => {
+          const found = participants.find((p) => p.id === id);
+          if (found) {
+            setDetailModalState({ isOpen: true, participant: found });
+          }
+        }}
       />
     </div>
   );

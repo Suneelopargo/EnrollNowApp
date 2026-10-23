@@ -353,6 +353,8 @@ public class ParticipantRegistryService {
         if (request.getGuardianName() != null) attrs.put("guardianName", request.getGuardianName());
         if (request.getEthnicity() != null) attrs.put("ethnicity", request.getEthnicity());
         if (request.getRace() != null) attrs.put("race", request.getRace());
+        if (request.getFamilyId() != null) attrs.put("familyId", request.getFamilyId().trim());
+        if (request.getVariables() != null) attrs.put("variables", request.getVariables());
         try {
             participant.setCustomAttributes(objectMapper.writeValueAsString(attrs));
         } catch (Exception e) {
@@ -363,8 +365,26 @@ public class ParticipantRegistryService {
         participant.setUpdatedAt(OffsetDateTime.now());
         participantRepository.save(participant);
 
+        // Update Global ID if provided
+        if (request.getGlobalId() != null && !request.getGlobalId().isBlank()) {
+            List<ParticipantIdentifier> ids = identifierRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            ParticipantIdentifier globalIdObj = ids.stream()
+                    .filter(i -> "GLOBAL_ID".equalsIgnoreCase(i.getIdentifierType()))
+                    .findFirst()
+                    .orElseGet(() -> {
+                        ParticipantIdentifier newId = new ParticipantIdentifier();
+                        newId.setTenantId(tenantId);
+                        newId.setParticipantId(participantId);
+                        newId.setIdentifierType("GLOBAL_ID");
+                        newId.setPrimaryIdentifier(true);
+                        return newId;
+                    });
+            globalIdObj.setIdentifierValue(request.getGlobalId().trim());
+            identifierRepository.save(globalIdObj);
+        }
+
         // Update Preference if provided
-        if (request.getContactForFutureStudies() != null || request.getPrimaryLanguage() != null) {
+        if (request.getContactForFutureStudies() != null || request.getPrimaryLanguage() != null || request.getTimezone() != null) {
             ParticipantPreference pref = preferenceRepository.findByTenantIdAndParticipantId(tenantId, participantId)
                     .orElseGet(() -> {
                         ParticipantPreference p = new ParticipantPreference();
@@ -377,6 +397,9 @@ public class ParticipantRegistryService {
             }
             if (request.getPrimaryLanguage() != null) {
                 pref.setPreferredLanguage(request.getPrimaryLanguage());
+            }
+            if (request.getTimezone() != null && !request.getTimezone().isBlank()) {
+                pref.setTimezone(request.getTimezone().trim());
             }
             preferenceRepository.save(pref);
         }
@@ -645,7 +668,11 @@ public class ParticipantRegistryService {
 
         // Timestamps & Display strings
         dto.setDateCreated(p.getCreatedAt() != null ? p.getCreatedAt().format(DISPLAY_DT_FMT) : "");
-        dto.setTimezone("America/New_York (EDT)");
+        if (pref != null && pref.getTimezone() != null && !pref.getTimezone().isBlank()) {
+            dto.setTimezone(pref.getTimezone());
+        } else {
+            dto.setTimezone("America/New_York (EDT)");
+        }
 
         // Last Contact date from candidate
         OffsetDateTime lastContact = candidates.stream()
@@ -665,7 +692,8 @@ public class ParticipantRegistryService {
             tags = list.stream().map(Object::toString).collect(Collectors.toList());
         }
         dto.setTags(tags);
-        dto.setFamilyId(customAttrs.getOrDefault("familyId", "FAM-10001").toString());
+        String famId = customAttrs.getOrDefault("familyId", "FAM-10001").toString();
+        dto.setFamilyId(famId);
 
         // ContactMethods DTO
         String fullAddress = primaryAddr != null
@@ -694,18 +722,70 @@ public class ParticipantRegistryService {
         );
         dto.setDemographics(demo);
 
-        // FamilyInfo DTO
+        // FamilyInfo DTO with resolved members
+        List<FamilyInfoDto.FamilyMemberDto> familyMembers = new ArrayList<>();
+        if (famId != null && !famId.isBlank()) {
+            List<Participant> tenantParticipants = participantRepository.findByTenantId(p.getTenantId());
+            for (Participant other : tenantParticipants) {
+                if (other.getId().equals(p.getId())) continue;
+                Map<String, Object> otherAttrs = parseCustomAttributes(other.getCustomAttributes());
+                if (famId.equalsIgnoreCase(String.valueOf(otherAttrs.get("familyId")))) {
+                    String otherName = ((other.getFirstName() != null ? other.getFirstName() : "") + " " +
+                            (other.getLastName() != null ? other.getLastName() : "")).trim();
+                    String otherAge = other.getDateOfBirth() != null
+                            ? String.valueOf(Period.between(other.getDateOfBirth(), LocalDate.now()).getYears())
+                            : "N/A";
+                    String otherSex = other.getSexAtBirth() != null ? other.getSexAtBirth() : "Unspecified";
+                    List<String> otherStudies = candidateRepository.findByTenantIdAndParticipantId(p.getTenantId(), other.getId())
+                            .stream()
+                            .map(c -> studiesMap.get(c.getStudyId()))
+                            .filter(Objects::nonNull)
+                            .map(Study::getName)
+                            .collect(Collectors.toList());
+                    familyMembers.add(new FamilyInfoDto.FamilyMemberDto(
+                            other.getId().toString(),
+                            otherName,
+                            otherSex,
+                            otherAge,
+                            otherStudies
+                    ));
+                }
+            }
+        }
+
         FamilyInfoDto family = new FamilyInfoDto(
                 customAttrs.getOrDefault("familyRole", "Proband").toString(),
-                1,
-                "PED-101",
-                customAttrs.getOrDefault("guardianName", "N/A").toString()
+                familyMembers.size() + 1,
+                "PED-" + (famId.length() > 4 ? famId.substring(famId.length() - 4) : "101"),
+                customAttrs.getOrDefault("guardianName", "N/A").toString(),
+                familyMembers
         );
         dto.setFamily(family);
 
-        dto.setVariables(Collections.emptyList());
+        // Variables DTO
+        List<ParticipantVariableDto> variableList = new ArrayList<>();
+        if (customAttrs.get("variables") instanceof List) {
+            try {
+                String varJson = objectMapper.writeValueAsString(customAttrs.get("variables"));
+                variableList = objectMapper.readValue(varJson, new TypeReference<List<ParticipantVariableDto>>() {});
+            } catch (Exception ignored) {}
+        }
+        dto.setVariables(variableList);
 
         return dto;
+    }
+
+    @Transactional(readOnly = true)
+    public List<RegistryParticipantDto> findDuplicatesByName(UUID tenantId, String firstName, String lastName) {
+        if (firstName == null || lastName == null || firstName.isBlank() || lastName.isBlank()) {
+            return Collections.emptyList();
+        }
+        List<Participant> matches = participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(
+                tenantId, firstName.trim(), lastName.trim());
+        return matches.stream()
+                .map(p -> getParticipantById(tenantId, p.getId()).orElse(null))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private boolean matchesSearch(RegistryParticipantDto p, String lower) {

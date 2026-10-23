@@ -18,6 +18,8 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID>,
 
     List<Participant> findByTenantId(UUID tenantId);
 
+    List<Participant> findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(UUID tenantId, String firstName, String lastName);
+
     Page<Participant> findByTenantId(UUID tenantId, Pageable pageable);
 
     long countByTenantId(UUID tenantId);

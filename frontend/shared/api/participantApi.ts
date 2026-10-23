@@ -75,6 +75,11 @@ export interface CreateParticipantPayload {
   guardianName?: string;
   tags?: string[];
   studyId?: string;
+  familyId?: string;
+  globalId?: string;
+  timezone?: string;
+  globalDateOfLastContact?: string;
+  variables?: Array<{ id?: string; name: string; type?: string; value: string; lastUpdated?: string }>;
 }
 
 export interface AssignStudyPayload {
@@ -94,6 +99,15 @@ export const participantApi = {
 
     const res = await apiClient.get('/api/v1/participants', { skipToast: true, ...config } as any);
     return res.data?.data ?? res.data;
+  },
+
+  async checkDuplicates(firstName: string, lastName: string, config?: any): Promise<Participant[]> {
+    const res = await apiClient.get('/api/v1/participants/check-duplicate', {
+      params: { firstName, lastName },
+      skipToast: true,
+      ...config,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
   },
 
   async getParticipant(id: string | number, config?: any): Promise<Participant> {

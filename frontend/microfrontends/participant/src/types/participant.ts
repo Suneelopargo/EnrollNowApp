@@ -21,15 +21,26 @@ export interface Demographics {
   primaryLanguage?: string;
 }
 
+export interface FamilyMember {
+  id: string;
+  name: string;
+  sex?: string;
+  age?: string;
+  studies?: string[];
+}
+
 export interface FamilyInfo {
   familyRole?: string;
   membersCount?: number;
   pedigreeTreeId?: string;
   guardianName?: string;
+  members?: FamilyMember[];
 }
 
 export interface ParticipantVariable {
+  id?: string;
   name: string;
+  type?: string;
   value: string;
   lastUpdated?: string;
 }
@@ -38,6 +49,7 @@ export interface ParticipantRecord {
   id: string;
   name: string;
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   studies?: StudyItem[];
   gender?: string;
