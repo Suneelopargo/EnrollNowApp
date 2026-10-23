@@ -93,11 +93,23 @@ export interface AssignStudyPayload {
 
 export const participantApi = {
   async getParticipants(configOrParams?: any): Promise<any> {
-    const isConfig = configOrParams && ('headers' in configOrParams || 'skipToast' in configOrParams);
-    const params = isConfig ? configOrParams.params : configOrParams;
-    const config = isConfig ? configOrParams : { params };
+    let params: any;
+    let config: any = {};
 
-    const res = await apiClient.get('/api/v1/participants', { skipToast: true, ...config } as any);
+    if (configOrParams) {
+      if (typeof configOrParams === 'object' && 'params' in configOrParams) {
+        params = configOrParams.params;
+        const { params: _, ...rest } = configOrParams;
+        config = rest;
+      } else if (typeof configOrParams === 'object' && ('headers' in configOrParams || 'skipToast' in configOrParams)) {
+        params = configOrParams.params;
+        config = configOrParams;
+      } else {
+        params = configOrParams;
+      }
+    }
+
+    const res = await apiClient.get('/api/v1/participants', { skipToast: true, ...config, params } as any);
     return res.data?.data ?? res.data;
   },
 

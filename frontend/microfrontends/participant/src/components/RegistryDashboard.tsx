@@ -113,7 +113,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         pageSize: 500,
       };
 
-      const res: any = await participantApi.getParticipants({ params });
+      const res: any = await participantApi.getParticipants(params);
       const rawList = Array.isArray(res)
         ? res
         : Array.isArray(res?.items)

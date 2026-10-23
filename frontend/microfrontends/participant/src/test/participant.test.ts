@@ -65,6 +65,30 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     getSpy.mockRestore();
   });
 
+  it('unwraps nested { params } without producing double-nested params', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: { items: [], totalCount: 0 },
+    } as any);
+
+    await participantApi.getParticipants({
+      params: {
+        tenantId: '11111111-1111-1111-1111-111111111111',
+        siteId: '22222222-2222-2222-2222-222222222222',
+        contactFilter: 'all',
+      },
+    });
+
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/participants', expect.objectContaining({
+      params: {
+        tenantId: '11111111-1111-1111-1111-111111111111',
+        siteId: '22222222-2222-2222-2222-222222222222',
+        contactFilter: 'all',
+      },
+      skipToast: true,
+    }));
+    getSpy.mockRestore();
+  });
+
   it('fetches single participant by id', async () => {
     const mockParticipant = { id: 'p-1', firstName: 'Alice', lastName: 'Smith' };
     const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
