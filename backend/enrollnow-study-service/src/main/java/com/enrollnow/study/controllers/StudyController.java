@@ -2,23 +2,28 @@ package com.enrollnow.study.controllers;
 
 import com.enrollnow.common.core.ApiResponse;
 import com.enrollnow.identity.services.SiteAuthorizationService;
+import com.enrollnow.study.dtos.CopyStudyRequest;
 import com.enrollnow.study.dtos.CreateStudyRequest;
+import com.enrollnow.study.dtos.ImportStudyResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
+import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.services.MyStudiesService;
 import com.enrollnow.study.services.StudyService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -26,16 +31,17 @@ public class StudyController {
 
     private final StudyService studyService;
     private final SiteAuthorizationService siteAuthorizationService;
+    private final ObjectMapper objectMapper;
 
     public StudyController(StudyRepository studyRepository) {
-        this(new StudyService(studyRepository), null);
+        this(new StudyService(studyRepository), null, null);
     }
 
     public StudyController(
             StudyRepository studyRepository,
             SiteAuthorizationService siteAuthorizationService
     ) {
-        this(new StudyService(studyRepository), siteAuthorizationService);
+        this(new StudyService(studyRepository), siteAuthorizationService, null);
     }
 
     public StudyController(
@@ -43,7 +49,7 @@ public class StudyController {
             SiteAuthorizationService siteAuthorizationService,
             MyStudiesService myStudiesService
     ) {
-        this(new StudyService(studyRepository, myStudiesService), siteAuthorizationService);
+        this(new StudyService(studyRepository, myStudiesService), siteAuthorizationService, null);
     }
 
     @Autowired
@@ -51,8 +57,17 @@ public class StudyController {
             StudyService studyService,
             @Autowired(required = false) SiteAuthorizationService siteAuthorizationService
     ) {
+        this(studyService, siteAuthorizationService, null);
+    }
+
+    public StudyController(
+            StudyService studyService,
+            SiteAuthorizationService siteAuthorizationService,
+            ObjectMapper objectMapper
+    ) {
         this.studyService = studyService;
         this.siteAuthorizationService = siteAuthorizationService;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     @GetMapping({"/tenants/{tenantId}/studies", "/studies"})
@@ -105,11 +120,130 @@ public class StudyController {
             @RequestBody(required = false) Map<String, Object> payload
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        UUID callerUserId = resolveCallerUserId();
         CreateStudyRequest request = mapToCreateRequest(payload);
 
-        StudySummaryResponse saved = studyService.createStudy(effectiveTenantId, request);
+        StudySummaryResponse saved = studyService.createStudy(effectiveTenantId, request, callerUserId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Study created successfully", saved));
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/copy", "/studies/copy"})
+    public ResponseEntity<ApiResponse<StudySummaryResponse>> copyStudy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @RequestBody(required = false) Map<String, Object> payload
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        UUID callerUserId = resolveCallerUserId();
+        CopyStudyRequest request = mapToCopyRequest(payload);
+
+        StudySummaryResponse saved = studyService.copyStudy(effectiveTenantId, request, callerUserId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Study copied successfully", saved));
+    }
+
+    @PostMapping(
+            value = {"/tenants/{tenantId}/studies/import", "/studies/import"},
+            consumes = {MediaType.APPLICATION_JSON_VALUE}
+    )
+    public ResponseEntity<ApiResponse<ImportStudyResponse>> importStudyJson(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @RequestBody Map<String, Object> payload
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        UUID callerUserId = resolveCallerUserId();
+
+        String studyName = null;
+        Map<String, Object> studyData = null;
+
+        if (payload.containsKey("studyName")) {
+            studyName = String.valueOf(payload.get("studyName"));
+            if (payload.get("studyData") instanceof Map<?, ?> map) {
+                studyData = (Map<String, Object>) map;
+            } else if (payload.get("data") instanceof Map<?, ?> map) {
+                studyData = (Map<String, Object>) map;
+            } else {
+                studyData = payload;
+            }
+        } else if (payload.containsKey("shortName")) {
+            studyName = String.valueOf(payload.get("shortName"));
+            studyData = payload;
+        } else if (payload.containsKey("name")) {
+            studyName = String.valueOf(payload.get("name"));
+            studyData = payload;
+        } else {
+            studyData = payload;
+            studyName = "Imported Study";
+        }
+
+        ImportStudyResponse response = studyService.importStudy(effectiveTenantId, studyName, studyData, callerUserId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Study imported successfully", response));
+    }
+
+    @PostMapping(
+            value = {"/tenants/{tenantId}/studies/import", "/studies/import"},
+            consumes = {MediaType.MULTIPART_FORM_DATA_VALUE}
+    )
+    public ResponseEntity<ApiResponse<ImportStudyResponse>> importStudyMultipart(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "studyName", required = false) String studyNameParam,
+            @RequestParam(value = "shortName", required = false) String shortNameParam
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (siteAuthorizationService != null) {
+            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
+        }
+
+        UUID callerUserId = resolveCallerUserId();
+
+        if (file == null || file.isEmpty()) {
+            throw new InvalidStudyException("Must select a file to import a study.");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && !originalFilename.toLowerCase().endsWith(".json")) {
+            throw new InvalidStudyException("Must select a .json file to import a study.");
+        }
+
+        Map<String, Object> dataJSON;
+        try {
+            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            dataJSON = objectMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ex) {
+            throw new InvalidStudyException("File contents lack the proper JSON format, please try again.");
+        }
+
+        String studyName = studyNameParam != null && !studyNameParam.isBlank()
+                ? studyNameParam.trim()
+                : (shortNameParam != null && !shortNameParam.isBlank() ? shortNameParam.trim() : null);
+
+        if (studyName == null && dataJSON.get("study") instanceof Map<?, ?> stMap && stMap.get("name") != null) {
+            studyName = String.valueOf(stMap.get("name")).trim();
+        } else if (studyName == null && dataJSON.get("studyName") != null) {
+            studyName = String.valueOf(dataJSON.get("studyName")).trim();
+        }
+
+        if (studyName == null || studyName.isBlank()) {
+            throw new InvalidStudyException("Must provide a study name to import a new study.");
+        }
+
+        ImportStudyResponse response = studyService.importStudy(effectiveTenantId, studyName, dataJSON, callerUserId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Study imported successfully", response));
     }
 
     @PutMapping({"/tenants/{tenantId}/studies/{studyId}", "/studies/{studyId}"})
@@ -134,11 +268,12 @@ public class StudyController {
         if (body == null) {
             return new CreateStudyRequest();
         }
-        String name = body.get("name") != null ? String.valueOf(body.get("name"))
+        String name = body.get("shortName") != null ? String.valueOf(body.get("shortName"))
+                : body.get("name") != null ? String.valueOf(body.get("name"))
                 : body.get("title") != null ? String.valueOf(body.get("title")) : "New Study";
         String code = body.get("studyCode") != null ? String.valueOf(body.get("studyCode"))
                 : body.get("protocolNumber") != null ? String.valueOf(body.get("protocolNumber"))
-                : "STD-" + System.currentTimeMillis();
+                : null;
         String description = body.get("description") != null ? String.valueOf(body.get("description")) : "";
         Integer sampleSize = null;
         if (body.get("sampleSize") instanceof Number n) {
@@ -150,12 +285,29 @@ public class StudyController {
         return new CreateStudyRequest(name, code, description, sampleSize);
     }
 
+    private CopyStudyRequest mapToCopyRequest(Map<String, Object> body) {
+        if (body == null) {
+            return new CopyStudyRequest();
+        }
+        String studyName = body.get("shortName") != null ? String.valueOf(body.get("shortName"))
+                : body.get("studyName") != null ? String.valueOf(body.get("studyName"))
+                : body.get("name") != null ? String.valueOf(body.get("name"))
+                : body.get("title") != null ? String.valueOf(body.get("title")) : "";
+
+        String sourceId = body.get("templateId") != null ? String.valueOf(body.get("templateId"))
+                : body.get("sourceStudyId") != null ? String.valueOf(body.get("sourceStudyId"))
+                : body.get("idOfStudyToCopy") != null ? String.valueOf(body.get("idOfStudyToCopy")) : "";
+
+        return new CopyStudyRequest(studyName, sourceId);
+    }
+
     private UpdateStudyRequest mapToUpdateRequest(Map<String, Object> body) {
         if (body == null) {
             return new UpdateStudyRequest();
         }
         String name = body.containsKey("name") ? String.valueOf(body.get("name"))
-                : body.containsKey("title") ? String.valueOf(body.get("title")) : null;
+                : body.containsKey("title") ? String.valueOf(body.get("title"))
+                : body.containsKey("shortName") ? String.valueOf(body.get("shortName")) : null;
         String description = body.containsKey("description") ? String.valueOf(body.get("description")) : null;
         Boolean archived = body.containsKey("archived") ? Boolean.parseBoolean(String.valueOf(body.get("archived"))) : null;
         Integer sampleSize = null;
@@ -165,6 +317,16 @@ public class StudyController {
             sampleSize = n.intValue();
         }
         return new UpdateStudyRequest(name, description, archived, sampleSize);
+    }
+
+    private UUID resolveCallerUserId() {
+        if (siteAuthorizationService != null) {
+            Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
+            if (callerOpt.isPresent()) {
+                return callerOpt.get().userId();
+            }
+        }
+        return null;
     }
 
     private UUID resolveTenantId(UUID targetTenantId) {
@@ -178,6 +340,6 @@ public class StudyController {
                 return callerOpt.get().tenantId();
             }
         }
-        return targetTenantId;
+        return targetTenantId != null ? targetTenantId : UUID.fromString("11111111-1111-1111-1111-111111111111");
     }
 }

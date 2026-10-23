@@ -1,11 +1,14 @@
 // frontend/microfrontends/study/src/remoteEntry.tsx - Study MFE Remote Entry
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MfeContext } from '../../../shared/contracts';
 import { Plus, Upload, X } from 'lucide-react';
 import { dashboardApi } from '../../../shared/api/dashboardApi';
 import { participantApi } from '../../../shared/api/participantApi';
 import { studyApi } from '../../../shared/api/studyApi';
+import { toast } from '../../../shared/toaster';
+import { confirmation } from '../../../shared/confirmation';
+import { getApiErrorMessage } from '../../../shared/api-client';
 import { useFocusTrap } from '../../../shared/accessibility/useFocusTrap';
 
 export interface StudyModuleProps {
@@ -37,61 +40,69 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
     }
   }, [location.search, navigate]);
 
-  useEffect(() => {
-    const fetchStudies = async () => {
-      setLoading(true);
-      try {
-        const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
-          studyApi.getStudies(),
-          dashboardApi.getOverview({ skipToast: true } as any),
-          participantApi.getParticipants({ skipToast: true } as any),
-        ]);
-        const registryStudies = studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value)
-          ? studiesRes.value
-          : [];
-        const overviewStudies = overviewRes.status === 'fulfilled'
-          ? overviewRes.value?.recentStudies || []
-          : [];
-        const getStudyIdentifiers = (study: any) => [study.id, study.studyId, study.protocolId, study.protocolNumber]
-          .filter((value) => value !== undefined && value !== null).map(String);
-        const sourceStudies = registryStudies.length > 0 ? registryStudies : overviewStudies;
-        const mergedStudies = sourceStudies.map((study: any) => {
-          const ids = getStudyIdentifiers(study);
-          const overviewStudy = overviewStudies.find((item: any) => getStudyIdentifiers(item).some((id: string) => ids.includes(id)));
-          return {
-            ...overviewStudy,
-            ...study,
-            enrolled: study.enrolled ?? study.enrolledParticipants ?? overviewStudy?.enrolled ?? overviewStudy?.enrolledParticipants ?? 0,
-            targetEnrollment: study.targetEnrollment ?? study.targetParticipants ?? overviewStudy?.targetEnrollment ?? 0,
-          };
-        });
-        setStudies(mergedStudies);
-        if (participantsRes.status === 'fulfilled' && Array.isArray(participantsRes.value)) {
-          setParticipants(participantsRes.value);
-        }
-      } catch {
-        // Keep the study selection screen available when an endpoint is unavailable.
-      } finally {
-        setLoading(false);
+  const fetchStudies = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
+        studyApi.getStudies(),
+        dashboardApi.getOverview({ skipToast: true } as any),
+        participantApi.getParticipants({ skipToast: true } as any),
+      ]);
+      const registryStudies = studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value)
+        ? studiesRes.value
+        : [];
+      const overviewStudies = overviewRes.status === 'fulfilled'
+        ? overviewRes.value?.recentStudies || []
+        : [];
+      const getStudyIdentifiers = (study: any) => [study.id, study.studyId, study.protocolId, study.protocolNumber, study.studyCode]
+        .filter((value) => value !== undefined && value !== null).map(String);
+      const sourceStudies = registryStudies.length > 0 ? registryStudies : overviewStudies;
+      const mergedStudies = sourceStudies.map((study: any) => {
+        const ids = getStudyIdentifiers(study);
+        const overviewStudy = overviewStudies.find((item: any) => getStudyIdentifiers(item).some((id: string) => ids.includes(id)));
+        return {
+          ...overviewStudy,
+          ...study,
+          title: study.title || study.name || overviewStudy?.title || overviewStudy?.name || 'Untitled Study',
+          name: study.name || study.title || overviewStudy?.name || overviewStudy?.title || 'Untitled Study',
+          enrolled: study.enrolled ?? study.enrolledParticipants ?? overviewStudy?.enrolled ?? overviewStudy?.enrolledParticipants ?? 0,
+          targetEnrollment: study.targetEnrollment ?? study.sampleSize ?? study.targetParticipants ?? overviewStudy?.targetEnrollment ?? 100,
+        };
+      });
+      setStudies(mergedStudies);
+      if (participantsRes.status === 'fulfilled' && Array.isArray(participantsRes.value)) {
+        setParticipants(participantsRes.value);
       }
-    };
-    fetchStudies();
+    } catch {
+      // Keep the study selection screen available when an endpoint is unavailable.
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchStudies();
+  }, [fetchStudies]);
 
   const data = studies;
   const tableData = data.map((study) => ({
     ...study,
-    protocolId: study.protocolId ?? study.protocolNumber ?? study.id,
-    targetParticipants: study.targetParticipants ?? study.targetEnrollment ?? study.target ?? 0,
+    protocolId: study.protocolId ?? study.protocolNumber ?? study.studyCode ?? study.id,
+    targetParticipants: study.targetParticipants ?? study.targetEnrollment ?? study.sampleSize ?? study.target ?? 100,
     enrolledParticipants: study.enrolledParticipants ?? study.enrolled ?? 0,
     siteCount: study.siteCount ?? 0,
   }));
+
+  const eligibleTemplates = [...tableData].sort((a, b) =>
+    (a.title || a.name || '').localeCompare(b.title || b.name || '', undefined, { sensitivity: 'base' })
+  );
+
   const selectedStudy = selectedStudyId
-    ? tableData.find((study) => [study.id, study.studyId, study.protocolId, study.protocolNumber]
+    ? tableData.find((study) => [study.id, study.studyId, study.protocolId, study.protocolNumber, study.studyCode]
         .some((id) => id !== undefined && String(id) === selectedStudyId))
     : undefined;
 
-  const selectedStudyIds = selectedStudy ? [selectedStudy.id, selectedStudy.studyId, selectedStudy.protocolId, selectedStudy.protocolNumber]
+  const selectedStudyIds = selectedStudy ? [selectedStudy.id, selectedStudy.studyId, selectedStudy.protocolId, selectedStudy.protocolNumber, selectedStudy.studyCode]
     .filter((value) => value !== undefined && value !== null).map(String) : [];
   const matchingParticipants = participants.filter((participant) => [participant.studyId, participant.study?.id, participant.study?.studyId]
     .filter((value) => value !== undefined && value !== null).some((value) => selectedStudyIds.includes(String(value)))
@@ -116,72 +127,183 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
     })).sort((a, b) => a.week.localeCompare(b.week));
   })();
   const recruitedCount = Math.max(0, Number(selectedStudy?.enrolled ?? selectedStudy?.enrolledParticipants) || 0);
-  const targetCount = Math.max(0, Number(selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants) || 0);
+  const targetCount = Math.max(0, Number(selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants ?? selectedStudy?.sampleSize) || 100);
   const recruitmentProgress = targetCount > 0 ? Math.min(100, Math.round((recruitedCount / targetCount) * 100)) : 0;
   const weeklyMaximum = Math.max(1, ...weeklyRecruitment.map((entry) => entry.count));
 
+  const validateStudyName = (rawName: string): string | null => {
+    const trimmed = rawName.trim();
+    if (!trimmed) {
+      return 'Short study name is required.';
+    }
+    if (trimmed.length > 15) {
+      return 'Short study name must not exceed 15 characters.';
+    }
+    const isDuplicate = studies.some(
+      (s) => (s.name || s.title || '').trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      return 'Study name already exists. Please choose another';
+    }
+    return null;
+  };
+
   const handleCreateStudy = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsSavingStudy(true);
     setStudyFormError(null);
-    const template = tableData.find((study) => String(study.id ?? study.studyId ?? study.protocolId) === studyForm.templateId);
-    const payload = {
-      title: studyForm.shortName.trim(),
-      shortName: studyForm.shortName.trim(),
-      phase: template?.phase || 'Phase I',
-      therapeuticArea: template?.therapeuticArea || '',
-      targetEnrollment: Number(template?.targetEnrollment ?? template?.targetParticipants ?? 100),
-      status: 'ACTIVE',
-    };
+
+    const validationError = validateStudyName(studyForm.shortName);
+    if (validationError) {
+      setStudyFormError(validationError);
+      return;
+    }
+
+    const trimmedName = studyForm.shortName.trim();
+    setIsSavingStudy(true);
+
     try {
-      const created = (await studyApi.createStudy(payload)) || payload;
-      setStudies((current) => [{
-        ...created,
-        protocolId: created.protocolId ?? created.protocolNumber ?? created.id ?? `ST-${Date.now()}`,
-        targetParticipants: created.targetParticipants ?? created.targetEnrollment ?? payload.targetEnrollment,
-        enrolledParticipants: created.enrolledParticipants ?? created.enrolled ?? 0,
-        siteCount: created.siteCount ?? 0,
-      }, ...current]);
-      setShowAddStudy(false);
-      setStudyForm({ shortName: '', templateId: '' });
-      navigate(`/studies?studyId=${encodeURIComponent(String(created.id ?? created.studyId ?? created.protocolNumber))}`);
-    } catch {
-      setStudyFormError('Unable to add the study. Please try again.');
+      if (studyForm.templateId) {
+        // Copy from existing study
+        const created = await studyApi.copyStudy({
+          studyName: trimmedName,
+          sourceStudyId: studyForm.templateId,
+        });
+
+        toast.success(`Successfully created study ${trimmedName}.`);
+        setShowAddStudy(false);
+        setStudyForm({ shortName: '', templateId: '' });
+        const newId = String(created.id ?? created.studyId ?? created.studyCode ?? created.protocolNumber);
+        await fetchStudies();
+        navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
+      } else {
+        // Normal study creation
+        const template = tableData.find((study) => String(study.id ?? study.studyId ?? study.protocolId) === studyForm.templateId);
+        const payload = {
+          title: trimmedName,
+          name: trimmedName,
+          shortName: trimmedName,
+          phase: template?.phase || 'Phase I',
+          therapeuticArea: template?.therapeuticArea || '',
+          sampleSize: Number(template?.targetEnrollment ?? template?.targetParticipants ?? 100),
+          targetEnrollment: Number(template?.targetEnrollment ?? template?.targetParticipants ?? 100),
+          status: 'ACTIVE',
+        };
+
+        const created = await studyApi.createStudy(payload);
+        toast.success(`Successfully created study ${trimmedName}.`);
+        setShowAddStudy(false);
+        setStudyForm({ shortName: '', templateId: '' });
+        const newId = String(created.id ?? created.studyId ?? created.studyCode ?? created.protocolNumber);
+        await fetchStudies();
+        navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
+      }
+    } catch (err: any) {
+      const msg = getApiErrorMessage(err) || 'Unable to create the study. Please try again.';
+      setStudyFormError(msg);
+      toast.error(msg);
     } finally {
       setIsSavingStudy(false);
     }
+  };
+
+  const handleImportButtonClick = () => {
+    setStudyFormError(null);
+    importInputRef.current?.click();
   };
 
   const handleImportStudy = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+
     setStudyFormError(null);
+
+    const isJson = file.name.toLowerCase().endsWith('.json') || file.type === 'application/json';
+    if (!isJson) {
+      const err = 'Must select a .json file to import a study.';
+      setStudyFormError(err);
+      toast.error(err);
+      return;
+    }
+
+    // Pre-validate JSON parse client-side before prompting confirmation
+    let parsedJson: any = null;
     try {
-      const imported = JSON.parse(await file.text());
-      const name = String(imported.shortName ?? imported.title ?? '').trim().slice(0, 15);
-      if (!name) throw new Error('The selected file does not contain a study name.');
-      setIsSavingStudy(true);
-      const payload = {
-        title: name,
-        shortName: name,
-        phase: imported.phase || 'Phase I',
-        therapeuticArea: imported.therapeuticArea || '',
-        targetEnrollment: Math.max(1, Number(imported.targetEnrollment ?? imported.targetParticipants) || 100),
-        status: 'ACTIVE',
-      };
-      const created = (await studyApi.createStudy(payload)) || payload;
-      setStudies((current) => [{
-        ...created,
-        protocolId: created.protocolId ?? created.protocolNumber ?? created.id ?? `ST-${Date.now()}`,
-        targetEnrollment: created.targetEnrollment ?? payload.targetEnrollment,
-        enrolled: created.enrolled ?? 0,
-      }, ...current]);
+      const fileText = await file.text();
+      parsedJson = JSON.parse(fileText);
+    } catch {
+      const err = `File contents lack the proper format for file ${file.name}, please try again.`;
+      setStudyFormError(err);
+      toast.error(err);
+      return;
+    }
+
+    // Determine study name: use entered shortName, or auto-extract from JSON / file name
+    let trimmedName = studyForm.shortName.trim();
+    if (!trimmedName && parsedJson) {
+      const extracted = (parsedJson.study?.name || parsedJson.studyName || parsedJson.name || file.name.replace(/\.json$/i, '')).trim();
+      if (extracted) {
+        trimmedName = extracted.slice(0, 15);
+        setStudyForm((current) => ({ ...current, shortName: trimmedName }));
+      }
+    }
+
+    if (!trimmedName) {
+      const err = 'Must provide a study name to import a new study.';
+      setStudyFormError(err);
+      toast.error(err);
+      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
+      input?.focus();
+      return;
+    }
+
+    if (trimmedName.length > 15) {
+      const err = 'Short study name must not exceed 15 characters.';
+      setStudyFormError(err);
+      toast.error(err);
+      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
+      input?.focus();
+      return;
+    }
+
+    const isDuplicate = studies.some(
+      (s) => (s.name || s.title || '').trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (isDuplicate) {
+      const err = 'Study name already exists. Please choose another';
+      setStudyFormError(err);
+      toast.error(err);
+      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
+      input?.focus();
+      return;
+    }
+
+    // Confirmation dialog
+    const confirmed = await confirmation.confirm({
+      title: 'Are you sure?',
+      message: `Importing file ${file.name} will create study ${trimmedName} and populate it with the file contents.`,
+      confirmText: 'Yes, import and create study',
+      cancelText: 'Cancel',
+      intent: 'warning',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSavingStudy(true);
+    try {
+      const result = await studyApi.importStudy(trimmedName, file);
+      toast.success(`Successfully created study ${trimmedName}.`);
       setShowAddStudy(false);
       setStudyForm({ shortName: '', templateId: '' });
-      navigate(`/studies?studyId=${encodeURIComponent(String(created.id ?? created.studyId ?? created.protocolNumber))}`);
-    } catch {
-      setStudyFormError('Import a valid study JSON file with a short study name.');
+      const newId = String(result.studyId ?? result.studyCode);
+      await fetchStudies();
+      navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
+    } catch (err: any) {
+      const errMsg = getApiErrorMessage(err) || `Something went wrong while importing file ${file.name}, please contact the site admin.`;
+      setStudyFormError(errMsg);
+      toast.error(errMsg);
     } finally {
       setIsSavingStudy(false);
     }
@@ -197,7 +319,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
             <div>
               <p>STUDY DASHBOARD</p>
               <h1 id="study-dashboard-title">{selectedStudy.title}</h1>
-              <span>{selectedStudy.protocolNumber || selectedStudy.protocolId || selectedStudy.id} · {selectedStudy.phase || 'Study phase unavailable'}</span>
+              <span>{selectedStudy.protocolNumber || selectedStudy.protocolId || selectedStudy.studyCode || selectedStudy.id} · {selectedStudy.phase || 'Study phase unavailable'}</span>
             </div>
           </header>
 
@@ -219,34 +341,12 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
             </div>
           </section>
 
-          <section className="study-metrics-grid" aria-label="Study recruitment metrics">
-            <article className="study-metric study-metric--recruited">
-              <span>Total number of participants recruited</span>
-              <strong>{recruitedCount.toLocaleString()}</strong>
-              <small>{Math.max(0, targetCount - recruitedCount).toLocaleString()} left to recruit</small>
-            </article>
-            <article className="study-metric study-metric--target">
-              <span>On Target Performance</span>
-              <strong>{recruitmentProgress}%</strong>
-              <small>{recruitedCount.toLocaleString()} of {targetCount.toLocaleString()} participants</small>
-            </article>
-            <article className="study-metric study-metric--weekly">
-              <span>Average recruited per active week</span>
-              <strong>{weeklyRecruitment.length
-                ? Math.round(weeklyRecruitment.reduce((sum, week) => sum + week.count, 0) / weeklyRecruitment.length).toLocaleString()
-                : '—'}</strong>
-              <small>{weeklyRecruitment.length ? 'From available participant records' : 'Weekly recruitment data unavailable'}</small>
-            </article>
-          </section>
-
           <section className="study-weekly-panel" aria-labelledby="study-weekly-title">
             <div className="study-weekly-panel__heading">
-              <div>
-                <h2 id="study-weekly-title">Weekly Recruitment</h2>
-                <p>Enrolled participant records by week</p>
-              </div>
+              <h2 id="study-weekly-title">Weekly Recruitment</h2>
+              <span>Rolling participant accrual</span>
             </div>
-            <div className="study-weekly-chart">
+            <div className="study-weekly-chart" role="region" aria-label="Weekly recruitment breakdown chart">
               <div className="study-weekly-chart__y-label">Participants</div>
               <div className="study-weekly-chart__plot">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Weekly participant recruitment bar chart">
@@ -294,15 +394,30 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
             <form onSubmit={handleCreateStudy}>
               <label>
                 <span>Short Study Name</span>
-                <input required maxLength={15} placeholder="max length 15 characters" value={studyForm.shortName} onChange={(event) => setStudyForm((current) => ({ ...current, shortName: event.target.value }))} />
+                <input
+                  id="short-study-name"
+                  required
+                  maxLength={15}
+                  placeholder="max length 15 characters"
+                  value={studyForm.shortName}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    setStudyForm((current) => ({ ...current, shortName: val }));
+                    if (studyFormError) setStudyFormError(null);
+                  }}
+                />
               </label>
               <label>
                 <span>Copy From Existing Study</span>
-                <select value={studyForm.templateId} onChange={(event) => setStudyForm((current) => ({ ...current, templateId: event.target.value }))}>
-                  <option value="">Select a template (optional)</option>
-                  {tableData.map((study) => {
+                <select
+                  aria-label="Select study to copy"
+                  value={studyForm.templateId}
+                  onChange={(event) => setStudyForm((current) => ({ ...current, templateId: event.target.value }))}
+                >
+                  <option value="">{eligibleTemplates.length === 0 ? 'No existing studies available to copy' : 'Select a template (optional)'}</option>
+                  {eligibleTemplates.map((study) => {
                     const id = study.id ?? study.studyId ?? study.protocolId;
-                    return <option key={id} value={String(id)}>{study.title}</option>;
+                    return <option key={id} value={String(id)}>{study.title || study.name}</option>;
                   })}
                 </select>
               </label>
@@ -311,10 +426,23 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
                 <button type="submit" className="btn btn-primary" disabled={isSavingStudy}>
                   <Plus size={15} /> {isSavingStudy ? 'Submitting…' : 'Submit'}
                 </button>
-                <button type="button" className="study-form-dialog__import" onClick={() => importInputRef.current?.click()} disabled={isSavingStudy}>
-                  <Upload size={15} /> Import Study
+                <button
+                  id="import-study-btn"
+                  type="button"
+                  className="study-form-dialog__import"
+                  onClick={handleImportButtonClick}
+                  disabled={isSavingStudy}
+                >
+                  <Upload size={15} /> {isSavingStudy ? 'Importing…' : 'Import Study'}
                 </button>
-                <input ref={importInputRef} className="study-form-dialog__file-input" type="file" accept="application/json,.json" aria-label="Import study JSON file" onChange={handleImportStudy} />
+                <input
+                  ref={importInputRef}
+                  className="study-form-dialog__file-input"
+                  type="file"
+                  accept="application/json,.json"
+                  aria-label="Import study JSON file"
+                  onChange={handleImportStudy}
+                />
               </div>
             </form>
           </section>

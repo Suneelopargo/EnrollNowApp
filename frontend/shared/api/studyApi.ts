@@ -21,6 +21,20 @@ export interface Study {
   [key: string]: any;
 }
 
+export interface CopyStudyPayload {
+  studyName: string;
+  sourceStudyId: string;
+}
+
+export interface ImportStudyResult {
+  studyId: string;
+  studyCode: string;
+  name: string;
+  message?: string;
+  importedEntitiesSummary?: Record<string, number>;
+  unsupportedFeatures?: string[];
+}
+
 export const studyApi = {
   async getStudies(config?: any): Promise<Study[]> {
     const res = await apiClient.get('/api/v1/studies', { skipToast: true, ...config });
@@ -34,6 +48,33 @@ export const studyApi = {
 
   async createStudy(study: Partial<Study>, config?: any): Promise<Study> {
     const res = await apiClient.post('/api/v1/studies', study, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async copyStudy(payload: CopyStudyPayload, config?: any): Promise<Study> {
+    const res = await apiClient.post('/api/v1/studies/copy', payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async importStudy(studyName: string, file: File, config?: any): Promise<ImportStudyResult> {
+    const formData = new FormData();
+    formData.append('studyName', studyName);
+    formData.append('file', file);
+    const res = await apiClient.post('/api/v1/studies/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      ...config,
+    });
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async importStudyJson(studyName: string, studyData: any, config?: any): Promise<ImportStudyResult> {
+    const res = await apiClient.post(
+      '/api/v1/studies/import',
+      { studyName, studyData },
+      config
+    );
     return (res.data as any)?.data ?? res.data;
   },
 

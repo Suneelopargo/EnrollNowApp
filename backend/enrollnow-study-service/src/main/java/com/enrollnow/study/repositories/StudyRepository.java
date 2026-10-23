@@ -26,4 +26,14 @@ public interface StudyRepository extends JpaRepository<Study, UUID> {
             UUID tenantId,
             String studyCode
     );
+
+    boolean existsByTenantIdAndNameIgnoreCase(
+            UUID tenantId,
+            String name
+    );
+
+    Optional<Study> findByTenantIdAndNameIgnoreCase(
+            UUID tenantId,
+            String name
+    );
 }

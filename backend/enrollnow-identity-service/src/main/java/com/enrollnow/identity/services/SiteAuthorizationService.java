@@ -94,6 +94,25 @@ public class SiteAuthorizationService {
         }
     }
 
+    public void requireStudyCreateAccess(UUID targetTenantId) {
+        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
+        if (callerOpt.isEmpty()) {
+            return;
+        }
+        CallerIdentity caller = callerOpt.get();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanManageSiteAdmins()
+                && !callerEffective.isCanAccessSiteAdmin()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_STUDIES_CREATE)
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
+            throw new AccessDeniedException("Access denied: creating or copying a study requires SITE_STUDIES_CREATE permission or Site Admin/Manager role");
+        }
+    }
+
     public void requireSiteAdminAccess(UUID targetTenantId, UUID siteId) {
         Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
         if (callerOpt.isEmpty()) {
