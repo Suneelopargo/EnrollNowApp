@@ -1,11 +1,13 @@
 package com.enrollnow.study.services;
 
+import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +33,12 @@ class StudyServiceTest {
     @Mock
     private MyStudiesService myStudiesService;
 
+    @Mock
+    private StudyMemberRepository studyMemberRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
     private StudyService studyService;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -39,6 +48,8 @@ class StudyServiceTest {
     @BeforeEach
     void setUp() {
         studyService = new StudyService(studyRepository, myStudiesService);
+        studyService.setStudyMemberRepository(studyMemberRepository);
+        studyService.setUserRepository(userRepository);
     }
 
     @Test
@@ -85,7 +96,7 @@ class StudyServiceTest {
         assertEquals("ONC-100", res.getStudyCode());
         assertEquals("Oncology Trial", res.getName());
         assertEquals(200, res.getSampleSize());
-        assertEquals(130, res.getEnrolled()); // 65% of 200
+        assertNull(res.getEnrolled()); // Synthetic 65% enrollment removed - non-fabricated representation
     }
 
     @Test
@@ -156,5 +167,39 @@ class StudyServiceTest {
         assertEquals("Updated Name", res.getName());
         assertTrue(res.isArchived());
         assertEquals(300, res.getSampleSize());
+    }
+
+    @Test
+    void getStudyByIdOrCode_nonAdmin_unassigned_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setName("Restricted Study");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyService.getStudyByIdOrCode(tenantId, studyId.toString(), userId, false)
+        );
+    }
+
+    @Test
+    void toSummaryResponseList_batchQueries_preventsNPlusOne() {
+        Study study1 = new Study();
+        study1.setId(studyId);
+        study1.setName("Study 1");
+
+        UUID otherId = UUID.randomUUID();
+        Study study2 = new Study();
+        study2.setId(otherId);
+        study2.setName("Study 2");
+
+        when(studyMemberRepository.findByIdStudyIdIn(anyCollection())).thenReturn(List.of());
+
+        List<StudySummaryResponse> summaries = studyService.toSummaryResponseList(List.of(study1, study2));
+
+        assertEquals(2, summaries.size());
+        verify(studyMemberRepository, times(1)).findByIdStudyIdIn(anyCollection());
+        verify(studyMemberRepository, never()).findByTenantIdAndIdStudyId(any(), any());
     }
 }

@@ -34,6 +34,10 @@ public interface StudyMemberRepository extends JpaRepository<StudyMember, StudyM
             UUID studyId
     );
 
+    List<StudyMember> findByIdStudyIdIn(
+            java.util.Collection<UUID> studyIds
+    );
+
     void deleteByIdStudyId(
             UUID studyId
     );

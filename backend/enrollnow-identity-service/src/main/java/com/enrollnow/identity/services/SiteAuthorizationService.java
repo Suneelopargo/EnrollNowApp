@@ -64,7 +64,7 @@ public class SiteAuthorizationService {
             return Optional.of(new CallerIdentity(nameUuid, detailsTenantId));
         }
 
-        return Optional.empty();
+        throw new InsufficientAuthenticationException("Unable to resolve authenticated caller identity");
     }
 
     public void requireTenantMatch(UUID targetTenantId) {
@@ -110,6 +110,24 @@ public class SiteAuthorizationService {
                 && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_STUDIES_CREATE)
                 && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
             throw new AccessDeniedException("Access denied: creating or copying a study requires SITE_STUDIES_CREATE permission or Site Admin/Manager role");
+        }
+    }
+
+    public void requireStudyManageAccess(UUID targetTenantId) {
+        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
+        if (callerOpt.isEmpty()) {
+            return;
+        }
+        CallerIdentity caller = callerOpt.get();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanManageSiteAdmins()
+                && !callerEffective.isCanAccessSiteAdmin()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
+            throw new AccessDeniedException("Access denied: modifying, archiving, or deleting a study requires SITE_ALL_STUDIES_MANAGE permission or Site Admin/Manager role");
         }
     }
 

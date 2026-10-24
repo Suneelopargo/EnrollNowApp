@@ -4,6 +4,7 @@ import com.enrollnow.common.core.ApiResponse;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.study.dtos.CopyStudyRequest;
 import com.enrollnow.study.dtos.CreateStudyRequest;
+import com.enrollnow.study.dtos.ImportStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.exceptions.DuplicateStudyNameException;
@@ -60,7 +61,7 @@ class StudyCopyAndImportControllerTest {
         StudySummaryResponse expected = new StudySummaryResponse(studyId, "CLONE_01", "ClonedStudy", "", false);
         when(studyService.copyStudy(eq(tenantId), any(CopyStudyRequest.class), eq(userId))).thenReturn(expected);
 
-        Map<String, Object> body = Map.of("shortName", "ClonedStudy", "templateId", "source-study-id");
+        CopyStudyRequest body = new CopyStudyRequest("ClonedStudy", "source-study-id");
 
         ResponseEntity<ApiResponse<StudySummaryResponse>> response =
                 studyController.copyStudy(tenantId, body);
@@ -78,7 +79,7 @@ class StudyCopyAndImportControllerTest {
         doThrow(new AccessDeniedException("Access denied: creating or copying a study requires SITE_STUDIES_CREATE permission"))
                 .when(siteAuthorizationService).requireStudyCreateAccess(tenantId);
 
-        Map<String, Object> body = Map.of("shortName", "ClonedStudy", "templateId", "source-study-id");
+        CopyStudyRequest body = new CopyStudyRequest("ClonedStudy", "source-study-id");
 
         assertThrows(AccessDeniedException.class, () ->
                 studyController.copyStudy(tenantId, body));
@@ -99,9 +100,9 @@ class StudyCopyAndImportControllerTest {
 
         when(studyService.importStudy(eq(tenantId), eq("ImportedStudy"), any(), eq(userId))).thenReturn(expected);
 
-        Map<String, Object> body = Map.of(
-                "studyName", "ImportedStudy",
-                "studyData", Map.of("statuses", List.of(Map.of("name", "Enrolled")))
+        ImportStudyRequest body = new ImportStudyRequest(
+                "ImportedStudy",
+                Map.of("statuses", List.of(Map.of("name", "Enrolled")))
         );
 
         ResponseEntity<ApiResponse<ImportStudyResponse>> response =

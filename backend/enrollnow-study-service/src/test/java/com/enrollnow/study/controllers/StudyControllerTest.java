@@ -3,6 +3,7 @@ package com.enrollnow.study.controllers;
 import com.enrollnow.common.core.ApiResponse;
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.services.SiteAuthorizationService;
+import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.models.Study;
@@ -217,18 +218,62 @@ class StudyControllerTest {
 
         when(studyRepository.save(any(Study.class))).thenReturn(savedStudy);
 
-        Map<String, Object> payload = Map.of(
-                "title", "Neurology Study",
-                "protocolNumber", "NEURO-01",
-                "description", "Phase II Alzheimer study"
-        );
+        CreateStudyRequest request = new CreateStudyRequest("Neurology Study", "NEURO-01", "Phase II Alzheimer study", null);
 
         ResponseEntity<ApiResponse<StudySummaryResponse>> response =
-                studyController.createStudy(tenantId, payload);
+                studyController.createStudy(tenantId, request);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Neurology Study", response.getBody().getData().getTitle());
         assertEquals("NEURO-01", response.getBody().getData().getProtocolNumber());
+    }
+
+    @Test
+    void updateStudy_enforcesStudyManageAccess() {
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setName("Existing");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRepository.save(any(Study.class))).thenAnswer(i -> i.getArgument(0));
+
+        com.enrollnow.study.dtos.UpdateStudyRequest updateReq =
+                new com.enrollnow.study.dtos.UpdateStudyRequest("Updated Study", "Desc", false, 150);
+
+        ResponseEntity<ApiResponse<StudySummaryResponse>> response =
+                studyController.updateStudy(tenantId, studyId.toString(), updateReq);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(siteAuthorizationService).requireStudyManageAccess(tenantId);
+    }
+
+    @Test
+    void archiveStudy_enforcesStudyManageAccess() {
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setName("Existing");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRepository.save(any(Study.class))).thenAnswer(i -> i.getArgument(0));
+
+        ResponseEntity<ApiResponse<StudySummaryResponse>> response =
+                studyController.archiveStudy(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(siteAuthorizationService).requireStudyManageAccess(tenantId);
+    }
+
+    @Test
+    void deleteStudy_enforcesStudyManageAccess() {
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setName("Existing");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        ResponseEntity<ApiResponse<Void>> response =
+                studyController.deleteStudy(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(siteAuthorizationService).requireStudyManageAccess(tenantId);
+        verify(studyRepository).delete(existing);
     }
 }

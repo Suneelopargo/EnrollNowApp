@@ -7,7 +7,7 @@ import { toast } from '../../toaster';
 import { confirmation } from '../../confirmation';
 import { studyApi } from '../../api/studyApi';
 import { getApiErrorMessage } from '../../api-client';
-import { validateField, validators } from '../validation';
+import { validateField, validators, validateStudyName, STUDY_NAME_RULES } from '../validation';
 
 export interface AddStudyModalProps {
   isOpen: boolean;
@@ -16,11 +16,6 @@ export interface AddStudyModalProps {
   studies?: any[];
   studyToEdit?: any | null;
 }
-
-const STUDY_NAME_RULES = [
-  validators.required('Short study name'),
-  validators.maxLength(15, 'Short study name'),
-];
 
 export const AddStudyModal: React.FC<AddStudyModalProps> = ({
   isOpen,
@@ -74,24 +69,13 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
     event.preventDefault();
 
     const trimmedName = studyForm.shortName.trim();
-    const validationError = validateField(trimmedName, STUDY_NAME_RULES);
+    const currentId = studyToEdit ? String(studyToEdit.id ?? studyToEdit.studyId) : null;
+    const validationError = validateStudyName(trimmedName, availableStudies, currentId);
     if (validationError) {
       setShortNameError(validationError);
-      document.getElementById('short-study-name')?.focus();
-      return;
-    }
-
-    const currentId = studyToEdit ? String(studyToEdit.id ?? studyToEdit.studyId) : null;
-    const isDuplicate = availableStudies.some((s) => {
-      const sId = String(s.id ?? s.studyId);
-      if (currentId && sId === currentId) return false;
-      return (s.name || s.title || '').trim().toLowerCase() === trimmedName.toLowerCase();
-    });
-
-    if (isDuplicate) {
-      const err = 'Study name already exists. Please choose another';
-      setShortNameError(err);
-      toast.error(err);
+      if (validationError.includes('already exists')) {
+        toast.error(validationError);
+      }
       document.getElementById('short-study-name')?.focus();
       return;
     }
@@ -183,22 +167,14 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
       }
     }
 
-    const validationError = validateField(trimmedName, STUDY_NAME_RULES);
+    const validationError = validateStudyName(trimmedName, availableStudies);
     if (validationError) {
       setShortNameError(validationError);
-      toast.error('Must provide a study name to import a new study.');
-      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
-      input?.focus();
-      return;
-    }
-
-    const isDuplicate = availableStudies.some(
-      (s) => (s.name || s.title || '').trim().toLowerCase() === trimmedName.toLowerCase()
-    );
-    if (isDuplicate) {
-      const err = 'Study name already exists. Please choose another';
-      setShortNameError(err);
-      toast.error(err);
+      toast.error(
+        validationError.includes('already exists')
+          ? validationError
+          : 'Must provide a study name to import a new study.'
+      );
       const input = document.getElementById('short-study-name') as HTMLInputElement | null;
       input?.focus();
       return;
@@ -234,15 +210,14 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
   };
 
   const modalFooter = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', width: '100%' }}>
+    <div className="study-modal__footer">
       {!isEditMode && (
         <button
           id="import-study-btn"
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-secondary study-modal__import-btn"
           onClick={handleImportButtonClick}
           disabled={isSavingStudy}
-          style={{ marginRight: 'auto' }}
         >
           <Upload size={15} /> {isSavingStudy ? 'Importing…' : 'Import Study'}
         </button>

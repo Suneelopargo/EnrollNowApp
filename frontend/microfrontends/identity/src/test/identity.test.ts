@@ -158,6 +158,7 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
           user: null,
           token: null,
           apiBaseUrl: 'http://localhost:8080',
+          correlationId: 'test-correlation-id',
           navigate: vi.fn(),
         },
       })

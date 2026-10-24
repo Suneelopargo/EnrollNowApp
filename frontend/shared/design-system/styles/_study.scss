@@ -249,6 +249,18 @@
 
 .study-form-dialog__file-input { display: none; }
 
+.study-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+}
+
+.study-modal__import-btn {
+  margin-right: auto;
+}
+
 @media (max-width: 760px) {
   .study-metrics-grid { grid-template-columns: minmax(0, 1fr); }
   .study-metric { min-height: 80px; }

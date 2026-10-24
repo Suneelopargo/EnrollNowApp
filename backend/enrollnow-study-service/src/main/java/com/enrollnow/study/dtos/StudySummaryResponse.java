@@ -100,7 +100,7 @@ public class StudySummaryResponse {
     }
 
     public Integer getEnrolled() {
-        return enrolled != null ? enrolled : 0;
+        return enrolled;
     }
 
     public void setEnrolled(Integer enrolled) {

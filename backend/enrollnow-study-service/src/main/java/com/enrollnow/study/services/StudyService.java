@@ -45,7 +45,7 @@ public class StudyService {
     private final StudyRepository studyRepository;
     private final MyStudiesService myStudiesService;
     private final StudyConfigurationService studyConfigurationService;
-    private final StudyMemberRepository studyMemberRepository;
+    private StudyMemberRepository studyMemberRepository;
     private final RoleRepository roleRepository;
     private final UserRoleAssignmentRepository userRoleAssignmentRepository;
     private final TeamMembershipRepository teamMembershipRepository;
@@ -85,6 +85,11 @@ public class StudyService {
         this.userRoleAssignmentRepository = userRoleAssignmentRepository;
         this.teamMembershipRepository = teamMembershipRepository;
         this.teamStudyRepository = teamStudyRepository;
+    }
+
+    @Autowired(required = false)
+    public void setStudyMemberRepository(StudyMemberRepository studyMemberRepository) {
+        this.studyMemberRepository = studyMemberRepository;
     }
 
     @Autowired(required = false)
@@ -152,16 +157,33 @@ public class StudyService {
                     .collect(Collectors.toList());
         }
 
-        return studies.stream()
-                .map(this::toSummaryResponse)
-                .collect(Collectors.toList());
+        return toSummaryResponseList(studies);
+    }
+
+    @Transactional(readOnly = true)
+    public StudySummaryResponse getStudyByIdOrCode(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        if (callerUserId != null && !canManageSiteAdmins && myStudiesService != null && tenantId != null) {
+            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
+            boolean hasAccess = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
+            if (!hasAccess) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied: you do not have permission to access study " + studyId);
+            }
+        }
+
+        return toSummaryResponse(study);
     }
 
     @Transactional(readOnly = true)
     public StudySummaryResponse getStudyByIdOrCode(UUID tenantId, String studyId) {
-        Study study = findStudyByIdOrCode(tenantId, studyId)
-                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
-        return toSummaryResponse(study);
+        return getStudyByIdOrCode(tenantId, studyId, null, true);
     }
 
     @Transactional
@@ -493,59 +515,92 @@ public class StudyService {
         }
     }
 
-    public StudySummaryResponse toSummaryResponse(Study s) {
-        StudySummaryResponse res = new StudySummaryResponse(
-                s.getId(),
-                s.getStudyCode(),
-                s.getName(),
-                s.getDescription(),
-                s.isArchived()
-        );
-        int sample = s.getSampleSize() != null ? s.getSampleSize() : 100;
-        res.setSampleSize(sample);
-        int enrolled = Math.max(0, (int) Math.round(sample * 0.65));
-        res.setEnrolled(enrolled);
-        res.setStartDate(s.getRecruitmentStartDate());
-        res.setEndDate(s.getRecruitmentEndDate());
+    public List<StudySummaryResponse> toSummaryResponseList(List<Study> studyList) {
+        if (studyList == null || studyList.isEmpty()) {
+            return Collections.emptyList();
+        }
 
-        List<StudyAdminSummary> adminList = new ArrayList<>();
-        if (studyMemberRepository != null && s.getId() != null) {
-            List<StudyMember> members = studyMemberRepository.findByTenantIdAndIdStudyId(s.getTenantId(), s.getId());
+        List<UUID> studyIds = studyList.stream()
+                .map(Study::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        Map<UUID, List<StudyMember>> membersByStudyId = new HashMap<>();
+        Map<UUID, com.enrollnow.identity.models.User> usersById = new HashMap<>();
+
+        if (studyMemberRepository != null && !studyIds.isEmpty()) {
+            List<StudyMember> allMembers = studyMemberRepository.findByIdStudyIdIn(studyIds);
+            for (StudyMember m : allMembers) {
+                if (m.getId() != null && m.getId().getStudyId() != null) {
+                    membersByStudyId.computeIfAbsent(m.getId().getStudyId(), k -> new ArrayList<>()).add(m);
+                }
+            }
+
+            if (userRepository != null) {
+                Set<UUID> userIds = allMembers.stream()
+                        .map(m -> m.getId() != null ? m.getId().getUserId() : null)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+                studyList.stream()
+                        .map(Study::getCreatedBy)
+                        .filter(Objects::nonNull)
+                        .forEach(userIds::add);
+
+                if (!userIds.isEmpty()) {
+                    userRepository.findAllById(userIds).forEach(u -> usersById.put(u.getId(), u));
+                }
+            }
+        }
+
+        List<StudySummaryResponse> results = new ArrayList<>(studyList.size());
+        for (Study s : studyList) {
+            StudySummaryResponse res = new StudySummaryResponse(
+                    s.getId(),
+                    s.getStudyCode(),
+                    s.getName(),
+                    s.getDescription(),
+                    s.isArchived()
+            );
+            int sample = s.getSampleSize() != null ? s.getSampleSize() : 100;
+            res.setSampleSize(sample);
+            // No fabricated or synthetic enrollment values - represented as unrecorded/null
+            res.setEnrolled(null);
+            res.setStartDate(s.getRecruitmentStartDate());
+            res.setEndDate(s.getRecruitmentEndDate());
+
+            List<StudyAdminSummary> adminList = new ArrayList<>();
+            List<StudyMember> members = membersByStudyId.getOrDefault(s.getId(), Collections.emptyList());
             for (StudyMember m : members) {
                 if (m.getId() != null && m.getId().getUserId() != null) {
                     UUID uid = m.getId().getUserId();
                     String name = "User " + uid.toString().substring(0, 4);
                     String email = uid + "@enrollnow.local";
                     String initials = "U";
-                    if (userRepository != null) {
-                        Optional<com.enrollnow.identity.models.User> uOpt = userRepository.findById(uid);
-                        if (uOpt.isPresent()) {
-                            com.enrollnow.identity.models.User u = uOpt.get();
-                            String first = u.getFirstName() != null ? u.getFirstName().trim() : "";
-                            String last = u.getLastName() != null ? u.getLastName().trim() : "";
-                            name = (first + " " + last).trim();
-                            if (name.isEmpty()) {
-                                name = "User " + uid.toString().substring(0, 4);
-                            }
-                            initials = "";
-                            if (!first.isEmpty()) initials += Character.toUpperCase(first.charAt(0));
-                            if (!last.isEmpty()) initials += Character.toUpperCase(last.charAt(0));
-                            if (initials.isEmpty() && !name.isEmpty()) initials = ("" + Character.toUpperCase(name.charAt(0)));
+                    com.enrollnow.identity.models.User u = usersById.get(uid);
+                    if (u != null) {
+                        String first = u.getFirstName() != null ? u.getFirstName().trim() : "";
+                        String last = u.getLastName() != null ? u.getLastName().trim() : "";
+                        name = (first + " " + last).trim();
+                        if (name.isEmpty()) {
+                            name = "User " + uid.toString().substring(0, 4);
                         }
+                        initials = "";
+                        if (!first.isEmpty()) initials += Character.toUpperCase(first.charAt(0));
+                        if (!last.isEmpty()) initials += Character.toUpperCase(last.charAt(0));
+                        if (initials.isEmpty() && !name.isEmpty()) initials = ("" + Character.toUpperCase(name.charAt(0)));
                     }
                     adminList.add(new StudyAdminSummary(uid, name, email, initials.isEmpty() ? "U" : initials, m.getStudyRole()));
                 }
             }
-        }
-        if (adminList.isEmpty() && s.getCreatedBy() != null) {
-            UUID uid = s.getCreatedBy();
-            String name = "Admin";
-            String email = uid + "@enrollnow.local";
-            String initials = "AD";
-            if (userRepository != null) {
-                Optional<com.enrollnow.identity.models.User> uOpt = userRepository.findById(uid);
-                if (uOpt.isPresent()) {
-                    com.enrollnow.identity.models.User u = uOpt.get();
+
+            if (adminList.isEmpty() && s.getCreatedBy() != null) {
+                UUID uid = s.getCreatedBy();
+                String name = "Admin";
+                String email = uid + "@enrollnow.local";
+                String initials = "AD";
+                com.enrollnow.identity.models.User u = usersById.get(uid);
+                if (u != null) {
                     String first = u.getFirstName() != null ? u.getFirstName().trim() : "";
                     String last = u.getLastName() != null ? u.getLastName().trim() : "";
                     name = (first + " " + last).trim();
@@ -553,13 +608,20 @@ public class StudyService {
                     initials = "";
                     if (!first.isEmpty()) initials += Character.toUpperCase(first.charAt(0));
                     if (!last.isEmpty()) initials += Character.toUpperCase(last.charAt(0));
+                    if (initials.isEmpty() && !name.isEmpty()) initials = ("" + Character.toUpperCase(name.charAt(0)));
                 }
+                adminList.add(new StudyAdminSummary(uid, name, email, initials.isEmpty() ? "AD" : initials, "STUDY_ADMIN"));
             }
-            adminList.add(new StudyAdminSummary(uid, name, email, initials.isEmpty() ? "AD" : initials, "STUDY_ADMIN"));
+            res.setAdmins(adminList);
+            results.add(res);
         }
-        res.setAdmins(adminList);
+        return results;
+    }
 
-        return res;
+    public StudySummaryResponse toSummaryResponse(Study s) {
+        if (s == null) return null;
+        List<StudySummaryResponse> list = toSummaryResponseList(Collections.singletonList(s));
+        return list.isEmpty() ? null : list.get(0);
     }
 
     private Optional<Study> findStudyByIdOrCode(UUID tenantId, String studyId) {

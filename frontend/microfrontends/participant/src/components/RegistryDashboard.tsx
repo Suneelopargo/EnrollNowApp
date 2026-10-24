@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { MfeContext } from '../../../../shared/contracts';
 import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { participantApi, RegistrySearchParams, CreateParticipantPayload } from '../../../../shared/api/participantApi';
 import LeftFilterPanel from './LeftFilterPanel';
@@ -173,7 +174,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       setAllParticipants((prev) => (isUnfiltered || prev.length === 0 ? mapped : prev));
       setSelectedParticipantId((prev) => prev || (mapped.length > 0 ? mapped[0].id : ''));
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to retrieve participants from the server';
+      const errorMsg = getApiErrorMessage(err, 'Failed to retrieve participants from the server');
       setError(errorMsg);
       showNotification(errorMsg, 'error');
       setParticipants([]);
@@ -228,7 +229,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       await fetchParticipants(true);
       if (created?.id) setSelectedParticipantId(String(created.id));
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to create participant on server.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to create participant on server.');
       showNotification(errorMsg, 'error');
     }
   };
@@ -257,7 +258,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       showNotification(`Assigned ${participantIds.length} participant(s) to ${studyName}.`, 'success');
       await fetchParticipants(true);
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to assign study to selected participants.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to assign study to selected participants.');
       showNotification(errorMsg, 'error');
     }
   };
@@ -319,7 +320,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       setSavedSearches((prev) => [...prev, newSaved]);
       showNotification(`Saved filter "${filterName}" added to Saved Searches.`, 'success');
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to save filter on server.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to save filter on server.');
       showNotification(errorMsg, 'error');
     }
   };
@@ -338,7 +339,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           setSavedSearches((prev) => prev.filter((item) => item.id !== searchItem.id));
           showNotification(`Saved search "${searchItem.name}" deleted.`, 'success');
         } catch (err: any) {
-          const errorMsg = err?.response?.data?.message || err?.message || 'Failed to delete saved search.';
+          const errorMsg = getApiErrorMessage(err, 'Failed to delete saved search.');
           showNotification(errorMsg, 'error');
         }
       },
@@ -415,7 +416,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       setDetailModalState({ isOpen: false, participant: null });
       await fetchParticipants(true);
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to update participant on server.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to update participant on server.');
       showNotification(errorMsg, 'error');
     }
   };
@@ -435,7 +436,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           showNotification(`Participant "${participant.name}" deleted.`, 'success');
           await fetchParticipants(true);
         } catch (err: any) {
-          const errorMsg = err?.response?.data?.message || err?.message || 'Failed to delete participant.';
+          const errorMsg = getApiErrorMessage(err, 'Failed to delete participant.');
           showNotification(errorMsg, 'error');
         }
       },
@@ -462,7 +463,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       window.URL.revokeObjectURL(url);
       showNotification('Registry exported successfully.', 'success');
     } catch (err: any) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to export registry.';
+      const errorMsg = getApiErrorMessage(err, 'Failed to export registry.');
       showNotification(errorMsg, 'error');
     }
   };

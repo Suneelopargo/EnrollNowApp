@@ -1,5 +1,6 @@
 // frontend/shared/api/studyApi.ts - Centralized Study Management API
 import { apiClient } from '../api-client';
+import type { AxiosRequestConfig } from 'axios';
 
 export interface StudyAdmin {
   userId: string;
@@ -48,30 +49,47 @@ export interface ImportStudyResult {
   unsupportedFeatures?: string[];
 }
 
+export interface StudyApiRequestConfig extends AxiosRequestConfig {
+  skipToast?: boolean;
+  skipLoader?: boolean;
+  silent?: boolean;
+}
+
+export interface GetStudiesParams {
+  includeArchived?: boolean;
+  status?: string;
+  phase?: string;
+  therapeuticArea?: string;
+  search?: string;
+  page?: number;
+  size?: number;
+  [key: string]: unknown;
+}
+
 export const studyApi = {
-  async getStudies(paramsOrConfig?: any): Promise<Study[]> {
-    const isConfig = paramsOrConfig && (paramsOrConfig.params || paramsOrConfig.headers || paramsOrConfig.skipToast !== undefined);
-    const config = isConfig ? paramsOrConfig : { params: paramsOrConfig };
-    const res = await apiClient.get('/api/v1/studies', { skipToast: true, ...config });
+  async getStudies(paramsOrConfig?: GetStudiesParams | StudyApiRequestConfig): Promise<Study[]> {
+    const isConfig = paramsOrConfig && ('params' in paramsOrConfig || 'headers' in paramsOrConfig || 'skipToast' in (paramsOrConfig as Record<string, unknown>));
+    const config = isConfig ? (paramsOrConfig as StudyApiRequestConfig) : { params: paramsOrConfig };
+    const res = await apiClient.get('/api/v1/studies', { skipToast: true, ...config } as any);
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
-  async getStudy(id: string | number, config?: any): Promise<Study> {
-    const res = await apiClient.get(`/api/v1/studies/${id}`, { skipToast: true, ...config });
+  async getStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
+    const res = await apiClient.get(`/api/v1/studies/${id}`, { skipToast: true, ...config } as any);
     return (res.data as any)?.data ?? res.data;
   },
 
-  async createStudy(study: Partial<Study>, config?: any): Promise<Study> {
+  async createStudy(study: Partial<Study>, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.post('/api/v1/studies', study, config);
     return (res.data as any)?.data ?? res.data;
   },
 
-  async copyStudy(payload: CopyStudyPayload, config?: any): Promise<Study> {
+  async copyStudy(payload: CopyStudyPayload, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.post('/api/v1/studies/copy', payload, config);
     return (res.data as any)?.data ?? res.data;
   },
 
-  async importStudy(studyName: string, file: File, config?: any): Promise<ImportStudyResult> {
+  async importStudy(studyName: string, file: File, config?: StudyApiRequestConfig): Promise<ImportStudyResult> {
     const formData = new FormData();
     formData.append('studyName', studyName);
     formData.append('file', file);
@@ -84,7 +102,7 @@ export const studyApi = {
     return (res.data as any)?.data ?? res.data;
   },
 
-  async importStudyJson(studyName: string, studyData: any, config?: any): Promise<ImportStudyResult> {
+  async importStudyJson(studyName: string, studyData: any, config?: StudyApiRequestConfig): Promise<ImportStudyResult> {
     const res = await apiClient.post(
       '/api/v1/studies/import',
       { studyName, studyData },
@@ -93,22 +111,22 @@ export const studyApi = {
     return (res.data as any)?.data ?? res.data;
   },
 
-  async updateStudy(id: string | number, study: Partial<Study>, config?: any): Promise<Study> {
+  async updateStudy(id: string | number, study: Partial<Study>, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.put(`/api/v1/studies/${id}`, study, config);
     return (res.data as any)?.data ?? res.data;
   },
 
-  async archiveStudy(id: string | number, config?: any): Promise<Study> {
+  async archiveStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.post(`/api/v1/studies/${id}/archive`, {}, config);
     return (res.data as any)?.data ?? res.data;
   },
 
-  async restoreStudy(id: string | number, config?: any): Promise<Study> {
+  async restoreStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.post(`/api/v1/studies/${id}/restore`, {}, config);
     return (res.data as any)?.data ?? res.data;
   },
 
-  async deleteStudy(id: string | number, config?: any): Promise<void> {
+  async deleteStudy(id: string | number, config?: StudyApiRequestConfig): Promise<void> {
     await apiClient.delete(`/api/v1/studies/${id}`, config);
   },
 };

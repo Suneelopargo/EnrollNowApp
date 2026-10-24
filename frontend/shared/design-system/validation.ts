@@ -100,3 +100,30 @@ export function validateForm<T extends Record<string, unknown>>(
   });
   return errors;
 }
+
+export const STUDY_NAME_RULES = [
+  validators.required('Short study name'),
+  validators.maxLength(15, 'Short study name'),
+];
+
+export function validateStudyName(
+  rawName: string,
+  existingStudies: Array<{ id?: string | number; studyId?: string | number; name?: string; title?: string }> = [],
+  currentStudyId?: string | number | null
+): string | null {
+  const trimmed = toText(rawName).trim();
+  const error = validateField(trimmed, STUDY_NAME_RULES);
+  if (error) {
+    return error;
+  }
+  const currentIdStr = currentStudyId != null ? String(currentStudyId) : null;
+  const isDuplicate = existingStudies.some((s) => {
+    const sId = s.id != null ? String(s.id) : (s.studyId != null ? String(s.studyId) : null);
+    if (currentIdStr && sId === currentIdStr) return false;
+    return toText(s.name || s.title).trim().toLowerCase() === trimmed.toLowerCase();
+  });
+  if (isDuplicate) {
+    return 'Study name already exists. Please choose another';
+  }
+  return null;
+}

@@ -1,15 +1,11 @@
 // frontend/microfrontends/study/src/remoteEntry.tsx - Study MFE Remote Entry
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MfeContext } from '../../../shared/contracts';
-import { Plus, Upload, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { dashboardApi } from '../../../shared/api/dashboardApi';
 import { participantApi } from '../../../shared/api/participantApi';
 import { studyApi } from '../../../shared/api/studyApi';
-import { toast } from '../../../shared/toaster';
-import { confirmation } from '../../../shared/confirmation';
-import { getApiErrorMessage } from '../../../shared/api-client';
-import { useFocusTrap } from '../../../shared/accessibility/useFocusTrap';
 import { AddStudyModal } from '../../../shared/design-system/components/AddStudyModal';
 
 export interface StudyModuleProps {
@@ -21,21 +17,12 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddStudy, setShowAddStudy] = useState(false);
-  const [isSavingStudy, setIsSavingStudy] = useState(false);
-  const [studyFormError, setStudyFormError] = useState<string | null>(null);
-  const [studyForm, setStudyForm] = useState({ shortName: '', templateId: '' });
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const addStudyDialogRef = useFocusTrap<HTMLElement>({
-    active: showAddStudy,
-    onEscape: () => setShowAddStudy(false),
-  });
   const location = useLocation();
   const navigate = useNavigate();
   const selectedStudyId = new URLSearchParams(location.search).get('studyId');
 
   useEffect(() => {
     if (new URLSearchParams(location.search).get('action') === 'add') {
-      setStudyFormError(null);
       setShowAddStudy(true);
       navigate('/studies', { replace: true });
     }
@@ -127,188 +114,15 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       count,
     })).sort((a, b) => a.week.localeCompare(b.week));
   })();
-  const recruitedCount = Math.max(0, Number(selectedStudy?.enrolled ?? selectedStudy?.enrolledParticipants) || 0);
+  const activeEnrolledCount = matchingParticipants.filter((participant) =>
+    ['ENROLLED', 'ACTIVE', 'COMPLETED'].includes(String(participant.status || '').toUpperCase())
+  ).length;
+  const recruitedCount = activeEnrolledCount > 0
+    ? activeEnrolledCount
+    : Math.max(0, Number(selectedStudy?.enrolled ?? selectedStudy?.enrolledParticipants) || 0);
   const targetCount = Math.max(0, Number(selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants ?? selectedStudy?.sampleSize) || 100);
   const recruitmentProgress = targetCount > 0 ? Math.min(100, Math.round((recruitedCount / targetCount) * 100)) : 0;
   const weeklyMaximum = Math.max(1, ...weeklyRecruitment.map((entry) => entry.count));
-
-  const validateStudyName = (rawName: string): string | null => {
-    const trimmed = rawName.trim();
-    if (!trimmed) {
-      return 'Short study name is required.';
-    }
-    if (trimmed.length > 15) {
-      return 'Short study name must not exceed 15 characters.';
-    }
-    const isDuplicate = studies.some(
-      (s) => (s.name || s.title || '').trim().toLowerCase() === trimmed.toLowerCase()
-    );
-    if (isDuplicate) {
-      return 'Study name already exists. Please choose another';
-    }
-    return null;
-  };
-
-  const handleCreateStudy = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStudyFormError(null);
-
-    const validationError = validateStudyName(studyForm.shortName);
-    if (validationError) {
-      setStudyFormError(validationError);
-      return;
-    }
-
-    const trimmedName = studyForm.shortName.trim();
-    setIsSavingStudy(true);
-
-    try {
-      if (studyForm.templateId) {
-        // Copy from existing study
-        const created = await studyApi.copyStudy({
-          studyName: trimmedName,
-          sourceStudyId: studyForm.templateId,
-        });
-
-        toast.success(`Successfully created study ${trimmedName}.`);
-        setShowAddStudy(false);
-        setStudyForm({ shortName: '', templateId: '' });
-        const newId = String(created.id ?? created.studyId ?? created.studyCode ?? created.protocolNumber);
-        await fetchStudies();
-        navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
-      } else {
-        // Normal study creation
-        const template = tableData.find((study) => String(study.id ?? study.studyId ?? study.protocolId) === studyForm.templateId);
-        const payload = {
-          title: trimmedName,
-          name: trimmedName,
-          shortName: trimmedName,
-          phase: template?.phase || 'Phase I',
-          therapeuticArea: template?.therapeuticArea || '',
-          sampleSize: Number(template?.targetEnrollment ?? template?.targetParticipants ?? 100),
-          targetEnrollment: Number(template?.targetEnrollment ?? template?.targetParticipants ?? 100),
-          status: 'ACTIVE',
-        };
-
-        const created = await studyApi.createStudy(payload);
-        toast.success(`Successfully created study ${trimmedName}.`);
-        setShowAddStudy(false);
-        setStudyForm({ shortName: '', templateId: '' });
-        const newId = String(created.id ?? created.studyId ?? created.studyCode ?? created.protocolNumber);
-        await fetchStudies();
-        navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
-      }
-    } catch (err: any) {
-      const msg = getApiErrorMessage(err) || 'Unable to create the study. Please try again.';
-      setStudyFormError(msg);
-      toast.error(msg);
-    } finally {
-      setIsSavingStudy(false);
-    }
-  };
-
-  const handleImportButtonClick = () => {
-    setStudyFormError(null);
-    importInputRef.current?.click();
-  };
-
-  const handleImportStudy = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-
-    setStudyFormError(null);
-
-    const isJson = file.name.toLowerCase().endsWith('.json') || file.type === 'application/json';
-    if (!isJson) {
-      const err = 'Must select a .json file to import a study.';
-      setStudyFormError(err);
-      toast.error(err);
-      return;
-    }
-
-    // Pre-validate JSON parse client-side before prompting confirmation
-    let parsedJson: any = null;
-    try {
-      const fileText = await file.text();
-      parsedJson = JSON.parse(fileText);
-    } catch {
-      const err = `File contents lack the proper format for file ${file.name}, please try again.`;
-      setStudyFormError(err);
-      toast.error(err);
-      return;
-    }
-
-    // Determine study name: use entered shortName, or auto-extract from JSON / file name
-    let trimmedName = studyForm.shortName.trim();
-    if (!trimmedName && parsedJson) {
-      const extracted = (parsedJson.study?.name || parsedJson.studyName || parsedJson.name || file.name.replace(/\.json$/i, '')).trim();
-      if (extracted) {
-        trimmedName = extracted.slice(0, 15);
-        setStudyForm((current) => ({ ...current, shortName: trimmedName }));
-      }
-    }
-
-    if (!trimmedName) {
-      const err = 'Must provide a study name to import a new study.';
-      setStudyFormError(err);
-      toast.error(err);
-      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
-      input?.focus();
-      return;
-    }
-
-    if (trimmedName.length > 15) {
-      const err = 'Short study name must not exceed 15 characters.';
-      setStudyFormError(err);
-      toast.error(err);
-      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
-      input?.focus();
-      return;
-    }
-
-    const isDuplicate = studies.some(
-      (s) => (s.name || s.title || '').trim().toLowerCase() === trimmedName.toLowerCase()
-    );
-    if (isDuplicate) {
-      const err = 'Study name already exists. Please choose another';
-      setStudyFormError(err);
-      toast.error(err);
-      const input = document.getElementById('short-study-name') as HTMLInputElement | null;
-      input?.focus();
-      return;
-    }
-
-    // Confirmation dialog
-    const confirmed = await confirmation.confirm({
-      title: 'Are you sure?',
-      message: `Importing file ${file.name} will create study ${trimmedName} and populate it with the file contents.`,
-      confirmText: 'Yes, import and create study',
-      cancelText: 'Cancel',
-      intent: 'warning',
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    setIsSavingStudy(true);
-    try {
-      const result = await studyApi.importStudy(trimmedName, file);
-      toast.success(`Successfully created study ${trimmedName}.`);
-      setShowAddStudy(false);
-      setStudyForm({ shortName: '', templateId: '' });
-      const newId = String(result.studyId ?? result.studyCode);
-      await fetchStudies();
-      navigate(`/studies?studyId=${encodeURIComponent(newId)}`);
-    } catch (err: any) {
-      const errMsg = getApiErrorMessage(err) || `Something went wrong while importing file ${file.name}, please contact the site admin.`;
-      setStudyFormError(errMsg);
-      toast.error(errMsg);
-    } finally {
-      setIsSavingStudy(false);
-    }
-  };
 
   return (
     <div className="study-workspace">

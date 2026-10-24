@@ -8,7 +8,8 @@ Use this checklist before opening or approving any frontend pull request. Every 
 - [ ] **No Duplicate API Clients or Services:** Checked `frontend/shared/api/` before adding any endpoint method. New endpoints are added to the canonical domain API module in `frontend/shared/api/`.
 - [ ] **No Direct HTTP Bypasses:** No component or microfrontend calls `fetch(`, `axios.create(`, or hardcodes `http://localhost:8080` (verified by `frontend/shared/api-architecture.test.ts`).
 - [ ] **No Duplicate Components or Modals:** Checked `frontend/shared/design-system/components/` (`Modal`, `Card`, `DataGrid`, `DataTable`, `Tabs`, `Footer`, `StatusBadge`, `LoadingSpinner`) and `frontend/shared/accessibility/` (`AccessibleField`, `useFocusTrap`) before creating custom UI primitives.
-- [ ] **No Duplicate Validation or Formatting Logic:** Reused `validators` / `validateForm` from `frontend/shared/design-system/validation` and `normalizePasswordPolicy` from `frontend/shared/api/authApi`.
+- [ ] **No Duplicate Validation or Formatting Logic:** Reused `validators` / `validateForm` from `frontend/shared/design-system/validation`, `validateStudyName` from `frontend/shared/design-system/validation.ts`, and `normalizePasswordPolicy` from `frontend/shared/api/authApi`.
+- [ ] **Canonical Domain Modals & State:** Shared domain creation/import modals (`AddStudyModal`, `AddUserModal`) are canonical; host microfrontends do not maintain obsolete dialog refs, dead state, or duplicated event handlers.
 - [ ] **No Native Browser Dialogs:** Used `requestConfirmation` / `confirmation` instead of `window.confirm` and `toast` instead of `window.alert`.
 
 ---

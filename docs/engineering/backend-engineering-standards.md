@@ -43,7 +43,8 @@ Every backend feature must honor the 4-layer architecture:
 ### 2.2 Layering Rules
 1. **Controllers Must Be Thin:**
    - Controllers must contain **zero** direct repository calls or entity mutations.
-   - All new Sprint 2+ controllers must accept strongly-typed request DTOs annotated with `@Valid` (do not introduce new `@RequestBody Map<String, Object>` endpoints).
+   - Controllers must accept strongly-typed request DTOs annotated with `@Valid`. Untyped payloads such as `@RequestBody Map<String, Object>` are strictly prohibited across all endpoints (including study management, copy, and import).
+   - Inbound DTOs must enforce required field presence (`@NotBlank`, `@NotNull`) and valid string lengths (`@Size`). Missing values must be rejected with HTTP 400 rather than silently defaulted.
 2. **Services Own Business Logic and Transactions:**
    - All domain operations, validations, cryptographic operations, and mutations belong in `@Service` classes.
    - Mutating service methods must be annotated with `@Transactional`. Read-only methods should use `@Transactional(readOnly = true)`.
@@ -135,6 +136,16 @@ EnrollNow is a strict multi-tenant clinical application. Cross-tenant data acces
    **Never re-implement `SecureRandom` or `MessageDigest.getInstance("SHA-256")` in domain services.**
 
 ---
+
+
+### 4.4 Study Access & Mutation Authorization Matrix
+Every clinical study endpoint must enforce granular authorization aligned with the permission catalog:
+
+1. **Study Creation (`createStudy`, `copyStudy`, `importStudy`):** Requires `siteAuthorizationService.requireStudyCreateAccess(tenantId)` (`PERM_SITE_STUDY_CREATE`).
+2. **Study Mutation & Lifecycle (`updateStudy`, `archiveStudy`, `restoreStudy`, `deleteStudy`):** Requires `siteAuthorizationService.requireStudyManageAccess(tenantId)` (`PERM_SITE_ALL_STUDIES_MANAGE` or Site Admin / Site Manager roles). Creation permission must never be treated as mutation permission.
+3. **Detail Access Control (`getStudyById`):** Non-admin callers must belong to the study via active `StudyMember` or `TeamStudy` assignment; callers lacking access receive HTTP 404/403.
+4. **Fail-Closed Caller Identity:** Caller identity resolution via `getAuthenticatedCaller()` must fail closed by throwing `InsufficientAuthenticationException` if the principal or tenant ID cannot be established.
+5. **No Synthetic Metrics:** Services must never fabricate business or regulatory numbers (e.g. estimating enrollment as a percentage of sample size). If actual figures are unrecorded in the service's schema, `null` must be returned.
 
 ## 5. Database Access & Persistence Standards
 

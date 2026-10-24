@@ -1,9 +1,13 @@
 // frontend/microfrontends/study/src/test/addStudyAndImport.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { studyApi } from '../../../../shared/api/studyApi';
 import { apiClient } from '../../../../shared/api-client';
 import { confirmation } from '../../../../shared/confirmation';
 import { toast } from '../../../../shared/toaster';
+import { validateStudyName, STUDY_NAME_RULES } from '../../../../shared/design-system/validation';
+import { AddStudyModal } from '../../../../shared/design-system/components/AddStudyModal';
 
 describe('Add Study, Copy Study, and Import Study Client Integration', () => {
   beforeEach(() => {
@@ -97,37 +101,20 @@ describe('Add Study, Copy Study, and Import Study Client Integration', () => {
     });
   });
 
-  describe('Form Validation Rules for Short Study Name', () => {
+  describe('Canonical Study Name Validation (Shared Design System)', () => {
     const existingStudies = [
       { id: '1', name: 'Cardiology 101', title: 'Cardiology 101' },
       { id: '2', name: 'Oncology Alpha', title: 'Oncology Alpha' },
     ];
 
-    const validateStudyName = (rawName: string, studies: any[]): string | null => {
-      const trimmed = rawName.trim();
-      if (!trimmed) {
-        return 'Short study name is required.';
-      }
-      if (trimmed.length > 15) {
-        return 'Short study name must not exceed 15 characters.';
-      }
-      const isDuplicate = studies.some(
-        (s) => (s.name || s.title || '').trim().toLowerCase() === trimmed.toLowerCase()
-      );
-      if (isDuplicate) {
-        return 'Study name already exists. Please choose another';
-      }
-      return null;
-    };
-
     it('rejects empty and whitespace-only study names', () => {
-      expect(validateStudyName('', existingStudies)).toBe('Short study name is required.');
-      expect(validateStudyName('   ', existingStudies)).toBe('Short study name is required.');
+      expect(validateStudyName('', existingStudies)).toBe('Short study name is required');
+      expect(validateStudyName('   ', existingStudies)).toBe('Short study name is required');
     });
 
     it('rejects study names longer than 15 characters', () => {
       expect(validateStudyName('StudyNameIsWayTooLong', existingStudies)).toBe(
-        'Short study name must not exceed 15 characters.'
+        'Short study name must be 15 characters or fewer'
       );
     });
 
@@ -140,6 +127,11 @@ describe('Add Study, Copy Study, and Import Study Client Integration', () => {
       );
     });
 
+    it('permits preserving same name when editing the existing study', () => {
+      expect(validateStudyName('Cardiology 101', existingStudies, '1')).toBeNull();
+      expect(validateStudyName('cardiology 101', existingStudies, '1')).toBeNull();
+    });
+
     it('accepts valid, non-duplicate names under 15 characters', () => {
       expect(validateStudyName('Neuro 202', existingStudies)).toBeNull();
       expect(validateStudyName('GEN-01', existingStudies)).toBeNull();
@@ -147,7 +139,62 @@ describe('Add Study, Copy Study, and Import Study Client Integration', () => {
     });
   });
 
-  describe('Import Confirmation Dialog & File Validation', () => {
+  describe('AddStudyModal Component Structure & Rendering', () => {
+    const mockStudies = [
+      { id: '1', name: 'Cardiology 101', status: 'ACTIVE', archived: false },
+      { id: '2', name: 'Archived Trial', status: 'ARCHIVED', archived: true },
+    ];
+
+    it('renders null when isOpen is false', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AddStudyModal, {
+          isOpen: false,
+          onClose: vi.fn(),
+          studies: mockStudies,
+        })
+      );
+      expect(html).toBe('');
+    });
+
+    it('renders Add Study modal correctly when isOpen is true', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AddStudyModal, {
+          isOpen: true,
+          onClose: vi.fn(),
+          studies: mockStudies,
+        })
+      );
+
+      expect(html).toContain('Add Study');
+      expect(html).toContain('Short Study Name');
+      expect(html).toContain('id="short-study-name"');
+      expect(html).toContain('Copy From Existing Study');
+      expect(html).toContain('Select a template (optional)');
+      expect(html).toContain('Cardiology 101');
+      // Archived study should not be in the template copy options
+      expect(html).not.toContain('<option value="2">Archived Trial</option>');
+      expect(html).toContain('Import Study');
+      expect(html).toContain('Submit');
+      expect(html).toContain('Cancel');
+    });
+
+    it('renders Edit Study mode correctly when studyToEdit is provided', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(AddStudyModal, {
+          isOpen: true,
+          onClose: vi.fn(),
+          studies: mockStudies,
+          studyToEdit: mockStudies[0],
+        })
+      );
+
+      expect(html).toContain('Edit Study');
+      expect(html).toContain('Save Changes');
+      expect(html).not.toContain('Import Study');
+    });
+  });
+
+  describe('Import File Handling & Confirmation Integration', () => {
     it('validates file extension and rejects non-JSON files', () => {
       const invalidFile = new File(['text'], 'export.csv', { type: 'text/csv' });
       const isJson = invalidFile.name.toLowerCase().endsWith('.json') || invalidFile.type === 'application/json';
