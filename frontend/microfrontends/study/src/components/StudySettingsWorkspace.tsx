@@ -1,6 +1,8 @@
 // frontend/microfrontends/study/src/components/StudySettingsWorkspace.tsx
 import React, { useState } from 'react';
 import { StudySettingsDetails } from './StudySettingsDetails';
+import { StudySettingsDisplay } from './StudySettingsDisplay';
+import { StudySettingsBulkTasks } from './StudySettingsBulkTasks';
 import { ChevronDown, ChevronRight, Info } from 'lucide-react';
 
 export interface StudySettingsWorkspaceProps {
@@ -235,6 +237,22 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
             canManageSettings={canManageSettings}
             onStudyUpdated={onStudyUpdated}
             onDirtyChange={(dirty) => setIsDetailsDirty(dirty)}
+          />
+        ) : activeSubmenu === 'display' ? (
+          <StudySettingsDisplay
+            studyId={studyId}
+            studyName={studyName}
+            isArchived={isArchived}
+            canManageSettings={canManageSettings}
+            onStudyUpdated={onStudyUpdated}
+          />
+        ) : activeSubmenu === 'bulk_tasks' ? (
+          <StudySettingsBulkTasks
+            studyId={studyId}
+            studyName={studyName}
+            isArchived={isArchived}
+            canManageSettings={canManageSettings}
+            onStudyUpdated={onStudyUpdated}
           />
         ) : (
           <div className="study-settings-placeholder" role="region" aria-label="Submenu coming soon">

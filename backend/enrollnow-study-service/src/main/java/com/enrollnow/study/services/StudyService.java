@@ -13,12 +13,18 @@ import com.enrollnow.study.dtos.CopyStudyRequest;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
 import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.ReorderBulkTasksRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskRequest;
 import com.enrollnow.study.dtos.StudyAdminSummary;
+import com.enrollnow.study.dtos.StudyBulkTasksResponse;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
 import com.enrollnow.study.dtos.StudyGrantDto;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
+import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.DuplicateStudyNameException;
 import com.enrollnow.study.exceptions.InvalidStudyException;
@@ -887,6 +893,9 @@ public class StudyService {
         studyMap.put("customIdGenerationEnabled", study.isCustomIdGenerationEnabled());
         studyMap.put("prefix", study.getPrefix());
         studyMap.put("sampleSize", study.getSampleSize());
+        studyMap.put("locale", study.getLocale());
+        studyMap.put("showGlobalComments", study.isShowGlobalComments());
+        studyMap.put("defaultGlobalLogs", study.isDefaultGlobalLogs());
         export.put("study", studyMap);
 
         List<Map<String, Object>> grantsList = new ArrayList<>();
@@ -989,6 +998,317 @@ public class StudyService {
         studyRepository.save(study);
 
         return String.format("%s%08d", prefix, nextVal);
+    }
+
+    private boolean resolveCanManageStudySettings(
+            Study study,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        if (canManageSiteAdmins) {
+            return true;
+        }
+        if (callerUserId == null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: authenticated caller identity is required"
+            );
+        }
+        StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
+                study.getTenantId(),
+                studyId,
+                callerUserId,
+                canManageSiteAdmins
+        );
+        if (navPerms == null || navPerms.getPermissions() == null || navPerms.getPermissions().isEmpty()) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: you do not have permission to view study " + studyId
+            );
+        }
+        return navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
+                || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission());
+    }
+
+    private void requireStudySettingsManage(
+            Study study,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        if (canManageSiteAdmins) {
+            return;
+        }
+        if (callerUserId == null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: authenticated caller identity is required"
+            );
+        }
+        StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
+                study.getTenantId(),
+                studyId,
+                callerUserId,
+                canManageSiteAdmins
+        );
+        boolean canManage = navPerms != null
+                && navPerms.getPermissions() != null
+                && (navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
+                || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission()));
+        if (!canManage) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: modifying study settings requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
+            );
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public StudyDisplaySettingsResponse getStudyDisplaySettings(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        boolean canManage = resolveCanManageStudySettings(study, studyId, callerUserId, canManageSiteAdmins);
+        return buildDisplaySettingsResponse(study, canManage);
+    }
+
+    private StudyDisplaySettingsResponse buildDisplaySettingsResponse(Study study, boolean canManage) {
+        if (studyConfigurationService != null) {
+            return studyConfigurationService.getDisplayConfiguration(
+                    study.getTenantId(),
+                    study.getId(),
+                    study.getLocale(),
+                    study.isShowGlobalComments(),
+                    study.isDefaultGlobalLogs(),
+                    canManage
+            );
+        }
+        StudyDisplaySettingsResponse response = new StudyDisplaySettingsResponse();
+        response.setStudyId(study.getId().toString());
+        response.setLocale(study.getLocale() != null && !study.getLocale().isBlank() ? study.getLocale() : "en-US");
+        response.setShowGlobalComments(study.isShowGlobalComments());
+        response.setDefaultGlobalLogs(study.isDefaultGlobalLogs());
+        response.setStatusPageCombinedView(false);
+        response.setEnrolledParticipantColumnsShowEvents(true);
+        response.setPotentialParticipantColumns(StudyConfigurationService.getDefaultPotentialColumns());
+        response.setEnrolledParticipantColumns(StudyConfigurationService.getDefaultEnrolledColumns());
+        response.setAvailableColumnOptions(new ArrayList<>());
+        response.setSupportedLocales(new ArrayList<>());
+        response.setCanManage(canManage);
+        return response;
+    }
+
+    @Transactional
+    public StudyDisplaySettingsResponse updateStudyDisplaySettings(
+            UUID tenantId,
+            String studyId,
+            UpdateStudyDisplaySettingsRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        if (request == null) {
+            throw new InvalidStudyException("Update study display settings request cannot be empty.");
+        }
+
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+
+        if (request.getLocale() != null) {
+            String trimmedLocale = request.getLocale().trim();
+            boolean validLocale = studyConfigurationService != null
+                    ? studyConfigurationService.isLocaleSupported(trimmedLocale)
+                    : !trimmedLocale.isBlank();
+            if (!validLocale) {
+                throw new InvalidStudyException("Unsupported study locale: " + trimmedLocale);
+            }
+            study.setLocale(trimmedLocale);
+        }
+        if (request.getShowGlobalComments() != null) {
+            study.setShowGlobalComments(request.getShowGlobalComments());
+        }
+        if (request.getDefaultGlobalLogs() != null) {
+            study.setDefaultGlobalLogs(request.getDefaultGlobalLogs());
+        }
+
+        // Validate & persist study customizations first so an invalid column list
+        // rolls back the whole update (transactional) rather than partially saving.
+        boolean hasCustomizationChanges = request.getStatusPageCombinedView() != null
+                || request.getEnrolledParticipantColumnsShowEvents() != null
+                || request.getPotentialParticipantColumns() != null
+                || request.getEnrolledParticipantColumns() != null;
+        if (hasCustomizationChanges && studyConfigurationService != null) {
+            studyConfigurationService.updateDisplayCustomizationsInConfig(
+                    study.getTenantId(),
+                    study.getId(),
+                    request
+            );
+        }
+
+        study.setUpdatedAt(OffsetDateTime.now());
+        if (callerUserId != null) {
+            study.setUpdatedBy(callerUserId);
+        }
+        studyRepository.save(study);
+
+        return buildDisplaySettingsResponse(study, true);
+    }
+
+    @Transactional(readOnly = true)
+    public StudyBulkTasksResponse getStudyBulkTasks(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        boolean canManage = resolveCanManageStudySettings(study, studyId, callerUserId, canManageSiteAdmins);
+        return buildBulkTasksResponse(study, canManage);
+    }
+
+    private StudyBulkTasksResponse buildBulkTasksResponse(Study study, boolean canManage) {
+        List<StudyAdminSummary> teamMembers = new ArrayList<>();
+        StudySummaryResponse summary = toSummaryResponse(study);
+        if (summary != null && summary.getAdmins() != null) {
+            teamMembers.addAll(summary.getAdmins());
+        }
+        if (studyConfigurationService != null) {
+            return studyConfigurationService.getBulkTasksConfiguration(
+                    study.getTenantId(),
+                    study.getId(),
+                    teamMembers,
+                    canManage
+            );
+        }
+        StudyBulkTasksResponse response = new StudyBulkTasksResponse();
+        response.setStudyId(study.getId().toString());
+        response.setBulkTaskGroups(new ArrayList<>());
+        response.setBulkTasks(new ArrayList<>());
+        response.setEvents(new ArrayList<>());
+        response.setTeamMembers(teamMembers);
+        response.setCanManage(canManage);
+        return response;
+    }
+
+    private Study requireBulkTaskManage(UUID tenantId, String studyId, UUID callerUserId, boolean canManageSiteAdmins) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new InvalidStudyException("Study configuration service is unavailable.");
+        }
+        return study;
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse createBulkTaskGroup(
+            UUID tenantId,
+            String studyId,
+            SaveBulkTaskGroupRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        if (request == null) {
+            throw new InvalidStudyException("Bulk task group request cannot be empty.");
+        }
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.createBulkTaskGroup(study.getTenantId(), study.getId(), request);
+        return buildBulkTasksResponse(study, true);
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse updateBulkTaskGroup(
+            UUID tenantId,
+            String studyId,
+            String groupId,
+            SaveBulkTaskGroupRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        if (request == null) {
+            throw new InvalidStudyException("Bulk task group request cannot be empty.");
+        }
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.updateBulkTaskGroup(study.getTenantId(), study.getId(), groupId, request);
+        return buildBulkTasksResponse(study, true);
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse deleteBulkTaskGroup(
+            UUID tenantId,
+            String studyId,
+            String groupId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.deleteBulkTaskGroup(study.getTenantId(), study.getId(), groupId);
+        return buildBulkTasksResponse(study, true);
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse createBulkTask(
+            UUID tenantId,
+            String studyId,
+            String groupId,
+            SaveBulkTaskRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.createBulkTask(study.getTenantId(), study.getId(), groupId, request);
+        return buildBulkTasksResponse(study, true);
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse updateBulkTask(
+            UUID tenantId,
+            String studyId,
+            String taskId,
+            SaveBulkTaskRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.updateBulkTask(study.getTenantId(), study.getId(), taskId, request);
+        return buildBulkTasksResponse(study, true);
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse deleteBulkTask(
+            UUID tenantId,
+            String studyId,
+            String taskId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.deleteBulkTask(study.getTenantId(), study.getId(), taskId);
+        return buildBulkTasksResponse(study, true);
+    }
+
+    @Transactional
+    public StudyBulkTasksResponse reorderBulkTasks(
+            UUID tenantId,
+            String studyId,
+            String groupId,
+            ReorderBulkTasksRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireBulkTaskManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.reorderBulkTasks(
+                study.getTenantId(),
+                study.getId(),
+                groupId,
+                request != null && request.getTaskIds() != null ? request.getTaskIds() : List.of()
+        );
+        return buildBulkTasksResponse(study, true);
     }
 
     @Transactional

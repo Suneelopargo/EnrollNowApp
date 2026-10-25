@@ -97,6 +97,108 @@ export interface UpdateStudyDetailsPayload {
   grants: StudyGrant[];
 }
 
+/** Mirrors backend ParticipantColumnDto (legacy Ripple column object: { label, value, cId?, title? }). */
+export interface ParticipantColumn {
+  label: string;
+  value: string;
+  cId?: string | null;
+  title?: string | null;
+}
+
+/** Mirrors backend LocaleOptionDto (legacy Ripple supportedLocales entry). */
+export interface LocaleOption {
+  value: string;
+  label: string;
+}
+
+export interface StudyDisplaySettings {
+  studyId: string;
+  locale: string;
+  showGlobalComments: boolean;
+  defaultGlobalLogs: boolean;
+  statusPageCombinedView: boolean;
+  enrolledParticipantColumnsShowEvents: boolean;
+  potentialParticipantColumns: ParticipantColumn[];
+  enrolledParticipantColumns: ParticipantColumn[];
+  availableColumnOptions: ParticipantColumn[];
+  supportedLocales: LocaleOption[];
+  canManage: boolean;
+}
+
+export interface UpdateStudyDisplaySettingsPayload {
+  locale?: string;
+  showGlobalComments?: boolean;
+  defaultGlobalLogs?: boolean;
+  statusPageCombinedView?: boolean;
+  enrolledParticipantColumnsShowEvents?: boolean;
+  potentialParticipantColumns?: ParticipantColumn[];
+  enrolledParticipantColumns?: ParticipantColumn[];
+}
+
+export type BulkTaskTriggerAction = 'completed' | 'scheduled';
+
+export interface BulkTaskTrigger {
+  eventId: string;
+  action: BulkTaskTriggerAction | string;
+}
+
+export interface BulkTask {
+  _id: string;
+  studyId?: string;
+  bulkTaskGroupId: string;
+  name: string;
+  description?: string;
+  assignedTo: string[];
+  assignedToInitials?: string;
+  rank: number;
+}
+
+export interface BulkTaskGroup {
+  _id: string;
+  studyId?: string;
+  name: string;
+  description?: string;
+  triggerActive: boolean;
+  trigger?: BulkTaskTrigger | null;
+  tasks: BulkTask[];
+}
+
+export interface StudyEventOption {
+  _id: string;
+  name: string;
+}
+
+export interface BulkTaskTeamMember {
+  userId: string;
+  name: string;
+  email?: string;
+  initials?: string;
+  role?: string;
+}
+
+/** Mirrors backend StudyBulkTasksResponse. Every Bulk Tasks mutation returns this refreshed snapshot. */
+export interface StudyBulkTasksData {
+  studyId: string;
+  canManage: boolean;
+  bulkTaskGroups: BulkTaskGroup[];
+  bulkTasks: BulkTask[];
+  events: StudyEventOption[];
+  teamMembers: BulkTaskTeamMember[];
+}
+
+export interface SaveBulkTaskGroupPayload {
+  name: string;
+  description?: string;
+  triggerActive?: boolean;
+  trigger?: BulkTaskTrigger | null;
+}
+
+export interface SaveBulkTaskPayload {
+  name: string;
+  description?: string;
+  assignedTo?: string[];
+}
+
 export interface ImportStudyResult {
   studyId: string;
   studyCode: string;
@@ -206,6 +308,96 @@ export const studyApi = {
 
   async importStudyComponents(id: string | number, components: any, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
     const res = await apiClient.post(`/api/v1/studies/${id}/import-components`, components, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async getStudyDisplaySettings(id: string | number, config?: StudyApiRequestConfig): Promise<StudyDisplaySettings> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/display-settings`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateStudyDisplaySettings(
+    id: string | number,
+    payload: UpdateStudyDisplaySettingsPayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyDisplaySettings> {
+    const res = await apiClient.put(`/api/v1/studies/${id}/display-settings`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async getStudyBulkTasks(id: string | number, config?: StudyApiRequestConfig): Promise<StudyBulkTasksData> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/bulk-tasks`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async createBulkTaskGroup(
+    studyId: string | number,
+    payload: SaveBulkTaskGroupPayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.post(`/api/v1/studies/${studyId}/bulk-task-groups`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateBulkTaskGroup(
+    studyId: string | number,
+    groupId: string,
+    payload: SaveBulkTaskGroupPayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async deleteBulkTaskGroup(
+    studyId: string | number,
+    groupId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.delete(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}`, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async createBulkTask(
+    studyId: string | number,
+    groupId: string,
+    payload: SaveBulkTaskPayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.post(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}/tasks`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateBulkTask(
+    studyId: string | number,
+    taskId: string,
+    payload: SaveBulkTaskPayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/bulk-tasks/${taskId}`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async deleteBulkTask(
+    studyId: string | number,
+    taskId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.delete(`/api/v1/studies/${studyId}/bulk-tasks/${taskId}`, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async reorderBulkTasks(
+    studyId: string | number,
+    groupId: string,
+    taskIds: string[],
+    config?: StudyApiRequestConfig
+  ): Promise<StudyBulkTasksData> {
+    const res = await apiClient.put(
+      `/api/v1/studies/${studyId}/bulk-task-groups/${groupId}/tasks/order`,
+      { taskIds },
+      config
+    );
     return (res.data as any)?.data ?? res.data;
   },
 

@@ -6,10 +6,16 @@ import com.enrollnow.study.dtos.CopyStudyRequest;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
+import com.enrollnow.study.dtos.ReorderBulkTasksRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskRequest;
+import com.enrollnow.study.dtos.StudyBulkTasksResponse;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
+import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
@@ -471,6 +477,292 @@ public class StudyController {
                     canManageSiteAdmins
             );
             return ResponseEntity.ok(ApiResponse.success("Study components imported successfully", result));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/display-settings", "/studies/{studyId}/display-settings"})
+    public ResponseEntity<ApiResponse<StudyDisplaySettingsResponse>> getStudyDisplaySettings(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyDisplaySettingsResponse response = studyService.getStudyDisplaySettings(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/display-settings", "/studies/{studyId}/display-settings"})
+    public ResponseEntity<ApiResponse<StudyDisplaySettingsResponse>> updateStudyDisplaySettings(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody UpdateStudyDisplaySettingsRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyDisplaySettingsResponse updated = studyService.updateStudyDisplaySettings(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Study display settings updated successfully", updated));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-tasks", "/studies/{studyId}/bulk-tasks"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> getStudyBulkTasks(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse response = studyService.getStudyBulkTasks(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-task-groups", "/studies/{studyId}/bulk-task-groups"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> createBulkTaskGroup(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody SaveBulkTaskGroupRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse created = studyService.createBulkTaskGroup(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Bulk task group created successfully", created));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-task-groups/{groupId}", "/studies/{studyId}/bulk-task-groups/{groupId}"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> updateBulkTaskGroup(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String groupId,
+            @RequestBody SaveBulkTaskGroupRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse updated = studyService.updateBulkTaskGroup(
+                    effectiveTenantId,
+                    studyId,
+                    groupId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Bulk task group updated successfully", updated));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-task-groups/{groupId}", "/studies/{studyId}/bulk-task-groups/{groupId}"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> deleteBulkTaskGroup(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String groupId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse remaining = studyService.deleteBulkTaskGroup(
+                    effectiveTenantId,
+                    studyId,
+                    groupId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Bulk task group deleted successfully", remaining));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-task-groups/{groupId}/tasks", "/studies/{studyId}/bulk-task-groups/{groupId}/tasks"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> createBulkTask(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String groupId,
+            @RequestBody SaveBulkTaskRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse created = studyService.createBulkTask(
+                    effectiveTenantId,
+                    studyId,
+                    groupId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Bulk task created successfully", created));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-tasks/{taskId}", "/studies/{studyId}/bulk-tasks/{taskId}"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> updateBulkTask(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String taskId,
+            @RequestBody SaveBulkTaskRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse updated = studyService.updateBulkTask(
+                    effectiveTenantId,
+                    studyId,
+                    taskId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Bulk task updated successfully", updated));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-tasks/{taskId}", "/studies/{studyId}/bulk-tasks/{taskId}"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> deleteBulkTask(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String taskId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse remaining = studyService.deleteBulkTask(
+                    effectiveTenantId,
+                    studyId,
+                    taskId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Bulk task deleted successfully", remaining));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/bulk-task-groups/{groupId}/tasks/order", "/studies/{studyId}/bulk-task-groups/{groupId}/tasks/order"})
+    public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> reorderBulkTasks(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String groupId,
+            @RequestBody ReorderBulkTasksRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyBulkTasksResponse reordered = studyService.reorderBulkTasks(
+                    effectiveTenantId,
+                    studyId,
+                    groupId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Bulk tasks reordered successfully", reordered));
         } catch (org.springframework.security.access.AccessDeniedException ex) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));

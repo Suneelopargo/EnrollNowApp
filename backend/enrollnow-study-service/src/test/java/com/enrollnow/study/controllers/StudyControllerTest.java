@@ -5,10 +5,16 @@ import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.ReorderBulkTasksRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskRequest;
+import com.enrollnow.study.dtos.StudyBulkTasksResponse;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
+import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.services.MyStudiesService;
@@ -433,5 +439,110 @@ class StudyControllerTest {
         assertNotNull(response.getBody());
         assertTrue(response.getBody().isSuccess());
         assertEquals("2.0", response.getBody().getData().get("version"));
+    }
+
+    // =========================================================================
+    // Display Settings & Bulk Tasks Endpoint Tests
+    // =========================================================================
+
+    @Test
+    void getStudyDisplaySettings_success() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Display Study");
+        study.setLocale("en-US");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setUserId(userId);
+        perms.setTenantId(tenantId);
+        perms.setCanManageSiteAdmins(true);
+        when(siteAuthorizationService.getCallerEffectivePermissions(tenantId, null)).thenReturn(Optional.of(perms));
+
+        ResponseEntity<ApiResponse<StudyDisplaySettingsResponse>> response =
+                studyController.getStudyDisplaySettings(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals("en-US", response.getBody().getData().getLocale());
+    }
+
+    @Test
+    void updateStudyDisplaySettings_success() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Display Study");
+        study.setLocale("en-US");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyRepository.save(any(Study.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setUserId(userId);
+        perms.setTenantId(tenantId);
+        perms.setCanManageSiteAdmins(true);
+        when(siteAuthorizationService.getCallerEffectivePermissions(tenantId, null)).thenReturn(Optional.of(perms));
+
+        UpdateStudyDisplaySettingsRequest req = new UpdateStudyDisplaySettingsRequest();
+        req.setLocale("es-ES");
+        req.setShowGlobalComments(true);
+
+        ResponseEntity<ApiResponse<StudyDisplaySettingsResponse>> response =
+                studyController.updateStudyDisplaySettings(tenantId, studyId.toString(), req);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals("es-ES", response.getBody().getData().getLocale());
+        assertTrue(response.getBody().getData().isShowGlobalComments());
+    }
+
+    @Test
+    void getStudyBulkTasks_success() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Bulk Study");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setUserId(userId);
+        perms.setTenantId(tenantId);
+        perms.setCanManageSiteAdmins(true);
+        when(siteAuthorizationService.getCallerEffectivePermissions(tenantId, null)).thenReturn(Optional.of(perms));
+
+        ResponseEntity<ApiResponse<StudyBulkTasksResponse>> response =
+                studyController.getStudyBulkTasks(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals(studyId.toString(), response.getBody().getData().getStudyId());
+    }
+
+    @Test
+    void getStudyDisplaySettings_notFound_returns404() {
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        ResponseEntity<ApiResponse<StudyDisplaySettingsResponse>> response =
+                studyController.getStudyDisplaySettings(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
+    }
+
+    @Test
+    void getStudyBulkTasks_notFound_returns404() {
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        ResponseEntity<ApiResponse<StudyBulkTasksResponse>> response =
+                studyController.getStudyBulkTasks(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
     }
 }

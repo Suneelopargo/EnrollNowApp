@@ -5,6 +5,7 @@ import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
+import com.enrollnow.study.dtos.*;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
@@ -1122,5 +1123,174 @@ class StudyServiceTest {
         assertTrue(customId.startsWith("SP-"));
         assertEquals(0, study.getNextSequentialIdentifier());
         verify(studyRepository, never()).save(study);
+    }
+
+    // =========================================================================
+    // Display Settings Service Tests
+    // =========================================================================
+
+    @Test
+    void exportStudy_includesDisplaySettingsAttributes() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Display Study");
+        study.setLocale("es-ES");
+        study.setShowGlobalComments(true);
+        study.setDefaultGlobalLogs(true);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        Map<String, Object> exported = studyService.exportStudy(tenantId, studyId.toString(), userId, true);
+
+        assertNotNull(exported);
+        Map<?, ?> studyMap = (Map<?, ?>) exported.get("study");
+        assertEquals("es-ES", studyMap.get("locale"));
+        assertEquals(true, studyMap.get("showGlobalComments"));
+        assertEquals(true, studyMap.get("defaultGlobalLogs"));
+    }
+
+    @Test
+    void getStudyDisplaySettings_siteAdmin_returnsSettings() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study Settings Test");
+        study.setLocale("fr-FR");
+        study.setShowGlobalComments(true);
+        study.setDefaultGlobalLogs(false);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        StudyDisplaySettingsResponse mockDisplay = new StudyDisplaySettingsResponse();
+        mockDisplay.setStudyId(studyId.toString());
+        mockDisplay.setLocale("fr-FR");
+        mockDisplay.setShowGlobalComments(true);
+        mockDisplay.setDefaultGlobalLogs(false);
+        mockDisplay.setCanManage(true);
+        when(studyConfigurationService.getDisplayConfiguration(eq(tenantId), eq(studyId), any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(mockDisplay);
+
+        StudyDisplaySettingsResponse resp = studyService.getStudyDisplaySettings(
+                tenantId,
+                studyId.toString(),
+                userId,
+                true // canManageSiteAdmins
+        );
+
+        assertNotNull(resp);
+        assertEquals("fr-FR", resp.getLocale());
+        assertTrue(resp.isShowGlobalComments());
+        assertFalse(resp.isDefaultGlobalLogs());
+        assertTrue(resp.isCanManage());
+    }
+
+    @Test
+    void updateStudyDisplaySettings_unauthorized_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study Settings Test");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, userId))
+                .thenReturn(Optional.empty());
+
+        UpdateStudyDisplaySettingsRequest req = new UpdateStudyDisplaySettingsRequest();
+        req.setLocale("en-US");
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.updateStudyDisplaySettings(tenantId, studyId.toString(), req, userId, false)
+        );
+    }
+
+    @Test
+    void updateStudyDisplaySettings_unsupportedLocale_throwsInvalidStudyException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study Settings Test");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        UpdateStudyDisplaySettingsRequest req = new UpdateStudyDisplaySettingsRequest();
+        req.setLocale("xx-UNKNOWN-LOCALE");
+
+        assertThrows(
+                InvalidStudyException.class,
+                () -> studyService.updateStudyDisplaySettings(tenantId, studyId.toString(), req, userId, true)
+        );
+    }
+
+    // =========================================================================
+    // Bulk Tasks Service Tests
+    // =========================================================================
+
+    @Test
+    void getStudyBulkTasks_siteAdmin_returnsBulkTasksData() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Bulk Tasks Study");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        StudyBulkTasksResponse mockBulk = new StudyBulkTasksResponse();
+        mockBulk.setStudyId(studyId.toString());
+        mockBulk.setCanManage(true);
+        when(studyConfigurationService.getBulkTasksConfiguration(eq(tenantId), eq(studyId), any(), anyBoolean()))
+                .thenReturn(mockBulk);
+
+        StudyBulkTasksResponse resp = studyService.getStudyBulkTasks(
+                tenantId,
+                studyId.toString(),
+                userId,
+                true
+        );
+
+        assertNotNull(resp);
+        assertEquals(studyId.toString(), resp.getStudyId());
+        assertTrue(resp.isCanManage());
+    }
+
+    @Test
+    void createBulkTaskGroup_unauthorized_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Bulk Tasks Study");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, userId))
+                .thenReturn(Optional.empty());
+
+        SaveBulkTaskGroupRequest req = new SaveBulkTaskGroupRequest();
+        req.setName("Restricted Group");
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.createBulkTaskGroup(tenantId, studyId.toString(), req, userId, false)
+        );
+    }
+
+    @Test
+    void createBulkTask_unauthorized_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Bulk Tasks Study");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, userId))
+                .thenReturn(Optional.empty());
+
+        SaveBulkTaskRequest req = new SaveBulkTaskRequest();
+        req.setName("Restricted Task");
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.createBulkTask(tenantId, studyId.toString(), "grp-1", req, userId, false)
+        );
     }
 }

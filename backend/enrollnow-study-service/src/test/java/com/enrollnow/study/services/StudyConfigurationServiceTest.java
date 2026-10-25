@@ -1,5 +1,6 @@
 package com.enrollnow.study.services;
 
+import com.enrollnow.study.dtos.*;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.StudyRequirement;
@@ -230,5 +231,240 @@ class StudyConfigurationServiceTest {
         String surveyJson = (String) survey.get("surveyJSON");
         assertTrue(surveyJson.contains(newVarId));
         assertFalse(surveyJson.contains(oldVarId));
+    }
+
+    // =========================================================================
+    // Display Settings Tests
+    // =========================================================================
+
+    @Test
+    void localeSupport_validAndInvalidCases() {
+        assertTrue(configurationService.isLocaleSupported("en-US"));
+        assertTrue(configurationService.isLocaleSupported("en-GB"));
+        assertTrue(configurationService.isLocaleSupported("de"));
+        assertTrue(configurationService.isLocaleSupported("ja"));
+        assertFalse(configurationService.isLocaleSupported("invalid-locale"));
+        assertFalse(configurationService.isLocaleSupported(null));
+        assertFalse(configurationService.isLocaleSupported("   "));
+
+        List<LocaleOptionDto> supported = configurationService.getSupportedLocales();
+        assertNotNull(supported);
+        assertTrue(supported.size() >= 30);
+    }
+
+    @Test
+    void getDisplayConfiguration_defaultsWhenNoRequirementExists() {
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        StudyDisplaySettingsResponse resp = configurationService.getDisplayConfiguration(
+                tenantId,
+                studyId,
+                "en-US",
+                false,
+                false,
+                true
+        );
+
+        assertNotNull(resp);
+        assertEquals("en-US", resp.getLocale());
+        assertFalse(resp.isShowGlobalComments());
+        assertFalse(resp.isDefaultGlobalLogs());
+        assertFalse(resp.isStatusPageCombinedView());
+        assertTrue(resp.isEnrolledParticipantColumnsShowEvents());
+        assertEquals(6, resp.getPotentialParticipantColumns().size());
+        assertEquals(3, resp.getEnrolledParticipantColumns().size());
+        assertTrue(resp.isCanManage());
+    }
+
+    @Test
+    void updateDisplayCustomizations_emptyColumns_throwsInvalidStudyException() {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        UpdateStudyDisplaySettingsRequest request = new UpdateStudyDisplaySettingsRequest();
+        request.setPotentialParticipantColumns(Collections.emptyList());
+
+        InvalidStudyException ex = assertThrows(
+                InvalidStudyException.class,
+                () -> configurationService.updateDisplayCustomizationsInConfig(tenantId, studyId, request)
+        );
+        assertEquals("Must have at least one column for display.", ex.getMessage());
+    }
+
+    @Test
+    void updateDisplayCustomizations_unsupportedColumn_throwsInvalidStudyException() {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        UpdateStudyDisplaySettingsRequest request = new UpdateStudyDisplaySettingsRequest();
+        request.setPotentialParticipantColumns(List.of(
+                new ParticipantColumnDto("Fake Column", "unsupported.col.value")
+        ));
+
+        assertThrows(
+                InvalidStudyException.class,
+                () -> configurationService.updateDisplayCustomizationsInConfig(tenantId, studyId, request)
+        );
+    }
+
+    @Test
+    void updateDisplayCustomizations_validColumns_persistsDisplaySettings() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        UpdateStudyDisplaySettingsRequest request = new UpdateStudyDisplaySettingsRequest();
+        request.setStatusPageCombinedView(true);
+        request.setEnrolledParticipantColumnsShowEvents(false);
+        request.setPotentialParticipantColumns(List.of(
+                new ParticipantColumnDto("ID", "psi.customId"),
+                new ParticipantColumnDto("Name", "p.name")
+        ));
+        request.setEnrolledParticipantColumns(List.of(
+                new ParticipantColumnDto("ID", "psi.customId")
+        ));
+
+        configurationService.updateDisplayCustomizationsInConfig(tenantId, studyId, request);
+
+        ArgumentCaptor<StudyRequirement> captor = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository).save(captor.capture());
+
+        Map<String, Object> updated = objectMapper.readValue(
+                captor.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        assertTrue(updated.containsKey("displaySettings"));
+        Map<?, ?> ds = (Map<?, ?>) updated.get("displaySettings");
+        assertEquals(true, ds.get("statusPageCombinedView"));
+        assertEquals(false, ds.get("enrolledParticipantColumnsShowEvents"));
+        assertEquals(2, ((List<?>) ds.get("potentialParticipantColumns")).size());
+        assertEquals(1, ((List<?>) ds.get("enrolledParticipantColumns")).size());
+    }
+
+    // =========================================================================
+    // Bulk Tasks Tests
+    // =========================================================================
+
+    @Test
+    void bulkTasks_createGroupAndCascadeDeleteTasks() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        // 1. Create Group
+        SaveBulkTaskGroupRequest groupReq = new SaveBulkTaskGroupRequest();
+        groupReq.setName("Follow-up Tasks");
+        groupReq.setDescription("Post-screening tasks");
+        groupReq.setTriggerActive(false);
+
+        configurationService.createBulkTaskGroup(tenantId, studyId, groupReq);
+
+        ArgumentCaptor<StudyRequirement> captor1 = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captor1.capture());
+        StudyRequirement savedReq1 = captor1.getValue();
+
+        Map<String, Object> config1 = objectMapper.readValue(
+                savedReq1.getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> groups1 = (List<?>) config1.get("bulkTaskGroups");
+        assertEquals(1, groups1.size());
+        String createdGroupId = (String) ((Map<?, ?>) groups1.get(0)).get("_id");
+        assertEquals("Follow-up Tasks", ((Map<?, ?>) groups1.get(0)).get("name"));
+
+        // 2. Create Task in that group
+        existing.setConfiguration(savedReq1.getConfiguration());
+        SaveBulkTaskRequest taskReq = new SaveBulkTaskRequest();
+        taskReq.setName("Send Lab Results");
+        taskReq.setDescription("Upload to portal");
+        taskReq.setAssignedTo(List.of("user_123"));
+
+        configurationService.createBulkTask(tenantId, studyId, createdGroupId, taskReq);
+
+        ArgumentCaptor<StudyRequirement> captor2 = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captor2.capture());
+        StudyRequirement savedReq2 = captor2.getValue();
+
+        Map<String, Object> config2 = objectMapper.readValue(
+                savedReq2.getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> tasks2 = (List<?>) config2.get("bulkTasks");
+        assertEquals(1, tasks2.size());
+        Map<?, ?> taskMap = (Map<?, ?>) tasks2.get(0);
+        assertEquals("Send Lab Results", taskMap.get("name"));
+        assertEquals(0, ((Number) taskMap.get("rank")).intValue());
+        assertEquals(createdGroupId, taskMap.get("bulkTaskGroupId"));
+
+        // 3. Delete Group -> Cascades and deletes all tasks belonging to that group
+        existing.setConfiguration(savedReq2.getConfiguration());
+        configurationService.deleteBulkTaskGroup(tenantId, studyId, createdGroupId);
+
+        ArgumentCaptor<StudyRequirement> captor3 = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captor3.capture());
+        StudyRequirement savedReq3 = captor3.getValue();
+
+        Map<String, Object> config3 = objectMapper.readValue(
+                savedReq3.getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> groups3 = (List<?>) config3.get("bulkTaskGroups");
+        List<?> tasks3 = (List<?>) config3.get("bulkTasks");
+        assertEquals(0, groups3.size());
+        assertEquals(0, tasks3.size());
+    }
+
+    @Test
+    void bulkTasks_reorderTasks_updatesRanksAccurately() throws Exception {
+        Map<String, Object> initialConfig = new LinkedHashMap<>();
+        initialConfig.put("bulkTaskGroups", List.of(
+                Map.of("_id", "grp_100", "name", "General Group")
+        ));
+        initialConfig.put("bulkTasks", new ArrayList<>(List.of(
+                new LinkedHashMap<>(Map.of("_id", "t_1", "bulkTaskGroupId", "grp_100", "name", "Task 1", "rank", 0)),
+                new LinkedHashMap<>(Map.of("_id", "t_2", "bulkTaskGroupId", "grp_100", "name", "Task 2", "rank", 1)),
+                new LinkedHashMap<>(Map.of("_id", "t_3", "bulkTaskGroupId", "grp_100", "name", "Task 3", "rank", 2))
+        )));
+
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration(objectMapper.writeValueAsString(initialConfig));
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        // Reorder: t_3 first, then t_1, then t_2
+        configurationService.reorderBulkTasks(tenantId, studyId, "grp_100", List.of("t_3", "t_1", "t_2"));
+
+        ArgumentCaptor<StudyRequirement> captor = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository).save(captor.capture());
+
+        Map<String, Object> updated = objectMapper.readValue(
+                captor.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> tasks = (List<?>) updated.get("bulkTasks");
+        for (Object obj : tasks) {
+            Map<?, ?> m = (Map<?, ?>) obj;
+            String id = (String) m.get("_id");
+            int rank = ((Number) m.get("rank")).intValue();
+            if ("t_3".equals(id)) assertEquals(0, rank);
+            if ("t_1".equals(id)) assertEquals(1, rank);
+            if ("t_2".equals(id)) assertEquals(2, rank);
+        }
     }
 }

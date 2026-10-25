@@ -1,6 +1,14 @@
 package com.enrollnow.study.services;
 
 import com.enrollnow.study.dtos.ImportStudyResponse;
+import com.enrollnow.study.dtos.LocaleOptionDto;
+import com.enrollnow.study.dtos.ParticipantColumnDto;
+import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
+import com.enrollnow.study.dtos.SaveBulkTaskRequest;
+import com.enrollnow.study.dtos.StudyAdminSummary;
+import com.enrollnow.study.dtos.StudyBulkTasksResponse;
+import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
+import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.StudyRequirement;
@@ -973,5 +981,831 @@ public class StudyConfigurationService {
                 }
             }
         }
+    }
+
+    // =========================================================================
+    // Display Settings & Bulk Tasks Configuration Support
+    // =========================================================================
+
+    private static final List<LocaleOptionDto> SUPPORTED_LOCALE_OPTIONS = List.of(
+            new LocaleOptionDto("en-US", "en-US - American English"),
+            new LocaleOptionDto("en-GB", "en-GB - British English"),
+            new LocaleOptionDto("en-CA", "en-CA - Canadian English"),
+            new LocaleOptionDto("en-AU", "en-AU - Australian English"),
+            new LocaleOptionDto("en", "en - English"),
+            new LocaleOptionDto("es-ES", "es-ES - European Spanish"),
+            new LocaleOptionDto("es-MX", "es-MX - Mexican Spanish"),
+            new LocaleOptionDto("es-419", "es-419 - Latin American Spanish"),
+            new LocaleOptionDto("es", "es - Spanish"),
+            new LocaleOptionDto("fr", "fr - French"),
+            new LocaleOptionDto("fr-CA", "fr-CA - Canadian French"),
+            new LocaleOptionDto("fr-CH", "fr-CH - Swiss French"),
+            new LocaleOptionDto("de", "de - German"),
+            new LocaleOptionDto("de-AT", "de-AT - Austrian German"),
+            new LocaleOptionDto("de-CH", "de-CH - Swiss High German"),
+            new LocaleOptionDto("it", "it - Italian"),
+            new LocaleOptionDto("pt", "pt - Portuguese"),
+            new LocaleOptionDto("pt-BR", "pt-BR - Brazilian Portuguese"),
+            new LocaleOptionDto("pt-PT", "pt-PT - European Portuguese"),
+            new LocaleOptionDto("nl", "nl - Dutch"),
+            new LocaleOptionDto("nl-BE", "nl-BE - Flemish"),
+            new LocaleOptionDto("da", "da - Danish"),
+            new LocaleOptionDto("sv", "sv - Swedish"),
+            new LocaleOptionDto("nb", "nb - Norwegian Bokmål"),
+            new LocaleOptionDto("fi", "fi - Finnish"),
+            new LocaleOptionDto("pl", "pl - Polish"),
+            new LocaleOptionDto("cs", "cs - Czech"),
+            new LocaleOptionDto("sk", "sk - Slovak"),
+            new LocaleOptionDto("hu", "hu - Hungarian"),
+            new LocaleOptionDto("ro", "ro - Romanian"),
+            new LocaleOptionDto("el", "el - Greek"),
+            new LocaleOptionDto("tr", "tr - Turkish"),
+            new LocaleOptionDto("ru", "ru - Russian"),
+            new LocaleOptionDto("uk", "uk - Ukrainian"),
+            new LocaleOptionDto("he", "he - Hebrew"),
+            new LocaleOptionDto("hi", "hi - Hindi"),
+            new LocaleOptionDto("id", "id - Indonesian"),
+            new LocaleOptionDto("ms", "ms - Malay"),
+            new LocaleOptionDto("vi", "vi - Vietnamese"),
+            new LocaleOptionDto("ja", "ja - Japanese"),
+            new LocaleOptionDto("ko", "ko - Korean"),
+            new LocaleOptionDto("zh", "zh - Chinese"),
+            new LocaleOptionDto("zh-Hans", "zh-Hans - Simplified Chinese")
+    );
+
+    private static final Set<String> VALID_LOCALE_CODES = new HashSet<>(Arrays.asList(
+            "af", "afh", "ain", "akz", "ale", "am", "an", "anp", "arp", "ars", "arw", "avk", "az", "az-alt-short",
+            "be", "bg", "bla", "bs", "ca", "cad", "car", "cay", "chb", "chg", "chn", "chy", "crh", "cs", "cy", "da",
+            "de", "de-AT", "de-CH", "del", "din", "dum", "eka", "el", "elx", "en", "en-AU", "en-CA", "en-GB", "en-US",
+            "es", "es-419", "es-ES", "es-MX", "et", "eu", "fat", "fi", "fil", "fo", "fr", "fr-CA", "fr-CH", "ga", "gba",
+            "gl", "grb", "gu", "hai", "he", "hi", "hit", "hmn", "hr", "hu", "hup", "hy", "id", "ie", "io", "is", "it",
+            "ja", "jbo", "jpr", "jrb", "ka", "kaw", "kbl", "kho", "kk", "km", "kn", "ko", "kr", "kut", "ky",
+            "ky-alt-variant", "lam", "lfn", "liv", "lo", "lt", "lui", "lun", "lus", "lv", "mga", "mic", "mk", "ml",
+            "mn", "mnc", "ms", "my-alt-variant", "mye", "nb", "nia", "nl", "nl-BE", "nog", "nov", "nwc", "nyo", "oj",
+            "pa", "pi", "pl", "pro", "ps-alt-variant", "pt", "pt-BR", "pt-PT", "rap", "rar", "ro", "ro-MD", "rom",
+            "ru", "rup", "sad", "sam", "see", "sel", "sh", "si", "sk", "sl", "sog", "sq", "sr", "sux", "sv", "sw",
+            "sw-CD", "syc", "ta", "te", "ter", "tli", "to", "tr", "tsi", "tw", "ug-alt-variant", "uk", "ur", "uz",
+            "vi", "was", "xal", "yue", "zap", "zbl", "zen", "zh", "zh-alt-long", "zh-Hans", "zu", "zun"
+    ));
+
+    private static final List<ParticipantColumnDto> STATIC_PARTICIPANT_COLUMN_OPTIONS = List.of(
+            new ParticipantColumnDto("ID", "psi.customId"),
+            new ParticipantColumnDto("Name", "p.name"),
+            new ParticipantColumnDto("Next Appointment", "a.next_appointment", null, "Shows next chronological date"),
+            new ParticipantColumnDto("Next Event", "a.next_event", null, "Shows date based on Events sort order"),
+            new ParticipantColumnDto("Contact Info", "cm.information"),
+            new ParticipantColumnDto("Last Contact", "psi.lastContactDate"),
+            new ParticipantColumnDto("Global Date of Last Contact", "p.globalLastContactDate"),
+            new ParticipantColumnDto("Last Comment", "c.lastComment"),
+            new ParticipantColumnDto("Last Pinned Comment", "c.lastStickied"),
+            new ParticipantColumnDto("Family ID", "p.familyId"),
+            new ParticipantColumnDto("Global ID", "p.globalId"),
+            new ParticipantColumnDto("Contact Name", "cm.contactName"),
+            new ParticipantColumnDto("Contact Email", "cm.email"),
+            new ParticipantColumnDto("Contact Phone", "cm.phone"),
+            new ParticipantColumnDto("Address", "cm.address1"),
+            new ParticipantColumnDto("City", "cm.city"),
+            new ParticipantColumnDto("State", "cm.state"),
+            new ParticipantColumnDto("Postal Code", "cm.zipcode"),
+            new ParticipantColumnDto("Current Age", "a.currentAge"),
+            new ParticipantColumnDto("Age (at time of study)", "psi.age"),
+            new ParticipantColumnDto("Sex", "p.sex"),
+            new ParticipantColumnDto("Ethnicity", "p.ethnicity"),
+            new ParticipantColumnDto("Race", "p.race"),
+            new ParticipantColumnDto("Birthday", "p.birthday"),
+            new ParticipantColumnDto("Recruitment Source", "psi.sourceId"),
+            new ParticipantColumnDto("Recruitment Site", "psi.siteId"),
+            new ParticipantColumnDto("Recruitment Strategy", "psi.strategyId"),
+            new ParticipantColumnDto("Date Added to Study", "psi.insertedAt"),
+            new ParticipantColumnDto("Date Profile Created", "p.insertedAt"),
+            new ParticipantColumnDto("Contact For Future Studies", "p.contactForFutureStudies"),
+            new ParticipantColumnDto("Signed Consent Form", "psi.signedConsentForm"),
+            new ParticipantColumnDto("Date Added to Enrolled", "psi.dateAddedToEnrolled"),
+            new ParticipantColumnDto("Last Contact Outcome", "c.outcome"),
+            new ParticipantColumnDto("Last Contact Comment", "c.comment"),
+            new ParticipantColumnDto("Next Event Name", "a.next_event_name"),
+            new ParticipantColumnDto("Next Appointment Name", "a.next_appointment_name"),
+            new ParticipantColumnDto("Tags", "p.tags")
+    );
+
+    public boolean isLocaleSupported(String locale) {
+        if (locale == null || locale.isBlank()) {
+            return false;
+        }
+        return VALID_LOCALE_CODES.contains(locale.trim());
+    }
+
+    public List<LocaleOptionDto> getSupportedLocales() {
+        return SUPPORTED_LOCALE_OPTIONS;
+    }
+
+    public static List<ParticipantColumnDto> getDefaultPotentialColumns() {
+        return List.of(
+                new ParticipantColumnDto("ID", "psi.customId"),
+                new ParticipantColumnDto("Name", "p.name"),
+                new ParticipantColumnDto("Next Appointment", "a.next_appointment", null, "Shows next chronological date"),
+                new ParticipantColumnDto("Contact Info", "cm.information"),
+                new ParticipantColumnDto("Last Contact", "psi.lastContactDate"),
+                new ParticipantColumnDto("Recruitment Source", "psi.sourceId")
+        );
+    }
+
+    public static List<ParticipantColumnDto> getDefaultEnrolledColumns() {
+        return List.of(
+                new ParticipantColumnDto("ID", "psi.customId"),
+                new ParticipantColumnDto("Name", "p.name"),
+                new ParticipantColumnDto("Next Appointment", "a.next_appointment", null, "Shows next chronological date")
+        );
+    }
+
+    public static String makeCustomVariableColumnValue(String name) {
+        if (name == null) {
+            return "cv.";
+        }
+        return "cv." + name.replaceAll("\\W+", "_").toLowerCase(Locale.ROOT);
+    }
+
+    private Map<String, Object> loadOrCreateStudyConfigMap(UUID tenantId, UUID studyId) {
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        try {
+            if (requirement.getConfiguration() != null && !requirement.getConfiguration().isBlank()) {
+                return objectMapper.readValue(requirement.getConfiguration(), new TypeReference<Map<String, Object>>() {});
+            }
+        } catch (Exception ex) {
+            throw new InvalidStudyException("Study configuration JSON is corrupted: " + ex.getMessage());
+        }
+        return new LinkedHashMap<>();
+    }
+
+    public List<ParticipantColumnDto> getAvailableColumnOptionsForConfig(Map<String, Object> configMap) {
+        List<ParticipantColumnDto> options = new ArrayList<>(STATIC_PARTICIPANT_COLUMN_OPTIONS);
+        if (configMap != null && configMap.get("customVariables") instanceof List<?> cvList) {
+            for (Object obj : cvList) {
+                if (obj instanceof Map<?, ?> cvMap) {
+                    Object nameObj = cvMap.get("name");
+                    if (nameObj != null && !nameObj.toString().isBlank()) {
+                        String cvName = nameObj.toString().trim();
+                        String cId = cvMap.get("_id") != null
+                                ? cvMap.get("_id").toString()
+                                : (cvMap.get("variableId") != null ? cvMap.get("variableId").toString() : null);
+                        options.add(new ParticipantColumnDto(cvName, makeCustomVariableColumnValue(cvName), cId, null));
+                    }
+                }
+            }
+        }
+        return options;
+    }
+
+    @Transactional(readOnly = true)
+    public StudyDisplaySettingsResponse getDisplayConfiguration(
+            UUID tenantId,
+            UUID studyId,
+            String studyLocale,
+            boolean showGlobalComments,
+            boolean defaultGlobalLogs,
+            boolean canManage
+    ) {
+        Map<String, Object> configMap = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .map(req -> {
+                    try {
+                        if (req.getConfiguration() != null && !req.getConfiguration().isBlank()) {
+                            return objectMapper.readValue(req.getConfiguration(), new TypeReference<Map<String, Object>>() {});
+                        }
+                    } catch (Exception ex) {
+                        throw new InvalidStudyException("Study configuration JSON is corrupted: " + ex.getMessage());
+                    }
+                    return new LinkedHashMap<String, Object>();
+                })
+                .orElseGet(LinkedHashMap::new);
+
+        return buildDisplaySettingsResponse(
+                studyId,
+                studyLocale,
+                showGlobalComments,
+                defaultGlobalLogs,
+                canManage,
+                configMap
+        );
+    }
+
+    private StudyDisplaySettingsResponse buildDisplaySettingsResponse(
+            UUID studyId,
+            String studyLocale,
+            boolean showGlobalComments,
+            boolean defaultGlobalLogs,
+            boolean canManage,
+            Map<String, Object> configMap
+    ) {
+        List<ParticipantColumnDto> availableOptions = getAvailableColumnOptionsForConfig(configMap);
+        Map<String, ParticipantColumnDto> optionByValue = new LinkedHashMap<>();
+        for (ParticipantColumnDto opt : availableOptions) {
+            optionByValue.put(opt.getValue(), opt);
+        }
+
+        boolean statusPageCombinedView = false;
+        boolean enrolledShowEvents = true;
+        List<ParticipantColumnDto> potentialCols = null;
+        List<ParticipantColumnDto> enrolledCols = null;
+
+        if (configMap.get("displaySettings") instanceof Map<?, ?> dsMap) {
+            if (dsMap.get("statusPageCombinedView") instanceof Boolean b) {
+                statusPageCombinedView = b;
+            }
+            if (dsMap.get("enrolledParticipantColumnsShowEvents") instanceof Boolean b) {
+                enrolledShowEvents = b;
+            }
+            if (dsMap.get("potentialParticipantColumns") instanceof List<?> rawPot && !rawPot.isEmpty()) {
+                potentialCols = parseColumnsList(rawPot, optionByValue);
+            }
+            if (dsMap.get("enrolledParticipantColumns") instanceof List<?> rawEnr && !rawEnr.isEmpty()) {
+                enrolledCols = parseColumnsList(rawEnr, optionByValue);
+            }
+        }
+
+        if (potentialCols == null || potentialCols.isEmpty()) {
+            potentialCols = getDefaultPotentialColumns();
+        }
+        if (enrolledCols == null || enrolledCols.isEmpty()) {
+            enrolledCols = getDefaultEnrolledColumns();
+        }
+
+        StudyDisplaySettingsResponse res = new StudyDisplaySettingsResponse();
+        res.setStudyId(studyId.toString());
+        res.setLocale((studyLocale != null && !studyLocale.isBlank()) ? studyLocale : "en-US");
+        res.setShowGlobalComments(showGlobalComments);
+        res.setDefaultGlobalLogs(defaultGlobalLogs);
+        res.setStatusPageCombinedView(statusPageCombinedView);
+        res.setEnrolledParticipantColumnsShowEvents(enrolledShowEvents);
+        res.setPotentialParticipantColumns(potentialCols);
+        res.setEnrolledParticipantColumns(enrolledCols);
+        res.setAvailableColumnOptions(availableOptions);
+        res.setSupportedLocales(SUPPORTED_LOCALE_OPTIONS);
+        res.setCanManage(canManage);
+        return res;
+    }
+
+    private List<ParticipantColumnDto> parseColumnsList(List<?> rawList, Map<String, ParticipantColumnDto> optionByValue) {
+        List<ParticipantColumnDto> cols = new ArrayList<>();
+        for (Object item : rawList) {
+            if (item instanceof Map<?, ?> m) {
+                String val = m.get("value") != null ? m.get("value").toString().trim() : "";
+                String label = m.get("label") != null ? m.get("label").toString().trim() : "";
+                String cId = m.get("cId") != null ? m.get("cId").toString() : null;
+                ParticipantColumnDto matched = optionByValue.get(val);
+                String title = matched != null ? matched.getTitle() : (m.get("title") != null ? m.get("title").toString() : null);
+                if (label.isEmpty() && matched != null) {
+                    label = matched.getLabel();
+                }
+                if (!val.isEmpty()) {
+                    cols.add(new ParticipantColumnDto(label, val, cId, title));
+                }
+            }
+        }
+        return cols;
+    }
+
+    @Transactional
+    public void updateDisplayCustomizationsInConfig(
+            UUID tenantId,
+            UUID studyId,
+            UpdateStudyDisplaySettingsRequest request
+    ) {
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<ParticipantColumnDto> availableOptions = getAvailableColumnOptionsForConfig(configMap);
+        Map<String, ParticipantColumnDto> optionByValue = new LinkedHashMap<>();
+        for (ParticipantColumnDto opt : availableOptions) {
+            optionByValue.put(opt.getValue(), opt);
+        }
+
+        Map<String, Object> displaySettings = new LinkedHashMap<>();
+        if (configMap.get("displaySettings") instanceof Map<?, ?> existingDs) {
+            for (Map.Entry<?, ?> e : existingDs.entrySet()) {
+                displaySettings.put(String.valueOf(e.getKey()), e.getValue());
+            }
+        } else {
+            displaySettings.put("statusPageCombinedView", false);
+            displaySettings.put("enrolledParticipantColumnsShowEvents", true);
+            displaySettings.put("potentialParticipantColumns", serializeColumns(getDefaultPotentialColumns()));
+            displaySettings.put("enrolledParticipantColumns", serializeColumns(getDefaultEnrolledColumns()));
+        }
+
+        if (request.getStatusPageCombinedView() != null) {
+            displaySettings.put("statusPageCombinedView", request.getStatusPageCombinedView());
+        }
+        if (request.getEnrolledParticipantColumnsShowEvents() != null) {
+            displaySettings.put("enrolledParticipantColumnsShowEvents", request.getEnrolledParticipantColumnsShowEvents());
+        }
+        if (request.getPotentialParticipantColumns() != null) {
+            List<ParticipantColumnDto> validated = validateAndNormalizeColumns(
+                    request.getPotentialParticipantColumns(),
+                    optionByValue
+            );
+            displaySettings.put("potentialParticipantColumns", serializeColumns(validated));
+        }
+        if (request.getEnrolledParticipantColumns() != null) {
+            List<ParticipantColumnDto> validated = validateAndNormalizeColumns(
+                    request.getEnrolledParticipantColumns(),
+                    optionByValue
+            );
+            displaySettings.put("enrolledParticipantColumns", serializeColumns(validated));
+        }
+
+        configMap.put("displaySettings", displaySettings);
+        saveStudyRequirement(
+                tenantId,
+                studyId,
+                requirement.getSampleSize() != null ? requirement.getSampleSize() : 100,
+                configMap
+        );
+    }
+
+    private List<ParticipantColumnDto> validateAndNormalizeColumns(
+            List<ParticipantColumnDto> incoming,
+            Map<String, ParticipantColumnDto> optionByValue
+    ) {
+        if (incoming == null || incoming.isEmpty()) {
+            throw new InvalidStudyException("Must have at least one column for display.");
+        }
+        List<ParticipantColumnDto> normalized = new ArrayList<>();
+        for (ParticipantColumnDto col : incoming) {
+            if (col == null || col.getValue() == null || col.getValue().isBlank()) {
+                throw new InvalidStudyException("Participant column value is required.");
+            }
+            String val = col.getValue().trim();
+            ParticipantColumnDto allowed = optionByValue.get(val);
+            if (allowed == null) {
+                throw new InvalidStudyException("Unsupported participant column value: " + val);
+            }
+            normalized.add(new ParticipantColumnDto(
+                    allowed.getLabel(),
+                    allowed.getValue(),
+                    allowed.getcId(),
+                    allowed.getTitle()
+            ));
+        }
+        return normalized;
+    }
+
+    private List<Map<String, Object>> serializeColumns(List<ParticipantColumnDto> cols) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (ParticipantColumnDto c : cols) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("label", c.getLabel());
+            m.put("value", c.getValue());
+            if (c.getcId() != null) {
+                m.put("cId", c.getcId());
+            }
+            if (c.getTitle() != null) {
+                m.put("title", c.getTitle());
+            }
+            list.add(m);
+        }
+        return list;
+    }
+
+    // =========================================================================
+    // Bulk Tasks Configuration Support
+    // =========================================================================
+
+    private static final Set<String> ALLOWED_TRIGGER_ACTIONS = Set.of("completed", "scheduled");
+
+    @Transactional(readOnly = true)
+    public StudyBulkTasksResponse getBulkTasksConfiguration(
+            UUID tenantId,
+            UUID studyId,
+            List<StudyAdminSummary> teamMembers,
+            boolean canManage
+    ) {
+        Map<String, Object> configMap = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .map(req -> {
+                    try {
+                        if (req.getConfiguration() != null && !req.getConfiguration().isBlank()) {
+                            return objectMapper.readValue(req.getConfiguration(), new TypeReference<Map<String, Object>>() {});
+                        }
+                    } catch (Exception ex) {
+                        throw new InvalidStudyException("Study configuration JSON is corrupted: " + ex.getMessage());
+                    }
+                    return new LinkedHashMap<String, Object>();
+                })
+                .orElseGet(LinkedHashMap::new);
+
+        return buildBulkTasksResponse(studyId, configMap, teamMembers, canManage);
+    }
+
+    private StudyBulkTasksResponse buildBulkTasksResponse(
+            UUID studyId,
+            Map<String, Object> configMap,
+            List<StudyAdminSummary> teamMembers,
+            boolean canManage
+    ) {
+        List<StudyAdminSummary> safeMembers = teamMembers != null ? teamMembers : Collections.emptyList();
+        Map<String, String> memberInitialsMap = new HashMap<>();
+        for (StudyAdminSummary m : safeMembers) {
+            if (m.getUserId() != null) {
+                memberInitialsMap.put(m.getUserId().toString(), m.getInitials() != null ? m.getInitials() : "");
+            }
+        }
+
+        List<StudyBulkTasksResponse.StudyEventOptionDto> eventOptions = new ArrayList<>();
+        if (configMap.get("events") instanceof List<?> rawEvents) {
+            for (Object obj : rawEvents) {
+                if (obj instanceof Map<?, ?> evtMap) {
+                    String id = evtMap.get("_id") != null ? evtMap.get("_id").toString() : "";
+                    String name = evtMap.get("name") != null ? evtMap.get("name").toString() : "";
+                    if (!id.isEmpty() && !name.isEmpty()) {
+                        eventOptions.add(new StudyBulkTasksResponse.StudyEventOptionDto(id, name));
+                    }
+                }
+            }
+        }
+
+        List<StudyBulkTasksResponse.BulkTaskDto> allTasks = new ArrayList<>();
+        if (configMap.get("bulkTasks") instanceof List<?> rawTasks) {
+            for (Object obj : rawTasks) {
+                if (obj instanceof Map<?, ?> btMap) {
+                    StudyBulkTasksResponse.BulkTaskDto dto = new StudyBulkTasksResponse.BulkTaskDto();
+                    dto.set_id(btMap.get("_id") != null ? btMap.get("_id").toString() : "");
+                    dto.setStudyId(studyId.toString());
+                    dto.setBulkTaskGroupId(btMap.get("bulkTaskGroupId") != null ? btMap.get("bulkTaskGroupId").toString() : "");
+                    dto.setName(btMap.get("name") != null ? btMap.get("name").toString() : "");
+                    dto.setDescription(btMap.get("description") != null ? btMap.get("description").toString() : "");
+                    int rank = 0;
+                    if (btMap.get("rank") instanceof Number n) {
+                        rank = n.intValue();
+                    }
+                    dto.setRank(rank);
+
+                    List<String> assignedTo = new ArrayList<>();
+                    if (btMap.get("assignedTo") instanceof List<?> rawAssigned) {
+                        for (Object a : rawAssigned) {
+                            if (a != null && !a.toString().isBlank()) {
+                                assignedTo.add(a.toString());
+                            }
+                        }
+                    }
+                    dto.setAssignedTo(assignedTo);
+
+                    StringBuilder initialsBuilder = new StringBuilder();
+                    for (String uid : assignedTo) {
+                        String init = memberInitialsMap.get(uid);
+                        if (init != null && !init.isBlank()) {
+                            if (initialsBuilder.length() > 0) {
+                                initialsBuilder.append(" ");
+                            }
+                            initialsBuilder.append(init);
+                        }
+                    }
+                    dto.setAssignedToInitials(initialsBuilder.toString());
+                    allTasks.add(dto);
+                }
+            }
+        }
+
+        allTasks.sort(Comparator.comparingInt(StudyBulkTasksResponse.BulkTaskDto::getRank));
+
+        List<StudyBulkTasksResponse.BulkTaskGroupDto> groups = new ArrayList<>();
+        if (configMap.get("bulkTaskGroups") instanceof List<?> rawGroups) {
+            for (Object obj : rawGroups) {
+                if (obj instanceof Map<?, ?> btgMap) {
+                    StudyBulkTasksResponse.BulkTaskGroupDto gDto = new StudyBulkTasksResponse.BulkTaskGroupDto();
+                    String gId = btgMap.get("_id") != null ? btgMap.get("_id").toString() : "";
+                    gDto.set_id(gId);
+                    gDto.setStudyId(studyId.toString());
+                    gDto.setName(btgMap.get("name") != null ? btgMap.get("name").toString() : "");
+                    gDto.setDescription(btgMap.get("description") != null ? btgMap.get("description").toString() : "");
+                    boolean triggerActive = Boolean.TRUE.equals(btgMap.get("triggerActive"));
+                    gDto.setTriggerActive(triggerActive);
+                    if (triggerActive && btgMap.get("trigger") instanceof Map<?, ?> trigMap) {
+                        String evtId = trigMap.get("eventId") != null ? trigMap.get("eventId").toString() : "";
+                        String action = trigMap.get("action") != null ? trigMap.get("action").toString() : "";
+                        gDto.setTrigger(new StudyBulkTasksResponse.BulkTaskTriggerDto(evtId, action));
+                    }
+                    List<StudyBulkTasksResponse.BulkTaskDto> groupTasks = allTasks.stream()
+                            .filter(t -> gId.equals(t.getBulkTaskGroupId()))
+                            .sorted(Comparator.comparingInt(StudyBulkTasksResponse.BulkTaskDto::getRank))
+                            .toList();
+                    gDto.setTasks(groupTasks);
+                    groups.add(gDto);
+                }
+            }
+        }
+
+        StudyBulkTasksResponse response = new StudyBulkTasksResponse();
+        response.setStudyId(studyId.toString());
+        response.setBulkTaskGroups(groups);
+        response.setBulkTasks(allTasks);
+        response.setEvents(eventOptions);
+        response.setTeamMembers(safeMembers);
+        response.setCanManage(canManage);
+        return response;
+    }
+
+    @Transactional
+    public void createBulkTaskGroup(UUID tenantId, UUID studyId, SaveBulkTaskGroupRequest request) {
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> groups = getMutableList(configMap, "bulkTaskGroups");
+
+        String name = validateGroupName(request != null ? request.getName() : null, groups, null);
+        String description = (request.getDescription() != null) ? request.getDescription().trim() : "";
+        boolean triggerActive = Boolean.TRUE.equals(request.getTriggerActive());
+
+        Map<String, Object> newGroup = new LinkedHashMap<>();
+        String newGroupId = "btg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        newGroup.put("_id", newGroupId);
+        newGroup.put("studyId", studyId.toString());
+        newGroup.put("name", name);
+        newGroup.put("description", description);
+        newGroup.put("triggerActive", triggerActive);
+
+        if (triggerActive) {
+            Map<String, Object> validatedTrigger = validateTrigger(request.getTrigger(), configMap);
+            newGroup.put("trigger", validatedTrigger);
+        }
+
+        groups.add(newGroup);
+        configMap.put("bulkTaskGroups", groups);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void updateBulkTaskGroup(UUID tenantId, UUID studyId, String groupId, SaveBulkTaskGroupRequest request) {
+        if (groupId == null || groupId.isBlank()) {
+            throw new InvalidStudyException("Bulk task group ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> groups = getMutableList(configMap, "bulkTaskGroups");
+
+        Map<String, Object> target = groups.stream()
+                .filter(g -> groupId.equals(String.valueOf(g.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Bulk task group not found: " + groupId));
+
+        String name = validateGroupName(request != null ? request.getName() : null, groups, groupId);
+        String description = (request.getDescription() != null) ? request.getDescription().trim() : "";
+        boolean triggerActive = Boolean.TRUE.equals(request.getTriggerActive());
+
+        target.put("name", name);
+        target.put("description", description);
+        target.put("triggerActive", triggerActive);
+
+        if (triggerActive) {
+            Map<String, Object> validatedTrigger = validateTrigger(request.getTrigger(), configMap);
+            target.put("trigger", validatedTrigger);
+        } else {
+            target.remove("trigger");
+        }
+
+        configMap.put("bulkTaskGroups", groups);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void deleteBulkTaskGroup(UUID tenantId, UUID studyId, String groupId) {
+        if (groupId == null || groupId.isBlank()) {
+            throw new InvalidStudyException("Bulk task group ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> groups = getMutableList(configMap, "bulkTaskGroups");
+
+        boolean removed = groups.removeIf(g -> groupId.equals(String.valueOf(g.get("_id"))));
+        if (!removed) {
+            throw new InvalidStudyException("Bulk task group not found: " + groupId);
+        }
+
+        List<Map<String, Object>> tasks = getMutableList(configMap, "bulkTasks");
+        tasks.removeIf(t -> groupId.equals(String.valueOf(t.get("bulkTaskGroupId"))));
+
+        configMap.put("bulkTaskGroups", groups);
+        configMap.put("bulkTasks", tasks);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void createBulkTask(UUID tenantId, UUID studyId, String groupId, SaveBulkTaskRequest request) {
+        if (groupId == null || groupId.isBlank()) {
+            throw new InvalidStudyException("Bulk task group ID is required.");
+        }
+        if (request == null || request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new InvalidStudyException("Task name is required.");
+        }
+        String taskName = request.getName().trim();
+        if (taskName.length() > 200) {
+            throw new InvalidStudyException("Task name must be 200 characters or less.");
+        }
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> groups = getMutableList(configMap, "bulkTaskGroups");
+
+        boolean groupExists = groups.stream().anyMatch(g -> groupId.equals(String.valueOf(g.get("_id"))));
+        if (!groupExists) {
+            throw new InvalidStudyException("Bulk task group not found: " + groupId);
+        }
+
+        List<Map<String, Object>> tasks = getMutableList(configMap, "bulkTasks");
+        int maxRank = -1;
+        for (Map<String, Object> t : tasks) {
+            if (groupId.equals(String.valueOf(t.get("bulkTaskGroupId")))) {
+                if (t.get("rank") instanceof Number n && n.intValue() > maxRank) {
+                    maxRank = n.intValue();
+                }
+            }
+        }
+
+        Map<String, Object> newTask = new LinkedHashMap<>();
+        newTask.put("_id", "bt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+        newTask.put("studyId", studyId.toString());
+        newTask.put("bulkTaskGroupId", groupId);
+        newTask.put("name", taskName);
+        newTask.put("description", request.getDescription() != null ? request.getDescription().trim() : "");
+        newTask.put("rank", maxRank + 1);
+        newTask.put("assignedTo", sanitizeAssignedTo(request.getAssignedTo()));
+
+        tasks.add(newTask);
+        configMap.put("bulkTasks", tasks);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void updateBulkTask(UUID tenantId, UUID studyId, String taskId, SaveBulkTaskRequest request) {
+        if (taskId == null || taskId.isBlank()) {
+            throw new InvalidStudyException("Task ID is required.");
+        }
+        if (request == null || request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new InvalidStudyException("Task name is required.");
+        }
+        String taskName = request.getName().trim();
+        if (taskName.length() > 200) {
+            throw new InvalidStudyException("Task name must be 200 characters or less.");
+        }
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> tasks = getMutableList(configMap, "bulkTasks");
+
+        Map<String, Object> target = tasks.stream()
+                .filter(t -> taskId.equals(String.valueOf(t.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Bulk task not found: " + taskId));
+
+        target.put("name", taskName);
+        target.put("description", request.getDescription() != null ? request.getDescription().trim() : "");
+        target.put("assignedTo", sanitizeAssignedTo(request.getAssignedTo()));
+
+        configMap.put("bulkTasks", tasks);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void deleteBulkTask(UUID tenantId, UUID studyId, String taskId) {
+        if (taskId == null || taskId.isBlank()) {
+            throw new InvalidStudyException("Task ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> tasks = getMutableList(configMap, "bulkTasks");
+
+        boolean removed = tasks.removeIf(t -> taskId.equals(String.valueOf(t.get("_id"))));
+        if (!removed) {
+            throw new InvalidStudyException("Bulk task not found: " + taskId);
+        }
+
+        configMap.put("bulkTasks", tasks);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void reorderBulkTasks(UUID tenantId, UUID studyId, String groupId, List<String> taskIds) {
+        if (groupId == null || groupId.isBlank()) {
+            throw new InvalidStudyException("Bulk task group ID is required.");
+        }
+        if (taskIds == null || taskIds.isEmpty()) {
+            return;
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> groups = getMutableList(configMap, "bulkTaskGroups");
+        boolean groupExists = groups.stream().anyMatch(g -> groupId.equals(String.valueOf(g.get("_id"))));
+        if (!groupExists) {
+            throw new InvalidStudyException("Bulk task group not found: " + groupId);
+        }
+
+        List<Map<String, Object>> tasks = getMutableList(configMap, "bulkTasks");
+        for (Map<String, Object> task : tasks) {
+            if (groupId.equals(String.valueOf(task.get("bulkTaskGroupId")))) {
+                String tId = String.valueOf(task.get("_id"));
+                int idx = taskIds.indexOf(tId);
+                if (idx >= 0) {
+                    task.put("rank", idx);
+                }
+            }
+        }
+
+        configMap.put("bulkTasks", tasks);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    private String validateGroupName(String rawName, List<Map<String, Object>> existingGroups, String excludeGroupId) {
+        if (rawName == null || rawName.trim().isEmpty()) {
+            throw new InvalidStudyException("Bulk task group name is required.");
+        }
+        String trimmed = rawName.trim();
+        if (trimmed.length() > 150) {
+            throw new InvalidStudyException("Bulk task group name must be 150 characters or less.");
+        }
+        for (Map<String, Object> g : existingGroups) {
+            String gId = String.valueOf(g.get("_id"));
+            if (excludeGroupId != null && excludeGroupId.equals(gId)) {
+                continue;
+            }
+            String existingName = g.get("name") != null ? g.get("name").toString().trim() : "";
+            if (trimmed.equalsIgnoreCase(existingName)) {
+                throw new InvalidStudyException("A bulk task group with this name already exists.");
+            }
+        }
+        return trimmed;
+    }
+
+    private Map<String, Object> validateTrigger(
+            StudyBulkTasksResponse.BulkTaskTriggerDto trigger,
+            Map<String, Object> configMap
+    ) {
+        if (trigger == null
+                || trigger.getEventId() == null || trigger.getEventId().trim().isEmpty()
+                || trigger.getAction() == null || trigger.getAction().trim().isEmpty()) {
+            throw new InvalidStudyException("Both trigger event and trigger action are required when Trigger is enabled.");
+        }
+        String eventId = trigger.getEventId().trim();
+        String action = trigger.getAction().trim().toLowerCase(Locale.ROOT);
+
+        if (!ALLOWED_TRIGGER_ACTIONS.contains(action)) {
+            throw new InvalidStudyException("Trigger action must be 'completed' or 'scheduled'.");
+        }
+
+        boolean eventFound = false;
+        if (configMap.get("events") instanceof List<?> rawEvents) {
+            for (Object obj : rawEvents) {
+                if (obj instanceof Map<?, ?> evtMap) {
+                    if (eventId.equals(String.valueOf(evtMap.get("_id")))) {
+                        eventFound = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!eventFound) {
+            throw new InvalidStudyException("Selected trigger event does not exist in this study.");
+        }
+
+        Map<String, Object> triggerMap = new LinkedHashMap<>();
+        triggerMap.put("eventId", eventId);
+        triggerMap.put("action", action);
+        return triggerMap;
+    }
+
+    private List<String> sanitizeAssignedTo(List<String> raw) {
+        if (raw == null) {
+            return Collections.emptyList();
+        }
+        List<String> cleaned = new ArrayList<>();
+        for (String id : raw) {
+            if (id != null && !id.trim().isEmpty() && !cleaned.contains(id.trim())) {
+                cleaned.add(id.trim());
+            }
+        }
+        return cleaned;
     }
 }
