@@ -24,6 +24,8 @@ public class StudyDetailsResponse {
     private String studyUrl;
     private boolean archived;
     private boolean canManage = false;
+    private boolean customIdGenerationEnabled = false;
+    private String prefix;
     private List<StudyGrantDto> grants = new ArrayList<>();
 
     public StudyDetailsResponse() {
@@ -163,6 +165,22 @@ public class StudyDetailsResponse {
 
     public void setCanManage(boolean canManage) {
         this.canManage = canManage;
+    }
+
+    public boolean isCustomIdGenerationEnabled() {
+        return customIdGenerationEnabled;
+    }
+
+    public void setCustomIdGenerationEnabled(boolean customIdGenerationEnabled) {
+        this.customIdGenerationEnabled = customIdGenerationEnabled;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
     }
 
     public List<StudyGrantDto> getGrants() {

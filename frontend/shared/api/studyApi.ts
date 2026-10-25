@@ -76,6 +76,8 @@ export interface StudyDetails {
   studyUrl?: string;
   archived: boolean;
   canManage: boolean;
+  customIdGenerationEnabled?: boolean;
+  prefix?: string;
   grants: StudyGrant[];
 }
 
@@ -88,6 +90,8 @@ export interface UpdateStudyDetailsPayload {
   recruitmentEndDate?: string;
   completionDate?: string;
   allowParticipationInOtherStudies?: boolean;
+  customIdGenerationEnabled?: boolean;
+  prefix?: string;
   studyUrlLabel?: string;
   studyUrl?: string;
   grants: StudyGrant[];
@@ -197,6 +201,11 @@ export const studyApi = {
 
   async exportStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
     const res = await apiClient.get(`/api/v1/studies/${id}/export`, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async importStudyComponents(id: string | number, components: any, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
+    const res = await apiClient.post(`/api/v1/studies/${id}/import-components`, components, config);
     return (res.data as any)?.data ?? res.data;
   },
 

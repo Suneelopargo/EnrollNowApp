@@ -530,4 +530,106 @@ public class StudyConfigurationService {
 
         return studyRequirementRepository.save(requirement);
     }
+
+    @Transactional
+    public Map<String, Object> importComponentsIntoExistingStudy(
+            UUID tenantId,
+            UUID studyId,
+            Map<String, Object> components
+    ) {
+        if (components == null || components.isEmpty()) {
+            return Map.of("importedCount", 0, "message", "No components selected to import.");
+        }
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> currentConfig;
+        try {
+            if (requirement.getConfiguration() != null && !requirement.getConfiguration().isBlank()) {
+                currentConfig = objectMapper.readValue(requirement.getConfiguration(), new TypeReference<Map<String, Object>>() {});
+            } else {
+                currentConfig = new LinkedHashMap<>();
+            }
+        } catch (Exception ex) {
+            currentConfig = new LinkedHashMap<>();
+        }
+
+        Map<String, Integer> summary = new LinkedHashMap<>();
+        String targetStudyId = studyId.toString();
+
+        List<String> categories = List.of(
+                "surveys", "customVariables", "statuses", "emailTemplates",
+                "textTemplates", "contactOutcomes", "contactRelationships",
+                "scheduledActions", "events"
+        );
+
+        int totalImported = 0;
+
+        for (String cat : categories) {
+            Object rawIncoming = components.get(cat);
+            if (rawIncoming instanceof List<?> incList && !incList.isEmpty()) {
+                List<Map<String, Object>> existingList = new ArrayList<>();
+                if (currentConfig.get(cat) instanceof List<?> curList) {
+                    for (Object o : curList) {
+                        if (o instanceof Map<?, ?> m) {
+                            existingList.add(new LinkedHashMap<>((Map<String, Object>) m));
+                        }
+                    }
+                }
+
+                Set<String> existingNames = new HashSet<>();
+                for (Map<String, Object> item : existingList) {
+                    Object name = item.get("name") != null ? item.get("name") : (item.get("outcome") != null ? item.get("outcome") : item.get("relationship"));
+                    if (name != null) {
+                        existingNames.add(name.toString().trim().toLowerCase(Locale.ROOT));
+                    }
+                }
+
+                int addedCount = 0;
+                for (Object incObj : incList) {
+                    if (incObj instanceof Map<?, ?> incMap) {
+                        Map<String, Object> mutableItem = new LinkedHashMap<>((Map<String, Object>) incMap);
+                        Object name = mutableItem.get("name") != null ? mutableItem.get("name") : (mutableItem.get("outcome") != null ? mutableItem.get("outcome") : mutableItem.get("relationship"));
+                        String nameStr = name != null ? name.toString().trim().toLowerCase(Locale.ROOT) : "";
+
+                        String prefix = switch (cat) {
+                            case "surveys" -> "srv_";
+                            case "customVariables" -> "cv_";
+                            case "statuses" -> "stat_";
+                            case "emailTemplates" -> "eml_";
+                            case "textTemplates" -> "txt_";
+                            default -> "cmp_";
+                        };
+                        String newId = prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        mutableItem.put("_id", newId);
+                        mutableItem.put("studyId", targetStudyId);
+
+                        if (!nameStr.isEmpty() && existingNames.contains(nameStr)) {
+                            Object origName = mutableItem.get("name");
+                            if (origName != null) {
+                                mutableItem.put("name", origName.toString() + " (Imported)");
+                            }
+                        }
+
+                        existingList.add(mutableItem);
+                        addedCount++;
+                    }
+                }
+
+                currentConfig.put(cat, existingList);
+                summary.put(cat, addedCount);
+                totalImported += addedCount;
+            }
+        }
+
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, currentConfig);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("importedCount", totalImported);
+        result.put("summary", summary);
+        result.put("message", "Successfully imported " + totalImported + " components into study.");
+        return result;
+    }
 }

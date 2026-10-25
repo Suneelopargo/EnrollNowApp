@@ -30,6 +30,12 @@ public class UpdateStudyDetailsRequest {
 
     private Boolean allowParticipationInOtherStudies;
 
+    private Boolean customIdGenerationEnabled;
+
+    @Size(max = 5, message = "Study Prefix must be 5 characters or less")
+    @Pattern(regexp = "^[a-zA-Z0-9]*$", message = "Study Prefix may only contain alphanumeric characters")
+    private String prefix;
+
     @Size(max = 100, message = "Study URL Label must be 100 characters or less")
     private String studyUrlLabel;
 
@@ -53,6 +59,25 @@ public class UpdateStudyDetailsRequest {
             String studyUrl,
             List<StudyGrantDto> grants
     ) {
+        this(name, longName, description, irbId, recruitmentStartDate, recruitmentEndDate,
+                completionDate, allowParticipationInOtherStudies, false, null, studyUrlLabel, studyUrl, grants);
+    }
+
+    public UpdateStudyDetailsRequest(
+            String name,
+            String longName,
+            String description,
+            String irbId,
+            LocalDate recruitmentStartDate,
+            LocalDate recruitmentEndDate,
+            LocalDate completionDate,
+            Boolean allowParticipationInOtherStudies,
+            Boolean customIdGenerationEnabled,
+            String prefix,
+            String studyUrlLabel,
+            String studyUrl,
+            List<StudyGrantDto> grants
+    ) {
         this.name = name;
         this.longName = longName;
         this.description = description;
@@ -61,6 +86,8 @@ public class UpdateStudyDetailsRequest {
         this.recruitmentEndDate = recruitmentEndDate;
         this.completionDate = completionDate;
         this.allowParticipationInOtherStudies = allowParticipationInOtherStudies;
+        this.customIdGenerationEnabled = customIdGenerationEnabled;
+        this.prefix = prefix;
         this.studyUrlLabel = studyUrlLabel;
         this.studyUrl = studyUrl;
         this.grants = grants != null ? grants : new ArrayList<>();
@@ -128,6 +155,22 @@ public class UpdateStudyDetailsRequest {
 
     public void setAllowParticipationInOtherStudies(Boolean allowParticipationInOtherStudies) {
         this.allowParticipationInOtherStudies = allowParticipationInOtherStudies;
+    }
+
+    public Boolean getCustomIdGenerationEnabled() {
+        return customIdGenerationEnabled;
+    }
+
+    public void setCustomIdGenerationEnabled(Boolean customIdGenerationEnabled) {
+        this.customIdGenerationEnabled = customIdGenerationEnabled;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
     }
 
     public String getStudyUrlLabel() {

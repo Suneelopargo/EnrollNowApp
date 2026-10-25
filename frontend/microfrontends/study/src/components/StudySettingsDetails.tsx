@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Loader2,
   Lock,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import {
   studyApi,
@@ -23,6 +25,7 @@ export interface StudySettingsDetailsProps {
   isArchived?: boolean;
   canManageSettings?: boolean;
   onStudyUpdated?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 interface FormState {
@@ -35,6 +38,8 @@ interface FormState {
   studyUrl: string;
   studyUrlLabel: string;
   allowParticipationInOtherStudies: boolean;
+  customIdGenerationEnabled: boolean;
+  prefix: string;
   irbId: string;
   grants: StudyGrant[];
 }
@@ -49,9 +54,18 @@ const initialFormState: FormState = {
   studyUrl: '',
   studyUrlLabel: '',
   allowParticipationInOtherStudies: true,
+  customIdGenerationEnabled: false,
+  prefix: '',
   irbId: '',
   grants: [],
 };
+
+interface ImportCategory {
+  key: string;
+  label: string;
+  items: any[];
+  getName: (item: any) => string;
+}
 
 export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   studyId,
@@ -59,6 +73,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   isArchived = false,
   canManageSettings = true,
   onStudyUpdated,
+  onDirtyChange,
 }) => {
   const [details, setDetails] = useState<StudyDetails | null>(null);
   const [form, setForm] = useState<FormState>(initialFormState);
@@ -69,6 +84,10 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   const [importing, setImporting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [parsedData, setParsedData] = useState<any | null>(null);
+  const [importCategories, setImportCategories] = useState<ImportCategory[]>([]);
+  const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({});
+  const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -97,6 +116,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
         studyUrl: data.studyUrl || '',
         studyUrlLabel: data.studyUrlLabel || '',
         allowParticipationInOtherStudies: data.allowParticipationInOtherStudies ?? true,
+        customIdGenerationEnabled: data.customIdGenerationEnabled ?? false,
+        prefix: data.prefix || '',
         irbId: data.irbId || '',
         grants: (data.grants || []).map((g) => ({
           id: g.id,
@@ -132,6 +153,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       form.studyUrl !== initialLoadedForm.studyUrl ||
       form.studyUrlLabel !== initialLoadedForm.studyUrlLabel ||
       form.allowParticipationInOtherStudies !== initialLoadedForm.allowParticipationInOtherStudies ||
+      form.customIdGenerationEnabled !== initialLoadedForm.customIdGenerationEnabled ||
+      form.prefix !== initialLoadedForm.prefix ||
       form.irbId !== initialLoadedForm.irbId;
 
     if (baseChanged) return true;
@@ -148,6 +171,23 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     return false;
   }, [form, initialLoadedForm, loading]);
 
+  // Notify parent on dirty change
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  // BeforeUnload navigation guard
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
   // Field change handler
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -155,10 +195,24 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    if (name === 'customIdGenerationEnabled') {
+      setForm((prev) => ({
+        ...prev,
+        customIdGenerationEnabled: checked,
+        prefix: checked ? prev.prefix : '',
+      }));
+    } else if (name === 'prefix') {
+      const upper = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+      setForm((prev) => ({
+        ...prev,
+        prefix: upper,
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value,
+      }));
+    }
 
     if (fieldErrors[name]) {
       setFieldErrors((prev) => {
@@ -216,6 +270,17 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       }
     }
 
+    if (form.customIdGenerationEnabled) {
+      const pref = form.prefix.trim();
+      if (!pref) {
+        errors.prefix = 'Study Prefix is required when Custom ID Autogeneration is enabled.';
+      } else if (pref.length > 5) {
+        errors.prefix = 'Study Prefix must be 5 characters or less.';
+      } else if (!/^[A-Z0-9]+$/.test(pref)) {
+        errors.prefix = 'Study Prefix may only contain uppercase alphanumeric characters.';
+      }
+    }
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -252,6 +317,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
         studyUrl: form.studyUrl.trim() || undefined,
         studyUrlLabel: form.studyUrlLabel.trim() || undefined,
         allowParticipationInOtherStudies: form.allowParticipationInOtherStudies,
+        customIdGenerationEnabled: form.customIdGenerationEnabled,
+        prefix: form.customIdGenerationEnabled ? form.prefix.trim() : undefined,
         irbId: form.irbId.trim() || undefined,
         grants: form.grants
           .filter((g) => g.grantNumber.trim() !== '' || g.agency.trim() !== '')
@@ -275,6 +342,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
         studyUrl: updated.studyUrl || '',
         studyUrlLabel: updated.studyUrlLabel || '',
         allowParticipationInOtherStudies: updated.allowParticipationInOtherStudies ?? true,
+        customIdGenerationEnabled: updated.customIdGenerationEnabled ?? false,
+        prefix: updated.prefix || '',
         irbId: updated.irbId || '',
         grants: (updated.grants || []).map((g) => ({
           id: g.id,
@@ -318,8 +387,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     }
   };
 
-  // Import Study Components
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Import Study Components (Incremental Import)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       if (!selected.name.toLowerCase().endsWith('.json')) {
@@ -328,23 +397,93 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       }
       setImportFile(selected);
       setError(null);
+
+      try {
+        const text = await selected.text();
+        const parsed = JSON.parse(text);
+        setParsedData(parsed);
+
+        const cats: ImportCategory[] = [
+          { key: 'surveys', label: 'Surveys', items: parsed.surveys ?? [], getName: (i: any) => i.name || 'Unnamed Survey' },
+          { key: 'statuses', label: 'Statuses', items: parsed.statuses ?? [], getName: (i: any) => i.name || 'Unnamed Status' },
+          { key: 'customVariables', label: 'Custom Variables', items: parsed.customVariables ?? [], getName: (i: any) => i.name || 'Unnamed Variable' },
+          { key: 'contactRelationships', label: 'Contact Relationships', items: parsed.contactRelationships ?? [], getName: (i: any) => i.relationship || i.name || 'Unnamed Relationship' },
+          { key: 'contactOutcomes', label: 'Contact Outcomes', items: parsed.contactOutcomes ?? [], getName: (i: any) => i.outcome || i.name || 'Unnamed Outcome' },
+          { key: 'emailTemplates', label: 'Email Templates', items: parsed.emailTemplates ?? [], getName: (i: any) => i.name || 'Unnamed Template' },
+          { key: 'textTemplates', label: 'Text Templates', items: parsed.textTemplates ?? [], getName: (i: any) => i.name || 'Unnamed Template' },
+        ].filter((cat) => cat.items.length > 0);
+
+        setImportCategories(cats);
+
+        // Select all items by default for user convenience
+        const initialSelections: Record<string, boolean> = {};
+        cats.forEach((cat) => {
+          cat.items.forEach((_, idx) => {
+            initialSelections[`${cat.key}_${idx}`] = true;
+          });
+        });
+        setSelectedItems(initialSelections);
+        if (cats.length > 0) {
+          setOpenCategory(cats[0].key);
+        }
+      } catch (parseErr: any) {
+        setError('File contents lack proper JSON format, please try again.');
+        setParsedData(null);
+        setImportCategories([]);
+        setSelectedItems({});
+      }
     }
   };
 
+  const handleToggleItem = (key: string) => {
+    setSelectedItems((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleToggleCategory = (catKey: string, items: any[]) => {
+    const allSelected = items.every((_, idx) => selectedItems[`${catKey}_${idx}`]);
+    setSelectedItems((prev) => {
+      const next = { ...prev };
+      items.forEach((_, idx) => {
+        next[`${catKey}_${idx}`] = !allSelected;
+      });
+      return next;
+    });
+  };
+
+  const totalSelectedCount = useMemo(() => {
+    return Object.values(selectedItems).filter(Boolean).length;
+  }, [selectedItems]);
+
   const handleImportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!importFile) return;
+    if (!importFile || !parsedData) return;
+
+    if (totalSelectedCount === 0) {
+      setError('Please select at least one component to import.');
+      return;
+    }
 
     setImporting(true);
     setError(null);
     try {
-      const fileText = await importFile.text();
-      const parsed = JSON.parse(fileText);
+      const componentsToImport: Record<string, any[]> = {};
+      importCategories.forEach((cat) => {
+        const selected = cat.items.filter((_, idx) => selectedItems[`${cat.key}_${idx}`]);
+        if (selected.length > 0) {
+          componentsToImport[cat.key] = selected;
+        }
+      });
 
-      await studyApi.importStudyJson(form.name || studyName, parsed);
+      await studyApi.importStudyComponents(studyId, componentsToImport);
       setShowImportModal(false);
       setImportFile(null);
-      setSuccessMessage('Study components imported successfully.');
+      setParsedData(null);
+      setImportCategories([]);
+      setSelectedItems({});
+      setSuccessMessage('Successfully imported unique study components.');
       await loadDetails();
       onStudyUpdated?.();
     } catch (err: any) {
@@ -598,6 +737,54 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                   <span>Allow study participants to be active in other studies</span>
                 </label>
               </div>
+
+              {/* Checkbox: Enable Custom ID Autogeneration */}
+              <div className="study-form-checkbox-group">
+                <label className="study-checkbox-label">
+                  <input
+                    id="study-details-custom-id"
+                    name="customIdGenerationEnabled"
+                    type="checkbox"
+                    className="study-checkbox-input"
+                    checked={form.customIdGenerationEnabled}
+                    onChange={handleInputChange}
+                    disabled={isReadOnly}
+                  />
+                  <span>Enable Custom ID Autogeneration</span>
+                </label>
+              </div>
+
+              {/* Study Prefix (shown when Custom ID Autogeneration is enabled) */}
+              {form.customIdGenerationEnabled && (
+                <div className="study-form-group">
+                  <label htmlFor="study-details-prefix" className="study-form-label">
+                    Study Prefix <span className="study-required-marker">*</span>
+                  </label>
+                  <input
+                    id="study-details-prefix"
+                    name="prefix"
+                    type="text"
+                    placeholder="e.g. STU01"
+                    className={`study-form-input ${fieldErrors.prefix ? 'study-form-input--error' : ''}`}
+                    value={form.prefix}
+                    onChange={handleInputChange}
+                    maxLength={5}
+                    disabled={isReadOnly}
+                    style={{ textTransform: 'uppercase' }}
+                    aria-required="true"
+                    aria-invalid={Boolean(fieldErrors.prefix)}
+                    aria-describedby={fieldErrors.prefix ? 'study-prefix-error' : undefined}
+                  />
+                  {fieldErrors.prefix && (
+                    <span id="study-prefix-error" className="study-field-error" role="alert">
+                      {fieldErrors.prefix}
+                    </span>
+                  )}
+                  <span className="study-field-hint">
+                    Maximum 5 uppercase alphanumeric characters. Unique per study.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -731,7 +918,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       {/* Import Modal */}
       {showImportModal && (
         <div className="study-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
-          <div className="study-modal">
+          <div className="study-modal study-modal--wide">
             <div className="study-modal__header">
               <h3 id="import-modal-title">Import Study Components</h3>
               <button
@@ -740,6 +927,9 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                 onClick={() => {
                   setShowImportModal(false);
                   setImportFile(null);
+                  setParsedData(null);
+                  setImportCategories([]);
+                  setSelectedItems({});
                 }}
                 aria-label="Close"
               >
@@ -749,7 +939,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
             <form onSubmit={handleImportSubmit}>
               <div className="study-modal__body">
                 <p className="study-modal__description">
-                  Select an exported study component JSON file to import into <strong>{form.name || studyName}</strong>.
+                  Select an exported study component JSON file to selectively import into{' '}
+                  <strong>{form.name || studyName}</strong>.
                 </p>
 
                 <div className="study-file-dropzone">
@@ -762,10 +953,98 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                     id="study-import-file-input"
                   />
                   <label htmlFor="study-import-file-input" className="study-file-label">
-                    <Upload size={22} />
+                    <Upload size={20} />
                     <span>{importFile ? importFile.name : 'Choose .json file'}</span>
                   </label>
                 </div>
+
+                {importFile && importCategories.length === 0 && (
+                  <p className="study-field-hint" style={{ marginTop: 8 }}>
+                    No importable components found in this file.
+                  </p>
+                )}
+
+                {importCategories.length > 0 && (
+                  <div className="study-import-categories">
+                    <div className="study-import-categories__header">
+                      <span>Select Components to Import:</span>
+                      <span className="study-import-count">
+                        {totalSelectedCount} component{totalSelectedCount === 1 ? '' : 's'} selected
+                      </span>
+                    </div>
+
+                    <div className="study-import-categories__list">
+                      {importCategories.map((cat) => {
+                        const isOpen = openCategory === cat.key;
+                        const catSelectedCount = cat.items.filter(
+                          (_, idx) => selectedItems[`${cat.key}_${idx}`]
+                        ).length;
+                        const allSelected =
+                          cat.items.length > 0 && catSelectedCount === cat.items.length;
+
+                        return (
+                          <div key={cat.key} className="study-import-category-card">
+                            <div className="study-import-category-card__header">
+                              <label
+                                className="study-import-checkbox-label"
+                                title={`Select all ${cat.label}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={allSelected}
+                                  onChange={() => handleToggleCategory(cat.key, cat.items)}
+                                />
+                                <strong>{cat.label}</strong>
+                              </label>
+
+                              <div className="study-import-category-card__meta">
+                                <span className="study-badge">
+                                  {catSelectedCount} / {cat.items.length}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="study-category-toggle-btn"
+                                  onClick={() => setOpenCategory(isOpen ? null : cat.key)}
+                                  aria-expanded={isOpen}
+                                  aria-label={`Toggle ${cat.label} list`}
+                                >
+                                  {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                </button>
+                              </div>
+                            </div>
+
+                            {isOpen && (
+                              <ul className="study-import-items-list">
+                                {cat.items.map((item, idx) => {
+                                  const itemKey = `${cat.key}_${idx}`;
+                                  const checked = Boolean(selectedItems[itemKey]);
+
+                                  return (
+                                    <li key={itemKey} className="study-import-item">
+                                      <label className="study-import-item-label">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => handleToggleItem(itemKey)}
+                                        />
+                                        <span>{cat.getName(item)}</span>
+                                      </label>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <p className="study-import-note">
+                      <strong>Note:</strong> If importing surveys, be sure to import any linked custom
+                      variables within the survey as well.
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="study-modal__footer">
                 <button
@@ -774,6 +1053,9 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                   onClick={() => {
                     setShowImportModal(false);
                     setImportFile(null);
+                    setParsedData(null);
+                    setImportCategories([]);
+                    setSelectedItems({});
                   }}
                   disabled={importing}
                 >
@@ -782,9 +1064,19 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                 <button
                   type="submit"
                   className="study-settings-btn study-settings-btn--primary"
-                  disabled={!importFile || importing}
+                  disabled={!importFile || totalSelectedCount === 0 || importing}
+                  data-testid="submit-incremental-import-btn"
                 >
-                  {importing ? 'Importing…' : 'Import'}
+                  {importing ? (
+                    <>
+                      <Loader2 className="study-spinner" size={14} />
+                      <span>Importing…</span>
+                    </>
+                  ) : (
+                    <span>
+                      Import {totalSelectedCount > 0 ? `(${totalSelectedCount} Selected)` : 'Components'}
+                    </span>
+                  )}
                 </button>
               </div>
             </form>

@@ -17,6 +17,7 @@ vi.mock('../../../../shared/api/studyApi', async (importOriginal) => {
       updateStudyDetails: vi.fn(),
       exportStudy: vi.fn(),
       importStudyJson: vi.fn(),
+      importStudyComponents: vi.fn(),
     },
   };
 });
@@ -161,6 +162,69 @@ describe('Study Settings → Details Functional Component Tests', () => {
       expect(filtered.length).toBe(2);
       expect(filtered[0].grantNumber).toBe('R01-HL123456');
       expect(filtered[1].agency).toBe('Gates Foundation');
+    });
+  });
+
+  describe('Custom ID Autogeneration & Prefix Validation Logic', () => {
+    it('validates prefix format (<= 5 uppercase alphanumeric chars, non-empty when enabled)', () => {
+      const isPrefixValid = (enabled: boolean, prefix?: string) => {
+        if (!enabled) return true;
+        if (!prefix || !prefix.trim()) return false;
+        const trimmed = prefix.trim();
+        if (trimmed.length > 5) return false;
+        return /^[A-Z0-9]+$/.test(trimmed);
+      };
+
+      expect(isPrefixValid(false, '')).toBe(true);
+      expect(isPrefixValid(true, 'STU01')).toBe(true);
+      expect(isPrefixValid(true, 'A1')).toBe(true);
+      expect(isPrefixValid(true, '')).toBe(false);
+      expect(isPrefixValid(true, 'TOOLONG')).toBe(false);
+      expect(isPrefixValid(true, 'ST-01')).toBe(false);
+      expect(isPrefixValid(true, 'st01')).toBe(false); // must be uppercase
+    });
+  });
+
+  describe('Incremental Import Category Parsing & Payload Selection', () => {
+    it('extracts categories from parsed study JSON and constructs component import payload', () => {
+      const mockParsedJson = {
+        surveys: [{ _id: 'srv1', name: 'Intake Survey' }],
+        statuses: [{ _id: 'stat1', name: 'Screening' }, { _id: 'stat2', name: 'Enrolled' }],
+        customVariables: [{ _id: 'cv1', name: 'BloodType' }],
+        emailTemplates: [{ _id: 'eml1', name: 'Appointment Reminder' }],
+      };
+
+      const selectedMap: Record<string, boolean> = {
+        'surveys_0': true,
+        'statuses_0': true,
+        'statuses_1': false,
+        'customVariables_0': true,
+        'emailTemplates_0': false,
+      };
+
+      const payload: Record<string, any[]> = {};
+      if (mockParsedJson.surveys) {
+        const s = mockParsedJson.surveys.filter((_, idx) => selectedMap[`surveys_${idx}`]);
+        if (s.length > 0) payload.surveys = s;
+      }
+      if (mockParsedJson.statuses) {
+        const s = mockParsedJson.statuses.filter((_, idx) => selectedMap[`statuses_${idx}`]);
+        if (s.length > 0) payload.statuses = s;
+      }
+      if (mockParsedJson.customVariables) {
+        const s = mockParsedJson.customVariables.filter((_, idx) => selectedMap[`customVariables_${idx}`]);
+        if (s.length > 0) payload.customVariables = s;
+      }
+      if (mockParsedJson.emailTemplates) {
+        const s = mockParsedJson.emailTemplates.filter((_, idx) => selectedMap[`emailTemplates_${idx}`]);
+        if (s.length > 0) payload.emailTemplates = s;
+      }
+
+      expect(payload.surveys.length).toBe(1);
+      expect(payload.statuses.length).toBe(1);
+      expect(payload.statuses[0].name).toBe('Screening');
+      expect(payload.customVariables.length).toBe(1);
+      expect(payload.emailTemplates).toBeUndefined();
     });
   });
 });

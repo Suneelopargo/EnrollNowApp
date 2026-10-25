@@ -13,6 +13,7 @@ import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
+import com.enrollnow.study.exceptions.DuplicateStudyNameException;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
@@ -61,6 +62,9 @@ class StudyServiceTest {
     @Mock
     private StudyGrantRepository studyGrantRepository;
 
+    @Mock
+    private StudyConfigurationService studyConfigurationService;
+
     private StudyService studyService;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -72,7 +76,7 @@ class StudyServiceTest {
         studyService = new StudyService(
                 studyRepository,
                 myStudiesService,
-                null,
+                studyConfigurationService,
                 studyMemberRepository,
                 roleRepository,
                 userRoleAssignmentRepository,
@@ -825,5 +829,108 @@ class StudyServiceTest {
         assertTrue(export.containsKey("study_grants"));
         List<?> grants = (List<?>) export.get("study_grants");
         assertEquals(1, grants.size());
+    }
+
+    @Test
+    void updateStudyDetails_withCustomIdAutogenerationEnabled_setsUppercasePrefix() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("OrigName");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyRepository.existsByTenantIdAndPrefixIgnoreCaseAndIdNot(tenantId, "DEMO", studyId)).thenReturn(false);
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "OrigName", "Long Name", "Desc", "IRB-1",
+                null, null, null, true, true, "demo", "url", "http://example.com", null
+        );
+
+        StudyDetailsResponse res = studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, true);
+
+        assertTrue(res.isCustomIdGenerationEnabled());
+        assertEquals("DEMO", res.getPrefix());
+        assertEquals("DEMO", study.getPrefix());
+    }
+
+    @Test
+    void updateStudyDetails_withCustomIdAutogenerationDisabled_clearsPrefix() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("OrigName");
+        study.setCustomIdGenerationEnabled(true);
+        study.setPrefix("OLD");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "OrigName", "Long Name", "Desc", "IRB-1",
+                null, null, null, true, false, null, "url", "http://example.com", null
+        );
+
+        StudyDetailsResponse res = studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, true);
+
+        assertFalse(res.isCustomIdGenerationEnabled());
+        assertNull(res.getPrefix());
+        assertNull(study.getPrefix());
+    }
+
+    @Test
+    void updateStudyDetails_withInvalidPrefixLength_throwsInvalidStudyException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("OrigName");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "OrigName", "Long Name", "Desc", "IRB-1",
+                null, null, null, true, true, "TOOLONG", "url", "http://example.com", null
+        );
+
+        assertThrows(
+                InvalidStudyException.class,
+                () -> studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, true)
+        );
+    }
+
+    @Test
+    void updateStudyDetails_withDuplicatePrefix_throwsDuplicateStudyNameException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("OrigName");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyRepository.existsByTenantIdAndPrefixIgnoreCaseAndIdNot(tenantId, "DUP", studyId)).thenReturn(true);
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "OrigName", "Long Name", "Desc", "IRB-1",
+                null, null, null, true, true, "DUP", "url", "http://example.com", null
+        );
+
+        assertThrows(
+                DuplicateStudyNameException.class,
+                () -> studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, true)
+        );
+    }
+
+    @Test
+    void importStudyComponents_callsStudyConfigurationService() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        Map<String, Object> components = Map.of("statuses", List.of(Map.of("name", "Screening")));
+        when(studyConfigurationService.importComponentsIntoExistingStudy(tenantId, studyId, components))
+                .thenReturn(Map.of("importedCount", 1));
+
+        Map<String, Object> result = studyService.importStudyComponents(tenantId, studyId.toString(), components, userId, true);
+
+        assertEquals(1, result.get("importedCount"));
+        verify(studyConfigurationService).importComponentsIntoExistingStudy(tenantId, studyId, components);
     }
 }

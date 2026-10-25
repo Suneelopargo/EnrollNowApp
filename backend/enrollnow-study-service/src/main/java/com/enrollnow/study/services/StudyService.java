@@ -35,6 +35,8 @@ import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.enrollnow.study.repositories.TeamStudyRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -74,6 +76,9 @@ public class StudyService {
 
     @Autowired(required = false)
     private PermissionRepository permissionRepository;
+
+    @Autowired(required = false)
+    private ObjectMapper objectMapper;
 
     public StudyService(StudyRepository studyRepository) {
         this(studyRepository, null, null, null, null, null, null, null);
@@ -682,6 +687,8 @@ public class StudyService {
         response.setStudyUrl(study.getStudyUrl());
         response.setArchived(study.isArchived());
         response.setCanManage(canManage);
+        response.setCustomIdGenerationEnabled(study.isCustomIdGenerationEnabled());
+        response.setPrefix(study.getPrefix());
         response.setGrants(grantDtos);
 
         return response;
@@ -752,6 +759,50 @@ public class StudyService {
         if (request.getAllowParticipationInOtherStudies() != null) {
             study.setAllowParticipationInOtherStudies(request.getAllowParticipationInOtherStudies());
         }
+
+        if (request.getCustomIdGenerationEnabled() != null) {
+            boolean enabled = request.getCustomIdGenerationEnabled();
+            study.setCustomIdGenerationEnabled(enabled);
+            if (!enabled) {
+                study.setPrefix(null);
+            } else {
+                String rawPrefix = request.getPrefix() != null ? request.getPrefix().trim() : "";
+                if (rawPrefix.isBlank()) {
+                    throw new InvalidStudyException("Study Prefix is required when Custom ID Autogeneration is enabled.");
+                }
+                if (rawPrefix.length() > 5) {
+                    throw new InvalidStudyException("Study Prefix must be 5 characters or less.");
+                }
+                if (!rawPrefix.matches("^[a-zA-Z0-9]+$")) {
+                    throw new InvalidStudyException("Study Prefix may only contain alphanumeric characters.");
+                }
+                String upperPrefix = rawPrefix.toUpperCase(Locale.ROOT);
+                if (studyRepository.existsByTenantIdAndPrefixIgnoreCaseAndIdNot(study.getTenantId(), upperPrefix, study.getId())) {
+                    throw new DuplicateStudyNameException("A study with prefix '" + upperPrefix + "' already exists.");
+                }
+                study.setPrefix(upperPrefix);
+            }
+        } else if (request.getPrefix() != null) {
+            // If prefix explicitly updated without changing toggle
+            if (study.isCustomIdGenerationEnabled()) {
+                String rawPrefix = request.getPrefix().trim();
+                if (rawPrefix.isBlank()) {
+                    throw new InvalidStudyException("Study Prefix is required when Custom ID Autogeneration is enabled.");
+                }
+                if (rawPrefix.length() > 5) {
+                    throw new InvalidStudyException("Study Prefix must be 5 characters or less.");
+                }
+                if (!rawPrefix.matches("^[a-zA-Z0-9]+$")) {
+                    throw new InvalidStudyException("Study Prefix may only contain alphanumeric characters.");
+                }
+                String upperPrefix = rawPrefix.toUpperCase(Locale.ROOT);
+                if (studyRepository.existsByTenantIdAndPrefixIgnoreCaseAndIdNot(study.getTenantId(), upperPrefix, study.getId())) {
+                    throw new DuplicateStudyNameException("A study with prefix '" + upperPrefix + "' already exists.");
+                }
+                study.setPrefix(upperPrefix);
+            }
+        }
+
         study.setStudyUrlLabel(request.getStudyUrlLabel());
         study.setStudyUrl(request.getStudyUrl());
         study.setUpdatedAt(OffsetDateTime.now());
@@ -809,6 +860,8 @@ public class StudyService {
         studyMap.put("studyURL", study.getStudyUrl());
         studyMap.put("studyUrlLabel", study.getStudyUrlLabel());
         studyMap.put("allowParticipationInOtherStudies", study.isAllowParticipationInOtherStudies());
+        studyMap.put("customIdGenerationEnabled", study.isCustomIdGenerationEnabled());
+        studyMap.put("prefix", study.getPrefix());
         studyMap.put("sampleSize", study.getSampleSize());
         export.put("study", studyMap);
 
@@ -826,7 +879,70 @@ public class StudyService {
         }
         export.put("study_grants", grantsList);
 
+        if (studyRequirementRepository != null && tenantId != null) {
+            studyRequirementRepository.findByTenantIdAndStudyId(tenantId, study.getId())
+                    .ifPresent(req -> {
+                        if (req.getConfiguration() != null && !req.getConfiguration().isBlank()) {
+                            try {
+                                ObjectMapper mapper = (this.objectMapper != null) ? this.objectMapper : new ObjectMapper();
+                                Map<String, Object> config = mapper.readValue(
+                                        req.getConfiguration(),
+                                        new TypeReference<Map<String, Object>>() {}
+                                );
+                                for (Map.Entry<String, Object> entry : config.entrySet()) {
+                                    if (!"study".equals(entry.getKey()) && !"study_grants".equals(entry.getKey())) {
+                                        export.put(entry.getKey(), entry.getValue());
+                                    }
+                                }
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    });
+        }
+
         return export;
+    }
+
+    @Transactional
+    public Map<String, Object> importStudyComponents(
+            UUID tenantId,
+            String studyId,
+            Map<String, Object> components,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        boolean canManage = canManageSiteAdmins;
+        if (!canManage && callerUserId != null) {
+            StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
+                    tenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            if (navPerms != null && navPerms.getPermissions() != null) {
+                canManage = navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
+                        || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission());
+            }
+        }
+
+        if (!canManage && callerUserId != null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: importing study components requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
+            );
+        }
+
+        if (studyConfigurationService != null) {
+            return studyConfigurationService.importComponentsIntoExistingStudy(
+                    study.getTenantId(),
+                    study.getId(),
+                    components
+            );
+        }
+
+        return Map.of("importedCount", 0, "message", "Configuration service unavailable.");
     }
 
     @Transactional

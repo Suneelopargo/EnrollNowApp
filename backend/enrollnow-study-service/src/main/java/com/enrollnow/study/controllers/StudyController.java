@@ -452,6 +452,34 @@ public class StudyController {
         }
     }
 
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/import-components", "/studies/{studyId}/import-components"})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> importStudyComponents(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody Map<String, Object> components
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            Map<String, Object> result = studyService.importStudyComponents(
+                    effectiveTenantId,
+                    studyId,
+                    components,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Study components imported successfully", result));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
     private boolean resolveCanManageSiteAdmins(UUID effectiveTenantId) {
         if (siteAuthorizationService != null) {
             Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =

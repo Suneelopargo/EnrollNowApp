@@ -34,6 +34,18 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
   const [activeSubmenu, setActiveSubmenu] = useState<StudySettingsSubmenuId>('details');
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true);
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(true);
+  const [isDetailsDirty, setIsDetailsDirty] = useState(false);
+
+  const handleSubmenuSelect = (target: StudySettingsSubmenuId) => {
+    if (target === activeSubmenu) return;
+    if (activeSubmenu === 'details' && isDetailsDirty) {
+      const proceed = window.confirm(
+        'You have unsaved changes in Study Details. Are you sure you want to discard your changes and leave?'
+      );
+      if (!proceed) return;
+    }
+    setActiveSubmenu(target);
+  };
 
   return (
     <div className="study-settings-workspace" data-testid="study-settings-workspace">
@@ -46,7 +58,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
               <button
                 type="button"
                 className={`study-settings-nav__btn ${activeSubmenu === 'details' ? 'study-settings-nav__btn--active' : ''}`}
-                onClick={() => setActiveSubmenu('details')}
+                onClick={() => handleSubmenuSelect('details')}
                 aria-current={activeSubmenu === 'details' ? 'page' : undefined}
                 data-testid="submenu-details"
               >
@@ -59,7 +71,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
               <button
                 type="button"
                 className={`study-settings-nav__btn ${activeSubmenu === 'display' ? 'study-settings-nav__btn--active' : ''}`}
-                onClick={() => setActiveSubmenu('display')}
+                onClick={() => handleSubmenuSelect('display')}
                 aria-current={activeSubmenu === 'display' ? 'page' : undefined}
                 data-testid="submenu-display"
               >
@@ -72,7 +84,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
               <button
                 type="button"
                 className={`study-settings-nav__btn ${activeSubmenu === 'bulk_tasks' ? 'study-settings-nav__btn--active' : ''}`}
-                onClick={() => setActiveSubmenu('bulk_tasks')}
+                onClick={() => handleSubmenuSelect('bulk_tasks')}
                 aria-current={activeSubmenu === 'bulk_tasks' ? 'page' : undefined}
                 data-testid="submenu-bulk-tasks"
               >
@@ -85,7 +97,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
               <button
                 type="button"
                 className={`study-settings-nav__btn ${activeSubmenu === 'email_and_text' ? 'study-settings-nav__btn--active' : ''}`}
-                onClick={() => setActiveSubmenu('email_and_text')}
+                onClick={() => handleSubmenuSelect('email_and_text')}
                 aria-current={activeSubmenu === 'email_and_text' ? 'page' : undefined}
                 data-testid="submenu-email-and-text"
               >
@@ -98,7 +110,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
               <button
                 type="button"
                 className={`study-settings-nav__btn ${activeSubmenu === 'survey_creator' ? 'study-settings-nav__btn--active' : ''}`}
-                onClick={() => setActiveSubmenu('survey_creator')}
+                onClick={() => handleSubmenuSelect('survey_creator')}
                 aria-current={activeSubmenu === 'survey_creator' ? 'page' : undefined}
                 data-testid="submenu-survey-creator"
               >
@@ -111,7 +123,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
               <button
                 type="button"
                 className={`study-settings-nav__btn ${activeSubmenu === 'old_survey_creator' ? 'study-settings-nav__btn--active' : ''}`}
-                onClick={() => setActiveSubmenu('old_survey_creator')}
+                onClick={() => handleSubmenuSelect('old_survey_creator')}
                 aria-current={activeSubmenu === 'old_survey_creator' ? 'page' : undefined}
                 data-testid="submenu-old-survey-creator"
               >
@@ -137,7 +149,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
                     <button
                       type="button"
                       className={`study-settings-nav__subbtn ${activeSubmenu === 'participants_requirements' ? 'study-settings-nav__subbtn--active' : ''}`}
-                      onClick={() => setActiveSubmenu('participants_requirements')}
+                      onClick={() => handleSubmenuSelect('participants_requirements')}
                       aria-current={activeSubmenu === 'participants_requirements' ? 'page' : undefined}
                       data-testid="submenu-participants-requirements"
                     >
@@ -148,7 +160,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
                     <button
                       type="button"
                       className={`study-settings-nav__subbtn ${activeSubmenu === 'participants_statuses' ? 'study-settings-nav__subbtn--active' : ''}`}
-                      onClick={() => setActiveSubmenu('participants_statuses')}
+                      onClick={() => handleSubmenuSelect('participants_statuses')}
                       aria-current={activeSubmenu === 'participants_statuses' ? 'page' : undefined}
                       data-testid="submenu-participants-statuses"
                     >
@@ -177,7 +189,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
                     <button
                       type="button"
                       className={`study-settings-nav__subbtn ${activeSubmenu === 'scheduling_events' ? 'study-settings-nav__subbtn--active' : ''}`}
-                      onClick={() => setActiveSubmenu('scheduling_events')}
+                      onClick={() => handleSubmenuSelect('scheduling_events')}
                       aria-current={activeSubmenu === 'scheduling_events' ? 'page' : undefined}
                       data-testid="submenu-scheduling-events"
                     >
@@ -188,7 +200,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
                     <button
                       type="button"
                       className={`study-settings-nav__subbtn ${activeSubmenu === 'scheduling_calendar' ? 'study-settings-nav__subbtn--active' : ''}`}
-                      onClick={() => setActiveSubmenu('scheduling_calendar')}
+                      onClick={() => handleSubmenuSelect('scheduling_calendar')}
                       aria-current={activeSubmenu === 'scheduling_calendar' ? 'page' : undefined}
                       data-testid="submenu-scheduling-calendar"
                     >
@@ -199,7 +211,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
                     <button
                       type="button"
                       className={`study-settings-nav__subbtn ${activeSubmenu === 'scheduling_activity_log' ? 'study-settings-nav__subbtn--active' : ''}`}
-                      onClick={() => setActiveSubmenu('scheduling_activity_log')}
+                      onClick={() => handleSubmenuSelect('scheduling_activity_log')}
                       aria-current={activeSubmenu === 'scheduling_activity_log' ? 'page' : undefined}
                       data-testid="submenu-scheduling-activity-log"
                     >
@@ -222,6 +234,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
             isArchived={isArchived}
             canManageSettings={canManageSettings}
             onStudyUpdated={onStudyUpdated}
+            onDirtyChange={(dirty) => setIsDetailsDirty(dirty)}
           />
         ) : (
           <div className="study-settings-placeholder" role="region" aria-label="Submenu coming soon">
@@ -238,7 +251,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
             <button
               type="button"
               className="study-settings-btn study-settings-btn--primary"
-              onClick={() => setActiveSubmenu('details')}
+              onClick={() => handleSubmenuSelect('details')}
             >
               Back to Details
             </button>
