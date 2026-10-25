@@ -202,66 +202,140 @@ public class StudyService {
             UUID callerUserId,
             boolean canManageSiteAdmins
     ) {
+        if (callerUserId == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied: caller identity could not be resolved.");
+        }
+
         Study study = findStudyByIdOrCode(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
 
-        if (callerUserId != null && !canManageSiteAdmins && myStudiesService != null && tenantId != null) {
-            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
-            boolean hasAccess = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
-            if (!hasAccess) {
-                throw new org.springframework.security.access.AccessDeniedException("Access denied: you do not have permission to access study " + studyId);
-            }
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // 1. Resolve assignments from user_role_assignments
+        List<UserRoleAssignment> allAssignments = (userRoleAssignmentRepository != null && tenantId != null)
+                ? userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, callerUserId, study.getId())
+                : Collections.emptyList();
+
+        List<UserRoleAssignment> validAssignments = allAssignments.stream()
+                .filter(UserRoleAssignment::isActive)
+                .filter(a -> a.getEffectiveFrom() == null || !now.isBefore(a.getEffectiveFrom()))
+                .filter(a -> a.getEffectiveTo() == null || !now.isAfter(a.getEffectiveTo()))
+                .toList();
+
+        boolean hasExpiredAssignment = !allAssignments.isEmpty() && validAssignments.isEmpty();
+
+        // 2. Resolve membership from study_members
+        Optional<StudyMember> memberOpt = (studyMemberRepository != null && tenantId != null)
+                ? studyMemberRepository.findByTenantIdAndIdStudyIdAndIdUserId(tenantId, study.getId(), callerUserId)
+                : Optional.empty();
+
+        boolean isMemberActive = memberOpt.isPresent() && memberOpt.get().isActive();
+        boolean isMemberInactive = memberOpt.isPresent() && !memberOpt.get().isActive();
+
+        // Fail closed for expired or explicitly inactive assignments when not a site admin
+        if (!canManageSiteAdmins && (hasExpiredAssignment || isMemberInactive)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied: your study assignment is inactive or has expired.");
         }
 
-        // Determine effective study role
-        String studyRoleName = "Study Member";
-        String studyPermissionCode = "STUDY_READ_ONLY";
-        UUID matchedRoleId = null;
+        // 3. Check access via MyStudiesService
+        boolean isAssignedViaMyStudies = false;
+        if (myStudiesService != null && tenantId != null) {
+            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
+            isAssignedViaMyStudies = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
+        }
 
-        if (canManageSiteAdmins) {
-            studyRoleName = "Study Admin";
-            studyPermissionCode = "STUDY_ADMIN";
-        } else if (callerUserId != null && tenantId != null) {
-            // Check user_role_assignments
-            if (userRoleAssignmentRepository != null) {
-                List<UserRoleAssignment> assignments = userRoleAssignmentRepository
-                        .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, callerUserId, study.getId());
-                for (UserRoleAssignment assignment : assignments) {
-                    if (roleRepository != null) {
-                        Role role = roleRepository.findById(assignment.getRoleId()).orElse(null);
-                        if (role != null && "STUDY".equalsIgnoreCase(role.getScopeType())) {
-                            studyPermissionCode = role.getCode();
-                            matchedRoleId = role.getId();
-                            if (role.getName() != null) {
-                                studyRoleName = role.getName();
-                            }
-                            break;
-                        }
+        // Non-site admins must have a valid assignment or active membership
+        if (!canManageSiteAdmins && validAssignments.isEmpty() && !isMemberActive && !isAssignedViaMyStudies) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied: you do not have permission to access study " + studyId);
+        }
+
+        // 4. Resolve effective study role
+        String matchedRoleCode = null;
+        String matchedRoleName = null;
+        UUID matchedRoleId = null;
+        int highestRank = 999;
+
+        for (UserRoleAssignment assignment : validAssignments) {
+            if (roleRepository != null) {
+                Role role = roleRepository.findById(assignment.getRoleId()).orElse(null);
+                if (role != null && "STUDY".equalsIgnoreCase(role.getScopeType())) {
+                    String code = role.getCode() != null ? role.getCode().trim().toUpperCase(Locale.ROOT) : "";
+                    int rank = switch (code) {
+                        case "STUDY_ADMIN" -> 1;
+                        case "STUDY_LEADER" -> 2;
+                        case "STUDY_RA" -> 3;
+                        case "STUDY_READ_ONLY" -> 4;
+                        default -> 5;
+                    };
+                    if (rank < highestRank) {
+                        highestRank = rank;
+                        matchedRoleCode = role.getCode();
+                        matchedRoleName = role.getName();
+                        matchedRoleId = role.getId();
                     }
                 }
             }
+        }
 
-            // Check study_members for role name if still default
-            if (studyMemberRepository != null) {
-                Optional<StudyMember> memberOpt = studyMemberRepository
-                        .findByTenantIdAndIdStudyIdAndIdUserId(tenantId, study.getId(), callerUserId);
-                if (memberOpt.isPresent() && memberOpt.get().getStudyRole() != null && !memberOpt.get().getStudyRole().isBlank()) {
-                    studyRoleName = memberOpt.get().getStudyRole();
-                }
+        if (matchedRoleCode == null && isMemberActive) {
+            String rawRole = memberOpt.get().getStudyRole();
+            String lower = rawRole != null ? rawRole.toLowerCase(Locale.ROOT) : "";
+            if (lower.contains("admin")) {
+                matchedRoleCode = "STUDY_ADMIN";
+                matchedRoleName = "Study Admin";
+            } else if (lower.contains("leader") || lower.contains("principal") || lower.contains("pi")) {
+                matchedRoleCode = "STUDY_LEADER";
+                matchedRoleName = "Study Leader";
+            } else if (lower.contains("ra") || lower.contains("assistant") || lower.contains("coordinator")) {
+                matchedRoleCode = "STUDY_RA";
+                matchedRoleName = (rawRole != null && !rawRole.isBlank()) ? rawRole : "Study RA";
+            } else {
+                matchedRoleCode = "STUDY_READ_ONLY";
+                matchedRoleName = (rawRole != null && !rawRole.isBlank()) ? rawRole : "Study Read-Only";
             }
         }
 
-        List<String> permissions = resolvePermissionsForStudyRole(studyPermissionCode, matchedRoleId);
+        if (matchedRoleCode == null && isAssignedViaMyStudies && myStudiesService != null && tenantId != null) {
+            MyStudyResponse ms = myStudiesService.getMyStudies(tenantId, callerUserId).stream()
+                    .filter(s -> s.getId().equals(study.getId()))
+                    .findFirst().orElse(null);
+            if (ms != null && ms.getStudyPermission() != null) {
+                matchedRoleCode = ms.getStudyPermission();
+                matchedRoleName = ms.getStudyRole();
+            }
+        }
+
+        // Global Site Admin without an explicit study assignment gets STUDY_READ_ONLY (never elevated to Study Admin)
+        if (matchedRoleCode == null && canManageSiteAdmins) {
+            matchedRoleCode = "STUDY_READ_ONLY";
+            matchedRoleName = "Site Administrator (Read Only)";
+        }
+
+        if (matchedRoleCode == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied: unable to resolve valid role for study " + studyId);
+        }
+
+        if (matchedRoleName == null) {
+            matchedRoleName = switch (matchedRoleCode) {
+                case "STUDY_ADMIN" -> "Study Admin";
+                case "STUDY_LEADER" -> "Study Leader";
+                case "STUDY_RA" -> "Study RA";
+                default -> "Study Read-Only";
+            };
+        }
+
+        List<String> permissions = resolvePermissionsForStudyRole(matchedRoleCode, matchedRoleId);
 
         return new StudyNavigationPermissionsResponse(
                 study.getId(),
                 study.getStudyCode(),
                 study.getName(),
-                studyRoleName,
-                studyPermissionCode,
+                matchedRoleName,
+                matchedRoleCode,
                 permissions,
                 study.isArchived(),
-                study.isArchived() ? "ARCHIVED" : "ACTIVE"
+                study.isArchived() ? "ARCHIVED" : "ACTIVE",
+                false
         );
     }
 
@@ -322,7 +396,6 @@ public class StudyService {
                         "CALENDAR_READ"
                 );
             case "STUDY_READ_ONLY":
-            default:
                 return List.of(
                         "STUDY_DASHBOARD_READ",
                         "CALENDAR_READ",
@@ -331,6 +404,8 @@ public class StudyService {
                         "REPORT_READ",
                         "PHI_READ"
                 );
+            default:
+                return Collections.emptyList();
         }
     }
 

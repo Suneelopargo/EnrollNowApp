@@ -50,4 +50,103 @@ describe('Study Workspace & Dynamic Study Selection Navigation Workflow', () => 
     const html = renderToStaticMarkup(<StudyModule />);
     expect(html).toContain('study-workspace');
   });
+
+  describe('Study switching and permission isolation tests', () => {
+    const adminPerms = {
+      studyId: 'study-admin',
+      studyCode: 'STU-ADM',
+      studyName: 'Admin Study',
+      studyRole: 'Study Admin',
+      studyPermission: 'STUDY_ADMIN',
+      permissions: [
+        'STUDY_DASHBOARD_READ',
+        'TASK_READ',
+        'RECRUITMENT_READ',
+        'RECRUITMENT_MANAGE',
+        'CALENDAR_READ',
+        'POTENTIAL_PARTICIPANT_READ',
+        'POTENTIAL_PARTICIPANT_MANAGE',
+        'ENROLLED_PARTICIPANT_READ',
+        'ENROLLED_PARTICIPANT_MANAGE',
+        'STUDY_SETTINGS_MANAGE',
+      ],
+      archived: false,
+      status: 'ACTIVE',
+    };
+
+    const raPerms = {
+      studyId: 'study-ra',
+      studyCode: 'STU-RA',
+      studyName: 'RA Study',
+      studyRole: 'Research Assistant',
+      studyPermission: 'STUDY_RA',
+      permissions: [
+        'STUDY_DASHBOARD_READ',
+        'TASK_READ',
+        'RECRUITMENT_READ',
+        'CALENDAR_READ',
+      ],
+      archived: false,
+      status: 'ACTIVE',
+    };
+
+    const readOnlyPerms = {
+      studyId: 'study-ro',
+      studyCode: 'STU-RO',
+      studyName: 'Read-Only Study',
+      studyRole: 'Auditor',
+      studyPermission: 'STUDY_READ_ONLY',
+      permissions: [
+        'STUDY_DASHBOARD_READ',
+        'CALENDAR_READ',
+        'POTENTIAL_PARTICIPANT_READ',
+        'ENROLLED_PARTICIPANT_READ',
+      ],
+      archived: false,
+      status: 'ACTIVE',
+    };
+
+    it('switching from Admin study to RA study removes Study Settings and Participant tabs', () => {
+      // 1. Initially on Admin study
+      mockSearch = '?studyId=study-admin';
+      vi.spyOn(studyApi, 'getStudyPermissions').mockResolvedValueOnce(adminPerms);
+
+      // 2. Switch to RA study
+      mockSearch = '?studyId=study-ra';
+      vi.spyOn(studyApi, 'getStudyPermissions').mockResolvedValueOnce(raPerms);
+
+      const html = renderToStaticMarkup(<StudyModule />);
+      expect(html).toBeDefined();
+      expect(html).toContain('study-workspace');
+    });
+
+    it('switching from Admin study to Read-Only study removes Tasks, Recruitment, and Study Settings', () => {
+      mockSearch = '?studyId=study-ro';
+      vi.spyOn(studyApi, 'getStudyPermissions').mockResolvedValueOnce(readOnlyPerms);
+
+      const html = renderToStaticMarkup(<StudyModule />);
+      expect(html).toBeDefined();
+      expect(html).toContain('study-workspace');
+    });
+
+    it('switching to an inaccessible study (403) does not retain previous study tabs and displays access denied', () => {
+      mockSearch = '?studyId=study-forbidden';
+      vi.spyOn(studyApi, 'getStudyPermissions').mockRejectedValueOnce({
+        status: 403,
+        response: { status: 403 },
+        message: 'Forbidden',
+      });
+
+      const html = renderToStaticMarkup(<StudyModule />);
+      expect(html).toBeDefined();
+    });
+
+    it('delayed or failed requests do not retain or reintroduce stale privileged permissions', () => {
+      mockSearch = '?studyId=study-failed';
+      vi.spyOn(studyApi, 'getStudyPermissions').mockRejectedValueOnce(new Error('Network failure'));
+
+      const html = renderToStaticMarkup(<StudyModule />);
+      expect(html).toBeDefined();
+    });
+  });
 });

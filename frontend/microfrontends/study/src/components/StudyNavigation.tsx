@@ -68,30 +68,49 @@ export function isStudyTabAuthorized(
   if (!permissions) return false;
 
   const role = (permissions.studyPermission || '').toUpperCase();
-  const perms = permissions.permissions || [];
+  const perms = permissions.permissions;
 
-  // Check explicit permission match first
   const tabDef = STUDY_TABS.find((t) => t.id === tabId);
-  if (tabDef && perms.length > 0) {
-    if (!perms.includes(tabDef.requiredPermission)) {
+  if (!tabDef) return false;
+
+  // 1. Explicit permission check: permissions array must be present, non-empty, and include requiredPermission
+  if (!Array.isArray(perms) || perms.length === 0 || !perms.includes(tabDef.requiredPermission)) {
+    return false;
+  }
+
+  // 2. Enforce legacy role-level constraints:
+  // - Study Settings: Strictly Admin only (role === 'STUDY_ADMIN')
+  if (tabId === 'study_settings') {
+    return role === 'STUDY_ADMIN';
+  }
+
+  // - RA: Forbidden from seeing Potential and Enrolled participants
+  if (role === 'STUDY_RA') {
+    if (tabId === 'potential_participants' || tabId === 'enrolled_participants') {
       return false;
     }
   }
 
-  // Enforce legacy role-level constraints
-  switch (role) {
-    case 'STUDY_ADMIN':
-      return true;
-    case 'STUDY_LEADER':
-      return tabId !== 'study_settings';
-    case 'STUDY_RA':
-      return ['dashboard', 'tasks', 'recruitment', 'calendar'].includes(tabId);
-    case 'STUDY_READ_ONLY':
-      return ['dashboard', 'calendar', 'potential_participants', 'enrolled_participants'].includes(tabId);
-    default:
-      // Fallback: use explicit permission check
-      return tabDef ? perms.includes(tabDef.requiredPermission) : false;
+  // - ReadOnly: Forbidden from seeing Tasks and Recruitment
+  if (role === 'STUDY_READ_ONLY') {
+    if (tabId === 'tasks' || tabId === 'recruitment') {
+      return false;
+    }
   }
+
+  // - Leader: Allowed all tabs except Study Settings (already checked above)
+  if (role === 'STUDY_LEADER') {
+    return true;
+  }
+
+  // - Admin: Allowed all tabs
+  if (role === 'STUDY_ADMIN') {
+    return true;
+  }
+
+  // For any other/unknown study role:
+  // Explicit permission check passed and tab is not study_settings
+  return true;
 }
 
 export const StudyNavigation: React.FC<StudyNavigationProps> = ({
@@ -159,7 +178,7 @@ export const StudyNavigation: React.FC<StudyNavigationProps> = ({
     [visibleTabs, onSelectTab]
   );
 
-  if (isParticipantUser) {
+  if (isParticipantUser || permissions?.isParticipantUser) {
     return null;
   }
 

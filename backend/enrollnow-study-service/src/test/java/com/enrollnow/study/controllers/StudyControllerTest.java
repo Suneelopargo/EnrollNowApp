@@ -286,6 +286,10 @@ class StudyControllerTest {
         study.setName("Neuro Study");
         study.setArchived(false);
 
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(myStudiesService.getMyStudies(tenantId, userId))
+                .thenReturn(List.of(new MyStudyResponse(studyId, "PROTO-200", "Neuro Study", "Coordinator", "STUDY_ADMIN")));
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
 
         ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
@@ -304,7 +308,40 @@ class StudyControllerTest {
     }
 
     @Test
+    void getStudyNavigationPermissions_unauthorized_returns403() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setName("Private Study");
+
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
+
+        ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
+                studyController.getStudyNavigationPermissions(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
+    }
+
+    @Test
+    void getStudyNavigationPermissions_unauthenticated_returns403() {
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.empty());
+
+        ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
+                studyController.getStudyNavigationPermissions(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
+    }
+
+    @Test
     void getStudyNavigationPermissions_notFound_returns404() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
 
         ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =

@@ -14,6 +14,7 @@ public class StudyNavigationPermissionsResponse {
     private List<String> permissions = new ArrayList<>();
     private boolean archived;
     private String status;
+    private boolean isParticipantUser;
 
     public StudyNavigationPermissionsResponse() {
     }
@@ -28,6 +29,20 @@ public class StudyNavigationPermissionsResponse {
             boolean archived,
             String status
     ) {
+        this(studyId, studyCode, studyName, studyRole, studyPermission, permissions, archived, status, false);
+    }
+
+    public StudyNavigationPermissionsResponse(
+            UUID studyId,
+            String studyCode,
+            String studyName,
+            String studyRole,
+            String studyPermission,
+            List<String> permissions,
+            boolean archived,
+            String status,
+            boolean isParticipantUser
+    ) {
         this.studyId = studyId;
         this.studyCode = studyCode;
         this.studyName = studyName;
@@ -36,6 +51,7 @@ public class StudyNavigationPermissionsResponse {
         this.permissions = permissions != null ? permissions : new ArrayList<>();
         this.archived = archived;
         this.status = status;
+        this.isParticipantUser = isParticipantUser;
     }
 
     public UUID getStudyId() {
@@ -100,5 +116,13 @@ public class StudyNavigationPermissionsResponse {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public boolean isParticipantUser() {
+        return isParticipantUser;
+    }
+
+    public void setParticipantUser(boolean participantUser) {
+        isParticipantUser = participantUser;
     }
 }

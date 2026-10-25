@@ -144,6 +144,33 @@ describe('Study Tab Navigation & Conditional Tab Visibility (Legacy Ripple Rules
       expect(isStudyTabAuthorized('dashboard', null)).toBe(false);
       expect(isStudyTabAuthorized('dashboard', undefined)).toBe(false);
     });
+
+    it('denies access to all tabs if permissions array is empty, even if role is STUDY_ADMIN', () => {
+      const emptyPermsAdmin: StudyNavigationPermissions = {
+        ...adminPermissions,
+        permissions: [],
+      };
+      const allTabs: StudyTabId[] = [
+        'dashboard',
+        'tasks',
+        'recruitment',
+        'calendar',
+        'potential_participants',
+        'enrolled_participants',
+        'study_settings',
+      ];
+      allTabs.forEach((tab) => {
+        expect(isStudyTabAuthorized(tab, emptyPermsAdmin)).toBe(false);
+      });
+    });
+
+    it('strictly denies study_settings for any non-STUDY_ADMIN role even if permission array contains STUDY_SETTINGS_MANAGE', () => {
+      const fakeAdminLeader: StudyNavigationPermissions = {
+        ...leaderPermissions,
+        permissions: [...leaderPermissions.permissions, 'STUDY_SETTINGS_MANAGE'],
+      };
+      expect(isStudyTabAuthorized('study_settings', fakeAdminLeader)).toBe(false);
+    });
   });
 
   describe('StudyNavigation component rendering', () => {

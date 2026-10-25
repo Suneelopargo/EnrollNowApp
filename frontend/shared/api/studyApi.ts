@@ -49,6 +49,7 @@ export interface StudyNavigationPermissions {
   permissions: string[];
   archived: boolean;
   status: string;
+  isParticipantUser?: boolean;
 }
 
 export interface ImportStudyResult {

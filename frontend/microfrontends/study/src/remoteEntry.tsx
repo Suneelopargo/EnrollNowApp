@@ -132,18 +132,18 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
 
   // Load study-specific permissions dynamically whenever selectedStudyId changes
   useEffect(() => {
+    // 1. Immediately clear any previously held permissions and errors to prevent cross-study leaks
+    setPermissions(null);
+    setPermissionsError(null);
+    setIsAccessDenied(false);
+
     if (!selectedStudyId) {
-      setPermissions(null);
-      setPermissionsError(null);
-      setIsAccessDenied(false);
       setPermissionsLoading(false);
       return;
     }
 
     let isCancelled = false;
     setPermissionsLoading(true);
-    setPermissionsError(null);
-    setIsAccessDenied(false);
 
     const loadStudyPermissions = async () => {
       try {
@@ -157,6 +157,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
         }
       } catch (err: any) {
         if (!isCancelled) {
+          setPermissions(null);
           const status = err?.status || err?.response?.status;
           if (status === 403) {
             setIsAccessDenied(true);
@@ -164,11 +165,11 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
               `Access denied: You do not have permission to access study ${selectedStudyId}.`
             );
           } else if (status === 404) {
-            setPermissions(null);
             setPermissionsError(`Study ${selectedStudyId} could not be found.`);
           } else {
-            // If permissions endpoint is momentarily unavailable, keep going
-            setPermissionsError(null);
+            setPermissionsError(
+              `Failed to load permissions for study ${selectedStudyId}. Access cannot be verified.`
+            );
           }
         }
       } finally {
@@ -337,28 +338,28 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
             Return to Studies
           </button>
         </section>
-      ) : permissionsError && !selectedStudy ? (
-        /* 3. Study Not Found State */
+      ) : permissionsError ? (
+        /* 3. Study Not Found or Permission Resolution Error State */
         <section className="study-selection-empty" aria-live="polite">
           <div className="study-selection-empty__icon">
             <AlertTriangle size={24} />
           </div>
-          <h1>Study Not Found</h1>
+          <h1>{permissionsError.includes('not be found') ? 'Study Not Found' : 'Unable to Authorize Study'}</h1>
           <p>{permissionsError}</p>
         </section>
+      ) : permissionsLoading ? (
+        <div className="study-selection-empty" role="status">
+          <div className="study-loading-indicator">Loading study permissions…</div>
+        </div>
       ) : selectedStudy || permissions ? (
         /* 4. Active Selected Study Workspace */
         <section className="study-dashboard" aria-labelledby="study-dashboard-title">
           {/* Header Context Banner */}
           <header className="study-dashboard__header">
             <div>
-              <p>STUDY WORKSPACE</p>
+              
               <h1 id="study-dashboard-title">{studyTitle}</h1>
-              <div className="study-dashboard__metadata">
-                <span>{studyCode}</span>
-                {selectedStudy?.phase && <span> · {selectedStudy.phase}</span>}
-                {studyRole && <span className="study-dashboard__role-badge">{studyRole}</span>}
-              </div>
+              
             </div>
             {isArchived && (
               <div className="study-archived-badge" role="status">

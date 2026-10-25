@@ -151,15 +151,20 @@ public class StudyController {
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = null;
-        boolean canManageSiteAdmins = true;
+        boolean canManageSiteAdmins = false;
 
         if (siteAuthorizationService != null) {
+            Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
+            if (callerOpt.isPresent()) {
+                callerUserId = callerOpt.get().userId();
+            }
             Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
                     siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
             if (effectiveOpt.isPresent()) {
-                callerUserId = effectiveOpt.get().getUserId();
+                if (callerUserId == null) {
+                    callerUserId = effectiveOpt.get().getUserId();
+                }
                 canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins()
-                        || effectiveOpt.get().isCanAccessSiteAdmin()
                         || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
             }
         }
@@ -172,6 +177,12 @@ public class StudyController {
                     canManageSiteAdmins
             );
             return ResponseEntity.ok(ApiResponse.success(permissions));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (org.springframework.security.core.AuthenticationException ex) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(HttpStatus.UNAUTHORIZED.value(), "UNAUTHORIZED", ex.getMessage()));
         } catch (StudyNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
