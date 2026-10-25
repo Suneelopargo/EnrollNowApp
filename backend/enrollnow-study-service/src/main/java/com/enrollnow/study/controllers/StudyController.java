@@ -6,6 +6,7 @@ import com.enrollnow.study.dtos.CopyStudyRequest;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
+import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
@@ -137,6 +138,40 @@ public class StudyController {
                     canManageSiteAdmins
             );
             return ResponseEntity.ok(ApiResponse.success(summary));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/permissions", "/studies/{studyId}/permissions"})
+    public ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> getStudyNavigationPermissions(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = null;
+        boolean canManageSiteAdmins = true;
+
+        if (siteAuthorizationService != null) {
+            Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
+                    siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
+            if (effectiveOpt.isPresent()) {
+                callerUserId = effectiveOpt.get().getUserId();
+                canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins()
+                        || effectiveOpt.get().isCanAccessSiteAdmin()
+                        || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
+            }
+        }
+
+        try {
+            StudyNavigationPermissionsResponse permissions = studyService.getStudyNavigationPermissions(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(permissions));
         } catch (StudyNotFoundException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));

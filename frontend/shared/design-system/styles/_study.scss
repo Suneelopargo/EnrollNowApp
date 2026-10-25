@@ -275,3 +275,340 @@
   .study-form-dialog__actions { align-items: stretch; flex-direction: column; }
   .study-form-dialog__actions > button { justify-content: center; }
 }
+
+// ============================================================================
+// Study Tab Navigation (Legacy Ripple Parity with EnrollNow Modern Theme)
+// ============================================================================
+
+.study-dashboard__metadata {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  color: #718597;
+  font-size: 13px;
+}
+
+.study-dashboard__role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(8, 126, 184, 0.12);
+  color: #087eb8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(8, 126, 184, 0.25);
+}
+
+.study-archived-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid #fde68a;
+}
+
+.study-archived-banner {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.study-navigation {
+  margin: 0 0 20px;
+  border-bottom: 2px solid #e2e8f0;
+  background: transparent;
+}
+
+.study-navigation__tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 0;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+}
+
+.study-navigation__tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #52697c;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 150ms ease;
+  position: relative;
+  bottom: -2px;
+
+  svg {
+    color: #64748b;
+    transition: color 150ms ease;
+  }
+
+  &:hover {
+    color: #087eb8;
+    background: rgba(8, 126, 184, 0.04);
+    border-bottom-color: rgba(8, 126, 184, 0.35);
+
+    svg {
+      color: #087eb8;
+    }
+  }
+
+  &:focus-visible {
+    outline: none;
+    background: rgba(8, 126, 184, 0.08);
+    border-radius: 4px 4px 0 0;
+  }
+
+  &.is-active {
+    color: #087eb8;
+    font-weight: 700;
+    border-bottom-color: #087eb8;
+
+    svg {
+      color: #087eb8;
+    }
+  }
+}
+
+.study-navigation__caret {
+  transition: transform 150ms ease;
+  margin-left: 2px;
+
+  &.is-open {
+    transform: rotate(180deg);
+  }
+}
+
+.study-navigation__dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.study-navigation__dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #dbe7f0;
+  box-shadow: 0 10px 25px rgba(15, 45, 75, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: studyFadeIn 120ms ease;
+}
+
+.study-navigation__dropdown-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 120ms ease;
+  letter-spacing: 0.04em;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #087eb8;
+  }
+
+  &.is-active {
+    background: #eaf5fb;
+    color: #087eb8;
+    font-weight: 700;
+  }
+}
+
+.study-tab-pane {
+  min-height: 250px;
+  animation: studyTabFade 180ms ease;
+}
+
+.study-tab-placeholder {
+  padding: 24px 28px;
+  border: 1px solid #dbe7f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(15, 45, 75, 0.05);
+
+  &__header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #edf2f7;
+
+    h2 {
+      margin: 0 0 4px;
+      color: #15344d;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    span {
+      color: #718597;
+      font-size: 13px;
+    }
+  }
+
+  &__body {
+    color: #475569;
+    font-size: 14px;
+    line-height: 1.6;
+
+    p {
+      margin: 0 0 8px;
+    }
+
+    small {
+      color: #94a3b8;
+      font-size: 12px;
+    }
+  }
+}
+
+.study-unauthorized-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 5px solid #dc2626;
+
+  &__icon {
+    color: #dc2626;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  &__content {
+    h3 {
+      margin: 0 0 6px;
+      color: #991b1b;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: #7f1d1d;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+  }
+
+  &__action {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 6px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: background 150ms ease;
+
+    &:hover {
+      background: #b91c1c;
+    }
+  }
+}
+
+.study-access-denied-panel {
+  display: grid;
+  min-height: 48vh;
+  align-content: center;
+  justify-items: center;
+  padding: 32px 20px;
+  text-align: center;
+
+  &__icon {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    place-items: center;
+    border-radius: 16px;
+    background: #fef2f2;
+    color: #dc2626;
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    margin: 0 0 8px;
+    color: #1e293b;
+    font-size: 22px;
+  }
+
+  p {
+    max-width: 440px;
+    margin: 0 0 20px;
+    color: #64748b;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+
+  &__btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 18px;
+    border-radius: 8px;
+    background: #087eb8;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: background 150ms ease;
+
+    &:hover {
+      background: #0284c7;
+    }
+  }
+}
+
+@keyframes studyFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes studyTabFade {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}

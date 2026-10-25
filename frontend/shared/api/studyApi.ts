@@ -40,6 +40,17 @@ export interface CopyStudyPayload {
   sourceStudyId: string;
 }
 
+export interface StudyNavigationPermissions {
+  studyId: string;
+  studyCode: string;
+  studyName: string;
+  studyRole: string;
+  studyPermission: string;
+  permissions: string[];
+  archived: boolean;
+  status: string;
+}
+
 export interface ImportStudyResult {
   studyId: string;
   studyCode: string;
@@ -76,6 +87,12 @@ export const studyApi = {
 
   async getStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.get(`/api/v1/studies/${id}`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async getStudyPermissions(id: string | number, tenantId?: string, config?: StudyApiRequestConfig): Promise<StudyNavigationPermissions> {
+    const url = tenantId ? `/api/v1/tenants/${tenantId}/studies/${id}/permissions` : `/api/v1/studies/${id}/permissions`;
+    const res = await apiClient.get(url, { skipToast: true, ...config } as any);
     return (res.data as any)?.data ?? res.data;
   },
 

@@ -1,8 +1,13 @@
 package com.enrollnow.study.services;
 
 import com.enrollnow.identity.repositories.UserRepository;
+import com.enrollnow.identity.repositories.RoleRepository;
+import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
+import com.enrollnow.identity.models.Role;
+import com.enrollnow.identity.models.UserRoleAssignment;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
@@ -39,6 +44,12 @@ class StudyServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private UserRoleAssignmentRepository userRoleAssignmentRepository;
+
     private StudyService studyService;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -47,7 +58,16 @@ class StudyServiceTest {
 
     @BeforeEach
     void setUp() {
-        studyService = new StudyService(studyRepository, myStudiesService);
+        studyService = new StudyService(
+                studyRepository,
+                myStudiesService,
+                null,
+                studyMemberRepository,
+                roleRepository,
+                userRoleAssignmentRepository,
+                null,
+                null
+        );
         studyService.setStudyMemberRepository(studyMemberRepository);
         studyService.setUserRepository(userRepository);
     }
@@ -201,5 +221,212 @@ class StudyServiceTest {
         assertEquals(2, summaries.size());
         verify(studyMemberRepository, times(1)).findByIdStudyIdIn(anyCollection());
         verify(studyMemberRepository, never()).findByTenantIdAndIdStudyId(any(), any());
+    }
+
+    @Test
+    void getStudyNavigationPermissions_forSiteAdmin_returnsAdminRoleAndAllPermissions() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setStudyCode("STUDY-001");
+        study.setName("Cardiology Study");
+        study.setArchived(false);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        StudyNavigationPermissionsResponse response = studyService.getStudyNavigationPermissions(
+                tenantId,
+                studyId.toString(),
+                userId,
+                true // is site admin
+        );
+
+        assertNotNull(response);
+        assertEquals(studyId, response.getStudyId());
+        assertEquals("STUDY-001", response.getStudyCode());
+        assertEquals("Cardiology Study", response.getStudyName());
+        assertEquals("STUDY_ADMIN", response.getStudyPermission());
+        assertEquals("Study Admin", response.getStudyRole());
+        assertFalse(response.isArchived());
+        assertEquals("ACTIVE", response.getStatus());
+
+        List<String> perms = response.getPermissions();
+        assertTrue(perms.contains("STUDY_DASHBOARD_READ"));
+        assertTrue(perms.contains("TASK_READ"));
+        assertTrue(perms.contains("RECRUITMENT_READ"));
+        assertTrue(perms.contains("RECRUITMENT_MANAGE"));
+        assertTrue(perms.contains("CALENDAR_READ"));
+        assertTrue(perms.contains("POTENTIAL_PARTICIPANT_READ"));
+        assertTrue(perms.contains("ENROLLED_PARTICIPANT_READ"));
+        assertTrue(perms.contains("STUDY_SETTINGS_MANAGE"));
+    }
+
+    @Test
+    void getStudyNavigationPermissions_forStudyLeader_returnsLeaderPermissions() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setStudyCode("LEAD-001");
+        study.setName("Leader Study");
+        study.setArchived(false);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        MyStudyResponse assigned = new MyStudyResponse(studyId, "LEAD-001", "Leader Study", "Study Leader", "STUDY_LEADER");
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+
+        UUID roleId = UUID.randomUUID();
+        UserRoleAssignment assignment = new UserRoleAssignment();
+        assignment.setUserId(userId);
+        assignment.setStudyId(studyId);
+        assignment.setRoleId(roleId);
+        assignment.setActive(true);
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, studyId))
+                .thenReturn(List.of(assignment));
+
+        Role leaderRole = new Role();
+        leaderRole.setId(roleId);
+        leaderRole.setCode("STUDY_LEADER");
+        leaderRole.setName("Study Leader");
+        leaderRole.setScopeType("STUDY");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(leaderRole));
+
+        StudyNavigationPermissionsResponse response = studyService.getStudyNavigationPermissions(
+                tenantId,
+                studyId.toString(),
+                userId,
+                false
+        );
+
+        assertNotNull(response);
+        assertEquals("STUDY_LEADER", response.getStudyPermission());
+        assertEquals("Study Leader", response.getStudyRole());
+
+        List<String> perms = response.getPermissions();
+        assertTrue(perms.contains("STUDY_DASHBOARD_READ"));
+        assertTrue(perms.contains("TASK_READ"));
+        assertTrue(perms.contains("RECRUITMENT_READ"));
+        assertTrue(perms.contains("CALENDAR_READ"));
+        assertTrue(perms.contains("POTENTIAL_PARTICIPANT_READ"));
+        assertTrue(perms.contains("ENROLLED_PARTICIPANT_READ"));
+        assertFalse(perms.contains("STUDY_SETTINGS_MANAGE")); // Leader cannot manage study settings
+    }
+
+    @Test
+    void getStudyNavigationPermissions_forStudyRA_returnsRaPermissions() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setStudyCode("RA-001");
+        study.setName("RA Study");
+        study.setArchived(false);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        MyStudyResponse assigned = new MyStudyResponse(studyId, "RA-001", "RA Study", "Research Assistant", "STUDY_RA");
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+
+        UUID roleId = UUID.randomUUID();
+        UserRoleAssignment assignment = new UserRoleAssignment();
+        assignment.setUserId(userId);
+        assignment.setStudyId(studyId);
+        assignment.setRoleId(roleId);
+        assignment.setActive(true);
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, studyId))
+                .thenReturn(List.of(assignment));
+
+        Role raRole = new Role();
+        raRole.setId(roleId);
+        raRole.setCode("STUDY_RA");
+        raRole.setName("Research Assistant");
+        raRole.setScopeType("STUDY");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(raRole));
+
+        StudyNavigationPermissionsResponse response = studyService.getStudyNavigationPermissions(
+                tenantId,
+                studyId.toString(),
+                userId,
+                false
+        );
+
+        assertNotNull(response);
+        assertEquals("STUDY_RA", response.getStudyPermission());
+        List<String> perms = response.getPermissions();
+        assertTrue(perms.contains("STUDY_DASHBOARD_READ"));
+        assertTrue(perms.contains("TASK_READ"));
+        assertTrue(perms.contains("RECRUITMENT_READ"));
+        assertTrue(perms.contains("CALENDAR_READ"));
+        assertFalse(perms.contains("POTENTIAL_PARTICIPANT_READ")); // RA cannot view potential participants
+        assertFalse(perms.contains("ENROLLED_PARTICIPANT_READ")); // RA cannot view enrolled participants
+        assertFalse(perms.contains("STUDY_SETTINGS_MANAGE")); // RA cannot manage study settings
+    }
+
+    @Test
+    void getStudyNavigationPermissions_forStudyReadOnly_returnsReadOnlyPermissions() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setStudyCode("RO-001");
+        study.setName("ReadOnly Study");
+        study.setArchived(false);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        MyStudyResponse assigned = new MyStudyResponse(studyId, "RO-001", "ReadOnly Study", "Auditor", "STUDY_READ_ONLY");
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+
+        UUID roleId = UUID.randomUUID();
+        UserRoleAssignment assignment = new UserRoleAssignment();
+        assignment.setUserId(userId);
+        assignment.setStudyId(studyId);
+        assignment.setRoleId(roleId);
+        assignment.setActive(true);
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, studyId))
+                .thenReturn(List.of(assignment));
+
+        Role roRole = new Role();
+        roRole.setId(roleId);
+        roRole.setCode("STUDY_READ_ONLY");
+        roRole.setName("Auditor");
+        roRole.setScopeType("STUDY");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(roRole));
+
+        StudyNavigationPermissionsResponse response = studyService.getStudyNavigationPermissions(
+                tenantId,
+                studyId.toString(),
+                userId,
+                false
+        );
+
+        assertNotNull(response);
+        assertEquals("STUDY_READ_ONLY", response.getStudyPermission());
+        List<String> perms = response.getPermissions();
+        assertTrue(perms.contains("STUDY_DASHBOARD_READ"));
+        assertTrue(perms.contains("CALENDAR_READ"));
+        assertTrue(perms.contains("POTENTIAL_PARTICIPANT_READ"));
+        assertTrue(perms.contains("ENROLLED_PARTICIPANT_READ"));
+        assertFalse(perms.contains("TASK_READ")); // ReadOnly cannot view tasks
+        assertFalse(perms.contains("RECRUITMENT_READ")); // ReadOnly cannot view recruitment
+        assertFalse(perms.contains("STUDY_SETTINGS_MANAGE")); // ReadOnly cannot manage study settings
+    }
+
+    @Test
+    void getStudyNavigationPermissions_unauthorizedUser_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setName("Private Study");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyService.getStudyNavigationPermissions(tenantId, studyId.toString(), userId, false)
+        );
+    }
+
+    @Test
+    void getStudyNavigationPermissions_studyNotFound_throwsStudyNotFoundException() {
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        assertThrows(
+                StudyNotFoundException.class,
+                () -> studyService.getStudyNavigationPermissions(tenantId, studyId.toString(), userId, false)
+        );
     }
 }

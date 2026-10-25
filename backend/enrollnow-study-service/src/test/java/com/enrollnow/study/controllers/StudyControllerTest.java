@@ -5,6 +5,7 @@ import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
@@ -275,5 +276,42 @@ class StudyControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(siteAuthorizationService).requireStudyManageAccess(tenantId);
         verify(studyRepository).delete(existing);
+    }
+
+    @Test
+    void getStudyNavigationPermissions_found_returnsOkWithPermissions() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setStudyCode("PROTO-200");
+        study.setName("Neuro Study");
+        study.setArchived(false);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
+                studyController.getStudyNavigationPermissions(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+
+        StudyNavigationPermissionsResponse data = response.getBody().getData();
+        assertEquals(studyId, data.getStudyId());
+        assertEquals("PROTO-200", data.getStudyCode());
+        assertEquals("Neuro Study", data.getStudyName());
+        assertNotNull(data.getPermissions());
+        assertTrue(data.getPermissions().contains("STUDY_DASHBOARD_READ"));
+    }
+
+    @Test
+    void getStudyNavigationPermissions_notFound_returns404() {
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
+                studyController.getStudyNavigationPermissions(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
     }
 }

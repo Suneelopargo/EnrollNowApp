@@ -3,6 +3,8 @@ package com.enrollnow.study.services;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.TeamMembership;
 import com.enrollnow.identity.models.UserRoleAssignment;
+import com.enrollnow.identity.repositories.PermissionRepository;
+import com.enrollnow.identity.repositories.RolePermissionRepository;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.TeamMembershipRepository;
 import com.enrollnow.identity.repositories.UserRepository;
@@ -12,6 +14,7 @@ import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
 import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.dtos.StudyAdminSummary;
+import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.DuplicateStudyNameException;
@@ -57,6 +60,12 @@ public class StudyService {
 
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
+
+    @Autowired(required = false)
+    private RolePermissionRepository rolePermissionRepository;
+
+    @Autowired(required = false)
+    private PermissionRepository permissionRepository;
 
     public StudyService(StudyRepository studyRepository) {
         this(studyRepository, null, null, null, null, null, null, null);
@@ -184,6 +193,145 @@ public class StudyService {
     @Transactional(readOnly = true)
     public StudySummaryResponse getStudyByIdOrCode(UUID tenantId, String studyId) {
         return getStudyByIdOrCode(tenantId, studyId, null, true);
+    }
+
+    @Transactional(readOnly = true)
+    public StudyNavigationPermissionsResponse getStudyNavigationPermissions(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        if (callerUserId != null && !canManageSiteAdmins && myStudiesService != null && tenantId != null) {
+            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
+            boolean hasAccess = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
+            if (!hasAccess) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied: you do not have permission to access study " + studyId);
+            }
+        }
+
+        // Determine effective study role
+        String studyRoleName = "Study Member";
+        String studyPermissionCode = "STUDY_READ_ONLY";
+        UUID matchedRoleId = null;
+
+        if (canManageSiteAdmins) {
+            studyRoleName = "Study Admin";
+            studyPermissionCode = "STUDY_ADMIN";
+        } else if (callerUserId != null && tenantId != null) {
+            // Check user_role_assignments
+            if (userRoleAssignmentRepository != null) {
+                List<UserRoleAssignment> assignments = userRoleAssignmentRepository
+                        .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, callerUserId, study.getId());
+                for (UserRoleAssignment assignment : assignments) {
+                    if (roleRepository != null) {
+                        Role role = roleRepository.findById(assignment.getRoleId()).orElse(null);
+                        if (role != null && "STUDY".equalsIgnoreCase(role.getScopeType())) {
+                            studyPermissionCode = role.getCode();
+                            matchedRoleId = role.getId();
+                            if (role.getName() != null) {
+                                studyRoleName = role.getName();
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Check study_members for role name if still default
+            if (studyMemberRepository != null) {
+                Optional<StudyMember> memberOpt = studyMemberRepository
+                        .findByTenantIdAndIdStudyIdAndIdUserId(tenantId, study.getId(), callerUserId);
+                if (memberOpt.isPresent() && memberOpt.get().getStudyRole() != null && !memberOpt.get().getStudyRole().isBlank()) {
+                    studyRoleName = memberOpt.get().getStudyRole();
+                }
+            }
+        }
+
+        List<String> permissions = resolvePermissionsForStudyRole(studyPermissionCode, matchedRoleId);
+
+        return new StudyNavigationPermissionsResponse(
+                study.getId(),
+                study.getStudyCode(),
+                study.getName(),
+                studyRoleName,
+                studyPermissionCode,
+                permissions,
+                study.isArchived(),
+                study.isArchived() ? "ARCHIVED" : "ACTIVE"
+        );
+    }
+
+    private List<String> resolvePermissionsForStudyRole(String roleCode, UUID roleId) {
+        if (roleId != null && rolePermissionRepository != null && permissionRepository != null) {
+            try {
+                var rolePerms = rolePermissionRepository.findByIdRoleId(roleId);
+                if (rolePerms != null && !rolePerms.isEmpty()) {
+                    List<String> loadedCodes = new ArrayList<>();
+                    for (var rp : rolePerms) {
+                        permissionRepository.findById(rp.getId().getPermissionId())
+                                .ifPresent(p -> loadedCodes.add(p.getCode()));
+                    }
+                    if (!loadedCodes.isEmpty()) {
+                        return loadedCodes;
+                    }
+                }
+            } catch (Exception ignored) {
+                // Fall back to canonical defaults
+            }
+        }
+
+        String normalized = roleCode != null ? roleCode.trim().toUpperCase(Locale.ROOT) : "STUDY_READ_ONLY";
+        switch (normalized) {
+            case "STUDY_ADMIN":
+                return List.of(
+                        "STUDY_DASHBOARD_READ",
+                        "TASK_READ",
+                        "RECRUITMENT_READ",
+                        "RECRUITMENT_MANAGE",
+                        "CALENDAR_READ",
+                        "POTENTIAL_PARTICIPANT_READ",
+                        "POTENTIAL_PARTICIPANT_MANAGE",
+                        "ENROLLED_PARTICIPANT_READ",
+                        "ENROLLED_PARTICIPANT_MANAGE",
+                        "STUDY_SETTINGS_MANAGE",
+                        "REPORT_READ",
+                        "PHI_READ"
+                );
+            case "STUDY_LEADER":
+                return List.of(
+                        "STUDY_DASHBOARD_READ",
+                        "TASK_READ",
+                        "RECRUITMENT_READ",
+                        "RECRUITMENT_MANAGE",
+                        "CALENDAR_READ",
+                        "POTENTIAL_PARTICIPANT_READ",
+                        "POTENTIAL_PARTICIPANT_MANAGE",
+                        "ENROLLED_PARTICIPANT_READ",
+                        "ENROLLED_PARTICIPANT_MANAGE",
+                        "PHI_READ"
+                );
+            case "STUDY_RA":
+                return List.of(
+                        "STUDY_DASHBOARD_READ",
+                        "TASK_READ",
+                        "RECRUITMENT_READ",
+                        "CALENDAR_READ"
+                );
+            case "STUDY_READ_ONLY":
+            default:
+                return List.of(
+                        "STUDY_DASHBOARD_READ",
+                        "CALENDAR_READ",
+                        "POTENTIAL_PARTICIPANT_READ",
+                        "ENROLLED_PARTICIPANT_READ",
+                        "REPORT_READ",
+                        "PHI_READ"
+                );
+        }
     }
 
     @Transactional
