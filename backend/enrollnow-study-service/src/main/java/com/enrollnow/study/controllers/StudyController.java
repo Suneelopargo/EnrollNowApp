@@ -6,8 +6,10 @@ import com.enrollnow.study.dtos.CopyStudyRequest;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
+import com.enrollnow.study.dtos.StudyDetailsResponse;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
+import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
@@ -374,6 +376,93 @@ public class StudyController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
         }
+    }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/details", "/studies/{studyId}/details"})
+    public ResponseEntity<ApiResponse<StudyDetailsResponse>> getStudyDetails(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyDetailsResponse details = studyService.getStudyDetails(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(details));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/details", "/studies/{studyId}/details"})
+    public ResponseEntity<ApiResponse<StudyDetailsResponse>> updateStudyDetails(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @Valid @RequestBody UpdateStudyDetailsRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyDetailsResponse updated = studyService.updateStudyDetails(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Study details updated successfully", updated));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/export", "/studies/{studyId}/export"})
+    public ResponseEntity<ApiResponse<Map<String, Object>>> exportStudy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            Map<String, Object> export = studyService.exportStudy(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(export));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    private boolean resolveCanManageSiteAdmins(UUID effectiveTenantId) {
+        if (siteAuthorizationService != null) {
+            Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
+                    siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
+            if (effectiveOpt.isPresent()) {
+                return effectiveOpt.get().isCanManageSiteAdmins()
+                        || effectiveOpt.get().isCanAccessSiteAdmin()
+                        || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
+            }
+        }
+        return false;
     }
 
     private UUID resolveCallerUserId() {

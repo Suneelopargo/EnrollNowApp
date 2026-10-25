@@ -143,6 +143,7 @@ const StudyActionsCellRenderer: React.FC<ICellRendererParams<Study>> = (params) 
             params.context?.onRestoreStudy?.(study);
           }}
           onKeyDown={handleKeyDown}
+          title={`Unarchive ${studyName}`}
           data-tooltip={`Unarchive ${studyName}`}
           aria-label={`Unarchive ${studyName}`}
         >
@@ -156,6 +157,7 @@ const StudyActionsCellRenderer: React.FC<ICellRendererParams<Study>> = (params) 
             params.context?.onDeleteStudy?.(study);
           }}
           onKeyDown={handleKeyDown}
+          title={`Delete ${studyName}`}
           data-tooltip={`Delete ${studyName}`}
           aria-label={`Delete ${studyName}`}
         >
@@ -175,6 +177,7 @@ const StudyActionsCellRenderer: React.FC<ICellRendererParams<Study>> = (params) 
           params.context?.onEditStudy?.(study);
         }}
         onKeyDown={handleKeyDown}
+        title={`Edit ${studyName}`}
         data-tooltip={`Edit ${studyName}`}
         aria-label={`Edit ${studyName}`}
       >
@@ -188,6 +191,7 @@ const StudyActionsCellRenderer: React.FC<ICellRendererParams<Study>> = (params) 
           params.context?.onArchiveStudy?.(study);
         }}
         onKeyDown={handleKeyDown}
+        title={`Archive ${studyName}`}
         data-tooltip={`Archive ${studyName}`}
         aria-label={`Archive ${studyName}`}
       >

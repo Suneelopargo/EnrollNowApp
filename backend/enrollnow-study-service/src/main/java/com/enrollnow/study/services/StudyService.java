@@ -14,18 +14,23 @@ import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.ImportStudyResponse;
 import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.dtos.StudyAdminSummary;
+import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.StudyGrantDto;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
+import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.DuplicateStudyNameException;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyLimitExceededException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyGrant;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.models.StudyMemberId;
 import com.enrollnow.study.models.TeamStudy;
 import com.enrollnow.study.models.TeamStudyId;
+import com.enrollnow.study.repositories.StudyGrantRepository;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
@@ -60,6 +65,9 @@ public class StudyService {
 
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
+
+    @Autowired(required = false)
+    private StudyGrantRepository studyGrantRepository;
 
     @Autowired(required = false)
     private RolePermissionRepository rolePermissionRepository;
@@ -109,6 +117,11 @@ public class StudyService {
     @Autowired(required = false)
     public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
         this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    @Autowired(required = false)
+    public void setStudyGrantRepository(StudyGrantRepository studyGrantRepository) {
+        this.studyGrantRepository = studyGrantRepository;
     }
 
     @Autowired(required = false)
@@ -611,6 +624,209 @@ public class StudyService {
 
         Study updated = studyRepository.save(study);
         return toSummaryResponse(updated);
+    }
+
+    @Transactional(readOnly = true)
+    public StudyDetailsResponse getStudyDetails(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        boolean canManage = canManageSiteAdmins;
+        if (!canManage && callerUserId != null) {
+            try {
+                StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
+                        tenantId,
+                        studyId,
+                        callerUserId,
+                        canManageSiteAdmins
+                );
+                if (navPerms != null && navPerms.getPermissions() != null) {
+                    canManage = navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
+                            || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission());
+                }
+            } catch (Exception ex) {
+                // If caller cannot access navigation, let canManage remain false
+            }
+        }
+
+        List<StudyGrantDto> grantDtos = new ArrayList<>();
+        if (studyGrantRepository != null && tenantId != null) {
+            List<StudyGrant> grants = studyGrantRepository.findByTenantIdAndStudyId(tenantId, study.getId());
+            if (grants != null) {
+                for (StudyGrant g : grants) {
+                    grantDtos.add(new StudyGrantDto(g.getId(), g.getGrantNumber(), g.getAgency()));
+                }
+            }
+        }
+
+        StudyDetailsResponse response = new StudyDetailsResponse();
+        response.setId(study.getId());
+        response.setTenantId(study.getTenantId());
+        response.setStudyCode(study.getStudyCode());
+        response.setName(study.getName());
+        response.setLongName(study.getLongName());
+        response.setDescription(study.getDescription());
+        response.setIrbId(study.getIrbId());
+        response.setRecruitmentStartDate(study.getRecruitmentStartDate());
+        response.setRecruitmentEndDate(study.getRecruitmentEndDate());
+        response.setCompletionDate(study.getCompletionDate());
+        response.setSampleSize(study.getSampleSize());
+        response.setLocale(study.getLocale());
+        response.setAllowParticipationInOtherStudies(study.isAllowParticipationInOtherStudies());
+        response.setStudyUrlLabel(study.getStudyUrlLabel());
+        response.setStudyUrl(study.getStudyUrl());
+        response.setArchived(study.isArchived());
+        response.setCanManage(canManage);
+        response.setGrants(grantDtos);
+
+        return response;
+    }
+
+    @Transactional
+    public StudyDetailsResponse updateStudyDetails(
+            UUID tenantId,
+            String studyId,
+            UpdateStudyDetailsRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        if (request == null) {
+            throw new InvalidStudyException("Update study details request cannot be empty.");
+        }
+
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        boolean canManage = canManageSiteAdmins;
+        if (!canManage && callerUserId != null) {
+            StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
+                    tenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            if (navPerms != null && navPerms.getPermissions() != null) {
+                canManage = navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
+                        || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission());
+            }
+        }
+
+        if (!canManage && callerUserId != null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: modifying study details requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
+            );
+        }
+
+        String newName = request.getName() != null ? request.getName().trim() : "";
+        if (newName.isBlank()) {
+            throw new InvalidStudyException("Short Study Name is required.");
+        }
+        if (newName.length() > 15) {
+            throw new InvalidStudyException("Short Study Name must be 15 characters or less.");
+        }
+        if (!newName.matches("^[a-zA-Z0-9 ]+$")) {
+            throw new InvalidStudyException("Short Study Name may only contain alphanumeric characters and spaces.");
+        }
+        if (!newName.equalsIgnoreCase(study.getName())) {
+            validateStudyName(study.getTenantId(), newName);
+        }
+        study.setName(newName);
+
+        if (request.getRecruitmentStartDate() != null && request.getRecruitmentEndDate() != null) {
+            if (request.getRecruitmentEndDate().isBefore(request.getRecruitmentStartDate())) {
+                throw new InvalidStudyException("Recruitment end date cannot be earlier than start date.");
+            }
+        }
+
+        study.setLongName(request.getLongName());
+        study.setDescription(request.getDescription());
+        study.setIrbId(request.getIrbId());
+        study.setRecruitmentStartDate(request.getRecruitmentStartDate());
+        study.setRecruitmentEndDate(request.getRecruitmentEndDate());
+        study.setCompletionDate(request.getCompletionDate());
+        if (request.getAllowParticipationInOtherStudies() != null) {
+            study.setAllowParticipationInOtherStudies(request.getAllowParticipationInOtherStudies());
+        }
+        study.setStudyUrlLabel(request.getStudyUrlLabel());
+        study.setStudyUrl(request.getStudyUrl());
+        study.setUpdatedAt(OffsetDateTime.now());
+        if (callerUserId != null) {
+            study.setUpdatedBy(callerUserId);
+        }
+
+        studyRepository.save(study);
+
+        // Update grants atomically
+        if (studyGrantRepository != null && tenantId != null && request.getGrants() != null) {
+            List<StudyGrant> existingGrants = studyGrantRepository.findByTenantIdAndStudyId(tenantId, study.getId());
+            studyGrantRepository.deleteAll(existingGrants);
+
+            List<StudyGrant> toSave = new ArrayList<>();
+            for (StudyGrantDto gDto : request.getGrants()) {
+                boolean hasNum = gDto.getGrantNumber() != null && !gDto.getGrantNumber().isBlank();
+                boolean hasAgency = gDto.getAgency() != null && !gDto.getAgency().isBlank();
+                if (hasNum || hasAgency) {
+                    StudyGrant sg = new StudyGrant();
+                    sg.setTenantId(tenantId);
+                    sg.setStudyId(study.getId());
+                    sg.setGrantNumber(gDto.getGrantNumber() != null ? gDto.getGrantNumber().trim() : "");
+                    sg.setAgency(gDto.getAgency() != null ? gDto.getAgency().trim() : "");
+                    toSave.add(sg);
+                }
+            }
+            if (!toSave.isEmpty()) {
+                studyGrantRepository.saveAll(toSave);
+            }
+        }
+
+        return getStudyDetails(tenantId, study.getId().toString(), callerUserId, canManageSiteAdmins);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> exportStudy(UUID tenantId, String studyId, UUID callerUserId, boolean canManageSiteAdmins) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        Map<String, Object> export = new LinkedHashMap<>();
+        export.put("version", "2.0");
+        export.put("exportedAt", OffsetDateTime.now().toString());
+
+        Map<String, Object> studyMap = new LinkedHashMap<>();
+        studyMap.put("id", study.getId().toString());
+        studyMap.put("studyCode", study.getStudyCode());
+        studyMap.put("name", study.getName());
+        studyMap.put("longname", study.getLongName());
+        studyMap.put("description", study.getDescription());
+        studyMap.put("irbId", study.getIrbId());
+        studyMap.put("startDate", study.getRecruitmentStartDate() != null ? study.getRecruitmentStartDate().toString() : null);
+        studyMap.put("endDate", study.getRecruitmentEndDate() != null ? study.getRecruitmentEndDate().toString() : null);
+        studyMap.put("completionDate", study.getCompletionDate() != null ? study.getCompletionDate().toString() : null);
+        studyMap.put("studyURL", study.getStudyUrl());
+        studyMap.put("studyUrlLabel", study.getStudyUrlLabel());
+        studyMap.put("allowParticipationInOtherStudies", study.isAllowParticipationInOtherStudies());
+        studyMap.put("sampleSize", study.getSampleSize());
+        export.put("study", studyMap);
+
+        List<Map<String, Object>> grantsList = new ArrayList<>();
+        if (studyGrantRepository != null && tenantId != null) {
+            List<StudyGrant> grants = studyGrantRepository.findByTenantIdAndStudyId(tenantId, study.getId());
+            if (grants != null) {
+                for (StudyGrant g : grants) {
+                    Map<String, Object> gMap = new LinkedHashMap<>();
+                    gMap.put("grantNum", g.getGrantNumber());
+                    gMap.put("grantAgency", g.getAgency());
+                    grantsList.add(gMap);
+                }
+            }
+        }
+        export.put("study_grants", grantsList);
+
+        return export;
     }
 
     @Transactional

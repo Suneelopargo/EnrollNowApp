@@ -16,6 +16,7 @@ import {
 import { StudyDashboardTab } from './components/StudyDashboardTab';
 import { StudyTabPlaceholder } from './components/StudyTabPlaceholder';
 import { StudyUnauthorizedTab } from './components/StudyUnauthorizedTab';
+import { StudySettingsWorkspace } from './components/StudySettingsWorkspace';
 
 export interface StudyModuleProps {
   context?: MfeContext;
@@ -402,6 +403,20 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
                 recruitmentProgress={recruitmentProgress}
                 weeklyRecruitment={weeklyRecruitment}
                 weeklyMaximum={weeklyMaximum}
+              />
+            ) : activeTab === 'study_settings' ? (
+              <StudySettingsWorkspace
+                studyId={String(selectedStudy?.id ?? selectedStudyId ?? '')}
+                studyName={studyTitle}
+                isArchived={isArchived}
+                canManageSettings={Boolean(
+                  permissions?.permissions?.includes('STUDY_SETTINGS_MANAGE') ||
+                  permissions?.studyPermission === 'STUDY_ADMIN' ||
+                  context?.user?.roles?.includes('SITE_ADMIN')
+                )}
+                onStudyUpdated={() => {
+                  fetchStudies();
+                }}
               />
             ) : (
               <StudyTabPlaceholder

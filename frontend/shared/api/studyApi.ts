@@ -52,6 +52,47 @@ export interface StudyNavigationPermissions {
   isParticipantUser?: boolean;
 }
 
+export interface StudyGrant {
+  id?: string;
+  grantNumber: string;
+  agency: string;
+}
+
+export interface StudyDetails {
+  id: string;
+  tenantId?: string;
+  studyCode: string;
+  name: string;
+  longName?: string;
+  description?: string;
+  irbId?: string;
+  recruitmentStartDate?: string;
+  recruitmentEndDate?: string;
+  completionDate?: string;
+  sampleSize?: number;
+  locale?: string;
+  allowParticipationInOtherStudies: boolean;
+  studyUrlLabel?: string;
+  studyUrl?: string;
+  archived: boolean;
+  canManage: boolean;
+  grants: StudyGrant[];
+}
+
+export interface UpdateStudyDetailsPayload {
+  name: string;
+  longName?: string;
+  description?: string;
+  irbId?: string;
+  recruitmentStartDate?: string;
+  recruitmentEndDate?: string;
+  completionDate?: string;
+  allowParticipationInOtherStudies?: boolean;
+  studyUrlLabel?: string;
+  studyUrl?: string;
+  grants: StudyGrant[];
+}
+
 export interface ImportStudyResult {
   studyId: string;
   studyCode: string;
@@ -141,6 +182,21 @@ export const studyApi = {
 
   async restoreStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
     const res = await apiClient.post(`/api/v1/studies/${id}/restore`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async getStudyDetails(id: string | number, config?: StudyApiRequestConfig): Promise<StudyDetails> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/details`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateStudyDetails(id: string | number, payload: UpdateStudyDetailsPayload, config?: StudyApiRequestConfig): Promise<StudyDetails> {
+    const res = await apiClient.put(`/api/v1/studies/${id}/details`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async exportStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/export`, config);
     return (res.data as any)?.data ?? res.data;
   },
 

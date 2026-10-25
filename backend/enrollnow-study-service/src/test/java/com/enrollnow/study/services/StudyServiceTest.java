@@ -7,11 +7,17 @@ import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.StudyGrantDto;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
+import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
+import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyGrant;
+import com.enrollnow.study.repositories.StudyGrantRepository;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +26,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,6 +58,9 @@ class StudyServiceTest {
     @Mock
     private UserRoleAssignmentRepository userRoleAssignmentRepository;
 
+    @Mock
+    private StudyGrantRepository studyGrantRepository;
+
     private StudyService studyService;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -70,6 +81,7 @@ class StudyServiceTest {
         );
         studyService.setStudyMemberRepository(studyMemberRepository);
         studyService.setUserRepository(userRepository);
+        studyService.setStudyGrantRepository(studyGrantRepository);
     }
 
     @Test
@@ -629,5 +641,189 @@ class StudyServiceTest {
                 StudyNotFoundException.class,
                 () -> studyService.getStudyNavigationPermissions(tenantId, studyId.toString(), userId, false)
         );
+    }
+
+    @Test
+    void getStudyDetails_returnsDetailsAndGrants_forAdmin() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setStudyCode("STUDY-001");
+        study.setName("ShortName");
+        study.setLongName("Long Formal Study Name");
+        study.setDescription("Study Description text");
+        study.setIrbId("IRB-999");
+        study.setRecruitmentStartDate(LocalDate.of(2026, 1, 1));
+        study.setRecruitmentEndDate(LocalDate.of(2026, 12, 31));
+        study.setCompletionDate(LocalDate.of(2027, 6, 30));
+        study.setAllowParticipationInOtherStudies(true);
+        study.setStudyUrl("https://example.com");
+        study.setStudyUrlLabel("Visit Portal");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        StudyGrant grant1 = new StudyGrant();
+        grant1.setId(UUID.randomUUID());
+        grant1.setTenantId(tenantId);
+        grant1.setStudyId(studyId);
+        grant1.setGrantNumber("GRANT-101");
+        grant1.setAgency("NIH");
+
+        when(studyGrantRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(List.of(grant1));
+
+        StudyDetailsResponse details = studyService.getStudyDetails(tenantId, studyId.toString(), userId, true);
+
+        assertNotNull(details);
+        assertEquals(studyId, details.getId());
+        assertEquals("ShortName", details.getName());
+        assertEquals("Long Formal Study Name", details.getLongName());
+        assertEquals("IRB-999", details.getIrbId());
+        assertTrue(details.isCanManage());
+        assertEquals(1, details.getGrants().size());
+        assertEquals("GRANT-101", details.getGrants().get(0).getGrantNumber());
+        assertEquals("NIH", details.getGrants().get(0).getAgency());
+    }
+
+    @Test
+    void getStudyDetails_notFound_throwsStudyNotFoundException() {
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        assertThrows(
+                StudyNotFoundException.class,
+                () -> studyService.getStudyDetails(tenantId, studyId.toString(), userId, true)
+        );
+    }
+
+    @Test
+    void updateStudyDetails_validRequest_persistsAndReplacesGrants() {
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setTenantId(tenantId);
+        existing.setName("OldName");
+        existing.setStudyCode("S-1");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRepository.save(any(Study.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        StudyGrant oldGrant = new StudyGrant();
+        oldGrant.setId(UUID.randomUUID());
+        oldGrant.setGrantNumber("OLD-G");
+        when(studyGrantRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(List.of(oldGrant))
+                .thenReturn(List.of(new StudyGrant()));
+
+        UpdateStudyDetailsRequest request = new UpdateStudyDetailsRequest(
+                "NewName",
+                "New Long Name",
+                "New Description",
+                "IRB-888",
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 12, 31),
+                LocalDate.of(2027, 1, 1),
+                false,
+                "New Label",
+                "https://newurl.org",
+                List.of(new StudyGrantDto(null, "NEW-GRANT-1", "AHA"))
+        );
+
+        StudyDetailsResponse response = studyService.updateStudyDetails(tenantId, studyId.toString(), request, userId, true);
+
+        assertNotNull(response);
+        assertEquals("NewName", existing.getName());
+        assertEquals("New Long Name", existing.getLongName());
+        assertEquals("IRB-888", existing.getIrbId());
+        assertFalse(existing.isAllowParticipationInOtherStudies());
+
+        verify(studyGrantRepository).deleteAll(anyCollection());
+        verify(studyGrantRepository).saveAll(anyCollection());
+    }
+
+    @Test
+    void updateStudyDetails_endDateBeforeStartDate_throwsInvalidStudyException() {
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setTenantId(tenantId);
+        existing.setName("ValidName");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        UpdateStudyDetailsRequest request = new UpdateStudyDetailsRequest(
+                "ValidName",
+                null,
+                null,
+                null,
+                LocalDate.of(2026, 10, 1),
+                LocalDate.of(2026, 5, 1), // earlier than start date
+                null,
+                true,
+                null,
+                null,
+                null
+        );
+
+        InvalidStudyException ex = assertThrows(
+                InvalidStudyException.class,
+                () -> studyService.updateStudyDetails(tenantId, studyId.toString(), request, userId, true)
+        );
+        assertTrue(ex.getMessage().contains("Recruitment end date cannot be earlier than start date"));
+    }
+
+    @Test
+    void updateStudyDetails_invalidName_throwsInvalidStudyException() {
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setTenantId(tenantId);
+        existing.setName("ValidName");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        UpdateStudyDetailsRequest tooLong = new UpdateStudyDetailsRequest(
+                "ThisStudyNameIsFarTooLongForValidation",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null
+        );
+
+        assertThrows(
+                InvalidStudyException.class,
+                () -> studyService.updateStudyDetails(tenantId, studyId.toString(), tooLong, userId, true)
+        );
+    }
+
+    @Test
+    void exportStudy_returnsExportMapWithStudyAndGrants() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setStudyCode("EXP-01");
+        study.setName("ExportStudy");
+        study.setLongName("Export Long Name");
+        study.setIrbId("IRB-EXP");
+        study.setAllowParticipationInOtherStudies(true);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        StudyGrant grant = new StudyGrant();
+        grant.setGrantNumber("G-999");
+        grant.setAgency("NSF");
+        when(studyGrantRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(List.of(grant));
+
+        Map<String, Object> export = studyService.exportStudy(tenantId, studyId.toString(), userId, true);
+
+        assertNotNull(export);
+        assertEquals("2.0", export.get("version"));
+        assertTrue(export.containsKey("study"));
+        Map<?, ?> studyMap = (Map<?, ?>) export.get("study");
+        assertEquals("ExportStudy", studyMap.get("name"));
+        assertEquals("IRB-EXP", studyMap.get("irbId"));
+
+        assertTrue(export.containsKey("study_grants"));
+        List<?> grants = (List<?>) export.get("study_grants");
+        assertEquals(1, grants.size());
     }
 }

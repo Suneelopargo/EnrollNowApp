@@ -1124,27 +1124,27 @@
   }
 }
 
-// When inside the first row of AG Grid, flip tooltip downwards so it doesn't get clipped by the header/filter row
-.ag-row[row-index="0"],
-.ag-row-first,
-.ag-row:first-child {
-  .site-admin-tooltip-btn[data-tooltip] {
-    &::before {
-      bottom: auto;
-      top: calc(100% + 8px);
-    }
+// When inside AG Grid row action buttons or pinned right container, position tooltip to the left so it never gets clipped by header or bottom viewport
+.ag-pinned-right-cols-container .site-admin-tooltip-btn[data-tooltip],
+.participant-grid__row-actions .site-admin-tooltip-btn[data-tooltip],
+.ag-cell .site-admin-tooltip-btn[data-tooltip] {
+  &::before {
+    bottom: auto;
+    top: 50%;
+    left: auto;
+    right: calc(100% + 8px);
+    transform: translateY(-50%);
+  }
 
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: auto;
-      top: calc(100% + 3px);
-      left: 50%;
-      transform: translateX(-50%);
-      border-width: 0 5px 5px 5px;
-      border-style: solid;
-      border-color: transparent transparent #2b2b2b transparent;
-    }
+  &::after {
+    bottom: auto;
+    top: 50%;
+    left: auto;
+    right: calc(100% + 3px);
+    transform: translateY(-50%);
+    border-width: 5px 0 5px 5px;
+    border-style: solid;
+    border-color: transparent transparent transparent #2b2b2b;
   }
 }
 

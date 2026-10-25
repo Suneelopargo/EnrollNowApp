@@ -5,8 +5,10 @@ import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.study.dtos.CreateStudyRequest;
 import com.enrollnow.study.dtos.MyStudyResponse;
+import com.enrollnow.study.dtos.StudyDetailsResponse;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
+import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.services.MyStudiesService;
@@ -350,5 +352,76 @@ class StudyControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertNotNull(response.getBody());
         assertFalse(response.getBody().isSuccess());
+    }
+
+    @Test
+    void getStudyDetails_success() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Detail Study");
+        study.setStudyCode("DET-01");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        ResponseEntity<ApiResponse<StudyDetailsResponse>> response =
+                studyController.getStudyDetails(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals("Detail Study", response.getBody().getData().getName());
+    }
+
+    @Test
+    void updateStudyDetails_success() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("OldName");
+        study.setStudyCode("DET-01");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyRepository.save(any(Study.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Site admin authorized caller
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setUserId(userId);
+        perms.setTenantId(tenantId);
+        perms.setCanManageSiteAdmins(true);
+        perms.setCanAccessSiteAdmin(true);
+        perms.setPermissions(List.of("SITE_ALL_STUDIES_MANAGE"));
+
+        when(siteAuthorizationService.getCallerEffectivePermissions(tenantId, null))
+                .thenReturn(Optional.of(perms));
+
+        UpdateStudyDetailsRequest request = new UpdateStudyDetailsRequest(
+                "NewName", "Long Title", "Desc", "IRB-123",
+                null, null, null, true, "Portal", "https://portal.org", null
+        );
+
+        ResponseEntity<ApiResponse<StudyDetailsResponse>> response =
+                studyController.updateStudyDetails(tenantId, studyId.toString(), request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals("NewName", response.getBody().getData().getName());
+    }
+
+    @Test
+    void exportStudy_success() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("ExportStudy");
+        study.setStudyCode("EXP-01");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response =
+                studyController.exportStudy(tenantId, studyId.toString());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+        assertEquals("2.0", response.getBody().getData().get("version"));
     }
 }
