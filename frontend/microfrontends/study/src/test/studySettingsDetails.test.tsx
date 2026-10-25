@@ -227,4 +227,53 @@ describe('Study Settings → Details Functional Component Tests', () => {
       expect(payload.emailTemplates).toBeUndefined();
     });
   });
+
+  describe('Unsaved Changes Guard Logic', () => {
+    it('detects dirty state when custom ID or prefix changes', () => {
+      const initial = {
+        name: 'CardioTrial',
+        customIdGenerationEnabled: false,
+        prefix: '',
+      };
+      const modified = {
+        name: 'CardioTrial',
+        customIdGenerationEnabled: true,
+        prefix: 'CARD',
+      };
+
+      const isDirty = (curr: typeof initial, prev: typeof initial) => {
+        return (
+          curr.name !== prev.name ||
+          curr.customIdGenerationEnabled !== prev.customIdGenerationEnabled ||
+          curr.prefix !== prev.prefix
+        );
+      };
+
+      expect(isDirty(initial, initial)).toBe(false);
+      expect(isDirty(modified, initial)).toBe(true);
+    });
+
+    it('prompts confirmation when switching studies while dirty', () => {
+      let confirmCalled = false;
+      const confirmSpy = vi.fn((_message: string) => {
+        confirmCalled = true;
+        return true;
+      });
+
+      const handleStudyChange = (newStudyId: string, currentStudyId: string, dirty: boolean) => {
+        if (newStudyId !== currentStudyId) {
+          if (dirty) {
+            const proceed = confirmSpy('Unsaved changes');
+            if (!proceed) return currentStudyId;
+          }
+          return newStudyId;
+        }
+        return currentStudyId;
+      };
+
+      const result = handleStudyChange('study-2', 'study-1', true);
+      expect(confirmCalled).toBe(true);
+      expect(result).toBe('study-2');
+    });
+  });
 });

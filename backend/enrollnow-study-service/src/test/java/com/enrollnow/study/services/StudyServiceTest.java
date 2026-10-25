@@ -18,14 +18,17 @@ import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyGrant;
+import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyGrantRepository;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -65,6 +68,9 @@ class StudyServiceTest {
     @Mock
     private StudyConfigurationService studyConfigurationService;
 
+    @Mock
+    private StudyRequirementRepository studyRequirementRepository;
+
     private StudyService studyService;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -86,6 +92,7 @@ class StudyServiceTest {
         studyService.setStudyMemberRepository(studyMemberRepository);
         studyService.setUserRepository(userRepository);
         studyService.setStudyGrantRepository(studyGrantRepository);
+        studyService.setStudyRequirementRepository(studyRequirementRepository);
     }
 
     @Test
@@ -932,5 +939,188 @@ class StudyServiceTest {
 
         assertEquals(1, result.get("importedCount"));
         verify(studyConfigurationService).importComponentsIntoExistingStudy(tenantId, studyId, components);
+    }
+
+    @Test
+    void updateStudyDetails_withNullCallerAndNotAdmin_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study One");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "Name", "Long Name", "Desc", "IRB-1",
+                null, null, null, false, false, "TEST", null, null, null
+        );
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.updateStudyDetails(tenantId, studyId.toString(), req, null, false)
+        );
+    }
+
+    @Test
+    void updateStudyDetails_withNonAdminAndNoManagePermission_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study One");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, userId))
+                .thenReturn(Optional.empty());
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "Name", "Long Name", "Desc", "IRB-1",
+                null, null, null, false, false, "TEST", null, null, null
+        );
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, false)
+        );
+    }
+
+    @Test
+    void exportStudy_withNullCallerAndNotAdmin_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study One");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.exportStudy(tenantId, studyId.toString(), null, false)
+        );
+    }
+
+    @Test
+    void importStudyComponents_withNullCallerAndNotAdmin_throwsAccessDeniedException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Study One");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyService.importStudyComponents(tenantId, studyId.toString(), Map.of(), null, false)
+        );
+    }
+
+    @Test
+    void updateStudyDetails_crossTenant_throwsStudyNotFoundException() {
+        UUID crossTenantId = UUID.randomUUID();
+        when(studyRepository.findByTenantIdAndId(crossTenantId, studyId)).thenReturn(Optional.empty());
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "Name", "Long Name", "Desc", "IRB-1",
+                null, null, null, false, false, "TEST", null, null, null
+        );
+
+        assertThrows(
+                StudyNotFoundException.class,
+                () -> studyService.updateStudyDetails(crossTenantId, studyId.toString(), req, userId, true)
+        );
+    }
+
+    @Test
+    void exportStudy_withCorruptedConfiguration_throwsInvalidStudyException() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Corrupted Config Study");
+
+        StudyRequirement req = new StudyRequirement();
+        req.setTenantId(tenantId);
+        req.setStudyId(studyId);
+        req.setConfiguration("{corrupted-json: invalid}");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(req));
+
+        assertThrows(
+                InvalidStudyException.class,
+                () -> studyService.exportStudy(tenantId, studyId.toString(), userId, true)
+        );
+    }
+
+    @Test
+    void exportStudy_returnsCompletePayloadWithPrefixAndGrants() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("Complete Export Study");
+        study.setStudyCode("CES-1");
+        study.setPrefix("EXPO");
+        study.setCustomIdGenerationEnabled(true);
+        study.setAllowParticipationInOtherStudies(true);
+
+        StudyGrant grant = new StudyGrant();
+        grant.setGrantNumber("GRANT-123");
+        grant.setAgency("NIH");
+
+        StudyRequirement req = new StudyRequirement();
+        req.setTenantId(tenantId);
+        req.setStudyId(studyId);
+        req.setConfiguration("{\"statuses\": [{\"name\": \"Enrolled\"}]}");
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(studyGrantRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(List.of(grant));
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(req));
+
+        Map<String, Object> exported = studyService.exportStudy(tenantId, studyId.toString(), userId, true);
+
+        assertNotNull(exported);
+        assertTrue(exported.containsKey("study"));
+        Map<?, ?> studyMap = (Map<?, ?>) exported.get("study");
+        assertEquals("Complete Export Study", studyMap.get("studyName"));
+        assertEquals("EXPO", studyMap.get("prefix"));
+        assertEquals(true, studyMap.get("customIdGenerationEnabled"));
+
+        assertTrue(exported.containsKey("study_grants"));
+        List<?> grantsList = (List<?>) exported.get("study_grants");
+        assertEquals(1, grantsList.size());
+
+        assertTrue(exported.containsKey("statuses"));
+    }
+
+    @Test
+    void generateNextCustomParticipantId_whenEnabled_returnsFormattedIdAndIncrements() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setPrefix("PRE");
+        study.setCustomIdGenerationEnabled(true);
+        study.setNextSequentialIdentifier(42);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        String customId = studyService.generateNextCustomParticipantId(tenantId, studyId);
+
+        assertEquals("PRE00000043", customId);
+        assertEquals(43, study.getNextSequentialIdentifier());
+        verify(studyRepository).save(study);
+    }
+
+    @Test
+    void generateNextCustomParticipantId_whenDisabled_returnsFallbackId() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setPrefix("PRE");
+        study.setCustomIdGenerationEnabled(false);
+        study.setNextSequentialIdentifier(0);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        String customId = studyService.generateNextCustomParticipantId(tenantId, studyId);
+
+        assertTrue(customId.startsWith("SP-"));
+        assertEquals(0, study.getNextSequentialIdentifier());
+        verify(studyRepository, never()).save(study);
     }
 }

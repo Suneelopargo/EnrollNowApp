@@ -464,6 +464,77 @@ class ParticipantRegistryServiceTest {
         assertThat(duplicates.get(0).getFirstName()).isEqualTo("Alice");
     }
 
+    @Test
+    void generateStudyParticipantId_whenCustomIdEnabled_generatesFormattedIdAndIncrements() {
+        Study study = new Study();
+        study.setId(UUID.randomUUID());
+        study.setTenantId(tenantId);
+        study.setPrefix("ONCO");
+        study.setCustomIdGenerationEnabled(true);
+        study.setNextSequentialIdentifier(5);
+
+        String id1 = service.generateStudyParticipantId(study);
+        assertThat(id1).isEqualTo("ONCO00000006");
+        assertThat(study.getNextSequentialIdentifier()).isEqualTo(6);
+        verify(studyRepository).save(study);
+
+        String id2 = service.generateStudyParticipantId(study);
+        assertThat(id2).isEqualTo("ONCO00000007");
+        assertThat(study.getNextSequentialIdentifier()).isEqualTo(7);
+    }
+
+    @Test
+    void generateStudyParticipantId_whenCustomIdDisabled_generatesFallbackId() {
+        Study study = new Study();
+        study.setId(UUID.randomUUID());
+        study.setTenantId(tenantId);
+        study.setPrefix("ONCO");
+        study.setCustomIdGenerationEnabled(false);
+        study.setNextSequentialIdentifier(0);
+
+        String id = service.generateStudyParticipantId(study);
+        assertThat(id).startsWith("SP-");
+        assertThat(study.getNextSequentialIdentifier()).isEqualTo(0);
+        verify(studyRepository, never()).save(study);
+    }
+
+    @Test
+    void assignStudy_withCustomIdEnabled_assignsFormattedIdAndCreatesIdentifier() {
+        UUID participantId = UUID.randomUUID();
+        UUID studyId = UUID.randomUUID();
+
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setStudyCode("STUDY-101");
+        study.setPrefix("STUDY");
+        study.setCustomIdGenerationEnabled(true);
+        study.setNextSequentialIdentifier(0);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+        when(participantRepository.existsById(participantId)).thenReturn(true);
+        when(enrollmentRepository.findByTenantIdAndStudyIdAndParticipantId(tenantId, studyId, participantId))
+                .thenReturn(Optional.empty());
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, participantId))
+                .thenReturn(Collections.emptyList());
+
+        AssignStudyRequest request = new AssignStudyRequest(participantId, studyId, "ENROLLED", "Enrolled participant");
+        service.assignStudy(tenantId, userId, request);
+
+        verify(enrollmentRepository).save(argThat(enrollment -> {
+            assertThat(enrollment.getStudyParticipantId()).isEqualTo("STUDY00000001");
+            assertThat(enrollment.getStatus()).isEqualTo("ENROLLED");
+            return true;
+        }));
+
+        verify(identifierRepository).save(argThat(identifier -> {
+            assertThat(identifier.getIdentifierType()).isEqualTo("STUDY_CUSTOM_ID");
+            assertThat(identifier.getIdentifierValue()).isEqualTo("STUDY00000001");
+            assertThat(identifier.getIssuingSystem()).isEqualTo("STUDY-101");
+            return true;
+        }));
+    }
+
     private Participant createMockParticipant(UUID id, String firstName, String lastName, LocalDate dob, String status) {
         Participant p = new Participant();
         p.setId(id);

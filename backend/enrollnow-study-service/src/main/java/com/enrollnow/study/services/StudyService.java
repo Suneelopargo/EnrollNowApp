@@ -710,7 +710,12 @@ public class StudyService {
                 .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
 
         boolean canManage = canManageSiteAdmins;
-        if (!canManage && callerUserId != null) {
+        if (!canManage) {
+            if (callerUserId == null) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Access denied: authenticated caller identity is required"
+                );
+            }
             StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
                     tenantId,
                     studyId,
@@ -721,12 +726,11 @@ public class StudyService {
                 canManage = navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
                         || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission());
             }
-        }
-
-        if (!canManage && callerUserId != null) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Access denied: modifying study details requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
-            );
+            if (!canManage) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Access denied: modifying study details requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
+                );
+            }
         }
 
         String newName = request.getName() != null ? request.getName().trim() : "";
@@ -843,6 +847,25 @@ public class StudyService {
         Study study = findStudyByIdOrCode(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
 
+        if (!canManageSiteAdmins) {
+            if (callerUserId == null) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Access denied: authenticated caller identity is required"
+                );
+            }
+            StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
+                    tenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            if (navPerms == null || navPerms.getPermissions() == null || navPerms.getPermissions().isEmpty()) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Access denied: you do not have permission to export study " + studyId
+                );
+            }
+        }
+
         Map<String, Object> export = new LinkedHashMap<>();
         export.put("version", "2.0");
         export.put("exportedAt", OffsetDateTime.now().toString());
@@ -851,6 +874,7 @@ public class StudyService {
         studyMap.put("id", study.getId().toString());
         studyMap.put("studyCode", study.getStudyCode());
         studyMap.put("name", study.getName());
+        studyMap.put("studyName", study.getName());
         studyMap.put("longname", study.getLongName());
         studyMap.put("description", study.getDescription());
         studyMap.put("irbId", study.getIrbId());
@@ -894,7 +918,8 @@ public class StudyService {
                                         export.put(entry.getKey(), entry.getValue());
                                     }
                                 }
-                            } catch (Exception ignored) {
+                            } catch (Exception ex) {
+                                throw new InvalidStudyException("Corrupted study configuration JSON: " + ex.getMessage());
                             }
                         }
                     });
@@ -915,7 +940,12 @@ public class StudyService {
                 .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
 
         boolean canManage = canManageSiteAdmins;
-        if (!canManage && callerUserId != null) {
+        if (!canManage) {
+            if (callerUserId == null) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Access denied: authenticated caller identity is required"
+                );
+            }
             StudyNavigationPermissionsResponse navPerms = getStudyNavigationPermissions(
                     tenantId,
                     studyId,
@@ -926,12 +956,11 @@ public class StudyService {
                 canManage = navPerms.getPermissions().contains("STUDY_SETTINGS_MANAGE")
                         || "STUDY_ADMIN".equalsIgnoreCase(navPerms.getStudyPermission());
             }
-        }
-
-        if (!canManage && callerUserId != null) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Access denied: importing study components requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
-            );
+            if (!canManage) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Access denied: importing study components requires STUDY_SETTINGS_MANAGE permission or Site Admin role"
+                );
+            }
         }
 
         if (studyConfigurationService != null) {
@@ -943,6 +972,23 @@ public class StudyService {
         }
 
         return Map.of("importedCount", 0, "message", "Configuration service unavailable.");
+    }
+
+    @Transactional
+    public synchronized String generateNextCustomParticipantId(UUID tenantId, UUID studyId) {
+        Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+
+        if (!study.isCustomIdGenerationEnabled() || study.getPrefix() == null || study.getPrefix().isBlank()) {
+            return "SP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
+        }
+
+        String prefix = study.getPrefix().trim().toUpperCase(Locale.ROOT);
+        long nextVal = study.getNextSequentialIdentifier() + 1;
+        study.setNextSequentialIdentifier(nextVal);
+        studyRepository.save(study);
+
+        return String.format("%s%08d", prefix, nextVal);
     }
 
     @Transactional

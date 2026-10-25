@@ -136,10 +136,6 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     }
   }, [studyId]);
 
-  useEffect(() => {
-    loadDetails();
-  }, [loadDetails]);
-
   // Dirty state calculation
   const isDirty = useMemo(() => {
     if (loading) return false;
@@ -170,6 +166,25 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     }
     return false;
   }, [form, initialLoadedForm, loading]);
+
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+  const prevStudyIdRef = useRef<string>(studyId);
+
+  useEffect(() => {
+    if (prevStudyIdRef.current !== studyId) {
+      if (isDirtyRef.current) {
+        const proceed = window.confirm(
+          'You have unsaved changes in Study Details. Are you sure you want to discard your changes and switch studies?'
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+      prevStudyIdRef.current = studyId;
+    }
+    loadDetails();
+  }, [studyId, loadDetails]);
 
   // Notify parent on dirty change
   useEffect(() => {

@@ -404,6 +404,20 @@ public class ParticipantRegistryService {
                 candidate.setUpdatedAt(OffsetDateTime.now());
                 candidate.setUpdatedBy(userId);
                 candidateRepository.save(candidate);
+
+                studyRepository.findByTenantIdAndId(tenantId, studyUuid).ifPresent(study -> {
+                    if (study.isCustomIdGenerationEnabled() && study.getPrefix() != null && !study.getPrefix().isBlank()) {
+                        String customId = generateStudyParticipantId(study);
+                        ParticipantIdentifier customIdentifier = new ParticipantIdentifier();
+                        customIdentifier.setTenantId(tenantId);
+                        customIdentifier.setParticipantId(saved.getId());
+                        customIdentifier.setIdentifierType("STUDY_CUSTOM_ID");
+                        customIdentifier.setIdentifierValue(customId);
+                        customIdentifier.setIssuingSystem(study.getStudyCode() != null ? study.getStudyCode() : study.getId().toString());
+                        customIdentifier.setPrimaryIdentifier(false);
+                        identifierRepository.save(customIdentifier);
+                    }
+                });
             } catch (Exception e) {
                 log.warn("Invalid studyId {} provided during participant creation", request.getStudyId());
             }
@@ -610,7 +624,8 @@ public class ParticipantRegistryService {
             throw new IllegalArgumentException("Study not found");
         }
 
-        UUID effectiveStudyId = study.getId();
+        final Study targetStudy = study;
+        UUID effectiveStudyId = targetStudy.getId();
         String status = request.getStatus() != null ? request.getStatus().toUpperCase() : "REFERRED";
 
         for (UUID pId : targetIds) {
@@ -624,7 +639,7 @@ public class ParticipantRegistryService {
                             e.setTenantId(tenantId);
                             e.setStudyId(effectiveStudyId);
                             e.setParticipantId(pId);
-                            e.setStudyParticipantId("SP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+                            e.setStudyParticipantId(generateStudyParticipantId(targetStudy));
                             e.setEnrolledAt(OffsetDateTime.now());
                             e.setCreatedBy(userId);
                             return e;
@@ -632,6 +647,23 @@ public class ParticipantRegistryService {
                 enrollment.setStatus("ENROLLED");
                 enrollment.setActive(true);
                 enrollmentRepository.save(enrollment);
+
+                if (targetStudy.isCustomIdGenerationEnabled() && targetStudy.getPrefix() != null && !targetStudy.getPrefix().isBlank()) {
+                    boolean hasIdentifier = identifierRepository.findByTenantIdAndParticipantId(tenantId, pId).stream()
+                            .anyMatch(i -> "STUDY_CUSTOM_ID".equalsIgnoreCase(i.getIdentifierType()) &&
+                                    (targetStudy.getId().toString().equals(i.getIssuingSystem()) ||
+                                     (targetStudy.getStudyCode() != null && targetStudy.getStudyCode().equalsIgnoreCase(i.getIssuingSystem()))));
+                    if (!hasIdentifier) {
+                        ParticipantIdentifier idRecord = new ParticipantIdentifier();
+                        idRecord.setTenantId(tenantId);
+                        idRecord.setParticipantId(pId);
+                        idRecord.setIdentifierType("STUDY_CUSTOM_ID");
+                        idRecord.setIdentifierValue(enrollment.getStudyParticipantId());
+                        idRecord.setIssuingSystem(targetStudy.getStudyCode() != null ? targetStudy.getStudyCode() : targetStudy.getId().toString());
+                        idRecord.setPrimaryIdentifier(false);
+                        identifierRepository.save(idRecord);
+                    }
+                }
             } else {
                 StudyCandidate candidate = candidateRepository.findByTenantIdAndStudyIdAndParticipantId(
                         tenantId, effectiveStudyId, pId)
@@ -1161,5 +1193,17 @@ public class ParticipantRegistryService {
     private String capitalize(String str) {
         if (str == null || str.isEmpty()) return "";
         return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
+    }
+
+    String generateStudyParticipantId(Study study) {
+        if (study != null && study.isCustomIdGenerationEnabled() && study.getPrefix() != null && !study.getPrefix().isBlank()) {
+            String prefix = study.getPrefix().trim().toUpperCase();
+            long nextVal = study.getNextSequentialIdentifier() + 1;
+            study.setNextSequentialIdentifier(nextVal);
+            study.setUpdatedAt(OffsetDateTime.now());
+            studyRepository.save(study);
+            return prefix + String.format("%08d", nextVal);
+        }
+        return "SP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 }

@@ -1,99 +1,225 @@
-# EnrollNow — Study Settings → Details: Complete Parity Remediation & Verification Report
+# Study Settings → Details: Final Parity Remediation & Verification Report
 
-## 1. Executive Summary
+## 1. Overview
 
-A comprehensive source-code comparison was performed between the legacy Ripple application (`ripple-develop`) and the current EnrollNow application (`EnrollNowApp`) for the **Study Settings → Details** workflow.
-
-The comparative analysis identified four verified functional defects and parity gaps:
-1. **Custom ID Autogeneration and Study Prefix Omission**: The database schema and entity (`Study.java`) possessed columns for `custom_id_generation_enabled` and `prefix`, but the API transfer layer (`StudyDetailsResponse`, `UpdateStudyDetailsRequest`), persistence service (`StudyService`), and React frontend (`StudySettingsDetails.tsx`) completely lacked support for them.
-2. **Incorrect Study Import Routing (Component Import vs. New Study Creation)**: In legacy Ripple, uploading a JSON configuration within **Study Settings → Details** opens an incremental import selector (`IncrementalImport`) allowing users to selectively import specific components (surveys, statuses, custom variables, email/text templates, contact outcomes, relationships) into the **current active study**. EnrollNow previously routed to `/api/v1/studies/import`, which erroneously attempted to instantiate a new study instead of importing into the active study.
-3. **Export Completeness**: The export endpoint previously returned only basic metadata and grants, omitting the subordinate entities stored in `StudyRequirement`.
-4. **Unsaved Changes Navigation Guard**: Form edits were only protected internally with Save/Discard buttons, allowing silent data loss when navigating between submenus or closing the browser window.
-
-All gaps have been remediated with minimal, targeted changes that preserve EnrollNow's established architecture, UI styling, Flyway migration history, and authorization model.
+This report documents all code remediations, architectural verifications, regression tests, and actual build/test command outputs completed during the final source-code verification pass for **Study Settings → Details**.
 
 ---
 
-## 2. Summary of Targeted Remediations
+## 2. Issues Identified & Remediations Implemented
 
-### 2.1 Custom ID Autogeneration & Study Prefix
-- **Backend Persistence**:
-  - `StudyRepository.java`: Added `existsByTenantIdAndPrefixIgnoreCase(UUID tenantId, String prefix)` and `existsByTenantIdAndPrefixIgnoreCaseAndIdNot(UUID tenantId, String prefix, UUID id)` to enforce tenant-scoped prefix uniqueness across distinct studies.
-  - `StudyDetailsResponse.java`: Added `customIdGenerationEnabled` (boolean) and `prefix` (String) fields with accessors.
-  - `UpdateStudyDetailsRequest.java`: Added `customIdGenerationEnabled` (Boolean) and `prefix` with `@Size(max = 5)` and regex validation `@Pattern(regexp = "^[a-zA-Z0-9]*$")`.
-  - `StudyService.java`:
-    - In `getStudyDetails`: Mapped `customIdGenerationEnabled` and `prefix` to the response DTO.
-    - In `updateStudyDetails`: Handled enabled toggle. If disabled, cleared `prefix` to `null`. If enabled, validated non-empty, max length 5, alphanumeric characters, auto-capitalization, and verified uniqueness across other studies in the tenant.
-- **Frontend Integration**:
-  - `frontend/shared/api/studyApi.ts`: Updated `StudyDetails` and `UpdateStudyDetailsPayload` interfaces to include `customIdGenerationEnabled` and `prefix`.
-  - `StudySettingsDetails.tsx`:
-    - Added "Enable Custom ID Autogeneration" checkbox.
-    - Added conditional "Study Prefix" input field displayed only when autogeneration is enabled.
-    - Enforced uppercase normalization, 5-character maximum length, alphanumeric filtering, and real-time validation error feedback.
+### Issue 1: Custom Participant ID Generation Not Consumed by Participant Creation / Enrollment Flow
+- **Root Cause**: While `enrollnow.studies` (`V3__study_foundation.sql`) and `Study.java` already contained `prefix`, `custom_id_generation_enabled`, and `next_sequential_identifier`, `ParticipantRegistryService.assignStudy()` hardcoded `"SP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase()`, and `ParticipantRegistryService.createParticipant()` did not generate a study custom ID when a `studyId` was supplied.
+- **Remediation**:
+  - Exposed `customIdGenerationEnabled` and `prefix` in `StudyDetailsResponse.java`, `UpdateStudyDetailsRequest.java`, `StudyService.getStudyDetails()`, and `StudyService.updateStudyDetails()` with legacy validation (`<= 5` uppercase alphanumeric characters, unique per tenant via `StudyRepository.existsByTenantIdAndPrefixIgnoreCaseAndIdNot`).
+  - Added `StudyService.generateNextCustomParticipantId(UUID tenantId, UUID studyId)` and `ParticipantRegistryService.generateStudyParticipantId(Study study)` implementing the exact legacy Ripple rule (`both/customIds/generateCustomId.js` & `both/customIds/settings.js`): increments `nextSequentialIdentifier` by 1 and formats `${PREFIX}${String.format("%08d", nextVal)}` (e.g., `ONCO00000001`).
+  - Wired `ParticipantRegistryService.assignStudy()` and `ParticipantRegistryService.createParticipant()` to generate and persist the formatted custom ID on `StudyEnrollment.studyParticipantId` and create a corresponding `ParticipantIdentifier` (`identifierType = "STUDY_CUSTOM_ID"`).
+- **Regression Tests**:
+  - `ParticipantRegistryServiceTest.generateStudyParticipantId_whenCustomIdEnabled_generatesFormattedIdAndIncrements`
+  - `ParticipantRegistryServiceTest.generateStudyParticipantId_whenCustomIdDisabled_generatesFallbackId`
+  - `ParticipantRegistryServiceTest.assignStudy_withCustomIdEnabled_assignsFormattedIdAndCreatesIdentifier`
+  - `StudyServiceTest.generateNextCustomParticipantId_whenEnabled_returnsFormattedIdAndIncrements`
+  - `StudyServiceTest.generateNextCustomParticipantId_whenDisabled_returnsFallbackId`
 
-### 2.2 Incremental Component Import Workflow
-- **Backend API**:
-  - `StudyConfigurationService.java`: Implemented `importComponentsIntoExistingStudy(UUID tenantId, UUID studyId, Map<String, Object> components)` that safely loads the study's existing `StudyRequirement` configuration, assigns fresh unique identifiers to imported components (`srv_`, `cv_`, `stat_`, `eml_`, `txt_`), deduplicates duplicate names, and merges into the active study configuration.
-  - `StudyService.java`: Added `importStudyComponents(UUID tenantId, String studyId, Map<String, Object> components, UUID callerUserId, boolean canManageSiteAdmins)` with RBAC authorization (`STUDY_SETTINGS_MANAGE` or Site Admin).
-  - `StudyController.java`: Exposed `POST /api/v1/studies/{studyId}/import-components` and `/tenants/{tenantId}/studies/{studyId}/import-components`.
-- **Frontend Integration**:
-  - `studyApi.ts`: Added `importStudyComponents(id, components)`.
-  - `StudySettingsDetails.tsx`: Replaced whole-study import with the legacy-parity `IncrementalImport` modal. Parses selected JSON files on upload, presents categorized components (Surveys, Statuses, Custom Variables, Contact Relationships, Contact Outcomes, Email Templates, Text Templates), offers category toggle and "Select All", displays selection counts, and posts the selected components into the active study.
+### Issue 2: Incremental Component Import Validation, Deduplication & Reference Remapping
+- **Root Cause**: `StudyConfigurationService.importComponentsIntoExistingStudy()` needed strict pre-persistence structural validation, `StudyNotFoundException` when a target study's requirement record is missing, deduplication both within the incoming batch and against existing study components, and complete ID reference remapping across top-level and nested `actionTriggerId` fields in `scheduledActions` as well as `surveyJSON` strings.
+- **Remediation**:
+  - Rewrote `StudyConfigurationService.importComponentsIntoExistingStudy()` with:
+    - Pre-persistence structural validation verifying each category is a `List` of `Map` objects (throws `InvalidStudyException` otherwise).
+    - Strict lookup via `studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElseThrow(() -> new StudyNotFoundException(...))`.
+    - Deduplication within the incoming batch (`batchSeen`) and against existing components by case-insensitive name matching.
+    - Full `idMap` population and reference remapping across `customVariables` (and `options`), `statuses`, `events`, `emailTemplates`, `textTemplates`, `scheduledActions` (`templateId`, top-level `actionTriggerId`, and `action.actionTriggerId`), `bulkTasks`, `studyGroups`, and `surveys` (`surveyJSON`).
+    - Selective category updates preserving all unselected configuration categories intact.
+- **Regression Tests**:
+  - `StudyConfigurationServiceTest.importComponents_studyNotFound_throwsStudyNotFoundException`
+  - `StudyConfigurationServiceTest.importComponents_emptyComponents_returnsZeroWithoutModifying`
+  - `StudyConfigurationServiceTest.importComponents_malformedCategoryNotList_throwsInvalidStudyException`
+  - `StudyConfigurationServiceTest.importComponents_selectiveImport_preservesExistingUnrelatedConfigurations`
+  - `StudyConfigurationServiceTest.importComponents_batchDuplicateNames_deduplicatesGracefully`
+  - `StudyConfigurationServiceTest.importComponents_duplicateAgainstExisting_reusesExistingIdWithoutDuplicate`
+  - `StudyConfigurationServiceTest.importComponents_remapsDependentIdsInScheduledActionsAndSurveys`
 
-### 2.3 Full-Fidelity Export Enrichment
-- In `StudyService.java` (`exportStudy`): Enriched export payload with `prefix`, `customIdGenerationEnabled`, and the study's complete component structure retrieved from `StudyRequirementRepository` (`statuses`, `events`, `customVariables`, `surveys`, `studyGroups`, `emailTemplates`, `textTemplates`, `scheduledActions`), ensuring export JSON files can be imported into other studies or into legacy Ripple.
+### Issue 3: Silent Error Swallowing in Study Export
+- **Root Cause**: `StudyService.exportStudy()` caught `Exception` when parsing `StudyRequirement.configuration` and ignored it silently, risking incomplete exports if stored JSON was corrupted.
+- **Remediation**:
+  - Replaced the silent catch block in `StudyService.exportStudy()` with `throw new InvalidStudyException("Corrupted study configuration JSON: " + ex.getMessage())`.
+  - Added `studyName`, `prefix`, and `customIdGenerationEnabled` to the exported `study` object alongside `study_grants` and all component collections.
+- **Regression Tests**:
+  - `StudyServiceTest.exportStudy_withCorruptedConfiguration_throwsInvalidStudyException`
+  - `StudyServiceTest.exportStudy_returnsCompletePayloadWithPrefixAndGrants`
 
-### 2.4 Unsaved Changes Navigation Protection
-- **Window Level**: Attached `beforeunload` event listener in `StudySettingsDetails.tsx` when `isDirty` is true, preventing accidental page closes or hard reloads.
-- **Workspace Submenu Level**: Added `onDirtyChange` callback from `StudySettingsDetails.tsx` to `StudySettingsWorkspace.tsx`. When switching from Details to other submenus while uncommitted changes exist, the user is presented with a confirmation dialog to prevent accidental data loss.
+### Issue 4: Null-Caller Authorization Bypass in Service Layer
+- **Root Cause**: In `StudyService.updateStudyDetails()`, `exportStudy()`, and `importStudyComponents()`, the permission check was guarded by `if (!canManageSiteAdmins && callerUserId != null)`, allowing calls with `callerUserId == null` and `canManageSiteAdmins == false` to bypass authorization if invoked directly.
+- **Remediation**:
+  - Enforced that whenever `!canManageSiteAdmins`, a `null` `callerUserId` immediately throws `org.springframework.security.access.AccessDeniedException("Access denied: authenticated caller identity is required")`.
+  - Verified that non-admin callers without `STUDY_SETTINGS_MANAGE` or `STUDY_ADMIN` are rejected with `AccessDeniedException`, and cross-tenant study IDs are rejected with `StudyNotFoundException`.
+- **Regression Tests**:
+  - `StudyServiceTest.updateStudyDetails_withNullCallerAndNotAdmin_throwsAccessDeniedException`
+  - `StudyServiceTest.updateStudyDetails_withNonAdminAndNoManagePermission_throwsAccessDeniedException`
+  - `StudyServiceTest.exportStudy_withNullCallerAndNotAdmin_throwsAccessDeniedException`
+  - `StudyServiceTest.importStudyComponents_withNullCallerAndNotAdmin_throwsAccessDeniedException`
+  - `StudyServiceTest.updateStudyDetails_crossTenant_throwsStudyNotFoundException`
 
----
-
-## 3. Final Parity Traceability Matrix
-
-| Feature / Business Rule | Legacy Authority | Current EnrollNow File & Location | Parity Status | Verification Evidence |
-| :--- | :--- | :--- | :--- | :--- |
-| **Short Study Name (<= 15 chars, alphanumeric)** | `details.jsx:435-445`, `updateStudyDetails.js:20-28` | `StudySettingsDetails.tsx:201-211`<br>`StudyService.java:725-738`<br>`UpdateStudyDetailsRequest.java:13-16` | **Complete** | Form validator, backend regex, unit tests (`StudyServiceTest`, `studySettingsDetails.test.tsx`). |
-| **Active Recruitment Start & End Date Ordering** | `details.jsx:475-495`, `updateStudyDetails.js:52-54` | `StudySettingsDetails.tsx:213-217`<br>`StudyService.java:740-744` | **Complete** | End date cannot precede start date. Validated in frontend and backend. |
-| **Completion Date Field** | `details.jsx:500-505` | `StudySettingsDetails.tsx:530-545`<br>`StudyService.java:751` | **Complete** | Form input and database persistence. |
-| **Custom ID Autogeneration Checkbox** | `details.jsx:508-510`, `settings.js:isAutomaticCustomIdGenerationEnabled` | `StudySettingsDetails.tsx:739-752`<br>`Study.java:67-68`<br>`StudyService.java:757-798` | **Complete** | Toggle persists to `custom_id_generation_enabled` in `enrollnow.studies`. |
-| **Study Prefix Input (<= 5 uppercase alphanumeric chars)** | `details.jsx:512-522`, `updateStudyDetails.js:29-37` | `StudySettingsDetails.tsx:754-783`<br>`StudyService.java:763-798`<br>`UpdateStudyDetailsRequest.java:35-37` | **Complete** | Auto-capitalization, regex filtering, uniqueness check in `StudyRepository`. |
-| **Clear Prefix on Disable** | `updateStudyDetails.js:31` | `StudyService.java:760-762`<br>`StudySettingsDetails.tsx:142-147` | **Complete** | Setting `customIdGenerationEnabled = false` resets prefix to `null`. Tested in `StudyServiceTest`. |
-| **Allow Participation in Other Studies** | `details.jsx:505-508` | `StudySettingsDetails.tsx:726-738`<br>`StudyService.java:753-755` | **Complete** | Checkbox properly persists boolean value. |
-| **Header URL & URL Label** | `details.jsx:530-545` | `StudySettingsDetails.tsx:691-724`<br>`StudyService.java:800-802` | **Complete** | Stored and displayed accurately. |
-| **Regulatory & IRB ID** | `details.jsx:550-560` | `StudySettingsDetails.tsx:801-815`<br>`StudyService.java:748` | **Complete** | Persisted to `irb_id`. |
-| **Study Grants (Inline Add/Edit/Delete)** | `details.jsx:230-310` | `StudySettingsDetails.tsx:817-885`<br>`StudyService.java:810-830`<br>`StudyGrantRepository.java` | **Complete** | Atomic replacement of grant records with non-empty validation. |
-| **Study Export with Full Configuration** | `studyImportAndExport.js:833-938` | `StudyService.java:837-903`<br>`studyApi.ts:198-201` | **Complete** | Exports `study`, `study_grants`, `surveys`, `statuses`, `events`, `customVariables`, etc. |
-| **Incremental Component Import** | `IncrementalImport.jsx:9-269`, `studyImportAndExport.js:944-1050` | `StudySettingsDetails.tsx:322-410, 920-1065`<br>`StudyConfigurationService.java:535-635`<br>`StudyController.java:455-485` | **Complete** | Selectively imports surveys, statuses, custom variables, and templates into current study. |
-| **Unsaved Changes Navigation Protection** | `details.jsx:22 (useNavigationGuard)` | `StudySettingsDetails.tsx:130-140`<br>`StudySettingsWorkspace.tsx:33-45` | **Complete** | Window `beforeunload` and submenu transition confirmations. |
-| **Read-Only Mode & RBAC Permissions** | `details.jsx:100` | `StudySettingsDetails.tsx:92-95, 413-422`<br>`StudyService.java:705-723, 908-929` | **Complete** | Form locked for non-admins and archived studies; backend enforces `STUDY_SETTINGS_MANAGE`. |
-
----
-
-## 4. Test Verification Results
-
-### 4.1 Backend Test Results (`enrollnow-study-service`)
-- Command: `mvn test -f backend/pom.xml -pl enrollnow-study-service`
-- Tests Run: **70 passed**, **0 failures**, **0 errors**, **0 skipped**
-- Verified Test Suites:
-  - `StudyServiceTest`: 32 tests (including prefix validation, uppercase conversion, duplicate prefix check, prefix clearing on disable, and component import dispatch).
-  - `StudyControllerTest`: 17 tests.
-  - `StudyCopyAndImportServiceTest`: 10 tests.
-  - `StudyCopyAndImportControllerTest`: 7 tests.
-  - `StudyAccessServiceTest`: 4 tests.
-
-### 4.2 Frontend Test Results (`enrollnow-study-mfe`)
-- Command: `npm test --workspace=enrollnow-study-mfe --prefix frontend`
-- Tests Run: **53 passed**, **0 failures**, **5 test files**
-- Verified Test Suites:
-  - `studySettingsDetails.test.tsx`: 9 tests (including workspace navigation, form rendering, name and date validations, grant sanitization, custom ID / prefix constraints, and incremental import selection).
-  - `studyNavigation.test.tsx`: 13 tests.
-  - `addStudyAndImport.test.ts`: 18 tests.
-  - `studyModuleWorkflow.test.tsx`: 7 tests.
-  - `study.test.ts`: 6 tests.
+### Issue 5: Unsaved Changes Protection When Switching Active Study
+- **Root Cause**: While browser refresh (`beforeunload`) and Study Settings submenu switching (`StudySettingsWorkspace.tsx`) prompted on unsaved changes, changing the `studyId` prop directly on `StudySettingsDetails.tsx` reloaded study details without prompting.
+- **Remediation**:
+  - Added `prevStudyIdRef` and `isDirtyRef` tracking in `StudySettingsDetails.tsx` to prompt via `window.confirm` before loading a different study when `isDirty` is `true`.
+- **Regression Tests**:
+  - `studySettingsDetails.test.tsx` (`Unsaved Changes Guard Logic`: dirty detection and study-change confirmation prompt)
 
 ---
 
-## 5. Conclusion
+## 3. Files Modified & Created
 
-The **Study Settings → Details** screen has achieved complete functional parity with the legacy Ripple application while honoring EnrollNow's design system, security controls, and PostgreSQL persistence architecture. All legacy workflows—including custom ID generation with prefix uniqueness, incremental component imports, full-configuration exports, and unsaved changes navigation guards—are fully operational and verified.
+### Backend (`enrollnow-study-service` & `enrollnow-participant-service`)
+- `backend/enrollnow-study-service/src/main/java/com/enrollnow/study/repositories/StudyRepository.java`
+- `backend/enrollnow-study-service/src/main/java/com/enrollnow/study/dtos/StudyDetailsResponse.java`
+- `backend/enrollnow-study-service/src/main/java/com/enrollnow/study/dtos/UpdateStudyDetailsRequest.java`
+- `backend/enrollnow-study-service/src/main/java/com/enrollnow/study/services/StudyService.java`
+- `backend/enrollnow-study-service/src/main/java/com/enrollnow/study/services/StudyConfigurationService.java`
+- `backend/enrollnow-study-service/src/main/java/com/enrollnow/study/controllers/StudyController.java`
+- `backend/enrollnow-participant-service/src/main/java/com/enrollnow/participant/services/ParticipantRegistryService.java`
+- `backend/enrollnow-study-service/src/test/java/com/enrollnow/study/services/StudyServiceTest.java`
+- `backend/enrollnow-study-service/src/test/java/com/enrollnow/study/services/StudyConfigurationServiceTest.java` (New)
+- `backend/enrollnow-study-service/src/test/java/com/enrollnow/study/controllers/StudyControllerTest.java`
+- `backend/enrollnow-participant-service/src/test/java/com/enrollnow/participant/services/ParticipantRegistryServiceTest.java`
+
+### Frontend (`frontend`)
+- `frontend/shared/api/studyApi.ts`
+- `frontend/shared/design-system/styles/_study.scss`
+- `frontend/microfrontends/study/src/components/StudySettingsDetails.tsx`
+- `frontend/microfrontends/study/src/components/StudySettingsWorkspace.tsx`
+- `frontend/microfrontends/study/src/test/studySettingsDetails.test.tsx`
+
+---
+
+## 4. Actual Verification Command Outputs
+
+### 4.1 Backend Unit Tests — `enrollnow-study-service`
+**Command**:
+```powershell
+cmd.exe /c "D:\Softwares\apache-maven-3.9.16\bin\mvn.cmd test -f backend/pom.xml -pl enrollnow-study-service"
+```
+**Output**:
+```text
+[INFO] ---------------< com.enrollnow:enrollnow-study-service >----------------
+[INFO] Building enrollnow-study-service 1.0.0-SNAPSHOT
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.enrollnow.study.controllers.StudyControllerTest
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.778 s -- in com.enrollnow.study.controllers.StudyControllerTest
+[INFO] Running com.enrollnow.study.controllers.StudyCopyAndImportControllerTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.425 s -- in com.enrollnow.study.controllers.StudyCopyAndImportControllerTest
+[INFO] Running com.enrollnow.study.services.StudyAccessServiceTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.594 s -- in com.enrollnow.study.services.StudyAccessServiceTest
+[INFO] Running com.enrollnow.study.services.StudyConfigurationServiceTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.254 s -- in com.enrollnow.study.services.StudyConfigurationServiceTest
+[INFO] Running com.enrollnow.study.services.StudyCopyAndImportServiceTest
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.337 s -- in com.enrollnow.study.services.StudyCopyAndImportServiceTest
+[INFO] Running com.enrollnow.study.services.StudyServiceTest
+[INFO] Tests run: 41, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.512 s -- in com.enrollnow.study.services.StudyServiceTest
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 86, Failures: 0, Errors: 0, Skipped: 0
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] Total time:  18.205 s
+[INFO] ------------------------------------------------------------------------
+```
+
+### 4.2 Backend Unit Tests — `enrollnow-participant-service`
+**Command**:
+```powershell
+cmd.exe /c "D:\Softwares\apache-maven-3.9.16\bin\mvn.cmd test -f backend/pom.xml -pl enrollnow-participant-service"
+```
+**Output**:
+```text
+[INFO] ------------< com.enrollnow:enrollnow-participant-service >-------------
+[INFO] Building enrollnow-participant-service 1.0.0-SNAPSHOT
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.enrollnow.participant.controllers.ParticipantRegistryControllerTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.665 s -- in com.enrollnow.participant.controllers.ParticipantRegistryControllerTest
+[INFO] Running com.enrollnow.participant.services.ParticipantRegistryServiceTest
+[INFO] Tests run: 20, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.715 s -- in com.enrollnow.participant.services.ParticipantRegistryServiceTest
+[INFO] Running com.enrollnow.participant.services.ParticipantSpecificationsTest
+[INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.982 s -- in com.enrollnow.participant.services.ParticipantSpecificationsTest
+[INFO] Running com.enrollnow.participant.services.RegistryExportServiceTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.025 s -- in com.enrollnow.participant.services.RegistryExportServiceTest
+[INFO] Running com.enrollnow.participant.services.RegistrySavedSearchServiceTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.153 s -- in com.enrollnow.participant.services.RegistrySavedSearchServiceTest
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 49, Failures: 0, Errors: 0, Skipped: 0
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] Total time:  20.826 s
+[INFO] ------------------------------------------------------------------------
+```
+
+### 4.3 Frontend Unit Tests — `enrollnow-study-mfe`
+**Command**:
+```powershell
+npm test --workspace=enrollnow-study-mfe --prefix frontend
+```
+**Output**:
+```text
+> enrollnow-study-mfe@1.0.0 test
+> vitest run
+
+ RUN  v2.1.9 D:/ProjectsWorkSpace/ProjectCode/EnrollnowSpace/EnrollNowApp/frontend/microfrontends/study
+
+ ✓ src/test/studyNavigation.test.tsx (13 tests) 36ms
+ ✓ src/test/studySettingsDetails.test.tsx (11 tests) 21ms
+ ✓ src/test/addStudyAndImport.test.ts (18 tests) 35ms
+ ✓ src/test/study.test.ts (6 tests) 14ms
+ ✓ src/test/studyModuleWorkflow.test.tsx (7 tests) 21ms
+
+ Test Files  5 passed (5)
+      Tests  55 passed (55)
+   Start at  23:29:23
+   Duration  2.50s
+```
+
+### 4.4 Frontend Monorepo Typecheck
+**Command**:
+```powershell
+npm run typecheck --prefix frontend
+```
+**Output**:
+```text
+> enrollnow-frontend-monorepo@1.0.0 typecheck
+> npm run typecheck --workspaces --if-present
+
+> @enrollnow/shared@1.0.0 typecheck
+> tsc --noEmit
+...
+> enrollnow-study-mfe@1.0.0 typecheck
+> tsc --noEmit
+...
+(All 12 workspaces exited with code 0)
+```
+
+### 4.5 Frontend Production Build — `enrollnow-shell`
+**Command**:
+```powershell
+npm run build --workspace=enrollnow-shell --prefix frontend
+```
+**Output**:
+```text
+> enrollnow-shell@1.0.0 build
+> tsc && vite build
+
+vite v6.4.5 building for production...
+transforming...
+✓ 17379 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                              0.84 kB │ gzip:   0.39 kB
+...
+✓ built in 35.32s
+```

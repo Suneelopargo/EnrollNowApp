@@ -1,6 +1,8 @@
 package com.enrollnow.study.services;
 
 import com.enrollnow.study.dtos.ImportStudyResponse;
+import com.enrollnow.study.exceptions.InvalidStudyException;
+import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -541,9 +543,23 @@ public class StudyConfigurationService {
             return Map.of("importedCount", 0, "message", "No components selected to import.");
         }
 
+        // Validate input data structure before persistence
+        for (Map.Entry<String, Object> entry : components.entrySet()) {
+            if (entry.getValue() != null && !(entry.getValue() instanceof List<?>)) {
+                throw new InvalidStudyException("Category '" + entry.getKey() + "' must be a list of component objects.");
+            }
+            if (entry.getValue() instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item != null && !(item instanceof Map<?, ?>)) {
+                        throw new InvalidStudyException("Malformed item in category '" + entry.getKey() + "': must be an object.");
+                    }
+                }
+            }
+        }
+
         StudyRequirement requirement = studyRequirementRepository
                 .findByTenantIdAndStudyId(tenantId, studyId)
-                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+                .orElseThrow(() -> new StudyNotFoundException("Study configuration not found for study: " + studyId));
 
         Map<String, Object> currentConfig;
         try {
@@ -553,77 +569,370 @@ public class StudyConfigurationService {
                 currentConfig = new LinkedHashMap<>();
             }
         } catch (Exception ex) {
-            currentConfig = new LinkedHashMap<>();
+            throw new InvalidStudyException("Existing study configuration JSON is corrupted: " + ex.getMessage());
         }
 
+        Map<String, String> idMap = new HashMap<>();
         Map<String, Integer> summary = new LinkedHashMap<>();
         String targetStudyId = studyId.toString();
 
-        List<String> categories = List.of(
-                "surveys", "customVariables", "statuses", "emailTemplates",
-                "textTemplates", "contactOutcomes", "contactRelationships",
-                "scheduledActions", "events"
-        );
+        // 1. Process Custom Variables
+        if (components.get("customVariables") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingCVs = getMutableList(currentConfig, "customVariables");
+            Set<String> batchSeen = new HashSet<>();
+            int addedCount = 0;
 
-        int totalImported = 0;
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> cv = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    String name = cv.get("name") != null ? cv.get("name").toString().trim() : "";
+                    String varType = cv.get("variableType") != null ? cv.get("variableType").toString().trim() : "";
+                    String dedupeKey = (name + "|" + varType).toLowerCase(Locale.ROOT);
 
-        for (String cat : categories) {
-            Object rawIncoming = components.get(cat);
-            if (rawIncoming instanceof List<?> incList && !incList.isEmpty()) {
-                List<Map<String, Object>> existingList = new ArrayList<>();
-                if (currentConfig.get(cat) instanceof List<?> curList) {
-                    for (Object o : curList) {
-                        if (o instanceof Map<?, ?> m) {
-                            existingList.add(new LinkedHashMap<>((Map<String, Object>) m));
+                    if (batchSeen.contains(dedupeKey)) {
+                        continue;
+                    }
+                    batchSeen.add(dedupeKey);
+
+                    String oldCvId = String.valueOf(cv.get("_id") != null ? cv.get("_id") : cv.get("variableId"));
+
+                    // Check if already in study
+                    Map<String, Object> matchedExisting = existingCVs.stream()
+                            .filter(e -> name.equalsIgnoreCase(String.valueOf(e.get("name")))
+                                    && varType.equalsIgnoreCase(String.valueOf(e.get("variableType"))))
+                            .findFirst().orElse(null);
+
+                    if (matchedExisting != null) {
+                        String existingId = String.valueOf(matchedExisting.get("_id") != null ? matchedExisting.get("_id") : matchedExisting.get("variableId"));
+                        idMap.put(oldCvId, existingId);
+                        // Map option IDs if present
+                        remapOptionIds(cv, matchedExisting, idMap);
+                    } else {
+                        String newCvId = "cv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        idMap.put(oldCvId, newCvId);
+                        cv.put("_id", newCvId);
+                        cv.put("variableId", newCvId);
+
+                        if (cv.get("options") instanceof List<?> rawOptions) {
+                            List<Map<String, Object>> newOptions = new ArrayList<>();
+                            for (Object optObj : rawOptions) {
+                                if (optObj instanceof Map<?, ?> optMap) {
+                                    Map<String, Object> opt = new LinkedHashMap<>((Map<String, Object>) optMap);
+                                    String oldOptId = String.valueOf(opt.get("optionId"));
+                                    String newOptId = "opt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                                    idMap.put(oldOptId, newOptId);
+                                    opt.put("optionId", newOptId);
+                                    newOptions.add(opt);
+                                }
+                            }
+                            cv.put("options", newOptions);
                         }
+                        existingCVs.add(cv);
+                        addedCount++;
                     }
                 }
+            }
+            currentConfig.put("customVariables", existingCVs);
+            summary.put("customVariables", addedCount);
+        }
 
+        // 2. Process Statuses
+        if (components.get("statuses") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingStatuses = getMutableList(currentConfig, "statuses");
+            Set<String> batchSeen = new HashSet<>();
+            int addedCount = 0;
+
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> st = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    String name = st.get("name") != null ? st.get("name").toString().trim() : "";
+                    boolean potential = Boolean.TRUE.equals(st.get("potential"));
+                    String dedupeKey = (name + "|" + potential).toLowerCase(Locale.ROOT);
+
+                    if (batchSeen.contains(dedupeKey)) {
+                        continue;
+                    }
+                    batchSeen.add(dedupeKey);
+
+                    String oldStId = String.valueOf(st.get("_id"));
+                    Map<String, Object> matchedExisting = existingStatuses.stream()
+                            .filter(e -> name.equalsIgnoreCase(String.valueOf(e.get("name")))
+                                    && potential == Boolean.TRUE.equals(e.get("potential")))
+                            .findFirst().orElse(null);
+
+                    if (matchedExisting != null) {
+                        idMap.put(oldStId, String.valueOf(matchedExisting.get("_id")));
+                    } else {
+                        String newStId = "stat_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        idMap.put(oldStId, newStId);
+                        st.put("_id", newStId);
+                        st.put("studyId", targetStudyId);
+                        existingStatuses.add(st);
+                        addedCount++;
+                    }
+                }
+            }
+            currentConfig.put("statuses", existingStatuses);
+            summary.put("statuses", addedCount);
+        }
+
+        // 3. Process Events
+        if (components.get("events") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingEvents = getMutableList(currentConfig, "events");
+            Set<String> batchSeen = new HashSet<>();
+            int addedCount = 0;
+
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> evt = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    String name = evt.get("name") != null ? evt.get("name").toString().trim().toLowerCase(Locale.ROOT) : "";
+
+                    if (batchSeen.contains(name)) {
+                        continue;
+                    }
+                    batchSeen.add(name);
+
+                    String oldEvtId = String.valueOf(evt.get("_id"));
+                    Map<String, Object> matchedExisting = existingEvents.stream()
+                            .filter(e -> name.equalsIgnoreCase(String.valueOf(e.get("name")).trim()))
+                            .findFirst().orElse(null);
+
+                    if (matchedExisting != null) {
+                        idMap.put(oldEvtId, String.valueOf(matchedExisting.get("_id")));
+                    } else {
+                        String newEvtId = "evt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        idMap.put(oldEvtId, newEvtId);
+                        evt.put("_id", newEvtId);
+                        evt.put("studyId", targetStudyId);
+
+                        if (evt.get("statuses") instanceof List<?> oldSts) {
+                            List<String> remappedSts = new ArrayList<>();
+                            for (Object s : oldSts) {
+                                String sStr = String.valueOf(s);
+                                remappedSts.add(idMap.getOrDefault(sStr, sStr));
+                            }
+                            evt.put("statuses", remappedSts);
+                        }
+                        existingEvents.add(evt);
+                        addedCount++;
+                    }
+                }
+            }
+            currentConfig.put("events", existingEvents);
+            summary.put("events", addedCount);
+        }
+
+        // 4. Process Email Templates
+        if (components.get("emailTemplates") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingEmailTemps = getMutableList(currentConfig, "emailTemplates");
+            Set<String> batchSeen = new HashSet<>();
+            int addedCount = 0;
+
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> et = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    String name = et.get("name") != null ? et.get("name").toString().trim().toLowerCase(Locale.ROOT) : "";
+
+                    if (batchSeen.contains(name)) {
+                        continue;
+                    }
+                    batchSeen.add(name);
+
+                    String oldId = String.valueOf(et.get("_id"));
+                    Map<String, Object> matchedExisting = existingEmailTemps.stream()
+                            .filter(e -> name.equalsIgnoreCase(String.valueOf(e.get("name")).trim()))
+                            .findFirst().orElse(null);
+
+                    if (matchedExisting != null) {
+                        idMap.put(oldId, String.valueOf(matchedExisting.get("_id")));
+                    } else {
+                        String newId = "eml_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        idMap.put(oldId, newId);
+                        et.put("_id", newId);
+                        et.put("studyId", targetStudyId);
+                        existingEmailTemps.add(et);
+                        addedCount++;
+                    }
+                }
+            }
+            currentConfig.put("emailTemplates", existingEmailTemps);
+            summary.put("emailTemplates", addedCount);
+        }
+
+        // 5. Process Text Templates
+        if (components.get("textTemplates") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingTextTemps = getMutableList(currentConfig, "textTemplates");
+            Set<String> batchSeen = new HashSet<>();
+            int addedCount = 0;
+
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> tt = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    String name = tt.get("name") != null ? tt.get("name").toString().trim().toLowerCase(Locale.ROOT) : "";
+
+                    if (batchSeen.contains(name)) {
+                        continue;
+                    }
+                    batchSeen.add(name);
+
+                    String oldId = String.valueOf(tt.get("_id"));
+                    Map<String, Object> matchedExisting = existingTextTemps.stream()
+                            .filter(e -> name.equalsIgnoreCase(String.valueOf(e.get("name")).trim()))
+                            .findFirst().orElse(null);
+
+                    if (matchedExisting != null) {
+                        idMap.put(oldId, String.valueOf(matchedExisting.get("_id")));
+                    } else {
+                        String newId = "txt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        idMap.put(oldId, newId);
+                        tt.put("_id", newId);
+                        tt.put("studyId", targetStudyId);
+                        existingTextTemps.add(tt);
+                        addedCount++;
+                    }
+                }
+            }
+            currentConfig.put("textTemplates", existingTextTemps);
+            summary.put("textTemplates", addedCount);
+        }
+
+        // 6. Process Scheduled Actions
+        if (components.get("scheduledActions") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingActions = getMutableList(currentConfig, "scheduledActions");
+            int addedCount = 0;
+
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> sa = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    if (sa.get("templateId") != null) {
+                        String oldTmplId = String.valueOf(sa.get("templateId"));
+                        sa.put("templateId", idMap.getOrDefault(oldTmplId, oldTmplId));
+                    }
+                    if (sa.get("actionTriggerId") != null) {
+                        String oldTrigId = String.valueOf(sa.get("actionTriggerId"));
+                        sa.put("actionTriggerId", idMap.getOrDefault(oldTrigId, oldTrigId));
+                    }
+                    if (sa.get("action") instanceof Map<?, ?> actMap) {
+                        Map<String, Object> mutableAct = new LinkedHashMap<>((Map<String, Object>) actMap);
+                        mutableAct.put("actionTriggerStudyId", targetStudyId);
+                        if (mutableAct.get("actionTriggerId") != null) {
+                            String oldTrigId = String.valueOf(mutableAct.get("actionTriggerId"));
+                            mutableAct.put("actionTriggerId", idMap.getOrDefault(oldTrigId, oldTrigId));
+                        }
+                        sa.put("action", mutableAct);
+                    }
+                    existingActions.add(sa);
+                    addedCount++;
+                }
+            }
+            currentConfig.put("scheduledActions", existingActions);
+            summary.put("scheduledActions", addedCount);
+        }
+
+        // 7. Process Surveys
+        if (components.get("surveys") instanceof List<?> rawList && !rawList.isEmpty()) {
+            List<Map<String, Object>> existingSurveys = getMutableList(currentConfig, "surveys");
+            Set<String> batchSeen = new HashSet<>();
+            int addedCount = 0;
+
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> origMap) {
+                    Map<String, Object> srv = new LinkedHashMap<>((Map<String, Object>) origMap);
+                    String name = srv.get("name") != null ? srv.get("name").toString().trim().toLowerCase(Locale.ROOT) : "";
+
+                    if (batchSeen.contains(name)) {
+                        continue;
+                    }
+                    batchSeen.add(name);
+
+                    String oldSrvId = String.valueOf(srv.get("_id") != null ? srv.get("_id") : srv.get("surveyId"));
+                    Map<String, Object> matchedExisting = existingSurveys.stream()
+                            .filter(e -> name.equalsIgnoreCase(String.valueOf(e.get("name")).trim()))
+                            .findFirst().orElse(null);
+
+                    if (matchedExisting != null) {
+                        idMap.put(oldSrvId, String.valueOf(matchedExisting.get("_id") != null ? matchedExisting.get("_id") : matchedExisting.get("surveyId")));
+                    } else {
+                        String newSrvId = "srv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+                        idMap.put(oldSrvId, newSrvId);
+                        srv.put("_id", newSrvId);
+                        srv.put("studyId", targetStudyId);
+
+                        // Remap email template references on survey
+                        if (srv.get("eConsentCompletionEmailTemplateId") != null) {
+                            String oldEml = String.valueOf(srv.get("eConsentCompletionEmailTemplateId"));
+                            srv.put("eConsentCompletionEmailTemplateId", idMap.getOrDefault(oldEml, oldEml));
+                        }
+                        if (srv.get("submissionSigningInitialTemplate") != null) {
+                            String oldEml = String.valueOf(srv.get("submissionSigningInitialTemplate"));
+                            srv.put("submissionSigningInitialTemplate", idMap.getOrDefault(oldEml, oldEml));
+                        }
+                        if (srv.get("submissionSigningReminderTemplate") != null) {
+                            String oldEml = String.valueOf(srv.get("submissionSigningReminderTemplate"));
+                            srv.put("submissionSigningReminderTemplate", idMap.getOrDefault(oldEml, oldEml));
+                        }
+
+                        // Deep replace IDs within surveyJSON
+                        if (srv.get("surveyJSON") != null) {
+                            String srvJsonStr;
+                            if (srv.get("surveyJSON") instanceof String str) {
+                                srvJsonStr = str;
+                            } else {
+                                try {
+                                    srvJsonStr = objectMapper.writeValueAsString(srv.get("surveyJSON"));
+                                } catch (Exception ignored) {
+                                    srvJsonStr = String.valueOf(srv.get("surveyJSON"));
+                                }
+                            }
+
+                            for (Map.Entry<String, String> entry : idMap.entrySet()) {
+                                srvJsonStr = srvJsonStr.replace(entry.getKey(), entry.getValue());
+                            }
+                            srv.put("surveyJSON", srvJsonStr);
+                        }
+
+                        existingSurveys.add(srv);
+                        addedCount++;
+                    }
+                }
+            }
+            currentConfig.put("surveys", existingSurveys);
+            summary.put("surveys", addedCount);
+        }
+
+        // 8. Process Contact Outcomes & Relationships
+        for (String cat : List.of("contactOutcomes", "contactRelationships")) {
+            if (components.get(cat) instanceof List<?> rawList && !rawList.isEmpty()) {
+                List<Map<String, Object>> existingList = getMutableList(currentConfig, cat);
                 Set<String> existingNames = new HashSet<>();
                 for (Map<String, Object> item : existingList) {
-                    Object name = item.get("name") != null ? item.get("name") : (item.get("outcome") != null ? item.get("outcome") : item.get("relationship"));
+                    Object name = item.get("outcome") != null ? item.get("outcome") : item.get("relationship");
                     if (name != null) {
                         existingNames.add(name.toString().trim().toLowerCase(Locale.ROOT));
                     }
                 }
 
                 int addedCount = 0;
-                for (Object incObj : incList) {
-                    if (incObj instanceof Map<?, ?> incMap) {
-                        Map<String, Object> mutableItem = new LinkedHashMap<>((Map<String, Object>) incMap);
-                        Object name = mutableItem.get("name") != null ? mutableItem.get("name") : (mutableItem.get("outcome") != null ? mutableItem.get("outcome") : mutableItem.get("relationship"));
-                        String nameStr = name != null ? name.toString().trim().toLowerCase(Locale.ROOT) : "";
+                for (Object obj : rawList) {
+                    if (obj instanceof Map<?, ?> origMap) {
+                        Map<String, Object> item = new LinkedHashMap<>((Map<String, Object>) origMap);
+                        Object nameObj = item.get("outcome") != null ? item.get("outcome") : item.get("relationship");
+                        String nameStr = nameObj != null ? nameObj.toString().trim().toLowerCase(Locale.ROOT) : "";
 
-                        String prefix = switch (cat) {
-                            case "surveys" -> "srv_";
-                            case "customVariables" -> "cv_";
-                            case "statuses" -> "stat_";
-                            case "emailTemplates" -> "eml_";
-                            case "textTemplates" -> "txt_";
-                            default -> "cmp_";
-                        };
-                        String newId = prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-                        mutableItem.put("_id", newId);
-                        mutableItem.put("studyId", targetStudyId);
-
-                        if (!nameStr.isEmpty() && existingNames.contains(nameStr)) {
-                            Object origName = mutableItem.get("name");
-                            if (origName != null) {
-                                mutableItem.put("name", origName.toString() + " (Imported)");
-                            }
+                        if (!nameStr.isEmpty() && !existingNames.contains(nameStr)) {
+                            item.put("_id", "cont_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+                            existingList.add(item);
+                            existingNames.add(nameStr);
+                            addedCount++;
                         }
-
-                        existingList.add(mutableItem);
-                        addedCount++;
                     }
                 }
-
                 currentConfig.put(cat, existingList);
                 summary.put(cat, addedCount);
-                totalImported += addedCount;
             }
         }
 
+        int totalImported = summary.values().stream().mapToInt(Integer::intValue).sum();
         saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, currentConfig);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -631,5 +940,38 @@ public class StudyConfigurationService {
         result.put("summary", summary);
         result.put("message", "Successfully imported " + totalImported + " components into study.");
         return result;
+    }
+
+    private List<Map<String, Object>> getMutableList(Map<String, Object> config, String key) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (config.get(key) instanceof List<?> rawList) {
+            for (Object obj : rawList) {
+                if (obj instanceof Map<?, ?> m) {
+                    list.add(new LinkedHashMap<>((Map<String, Object>) m));
+                }
+            }
+        }
+        return list;
+    }
+
+    private void remapOptionIds(Map<String, Object> incomingCv, Map<String, Object> existingCv, Map<String, String> idMap) {
+        if (incomingCv.get("options") instanceof List<?> inOpts && existingCv.get("options") instanceof List<?> exOpts) {
+            for (Object inOptObj : inOpts) {
+                if (inOptObj instanceof Map<?, ?> inOptMap) {
+                    String optName = inOptMap.get("name") != null ? inOptMap.get("name").toString().trim() : "";
+                    String inOptId = String.valueOf(inOptMap.get("optionId"));
+
+                    for (Object exOptObj : exOpts) {
+                        if (exOptObj instanceof Map<?, ?> exOptMap) {
+                            String exName = exOptMap.get("name") != null ? exOptMap.get("name").toString().trim() : "";
+                            if (optName.equalsIgnoreCase(exName)) {
+                                idMap.put(inOptId, String.valueOf(exOptMap.get("optionId")));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

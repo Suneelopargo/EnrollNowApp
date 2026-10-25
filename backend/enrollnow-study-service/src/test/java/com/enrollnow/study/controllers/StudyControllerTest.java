@@ -416,6 +416,16 @@ class StudyControllerTest {
         study.setStudyCode("EXP-01");
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
 
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setUserId(userId);
+        perms.setTenantId(tenantId);
+        perms.setCanManageSiteAdmins(true);
+        perms.setCanAccessSiteAdmin(true);
+        perms.setPermissions(List.of("SITE_ALL_STUDIES_MANAGE"));
+
+        when(siteAuthorizationService.getCallerEffectivePermissions(tenantId, null))
+                .thenReturn(Optional.of(perms));
+
         ResponseEntity<ApiResponse<Map<String, Object>>> response =
                 studyController.exportStudy(tenantId, studyId.toString());
 
