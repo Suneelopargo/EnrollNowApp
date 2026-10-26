@@ -1,10 +1,17 @@
 package com.enrollnow.study.dtos;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public class UpdateStudyRequirementsRequest {
 
+    @JsonProperty("sampleSize")
     private Integer sampleSize;
+
+    @JsonIgnore
+    private boolean sampleSizeSet = false;
+
     private List<DemographicGroupDto> studyGroups;
     private List<StudyCustomVariableDto> customVariables;
     private List<StudyVariableGroupDto> variableGroups;
@@ -21,6 +28,15 @@ public class UpdateStudyRequirementsRequest {
 
     public void setSampleSize(Integer sampleSize) {
         this.sampleSize = sampleSize;
+        this.sampleSizeSet = true;
+    }
+
+    public boolean isSampleSizeSet() {
+        return sampleSizeSet;
+    }
+
+    public void setSampleSizeSet(boolean sampleSizeSet) {
+        this.sampleSizeSet = sampleSizeSet;
     }
 
     public List<DemographicGroupDto> getStudyGroups() {

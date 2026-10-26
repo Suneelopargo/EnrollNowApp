@@ -569,9 +569,7 @@ public class StudyConfigurationService {
                     return req;
                 });
 
-        if (sampleSize != null) {
-            requirement.setSampleSize(sampleSize);
-        }
+        requirement.setSampleSize(sampleSize);
         requirement.setConfiguration(json);
         requirement.setUpdatedAt(OffsetDateTime.now());
 
@@ -978,7 +976,7 @@ public class StudyConfigurationService {
         }
 
         int totalImported = summary.values().stream().mapToInt(Integer::intValue).sum();
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, currentConfig);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), currentConfig);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("importedCount", totalImported);
@@ -1359,7 +1357,7 @@ public class StudyConfigurationService {
         saveStudyRequirement(
                 tenantId,
                 studyId,
-                requirement.getSampleSize() != null ? requirement.getSampleSize() : 100,
+                requirement.getSampleSize(),
                 configMap
         );
     }
@@ -1574,7 +1572,7 @@ public class StudyConfigurationService {
 
         groups.add(newGroup);
         configMap.put("bulkTaskGroups", groups);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -1610,7 +1608,7 @@ public class StudyConfigurationService {
         }
 
         configMap.put("bulkTaskGroups", groups);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -1635,7 +1633,7 @@ public class StudyConfigurationService {
 
         configMap.put("bulkTaskGroups", groups);
         configMap.put("bulkTasks", tasks);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -1684,7 +1682,7 @@ public class StudyConfigurationService {
 
         tasks.add(newTask);
         configMap.put("bulkTasks", tasks);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -1717,7 +1715,7 @@ public class StudyConfigurationService {
         target.put("assignedTo", sanitizeAssignedTo(request.getAssignedTo()));
 
         configMap.put("bulkTasks", tasks);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -1738,7 +1736,7 @@ public class StudyConfigurationService {
         }
 
         configMap.put("bulkTasks", tasks);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -1772,7 +1770,7 @@ public class StudyConfigurationService {
         }
 
         configMap.put("bulkTasks", tasks);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     private String validateGroupName(String rawName, List<Map<String, Object>> existingGroups, String excludeGroupId) {
@@ -2000,7 +1998,7 @@ public class StudyConfigurationService {
             configMap.put("scheduledActions", scheduledActions);
         }
 
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2055,7 +2053,7 @@ public class StudyConfigurationService {
 
         configMap.put("emailTemplates", emailTemplates);
         configMap.put("scheduledActions", scheduledActions);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2106,7 +2104,7 @@ public class StudyConfigurationService {
             configMap.put("scheduledActions", scheduledActions);
         }
 
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2140,7 +2138,7 @@ public class StudyConfigurationService {
 
         configMap.put("emailTemplates", emailTemplates);
         configMap.put("scheduledActions", scheduledActions);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2161,7 +2159,7 @@ public class StudyConfigurationService {
             }
         }
         configMap.put("emailTemplates", emailTemplates);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2215,7 +2213,7 @@ public class StudyConfigurationService {
             configMap.put("scheduledActions", scheduledActions);
         }
 
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2263,7 +2261,7 @@ public class StudyConfigurationService {
 
         configMap.put("textTemplates", textTemplates);
         configMap.put("scheduledActions", scheduledActions);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2314,7 +2312,7 @@ public class StudyConfigurationService {
             configMap.put("scheduledActions", scheduledActions);
         }
 
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2348,7 +2346,7 @@ public class StudyConfigurationService {
 
         configMap.put("textTemplates", textTemplates);
         configMap.put("scheduledActions", scheduledActions);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     @Transactional
@@ -2369,7 +2367,7 @@ public class StudyConfigurationService {
             }
         }
         configMap.put("textTemplates", textTemplates);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     private void setTemplateArchived(UUID tenantId, UUID studyId, String listKey, String templateId, boolean archived) {
@@ -2405,7 +2403,7 @@ public class StudyConfigurationService {
         target.put("updatedAt", OffsetDateTime.now().toString());
 
         configMap.put(listKey, templates);
-        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize(), configMap);
     }
 
     private void validateEmailTemplateName(String name, UUID tenantId, UUID studyId, String excludeTemplateId) {
@@ -2546,7 +2544,7 @@ public class StudyConfigurationService {
 
         StudyRequirementsResponse response = new StudyRequirementsResponse();
         response.setStudyId(studyId.toString());
-        response.setSampleSize(requirement != null && requirement.getSampleSize() != null ? requirement.getSampleSize() : 100);
+        response.setSampleSize(requirement != null ? requirement.getSampleSize() : null);
         response.setCanManage(canManage);
 
         // 1. Milestones
@@ -2643,8 +2641,8 @@ public class StudyConfigurationService {
 
         Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
 
-        if (request.getSampleSize() != null) {
-            if (request.getSampleSize() < 0) {
+        if (request.isSampleSizeSet()) {
+            if (request.getSampleSize() != null && request.getSampleSize() < 0) {
                 throw new InvalidStudyException("Sample size (N) cannot be negative.");
             }
             requirement.setSampleSize(request.getSampleSize());
@@ -2672,7 +2670,7 @@ public class StudyConfigurationService {
         saveStudyRequirement(
                 tenantId,
                 studyId,
-                requirement.getSampleSize() != null ? requirement.getSampleSize() : 100,
+                requirement.getSampleSize(),
                 configMap
         );
 
@@ -2714,7 +2712,7 @@ public class StudyConfigurationService {
         mList.add(mMap);
         configMap.put("milestones", mList);
         StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
-        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, req != null ? req.getSampleSize() : null, configMap);
 
         return new StudyMilestoneDto(milestoneId, date.toString(), target, desc);
     }
@@ -2760,7 +2758,7 @@ public class StudyConfigurationService {
         }
         configMap.put("milestones", mList);
         StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
-        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, req != null ? req.getSampleSize() : null, configMap);
 
         return new StudyMilestoneDto(milestoneId, date != null ? date.toString() : "", target, desc);
     }
@@ -2782,7 +2780,7 @@ public class StudyConfigurationService {
         mList.removeIf(m -> milestoneId.equals(m.get("_id")) || milestoneId.equals(m.get("id")));
         configMap.put("milestones", mList);
         StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
-        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, req != null ? req.getSampleSize() : null, configMap);
     }
 
     @Transactional(readOnly = true)
@@ -2861,7 +2859,7 @@ public class StudyConfigurationService {
         configMap.put("customVariableLayout", layout);
 
         StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
-        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+        saveStudyRequirement(tenantId, studyId, req != null ? req.getSampleSize() : null, configMap);
 
         return target;
     }

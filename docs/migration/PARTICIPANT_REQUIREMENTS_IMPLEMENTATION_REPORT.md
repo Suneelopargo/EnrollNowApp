@@ -168,6 +168,23 @@ The legacy Ripple application (`ripple-develop`) implemented participant study r
   - `FilterCard.tsx`: populates filter field dropdown from `getAllFilterFields()`, automatically adapts input controls (date picker, numeric input, multi-select badges) based on variable type.
   - `RegistryDashboard.tsx`: automatically fetches dynamic filter metadata on mount and on queue refresh.
 
+### 3.8 Operation-Level Saving Architecture (Legacy Parity)
+
+In legacy Ripple, study requirements were saved at the operation level rather than through a whole-page Save button with dirty-tracking. EnrollNow now fully reproduces this behavior across all 8 functional sections:
+
+| Feature / Action | Legacy Ripple Trigger (`ripple-develop`) | EnrollNow Modern Implementation |
+| :--- | :--- | :--- |
+| **Total Sample Size (N)** | Input change/blur | `onBlur` & Enter key submit via `studyApi.updateStudyRequirements(studyId, { sampleSize })` |
+| **Recruitment Milestones** | `addStudyMilestone`, `deleteMilestone` | Direct modal submit via `studyApi.addStudyMilestone` and deletion via `studyApi.deleteStudyMilestone` |
+| **Demographic Groups** | `insertGroup`, `updateGroup`, `removeGroup` | Add modal submit, inline `onBlur` for sample sizes and nested gender targets, and delete confirmation |
+| **Custom Variables** | `insertCustomVariable`, `updateCustomVariable` | Add modal submit, Edit modal submit, one-click `Convert to Multi`, unlock toggle, and deletion |
+| **Global Variables** | `addGlobalVariableToStudy` | Direct linking via `studyApi.addGlobalVariableToStudy` with layout auto-update |
+| **Variable Groups** | `insertCustomVariableGroup`, `updateCustomVariableLayout` | Add group modal submit, inline rename commit, safe delete unpack, variable assignment dropdown |
+| **Layout Item Ordering** | `updateCustomVariableLayout` | Immediate Move Up / Move Down reordering persisted via `customVariableLayout` |
+| **Contact Relationships & Outcomes** | `insertContactRelationship`, `insertContactOutcome` | Add modal submit, inline rename commit, and delete confirmation |
+
+The top header replaces the artificial full-page "Save Requirements" and "Discard" buttons with an enterprise-grade Auto-Saved / In-flight Saving status pill (`.study-status-indicator`), giving users immediate non-blocking feedback.
+
 ---
 
 ## 4. Security & Tenant Isolation
@@ -224,8 +241,8 @@ All automated test suites were executed directly against the workspace codebase.
 - **Study Microfrontend (`enrollnow-study-mfe`)**:
   - Command: `npm --prefix frontend/microfrontends/study run typecheck` -> **Passed** (0 errors).
   - Command: `npm --prefix frontend/microfrontends/study test`
-  - Result: **8 test files passed (81 tests)**, 0 failures.
-  - Includes suite: `studySettingsRequirements.test.tsx` (verifying requirements rendering, workspace navigation integration, and submenus preservation).
+  - Result: **8 test files passed (85 tests)**, 0 failures.
+  - Includes suite: `studySettingsRequirements.test.tsx` (verifying requirements rendering, workspace navigation integration, operation-level partial saving without full-page save requirement, milestone operations, and global variable linking).
 - **Participant Microfrontend (`@enrollnow/mfe-participant`)**:
   - Command: `npm --prefix frontend/microfrontends/participant run typecheck` -> **Passed** (0 errors).
   - Command: `npm --prefix frontend/microfrontends/participant test`
@@ -236,4 +253,4 @@ All automated test suites were executed directly against the workspace codebase.
   - Result: **Passed cleanly across all 13 workspaces**.
 - **Production Build**:
   - Command: `npm --prefix frontend run build`
-  - Result: **Vite production build succeeded** (17,383 modules transformed, bundle emitted into `dist/`).
+  - Result: **Vite production build succeeded** (17,383 modules transformed, bundle emitted into `dist/` in 48.99s).

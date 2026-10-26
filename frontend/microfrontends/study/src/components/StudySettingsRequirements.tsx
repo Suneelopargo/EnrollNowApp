@@ -5,6 +5,7 @@ import {
   StudyRequirementsData,
   StudyMilestone,
   DemographicGroup,
+  GenderGroup,
   StudyCustomVariable,
   StudyVariableGroup,
   StudyLayoutItem,
@@ -31,13 +32,14 @@ import {
   EyeOff,
   Edit2,
   FolderPlus,
-  Save,
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
+  GripVertical,
+  List,
   Lock,
   Unlock,
-  RotateCcw,
 } from 'lucide-react';
 
 export interface StudySettingsRequirementsProps {
@@ -59,13 +61,13 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
 }) => {
   // Loading & Action states
   const [loading, setLoading] = useState<boolean>(true);
-  const [saving, setSaving] = useState<boolean>(false);
+  const [isSavingOperation, setIsSavingOperation] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState<boolean>(false);
 
   // Requirements Data State
   const [sampleSize, setSampleSize] = useState<number | ''>('');
+  const [lastSavedSampleSize, setLastSavedSampleSize] = useState<number | ''>('');
   const [milestones, setMilestones] = useState<StudyMilestone[]>([]);
   const [studyGroups, setStudyGroups] = useState<DemographicGroup[]>([]);
   const [customVariables, setCustomVariables] = useState<StudyCustomVariable[]>([]);
@@ -80,6 +82,23 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
 
   // Search filter for custom variables
   const [variableSearch, setVariableSearch] = useState<string>('');
+
+  // Toggled categorical variable options view & assign group state
+  const [expandedOptionsVarIds, setExpandedOptionsVarIds] = useState<Set<string>>(new Set());
+  const [assignGroupVarId, setAssignGroupVarId] = useState<string | null>(null);
+
+  const toggleOptions = (varId: string) => {
+    setExpandedOptionsVarIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(varId)) next.delete(varId);
+      else next.add(varId);
+      return next;
+    });
+  };
+
+  // Toggled age range and gender sub-groups for demographic groups
+  const [expandedAgeRangeIds, setExpandedAgeRangeIds] = useState<Set<string>>(new Set());
+  const [expandedGenderGroupIds, setExpandedGenderGroupIds] = useState<Set<string>>(new Set());
 
   // Accordion collapsed state for 8 sections
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -128,6 +147,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const [newMilestoneDate, setNewMilestoneDate] = useState<string>('');
   const [newMilestoneTarget, setNewMilestoneTarget] = useState<string>('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState<string>('');
+
+  const [editingMilestone, setEditingMilestone] = useState<StudyMilestone | null>(null);
+  const [editMilestoneDate, setEditMilestoneDate] = useState<string>('');
+  const [editMilestoneTarget, setEditMilestoneTarget] = useState<string>('');
+  const [editMilestoneDesc, setEditMilestoneDesc] = useState<string>('');
 
   const [showAddAgeGroupModal, setShowAddAgeGroupModal] = useState<boolean>(false);
   const [newAgeGroupName, setNewAgeGroupName] = useState<string>('');
@@ -186,14 +210,55 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     isGlobal?: boolean;
   } | null>(null);
 
-  // Notify parent of dirty state
-  useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [isDirty, onDirtyChange]);
-
-  const markDirty = useCallback(() => {
-    setIsDirty(true);
-  }, []);
+  // Operation-level persistence helper (replaces page-level dirty/save workflow)
+  const persistPartial = useCallback(
+    async (
+      partial: Parameters<typeof studyApi.updateStudyRequirements>[1],
+      successMsg?: string
+    ): Promise<boolean> => {
+      if (!canManageSettings || isArchived) return false;
+      setIsSavingOperation(true);
+      setError(null);
+      try {
+        const updated = await studyApi.updateStudyRequirements(studyId, partial);
+        if (partial.sampleSize !== undefined) {
+          setSampleSize(updated.sampleSize ?? '');
+          setLastSavedSampleSize(updated.sampleSize ?? '');
+        }
+        if (partial.studyGroups !== undefined) {
+          setStudyGroups(updated.studyGroups || []);
+        }
+        if (partial.customVariables !== undefined) {
+          setCustomVariables(updated.customVariables || []);
+        }
+        if (partial.variableGroups !== undefined) {
+          setVariableGroups(updated.variableGroups || []);
+        }
+        if (partial.customVariableLayout !== undefined) {
+          setLayout(updated.customVariableLayout || []);
+        }
+        if (partial.contactRelationships !== undefined) {
+          setContactRelationships(updated.contactRelationships || []);
+        }
+        if (partial.contactOutcomes !== undefined) {
+          setContactOutcomes(updated.contactOutcomes || []);
+        }
+        if (successMsg) {
+          setSuccessMessage(successMsg);
+          setTimeout(() => setSuccessMessage(null), 3000);
+        }
+        onStudyUpdated?.();
+        return true;
+      } catch (err: any) {
+        console.error('Failed to persist requirements operation:', err);
+        setError(err?.response?.data?.message || err?.message || 'Failed to save changes.');
+        return false;
+      } finally {
+        setIsSavingOperation(false);
+      }
+    },
+    [studyId, canManageSettings, isArchived, onStudyUpdated]
+  );
 
   // Fetch study requirements
   const loadRequirements = useCallback(async () => {
@@ -202,7 +267,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     setError(null);
     try {
       const data: StudyRequirementsData = await studyApi.getStudyRequirements(studyId);
-      setSampleSize(data.sampleSize ?? '');
+      const sSize = data.sampleSize ?? '';
+      setSampleSize(sSize);
+      setLastSavedSampleSize(sSize);
       setMilestones(data.milestones || []);
       setStudyGroups(data.studyGroups || []);
       setCustomVariables(data.customVariables || []);
@@ -212,56 +279,30 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setContactOutcomes(data.contactOutcomes || []);
       setGlobalVariables(data.globalVariables || []);
       setUnlockedVariableIds(new Set());
-      setIsDirty(false);
+      onDirtyChange?.(false);
     } catch (err: any) {
       console.error('Failed to load study requirements:', err);
       setError(err?.response?.data?.message || err?.message || 'Failed to load study requirements.');
     } finally {
       setLoading(false);
     }
-  }, [studyId]);
+  }, [studyId, onDirtyChange]);
 
   useEffect(() => {
     loadRequirements();
   }, [loadRequirements]);
 
-  // Save all requirements
-  const handleSaveRequirements = async () => {
-    if (!canManageSettings || isArchived) return;
-    setSaving(true);
-    setError(null);
-    setSuccessMessage(null);
+  // Target Sample Size (N) - persists onBlur
+  const handleBlurSampleSize = async () => {
+    const val = sampleSize === '' ? null : Number(sampleSize);
+    const prev = lastSavedSampleSize === '' ? null : Number(lastSavedSampleSize);
+    if (val === prev) return;
+    await persistPartial({ sampleSize: val }, 'Target study sample size (N) saved.');
+  };
 
-    const payload = {
-      sampleSize: typeof sampleSize === 'number' ? sampleSize : null,
-      studyGroups,
-      customVariables,
-      variableGroups,
-      customVariableLayout: layout,
-      contactRelationships,
-      contactOutcomes,
-    };
-
-    try {
-      const updated = await studyApi.updateStudyRequirements(studyId, payload);
-      setSampleSize(updated.sampleSize ?? '');
-      setMilestones(updated.milestones || []);
-      setStudyGroups(updated.studyGroups || []);
-      setCustomVariables(updated.customVariables || []);
-      setVariableGroups(updated.variableGroups || []);
-      setLayout(updated.customVariableLayout || []);
-      setContactRelationships(updated.contactRelationships || []);
-      setContactOutcomes(updated.contactOutcomes || []);
-      setIsDirty(false);
-      setSuccessMessage('Study requirements updated and persisted successfully.');
-      onStudyUpdated?.();
-      setTimeout(() => setSuccessMessage(null), 4000);
-    } catch (err: any) {
-      console.error('Failed to update study requirements:', err);
-      setError(err?.response?.data?.message || err?.message || 'Failed to save study requirements.');
-    } finally {
-      setSaving(false);
-    }
+  // Group Quotas - persists onBlur of sampleSize / gender breakdown inputs
+  const handleBlurStudyGroups = async () => {
+    await persistPartial({ studyGroups }, 'Demographic quota target saved.');
   };
 
   // Milestone Actions
@@ -272,6 +313,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setError('Milestone target must be a positive integer.');
       return;
     }
+    setIsSavingOperation(true);
+    setError(null);
     try {
       const newM = await studyApi.addStudyMilestone(studyId, {
         milestoneDate: newMilestoneDate,
@@ -285,50 +328,144 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setNewMilestoneDesc('');
       setSuccessMessage('Recruitment milestone added.');
       setTimeout(() => setSuccessMessage(null), 3000);
+      onStudyUpdated?.();
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
+    } finally {
+      setIsSavingOperation(false);
+    }
+  };
+
+  const handleOpenEditMilestone = (m: StudyMilestone) => {
+    setEditingMilestone(m);
+    setEditMilestoneDate(m.milestoneDate);
+    setEditMilestoneTarget(String(m.participantTarget));
+    setEditMilestoneDesc(m.description || '');
+  };
+
+  const handleSaveEditedMilestone = async () => {
+    if (!editingMilestone || !editingMilestone.id || !editMilestoneDate || !editMilestoneTarget) return;
+    const target = parseInt(editMilestoneTarget, 10);
+    if (isNaN(target) || target <= 0) {
+      setError('Milestone target must be a positive integer.');
+      return;
+    }
+    setIsSavingOperation(true);
+    setError(null);
+    try {
+      const updated = await studyApi.updateStudyMilestone(studyId, editingMilestone.id, {
+        milestoneDate: editMilestoneDate,
+        participantTarget: target,
+        description: editMilestoneDesc.trim() || undefined,
+      });
+      setMilestones((prev) =>
+        prev
+          .map((m) => (m.id === editingMilestone.id ? updated : m))
+          .sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate))
+      );
+      setEditingMilestone(null);
+      setSuccessMessage('Milestone updated.');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      onStudyUpdated?.();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
+    } finally {
+      setIsSavingOperation(false);
     }
   };
 
   const handleDeleteMilestone = async (milestoneId: string) => {
+    await handleDeleteMilestoneDirect(milestoneId);
+  };
+
+  const handleAddMilestoneInline = async () => {
+    const today = new Date().toISOString().substring(0, 10);
     try {
+      setIsSavingOperation(true);
+      const newM = await studyApi.addStudyMilestone(studyId, {
+        milestoneDate: today,
+        participantTarget: 0,
+      });
+      setMilestones((prev) => [...prev, newM].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate)));
+      setSuccessMessage('Recruitment milestone added.');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      onStudyUpdated?.();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
+    } finally {
+      setIsSavingOperation(false);
+    }
+  };
+
+  const handleUpdateMilestoneDirect = async (
+    m: StudyMilestone,
+    partialUpdate: { milestoneDate?: string; participantTarget?: number }
+  ) => {
+    if (!m.id) return;
+    const newDate = partialUpdate.milestoneDate ?? m.milestoneDate;
+    const newTarget = partialUpdate.participantTarget ?? m.participantTarget;
+    try {
+      setIsSavingOperation(true);
+      const updated = await studyApi.updateStudyMilestone(studyId, m.id, {
+        milestoneDate: newDate,
+        participantTarget: newTarget,
+        description: m.description,
+      });
+      setMilestones((prev) =>
+        prev
+          .map((item) => (item.id === m.id ? updated : item))
+          .sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate))
+      );
+      setSuccessMessage('Milestone updated.');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      onStudyUpdated?.();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
+    } finally {
+      setIsSavingOperation(false);
+    }
+  };
+
+  const handleDeleteMilestoneDirect = async (milestoneId: string) => {
+    try {
+      setIsSavingOperation(true);
       await studyApi.deleteStudyMilestone(studyId, milestoneId);
       setMilestones((prev) => prev.filter((m) => m.id !== milestoneId));
       setConfirmDeleteModal(null);
       setSuccessMessage('Milestone deleted.');
       setTimeout(() => setSuccessMessage(null), 3000);
+      onStudyUpdated?.();
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Failed to delete milestone.');
+    } finally {
+      setIsSavingOperation(false);
     }
   };
+
+  const getGroupVariableIds = useCallback((group: StudyVariableGroup): string[] => {
+    return group.variableIds && group.variableIds.length > 0
+      ? group.variableIds
+      : group.members && group.members.length > 0
+      ? group.members
+      : [];
+  }, []);
 
   // Age Groups
   const ageGroups = useMemo(() => {
     return studyGroups.filter((g) => g.defaultCategoryName === 'age');
   }, [studyGroups]);
 
-  const handleAddAgeGroup = () => {
-    if (!newAgeGroupName.trim()) return;
-    const min = newAgeMin ? parseInt(newAgeMin, 10) : null;
-    const max = newAgeMax ? parseInt(newAgeMax, 10) : null;
-    if (min !== null && max !== null && min > max) {
-      setError('Minimum age cannot be greater than maximum age.');
-      return;
-    }
+  const handleAddAgeGroup = async () => {
     const newGroup: DemographicGroup = {
       id: 'grp_age_' + Date.now(),
       defaultCategoryName: 'age',
-      label: newAgeGroupName.trim(),
-      sampleSize: newAgeGroupSample.trim(),
-      ageRange: { min, max },
+      label: '',
+      sampleSize: '',
+      ageRange: { min: 1, max: 1 },
     };
-    setStudyGroups((prev) => [...prev, newGroup]);
-    setShowAddAgeGroupModal(false);
-    setNewAgeGroupName('');
-    setNewAgeGroupSample('');
-    setNewAgeMin('');
-    setNewAgeMax('');
-    markDirty();
+    const updated = [...studyGroups, newGroup];
+    setStudyGroups(updated);
+    await persistPartial({ studyGroups: updated }, 'Age group added.');
   };
 
   // Sex / Gender Groups
@@ -336,19 +473,16 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'sex');
   }, [studyGroups]);
 
-  const handleAddGenderGroup = () => {
-    if (!newGenderName.trim()) return;
+  const handleAddGenderGroup = async () => {
     const newGroup: DemographicGroup = {
       id: 'grp_gen_' + Date.now(),
       defaultCategoryName: 'sex',
-      label: newGenderName.trim(),
-      sampleSize: newGenderSample.trim(),
+      label: '',
+      sampleSize: '',
     };
-    setStudyGroups((prev) => [...prev, newGroup]);
-    setShowAddGenderModal(false);
-    setNewGenderName('');
-    setNewGenderSample('');
-    markDirty();
+    const updated = [...studyGroups, newGroup];
+    setStudyGroups(updated);
+    await persistPartial({ studyGroups: updated }, 'Gender group added.');
   };
 
   // Ethnicity Groups
@@ -356,24 +490,16 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'ethnicity');
   }, [studyGroups]);
 
-  const handleAddEthnicityGroup = () => {
-    if (!newEthLabel.trim()) return;
+  const handleAddEthnicityGroup = async () => {
     const newGroup: DemographicGroup = {
       id: 'grp_eth_' + Date.now(),
       defaultCategoryName: 'ethnicity',
-      label: newEthLabel.trim(),
-      sampleSize: newEthSample.trim(),
-      genderGroups: [
-        { id: 'gen_m_' + Date.now(), gender: 'Male', participants: null },
-        { id: 'gen_f_' + Date.now(), gender: 'Female', participants: null },
-        { id: 'gen_o_' + Date.now(), gender: 'Other', participants: null },
-      ],
+      label: '',
+      sampleSize: '',
     };
-    setStudyGroups((prev) => [...prev, newGroup]);
-    setShowAddEthnicityModal(false);
-    setNewEthLabel('');
-    setNewEthSample('');
-    markDirty();
+    const updated = [...studyGroups, newGroup];
+    setStudyGroups(updated);
+    await persistPartial({ studyGroups: updated }, 'Ethnicity category added.');
   };
 
   // Race Groups
@@ -381,24 +507,65 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'race');
   }, [studyGroups]);
 
-  const handleAddRaceGroup = () => {
-    if (!newRaceLabel.trim()) return;
+  const handleAddRaceGroup = async () => {
     const newGroup: DemographicGroup = {
       id: 'grp_race_' + Date.now(),
       defaultCategoryName: 'race',
-      label: newRaceLabel.trim(),
-      sampleSize: newRaceSample.trim(),
-      genderGroups: [
-        { id: 'gen_m_' + Date.now(), gender: 'Male', participants: null },
-        { id: 'gen_f_' + Date.now(), gender: 'Female', participants: null },
-        { id: 'gen_o_' + Date.now(), gender: 'Other', participants: null },
-      ],
+      label: '',
+      sampleSize: '',
     };
-    setStudyGroups((prev) => [...prev, newGroup]);
-    setShowAddRaceModal(false);
-    setNewRaceLabel('');
-    setNewRaceSample('');
-    markDirty();
+    const updated = [...studyGroups, newGroup];
+    setStudyGroups(updated);
+    await persistPartial({ studyGroups: updated }, 'Race category added.');
+  };
+
+  const handleEnableAgeRange = (groupId: string) => {
+    setExpandedAgeRangeIds((prev) => new Set(prev).add(groupId));
+    setStudyGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, ageRange: { min: 1, max: 1 } } : g))
+    );
+  };
+
+  const handleAddNestedGender = async (groupId: string) => {
+    setExpandedGenderGroupIds((prev) => new Set(prev).add(groupId));
+    const targetGroup = studyGroups.find((g) => g.id === groupId);
+    const currentGenders = targetGroup?.genderGroups || [];
+    const newNested: GenderGroup = {
+      id: 'gen_' + Date.now(),
+      gender: 'Male',
+      participants: 0,
+    };
+    const updatedGroups = studyGroups.map((g) =>
+      g.id === groupId ? { ...g, genderGroups: [...currentGenders, newNested] } : g
+    );
+    setStudyGroups(updatedGroups);
+    await persistPartial({ studyGroups: updatedGroups }, 'Gender quota added.');
+  };
+
+  const handleUpdateNestedGender = (
+    groupId: string,
+    nestedId: string,
+    partialNested: Partial<GenderGroup>
+  ) => {
+    const updatedGroups = studyGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const currentGenders = g.genderGroups || [];
+      const updatedGenders = currentGenders.map((gg) =>
+        gg.id === nestedId ? { ...gg, ...partialNested } : gg
+      );
+      return { ...g, genderGroups: updatedGenders };
+    });
+    setStudyGroups(updatedGroups);
+  };
+
+  const handleDeleteNestedGender = async (groupId: string, nestedId: string) => {
+    const updatedGroups = studyGroups.map((g) => {
+      if (g.id !== groupId) return g;
+      const currentGenders = g.genderGroups || [];
+      return { ...g, genderGroups: currentGenders.filter((gg) => gg.id !== nestedId) };
+    });
+    setStudyGroups(updatedGroups);
+    await persistPartial({ studyGroups: updatedGroups }, 'Gender quota removed.');
   };
 
   const handleUpdateGroupNestedGender = (groupId: string, gender: string, targetStr: string) => {
@@ -417,13 +584,14 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         return { ...g, genderGroups: updatedGenders };
       })
     );
-    markDirty();
   };
 
-  const handleDeleteGroup = (groupId: string) => {
-    setStudyGroups((prev) => prev.filter((g) => g.id !== groupId));
-    setConfirmDeleteModal(null);
-    markDirty();
+  const handleDeleteGroup = async (groupId: string) => {
+    const updated = studyGroups.filter((g) => g.id !== groupId);
+    const ok = await persistPartial({ studyGroups: updated }, 'Demographic group deleted.');
+    if (ok) {
+      setConfirmDeleteModal(null);
+    }
   };
 
   // Custom Variables
@@ -456,7 +624,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  const handleAddCustomVariable = () => {
+  const handleAddCustomVariable = async () => {
     if (!newVarName.trim()) return;
     const varId = 'var_' + Date.now();
     const options: VariableOption[] =
@@ -480,15 +648,23 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       rank: customVariables.length,
     };
 
-    setCustomVariables((prev) => [...prev, newVar]);
-    setLayout((prev) => [...prev, { id: 'lay_' + varId, type: 'variable', refId: varId, rank: prev.length }]);
-    setShowAddCustomVarModal(false);
-    setNewVarName('');
-    setNewVarType('single');
-    setNewVarIsGlobal(false);
-    setNewVarIsBlind(false);
-    setNewVarOptions(['Option 1', 'Option 2']);
-    markDirty();
+    const updatedVars = [...customVariables, newVar];
+    const updatedLayout: StudyLayoutItem[] = [
+      ...layout,
+      { id: 'lay_' + varId, type: 'variable' as const, refId: varId, rank: layout.length },
+    ];
+    const ok = await persistPartial(
+      { customVariables: updatedVars, customVariableLayout: updatedLayout },
+      `Custom variable "${newVar.name}" added.`
+    );
+    if (ok) {
+      setShowAddCustomVarModal(false);
+      setNewVarName('');
+      setNewVarType('single');
+      setNewVarIsGlobal(false);
+      setNewVarIsBlind(false);
+      setNewVarOptions(['Option 1', 'Option 2']);
+    }
   };
 
   const handleOpenEditVariable = (v: StudyCustomVariable) => {
@@ -507,7 +683,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     );
   };
 
-  const handleSaveEditedVariable = () => {
+  const handleSaveEditedVariable = async () => {
     if (!editingVariable || !editVarName.trim()) return;
     const varId = editingVariable.id;
     const finalOptions =
@@ -521,110 +697,146 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
             }))
         : [];
 
-    setCustomVariables((prev) =>
-      prev.map((v) =>
-        v.id === varId
-          ? {
-              ...v,
-              name: editVarName.trim(),
-              variableType: editVarType,
-              options: finalOptions,
-              isGlobal: editVarIsGlobal,
-              isBlind: editVarIsBlind,
-            }
-          : v
-      )
+    const updatedVars = customVariables.map((v) =>
+      v.id === varId
+        ? {
+            ...v,
+            name: editVarName.trim(),
+            variableType: editVarType,
+            options: finalOptions,
+            isGlobal: editVarIsGlobal,
+            isBlind: editVarIsBlind,
+          }
+        : v
     );
-    setEditingVariable(null);
-    markDirty();
+
+    const ok = await persistPartial(
+      { customVariables: updatedVars },
+      `Custom variable "${editVarName.trim()}" updated.`
+    );
+    if (ok) {
+      setEditingVariable(null);
+    }
   };
 
   const handleAddGlobalVariable = async (globalVar: StudyCustomVariable) => {
     if (!globalVar.id) return;
+    setIsSavingOperation(true);
+    setError(null);
     try {
       const added = await studyApi.addGlobalVariableToStudy(studyId, globalVar.id);
-      setCustomVariables((prev) => [...prev, added]);
-      setLayout((prev) => [
-        ...prev,
-        { id: 'lay_' + added.id, type: 'variable', refId: added.id || '', rank: prev.length },
-      ]);
+      const updatedVars = [...customVariables, added];
+      const updatedLayout: StudyLayoutItem[] = [
+        ...layout,
+        { id: 'lay_' + added.id, type: 'variable' as const, refId: added.id || '', rank: layout.length },
+      ];
+      await studyApi.updateStudyRequirements(studyId, { customVariableLayout: updatedLayout });
+      setCustomVariables(updatedVars);
+      setLayout(updatedLayout);
       setShowAddGlobalVarModal(false);
-      markDirty();
       setSuccessMessage(`Global variable "${added.name}" added to study.`);
       setTimeout(() => setSuccessMessage(null), 3000);
+      onStudyUpdated?.();
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Failed to add global variable.');
+    } finally {
+      setIsSavingOperation(false);
     }
   };
 
-  const handleConvertToMulti = (varId: string) => {
-    setCustomVariables((prev) =>
-      prev.map((v) => (v.id === varId && v.variableType === 'single' ? { ...v, variableType: 'multi' } : v))
+  const handleConvertToMulti = async (varId: string) => {
+    const updatedVars = customVariables.map((v) =>
+      v.id === varId && v.variableType === 'single' ? { ...v, variableType: 'multi' } : v
     );
-    markDirty();
+    await persistPartial({ customVariables: updatedVars }, 'Variable converted to multi-select.');
   };
 
-  const handleDeleteVariable = (varId: string) => {
-    setCustomVariables((prev) => prev.filter((v) => v.id !== varId));
-    setVariableGroups((prev) =>
-      prev.map((vg) => ({
-        ...vg,
-        variableIds: (vg.variableIds || []).filter((id) => id !== varId),
-      }))
+  const handleDeleteVariable = async (varId: string) => {
+    const isGlobal = confirmDeleteModal?.isGlobal;
+    const updatedVars = customVariables.filter((v) => v.id !== varId);
+    const updatedGroups = variableGroups.map((vg) => {
+      const remaining = getGroupVariableIds(vg).filter((id) => id !== varId);
+      return { ...vg, variableIds: remaining, members: remaining };
+    });
+    const updatedLayout = layout.filter((item) => !(item.type === 'variable' && item.refId === varId));
+
+    const ok = await persistPartial(
+      {
+        customVariables: updatedVars,
+        variableGroups: updatedGroups,
+        customVariableLayout: updatedLayout,
+      },
+      isGlobal ? 'Global variable unlinked from study.' : 'Custom variable deleted.'
     );
-    setLayout((prev) => prev.filter((item) => !(item.type === 'variable' && item.refId === varId)));
-    setConfirmDeleteModal(null);
-    markDirty();
+    if (ok) {
+      setConfirmDeleteModal(null);
+    }
   };
 
-  const handleAddVariableGroup = () => {
+  const handleAddVariableGroup = async () => {
     if (!newGroupName.trim()) return;
     const groupId = 'vg_' + Date.now();
     const newGroup: StudyVariableGroup = {
       id: groupId,
       name: newGroupName.trim(),
       variableIds: [],
+      members: [],
       rank: variableGroups.length,
     };
-    setVariableGroups((prev) => [...prev, newGroup]);
-    setLayout((prev) => [...prev, { id: 'lay_' + groupId, type: 'group', refId: groupId, rank: prev.length }]);
-    setShowAddGroupModal(false);
-    setNewGroupName('');
-    markDirty();
+    const updatedGroups = [...variableGroups, newGroup];
+    const updatedLayout: StudyLayoutItem[] = [
+      ...layout,
+      { id: 'lay_' + groupId, type: 'group' as const, refId: groupId, rank: layout.length },
+    ];
+    const ok = await persistPartial(
+      { variableGroups: updatedGroups, customVariableLayout: updatedLayout },
+      `Variable group "${newGroup.name}" created.`
+    );
+    if (ok) {
+      setShowAddGroupModal(false);
+      setNewGroupName('');
+    }
   };
 
-  const handleRenameGroup = (groupId: string) => {
+  const handleRenameGroup = async (groupId: string) => {
     if (!renameGroupValue.trim()) return;
-    setVariableGroups((prev) =>
-      prev.map((vg) => (vg.id === groupId ? { ...vg, name: renameGroupValue.trim() } : vg))
+    const updatedGroups = variableGroups.map((vg) =>
+      vg.id === groupId ? { ...vg, name: renameGroupValue.trim() } : vg
     );
-    setRenamingGroupId(null);
-    setRenameGroupValue('');
-    markDirty();
+    const ok = await persistPartial({ variableGroups: updatedGroups }, 'Variable group renamed.');
+    if (ok) {
+      setRenamingGroupId(null);
+      setRenameGroupValue('');
+    }
   };
 
-  const handleDeleteVariableGroup = (groupId: string) => {
-    setVariableGroups((prev) => prev.filter((vg) => vg.id !== groupId));
-    setLayout((prev) => prev.filter((item) => !(item.type === 'group' && item.refId === groupId)));
-    setConfirmDeleteModal(null);
-    markDirty();
+  const handleDeleteVariableGroup = async (groupId: string) => {
+    const updatedGroups = variableGroups.filter((vg) => vg.id !== groupId);
+    const updatedLayout = layout.filter((item) => !(item.type === 'group' && item.refId === groupId));
+    const ok = await persistPartial(
+      { variableGroups: updatedGroups, customVariableLayout: updatedLayout },
+      'Variable group deleted. Assigned variables returned to ungrouped list.'
+    );
+    if (ok) {
+      setConfirmDeleteModal(null);
+    }
   };
 
-  const handleAssignVariableToGroup = (varId: string, targetGroupId: string | '') => {
-    setVariableGroups((prev) =>
-      prev.map((vg) => {
-        const without = (vg.variableIds || []).filter((id) => id !== varId);
-        if (vg.id === targetGroupId) {
-          return { ...vg, variableIds: [...without, varId] };
-        }
-        return { ...vg, variableIds: without };
-      })
-    );
-    markDirty();
+  const handleAssignVariableToGroup = async (varId: string, targetGroupId: string | '') => {
+    const updatedGroups = variableGroups.map((vg) => {
+      const currentIds = getGroupVariableIds(vg);
+      const without = currentIds.filter((id) => id !== varId);
+      if (vg.id === targetGroupId) {
+        const next = [...without, varId];
+        return { ...vg, variableIds: next, members: next };
+      }
+      return { ...vg, variableIds: without, members: without };
+    });
+    await persistPartial({ variableGroups: updatedGroups }, 'Variable group assignment updated.');
   };
 
   // Layout reordering
-  const handleMoveLayoutItem = (index: number, direction: 'up' | 'down') => {
+  const handleMoveLayoutItem = async (index: number, direction: 'up' | 'down') => {
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= layout.length) return;
     const reordered = [...layout];
@@ -635,11 +847,115 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       item.rank = idx;
     });
     setLayout(reordered);
-    markDirty();
+    await persistPartial({ customVariableLayout: reordered }, 'Layout order saved.');
+  };
+
+  const handleMoveGroupMember = async (groupId: string, memberIdx: number, direction: 'up' | 'down') => {
+    const group = variableGroups.find((g) => g.id === groupId);
+    if (!group) return;
+    const memberIds = [...(group.members || group.variableIds || [])];
+    const targetIdx = direction === 'up' ? memberIdx - 1 : memberIdx + 1;
+    if (targetIdx < 0 || targetIdx >= memberIds.length) return;
+    const temp = memberIds[memberIdx];
+    memberIds[memberIdx] = memberIds[targetIdx];
+    memberIds[targetIdx] = temp;
+    const updatedGroups = variableGroups.map((g) =>
+      g.id === groupId ? { ...g, members: memberIds, variableIds: memberIds } : g
+    );
+    setVariableGroups(updatedGroups);
+    await persistPartial({ variableGroups: updatedGroups }, 'Group variable order saved.');
+  };
+
+  const handleUpdateVariableName = (varId: string, name: string) => {
+    setCustomVariables((prev) =>
+      prev.map((v) => (v.id === varId ? { ...v, name } : v))
+    );
+  };
+
+  const handleSaveVariableName = async (varId: string) => {
+    const targetVar = customVariables.find((v) => v.id === varId);
+    if (!targetVar || !targetVar.name.trim()) return;
+    await persistPartial({ customVariables }, 'Variable name updated.');
+  };
+
+  const handleToggleGlobal = async (varId: string) => {
+    const updated = customVariables.map((v) =>
+      v.id === varId ? { ...v, isGlobal: !v.isGlobal } : v
+    );
+    setCustomVariables(updated);
+    await persistPartial({ customVariables: updated }, 'Variable global setting updated.');
+  };
+
+  const handleToggleBlind = async (varId: string) => {
+    const updated = customVariables.map((v) =>
+      v.id === varId ? { ...v, isBlind: !v.isBlind } : v
+    );
+    setCustomVariables(updated);
+    await persistPartial({ customVariables: updated }, 'Variable blind setting updated.');
+  };
+
+  const handleUpdateOptionLabel = (varId: string, optionIdx: number, newLabel: string) => {
+    setCustomVariables((prev) =>
+      prev.map((v) => {
+        if (v.id !== varId) return v;
+        const opts = [...(v.options || [])];
+        if (opts[optionIdx]) {
+          opts[optionIdx] = { ...opts[optionIdx], label: newLabel, value: newLabel };
+        }
+        return { ...v, options: opts };
+      })
+    );
+  };
+
+  const handleSaveOption = async () => {
+    await persistPartial({ customVariables }, 'Option updated.');
+  };
+
+  const handleAddOptionInline = async (varId: string) => {
+    const updated = customVariables.map((v) => {
+      if (v.id !== varId) return v;
+      const opts = [...(v.options || [])];
+      const newIdx = opts.length + 1;
+      opts.push({ label: `Option ${newIdx}`, value: `Option ${newIdx}` });
+      return { ...v, options: opts };
+    });
+    setCustomVariables(updated);
+    await persistPartial({ customVariables: updated }, 'Option added.');
+  };
+
+  const handleDeleteOption = async (varId: string, optionIdx: number) => {
+    const updated = customVariables.map((v) => {
+      if (v.id !== varId) return v;
+      const opts = (v.options || []).filter((_, idx) => idx !== optionIdx);
+      return { ...v, options: opts };
+    });
+    setCustomVariables(updated);
+    await persistPartial({ customVariables: updated }, 'Option deleted.');
+  };
+
+  const getTypeName = (type: string) => {
+    switch (type) {
+      case 'multi':
+        return 'Multi Select';
+      case 'single':
+        return 'Single Select';
+      case 'short':
+        return 'Short Text';
+      case 'long':
+        return 'Long Text';
+      case 'number':
+        return 'Number';
+      case 'date':
+        return 'Date';
+      case 'dateTime':
+        return 'Time & Date';
+      default:
+        return type || 'Short Text';
+    }
   };
 
   // Contact Taxonomy
-  const handleAddTaxonomy = () => {
+  const handleAddTaxonomy = async () => {
     if (!newTaxonomyName.trim() || !showAddTaxonomyModal) return;
     const newTax: ContactTaxonomy = {
       id: 'tax_' + Date.now(),
@@ -647,39 +963,360 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       type: showAddTaxonomyModal,
     };
     if (showAddTaxonomyModal === 'relationship') {
-      setContactRelationships((prev) => [...prev, newTax]);
+      const updated = [...contactRelationships, newTax];
+      const ok = await persistPartial({ contactRelationships: updated }, `Relationship "${newTax.name}" added.`);
+      if (ok) {
+        setShowAddTaxonomyModal(null);
+        setNewTaxonomyName('');
+      }
     } else {
-      setContactOutcomes((prev) => [...prev, newTax]);
+      const updated = [...contactOutcomes, newTax];
+      const ok = await persistPartial({ contactOutcomes: updated }, `Outcome "${newTax.name}" added.`);
+      if (ok) {
+        setShowAddTaxonomyModal(null);
+        setNewTaxonomyName('');
+      }
     }
-    setShowAddTaxonomyModal(null);
-    setNewTaxonomyName('');
-    markDirty();
   };
 
-  const handleRenameTaxonomy = (id: string, type: 'relationship' | 'outcome') => {
+  const handleRenameTaxonomy = async (id: string, type: 'relationship' | 'outcome') => {
     if (!renameTaxonomyValue.trim()) return;
     if (type === 'relationship') {
-      setContactRelationships((prev) =>
-        prev.map((r) => ((r.id || r.name) === id ? { ...r, name: renameTaxonomyValue.trim() } : r))
+      const updated = contactRelationships.map((r) =>
+        (r.id || r.name) === id ? { ...r, name: renameTaxonomyValue.trim() } : r
       );
+      const ok = await persistPartial({ contactRelationships: updated }, 'Contact relationship updated.');
+      if (ok) {
+        setRenamingTaxonomyId(null);
+        setRenameTaxonomyValue('');
+      }
     } else {
-      setContactOutcomes((prev) =>
-        prev.map((o) => ((o.id || o.name) === id ? { ...o, name: renameTaxonomyValue.trim() } : o))
+      const updated = contactOutcomes.map((o) =>
+        (o.id || o.name) === id ? { ...o, name: renameTaxonomyValue.trim() } : o
       );
+      const ok = await persistPartial({ contactOutcomes: updated }, 'Contact outcome updated.');
+      if (ok) {
+        setRenamingTaxonomyId(null);
+        setRenameTaxonomyValue('');
+      }
     }
-    setRenamingTaxonomyId(null);
-    setRenameTaxonomyValue('');
-    markDirty();
   };
 
-  const handleDeleteTaxonomy = (id: string, type: 'relationship' | 'outcome') => {
+  const handleDeleteTaxonomy = async (id: string, type: 'relationship' | 'outcome') => {
     if (type === 'relationship') {
-      setContactRelationships((prev) => prev.filter((t) => (t.id || t.name) !== id));
+      const updated = contactRelationships.filter((t) => (t.id || t.name) !== id);
+      const ok = await persistPartial({ contactRelationships: updated }, 'Contact relationship deleted.');
+      if (ok) {
+        setConfirmDeleteModal(null);
+      }
     } else {
-      setContactOutcomes((prev) => prev.filter((t) => (t.id || t.name) !== id));
+      const updated = contactOutcomes.filter((t) => (t.id || t.name) !== id);
+      const ok = await persistPartial({ contactOutcomes: updated }, 'Contact outcome deleted.');
+      if (ok) {
+        setConfirmDeleteModal(null);
+      }
     }
-    setConfirmDeleteModal(null);
-    markDirty();
+  };
+
+  const renderCustomVariableCard = (
+    variable: StudyCustomVariable,
+    index: number,
+    isInsideGroup = false,
+    groupId?: string
+  ) => {
+    const locked = isVariableLocked(variable);
+    const isOptionsOpen = expandedOptionsVarIds.has(variable.id || variable.name);
+
+    return (
+      <div key={variable.id || variable.name} className="cv-sortable-row">
+        {/* Drag handle and move up/down arrow controls */}
+        <div className="drag-handle-col">
+          <div className="drag-handle-btn" title="Reorder">
+            <GripVertical size={16} />
+          </div>
+          {canManageSettings && !isArchived && (
+            <div className="order-actions">
+              <button
+                type="button"
+                className="btn-move-arrow"
+                disabled={index === 0}
+                onClick={() => {
+                  if (isInsideGroup && groupId) {
+                    handleMoveGroupMember(groupId, index, 'up');
+                  } else {
+                    handleMoveLayoutItem(index, 'up');
+                  }
+                }}
+                title="Move Up"
+                aria-label={`Move ${variable.name} up`}
+              >
+                <ChevronUp size={12} />
+              </button>
+              <button
+                type="button"
+                className="btn-move-arrow"
+                disabled={
+                  isInsideGroup && groupId
+                    ? index === (variableGroups.find((g) => g.id === groupId)?.members?.length ?? 1) - 1
+                    : index === layout.length - 1
+                }
+                onClick={() => {
+                  if (isInsideGroup && groupId) {
+                    handleMoveGroupMember(groupId, index, 'down');
+                  } else {
+                    handleMoveLayoutItem(index, 'down');
+                  }
+                }}
+                title="Move Down"
+                aria-label={`Move ${variable.name} down`}
+              >
+                <ChevronDown size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* The Custom Variable Card */}
+        <div className="cv-card custom-variable">
+          {/* Top-left Assign to Group pin button with popover */}
+          <div className="position-relative d-inline-block">
+            <button
+              type="button"
+              className="cv-move-pin"
+              title={variableGroups.length > 0 ? 'Assign to group' : 'Create a group first'}
+              onClick={() =>
+                setAssignGroupVarId(
+                  assignGroupVarId === (variable.id || variable.name) ? null : (variable.id || variable.name)
+                )
+              }
+              aria-label="Assign to group"
+            >
+              <FolderPlus size={13} />
+            </button>
+            {assignGroupVarId === (variable.id || variable.name) && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '24px',
+                  left: '10px',
+                  zIndex: 100,
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  padding: '10px',
+                  minWidth: '200px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                }}
+              >
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                  Assign to Group:
+                </div>
+                {variableGroups.length === 0 ? (
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>No groups created yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {variableGroups.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: '13px',
+                          textAlign: 'left',
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          color: '#1e293b',
+                        }}
+                        onClick={() => {
+                          handleAssignVariableToGroup(variable.id!, g.id!);
+                          setAssignGroupVarId(null);
+                        }}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                    {isInsideGroup && (
+                      <button
+                        type="button"
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: '12px',
+                          textAlign: 'left',
+                          background: '#fee2e2',
+                          border: '1px solid #fca5a5',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          color: '#991b1b',
+                          marginTop: '4px',
+                        }}
+                        onClick={() => {
+                          handleAssignVariableToGroup(variable.id!, '');
+                          setAssignGroupVarId(null);
+                        }}
+                      >
+                        Remove from group
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Card Header: Variable Name input and Red Trash button */}
+          <div className="cv-header">
+            <div className="cv-title">
+              <input
+                type="text"
+                className="custom-variable-input"
+                placeholder="Enter Custom Variable Name"
+                value={variable.name}
+                onChange={(e) => handleUpdateVariableName(variable.id!, e.target.value)}
+                onBlur={() => handleSaveVariableName(variable.id!)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveVariableName(variable.id!);
+                }}
+                disabled={locked || !canManageSettings || isArchived}
+                aria-label={`Custom variable name for ${variable.name}`}
+              />
+            </div>
+
+            <div className="cv-toolbar">
+              {canManageSettings && !isArchived && (
+                <button
+                  type="button"
+                  className="btn-trash"
+                  onClick={() =>
+                    setConfirmDeleteModal({
+                      type: 'variable',
+                      id: variable.id!,
+                      name: variable.name,
+                      isGlobal: variable.isGlobal,
+                    })
+                  }
+                  disabled={locked}
+                  aria-label={`Delete custom variable ${variable.name}`}
+                  title={locked ? 'Unlock to delete' : 'Delete custom variable'}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Card Typebar: Type badge, Convert button, Unlock button, Checkboxes, Options toggle */}
+          <div className="cv-typebar">
+            <span className="badge-type">{getTypeName(variable.variableType)}</span>
+
+            {variable.variableType === 'single' && canManageSettings && !isArchived && (
+              <button
+                type="button"
+                className="btn-convert"
+                onClick={() => handleConvertToMulti(variable.id!)}
+                disabled={locked}
+                title={locked ? 'Unlock variable to convert' : 'Convert single select to multi-select'}
+              >
+                <List size={12} /> Convert
+              </button>
+            )}
+
+            {variable.isGlobal && locked && canManageSettings && !isArchived && (
+              <button
+                type="button"
+                className="btn-unlock"
+                onClick={() => setUnlockPromptVariable(variable)}
+                title="Unlock to make changes across all studies"
+              >
+                <Lock size={12} /> Unlock
+              </button>
+            )}
+
+            <label className="toggle-checkbox">
+              <input
+                type="checkbox"
+                checked={!!variable.isGlobal}
+                onChange={() => handleToggleGlobal(variable.id!)}
+                disabled={locked || !canManageSettings || isArchived}
+              />
+              Global
+            </label>
+
+            <label className="toggle-checkbox">
+              <input
+                type="checkbox"
+                checked={!!variable.isBlind}
+                onChange={() => handleToggleBlind(variable.id!)}
+                disabled={locked || !canManageSettings || isArchived}
+              />
+              Blind
+            </label>
+
+            {(variable.variableType === 'single' || variable.variableType === 'multi') && (
+              <button
+                type="button"
+                className={`cv-options-toggle ${isOptionsOpen ? 'is-open' : ''}`}
+                onClick={() => toggleOptions(variable.id || variable.name)}
+                aria-label="Toggle options"
+              >
+                {isOptionsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                Options
+              </button>
+            )}
+          </div>
+
+          {/* Options details (Categorical Input) */}
+          {(variable.variableType === 'single' || variable.variableType === 'multi') && isOptionsOpen && (
+            <div className="cv-options-container">
+              {variable.options && variable.options.length > 0 ? (
+                variable.options.map((opt, optIdx) => (
+                  <div key={opt.value || optIdx} className="option-row">
+                    <input
+                      type="text"
+                      className="option-input"
+                      value={opt.label}
+                      onChange={(e) => handleUpdateOptionLabel(variable.id!, optIdx, e.target.value)}
+                      onBlur={handleSaveOption}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveOption();
+                      }}
+                      disabled={locked || !canManageSettings || isArchived}
+                      placeholder={`Option ${optIdx + 1}`}
+                    />
+                    {!locked && canManageSettings && !isArchived && (
+                      <button
+                        type="button"
+                        className="btn-option-delete"
+                        onClick={() => handleDeleteOption(variable.id!, optIdx)}
+                        title="Delete option"
+                        aria-label={`Delete option ${opt.label}`}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>
+                  No options defined yet.
+                </div>
+              )}
+
+              {!locked && canManageSettings && !isArchived && (
+                <div
+                  className="btn-add-item"
+                  style={{ marginTop: '6px', marginBottom: 0 }}
+                  onClick={() => handleAddOptionInline(variable.id!)}
+                >
+                  Add option
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -692,57 +1329,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   }
 
   return (
-    <div className="study-settings-requirements" data-testid="study-settings-requirements">
-      {/* Header */}
-      <div className="study-settings-requirements__header">
-        <div>
-          <h2 className="study-settings-requirements__title">Participant Requirements</h2>
-          <p className="study-settings-requirements__subtitle">
-            Configure participant sample targets, demographic quotas, custom protocol variables, and contact taxonomies.
-          </p>
-        </div>
-        <div className="study-header-controls">
-          <button
-            type="button"
-            className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--sm"
-            onClick={expandAllSections}
-            title="Expand all requirement sections"
-          >
-            Expand All
-          </button>
-          <button
-            type="button"
-            className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--sm"
-            onClick={collapseAllSections}
-            title="Collapse all requirement sections"
-          >
-            Collapse All
-          </button>
-          {isDirty && (
-            <button
-              type="button"
-              className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--sm"
-              onClick={loadRequirements}
-              disabled={saving}
-              title="Discard unsaved changes and reload from server"
-            >
-              <RotateCcw size={14} /> Discard
-            </button>
-          )}
-          {canManageSettings && !isArchived && (
-            <button
-              type="button"
-              className="study-settings-btn study-settings-btn--primary"
-              onClick={handleSaveRequirements}
-              disabled={saving || !isDirty}
-              aria-label="Save requirements"
-            >
-              {saving ? <Loader2 className="study-spinner" size={16} /> : <Save size={16} />}
-              <span>{saving ? 'Saving...' : 'Save Requirements'}</span>
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="study-requirements-page study-settings-requirements" data-testid="study-settings-requirements">
+      <h3 className="settings-header">Edit Participant Requirements</h3>
 
       {/* Notifications */}
       {error && (
@@ -765,653 +1353,968 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       )}
 
       {/* ========================================================================= */}
-      {/* 1. GENERAL SAMPLE REQUIREMENTS & MILESTONES */}
+      {/* 1. GENERAL SAMPLE REQUIREMENTS */}
       {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-sample-reqs">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
+      <div>
+        <div
+          className="sub-heading underlined"
           onClick={() => toggleSection('sample')}
+          role="button"
+          tabIndex={0}
           aria-expanded={!collapsedSections.sample}
-          aria-controls="section-content-sample"
         >
-          <div className="study-requirements-section__header-left">
-            <Users size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-sample-reqs">General Sample Requirements & Milestones</h3>
-            <span className="study-badge study-badge--neutral">
-              Target: {sampleSize !== '' ? sampleSize : 'Not set'} | {milestones.length} Milestones
-            </span>
+          <span>General Sample Requirements</span>
+          <div className="toggle-section">
+            {collapsedSections.sample ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </div>
-          <div className="study-requirements-section__header-right">
-            {collapsedSections.sample ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
+        </div>
 
         {!collapsedSections.sample && (
-          <div id="section-content-sample" className="study-requirements-section__content">
-            <div className="study-requirements-grid">
-              {/* Sample Size (N) */}
-              <div className="study-card study-requirements-card">
-                <h4 className="study-card__title">Total Study Sample Size (N)</h4>
-                <p className="study-card__description">
-                  Set the target total recruitment participant count for this study protocol.
-                </p>
-                <div className="study-form-group">
-                  <label htmlFor="sample-size-input" className="study-form-label">
-                    Target Participants
-                  </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '60px', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div className="req-field">
+              <label className="field-label">Sample Size (N)</label>
+              <input
+                type="number"
+                min="0"
+                className="group-input sample-size-input"
+                style={{ width: '160px' }}
+                value={sampleSize}
+                onChange={(e) => {
+                  const val = e.target.value === '' ? '' : parseInt(e.target.value, 10);
+                  setSampleSize(isNaN(val as number) ? '' : val);
+                }}
+                onBlur={handleBlurSampleSize}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                }}
+                disabled={!canManageSettings || isArchived}
+              />
+            </div>
+
+            <div style={{ flex: 1, minWidth: '320px' }}>
+              <div className="field-label" style={{ marginBottom: '8px' }}>
+                Milestone
+              </div>
+              {milestones.map((m) => (
+                <div key={m.id || m.milestoneDate} className="req-row" style={{ marginBottom: '8px' }}>
                   <input
-                    id="sample-size-input"
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="study-form-input"
-                    placeholder="e.g. 150"
-                    value={sampleSize}
+                    type="date"
+                    className="date-input"
+                    value={m.milestoneDate}
                     onChange={(e) => {
-                      const val = e.target.value === '' ? '' : parseInt(e.target.value, 10);
-                      setSampleSize(isNaN(val as number) ? '' : val);
-                      markDirty();
+                      const val = e.target.value;
+                      setMilestones((prev) =>
+                        prev.map((item) => (item.id === m.id ? { ...item, milestoneDate: val } : item))
+                      );
                     }}
+                    onBlur={(e) => handleUpdateMilestoneDirect(m, { milestoneDate: e.target.value })}
                     disabled={!canManageSettings || isArchived}
                   />
-                </div>
-              </div>
-
-              {/* Study Milestones */}
-              <div className="study-card study-requirements-card">
-                <div className="study-card__header-flex">
-                  <div>
-                    <h4 className="study-card__title">Recruitment Milestones</h4>
-                    <p className="study-card__description">
-                      Track date-based recruitment milestones across study timeline.
-                    </p>
+                  <div className="req-field">
+                    <input
+                      type="number"
+                      min="0"
+                      className="number-input"
+                      style={{ width: '85px' }}
+                      placeholder="Participants"
+                      value={m.participantTarget || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        setMilestones((prev) =>
+                          prev.map((item) => (item.id === m.id ? { ...item, participantTarget: val } : item))
+                        );
+                      }}
+                      onBlur={(e) =>
+                        handleUpdateMilestoneDirect(m, { participantTarget: parseInt(e.target.value, 10) || 0 })
+                      }
+                      disabled={!canManageSettings || isArchived}
+                    />
+                    <label className="field-label">Participants</label>
                   </div>
-                  {canManageSettings && !isArchived && (
+                  {canManageSettings && !isArchived && m.id && (
                     <button
                       type="button"
-                      className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--sm"
-                      onClick={() => setShowAddMilestoneModal(true)}
-                      aria-label="Add Milestone"
+                      className="btn-trash ms-auto"
+                      title="Delete milestone"
+                      onClick={() => handleDeleteMilestoneDirect(m.id!)}
                     >
-                      <Plus size={14} />
-                      <span>Add Milestone</span>
+                      <Trash2 size={16} />
                     </button>
                   )}
                 </div>
+              ))}
 
-                {milestones.length === 0 ? (
-                  <div className="study-empty-state-card">
-                    <Calendar size={24} className="study-empty-icon" />
-                    <p>No recruitment milestones scheduled yet.</p>
-                  </div>
-                ) : (
-                  <div className="study-table-container">
-                    <table className="study-table" aria-label="Recruitment Milestones">
-                      <thead>
-                        <tr>
-                          <th>Milestone Date</th>
-                          <th>Target Participants</th>
-                          <th>Description</th>
-                          <th className="text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {milestones.map((m) => (
-                          <tr key={m.id || m.milestoneDate}>
-                            <td>
-                              <strong>{m.milestoneDate}</strong>
-                            </td>
-                            <td>{m.participantTarget} participants</td>
-                            <td>{m.description || '—'}</td>
-                            <td className="text-right">
-                              {canManageSettings && !isArchived && m.id && (
-                                <button
-                                  type="button"
-                                  className="study-action-btn study-action-btn--danger"
-                                  onClick={() =>
-                                    setConfirmDeleteModal({
-                                      type: 'milestone',
-                                      id: m.id!,
-                                      name: `Milestone ${m.milestoneDate} (${m.participantTarget} participants)`,
-                                    })
-                                  }
-                                  title="Delete Milestone"
-                                  aria-label={`Delete milestone ${m.milestoneDate}`}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              {canManageSettings && !isArchived && (
+                <div className="btn-add-item" onClick={handleAddMilestoneInline}>
+                  Add milestone
+                </div>
+              )}
             </div>
           </div>
         )}
-      </section>
+      </div>
 
       {/* ========================================================================= */}
       {/* 2. AGE REQUIREMENTS */}
       {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-age-reqs">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
+      <div>
+        <div
+          className="sub-heading underlined"
           onClick={() => toggleSection('age')}
+          role="button"
+          tabIndex={0}
           aria-expanded={!collapsedSections.age}
-          aria-controls="section-content-age"
+          id="age-req-heading"
         >
-          <div className="study-requirements-section__header-left">
-            <Calendar size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-age-reqs">Age Requirements</h3>
-            <span className="study-badge study-badge--neutral">{ageGroups.length} Groups</span>
+          <span>Age Requirements</span>
+          <div className="toggle-section">
+            {collapsedSections.age ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </div>
-          <div className="study-requirements-section__header-right">
-            {canManageSettings && !isArchived && (
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddAgeGroupModal(true);
-                }}
-                aria-label="Add Age Group"
-              >
-                <Plus size={13} /> Add Group
-              </button>
-            )}
-            {collapsedSections.age ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
+        </div>
 
         {!collapsedSections.age && (
-          <div id="section-content-age" className="study-requirements-section__content">
-            {ageGroups.length === 0 ? (
-              <div className="study-empty-state-card">
-                <p>No age requirements defined. Recruitment is open to all ages.</p>
+          <div>
+            {ageGroups.map((grp) => (
+              <div key={grp.id} className="req-row">
+                <div className="req-field">
+                  <label className="field-label">Group</label>
+                  <input
+                    type="text"
+                    className="group-input"
+                    placeholder="Group"
+                    value={grp.label}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStudyGroups((prev) =>
+                        prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
+                      );
+                    }}
+                    onBlur={handleBlurStudyGroups}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                    disabled={!canManageSettings || isArchived}
+                    aria-label={`Group name for ${grp.label || 'group'}`}
+                  />
+                </div>
+
+                <div className="req-field">
+                  <label className="field-label">Sample Size</label>
+                  <input
+                    type="text"
+                    className="sample-size-input"
+                    placeholder="Sample Size"
+                    value={grp.sampleSize}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStudyGroups((prev) =>
+                        prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
+                      );
+                    }}
+                    onBlur={handleBlurStudyGroups}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                    disabled={!canManageSettings || isArchived}
+                    aria-label={`Sample size for ${grp.label || 'group'}`}
+                  />
+                </div>
+
+                <div className="req-field">
+                  <label className="field-label">Age Range</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="number-input"
+                    placeholder="1"
+                    value={grp.ageRange?.min ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                      setStudyGroups((prev) =>
+                        prev.map((g) =>
+                          g.id === grp.id
+                            ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
+                            : g
+                        )
+                      );
+                    }}
+                    onBlur={handleBlurStudyGroups}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                    disabled={!canManageSettings || isArchived}
+                    aria-label={`Minimum age for ${grp.label || 'group'}`}
+                  />
+                  <span className="range-separator">to</span>
+                  <input
+                    type="number"
+                    min="0"
+                    className="number-input"
+                    placeholder="1"
+                    value={grp.ageRange?.max ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                      setStudyGroups((prev) =>
+                        prev.map((g) =>
+                          g.id === grp.id
+                            ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
+                            : g
+                        )
+                      );
+                    }}
+                    onBlur={handleBlurStudyGroups}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                    disabled={!canManageSettings || isArchived}
+                    aria-label={`Maximum age for ${grp.label || 'group'}`}
+                  />
+                </div>
+
+                {canManageSettings && !isArchived && grp.id && (
+                  <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                    <button
+                      type="button"
+                      className="btn-trash"
+                      onClick={() =>
+                        setConfirmDeleteModal({
+                          type: 'group',
+                          id: grp.id!,
+                          name: `Age Group "${grp.label}"`,
+                        })
+                      }
+                      aria-label={`Delete age group ${grp.label}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="study-table-container">
-                <table className="study-table" aria-label="Age Groups">
-                  <thead>
-                    <tr>
-                      <th>Group Name</th>
-                      <th>Sample Target (N)</th>
-                      <th>Age Range (Years)</th>
-                      <th className="text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ageGroups.map((grp) => (
-                      <tr key={grp.id}>
-                        <td>
-                          <strong>{grp.label}</strong>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="study-form-input study-form-input--inline"
-                            value={grp.sampleSize}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setStudyGroups((prev) =>
-                                prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                              );
-                              markDirty();
-                            }}
-                            disabled={!canManageSettings || isArchived}
-                            aria-label={`Sample target for ${grp.label}`}
-                          />
-                        </td>
-                        <td>
-                          {grp.ageRange?.min ?? 0} to {grp.ageRange?.max ?? 'Any'} years
-                        </td>
-                        <td className="text-right">
-                          {canManageSettings && !isArchived && grp.id && (
-                            <button
-                              type="button"
-                              className="study-action-btn study-action-btn--danger"
-                              onClick={() =>
-                                setConfirmDeleteModal({
-                                  type: 'group',
-                                  id: grp.id!,
-                                  name: `Age Group "${grp.label}"`,
-                                })
-                              }
-                              aria-label={`Delete age group ${grp.label}`}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            ))}
+
+            {canManageSettings && !isArchived && (
+              <div className="btn-add-item marginbottom40" onClick={handleAddAgeGroup}>
+                Add age group
               </div>
             )}
           </div>
         )}
-      </section>
+      </div>
 
       {/* ========================================================================= */}
       {/* 3. SEX / GENDER REQUIREMENTS */}
       {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-sex-reqs">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
+      <div>
+        <div
+          className="sub-heading underlined"
           onClick={() => toggleSection('gender')}
+          role="button"
+          tabIndex={0}
           aria-expanded={!collapsedSections.gender}
-          aria-controls="section-content-gender"
+          id="sex-gender-heading"
         >
-          <div className="study-requirements-section__header-left">
-            <Users size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-sex-reqs">Sex / Gender Requirements</h3>
-            <span className="study-badge study-badge--neutral">{genderGroups.length} Groups</span>
+          <span>Sex/Gender</span>
+          <div className="toggle-section">
+            {collapsedSections.gender ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </div>
-          <div className="study-requirements-section__header-right">
-            {canManageSettings && !isArchived && (
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddGenderModal(true);
-                }}
-                aria-label="Add Sex/Gender Group"
-              >
-                <Plus size={13} /> Add Group
-              </button>
-            )}
-            {collapsedSections.gender ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
+        </div>
 
         {!collapsedSections.gender && (
-          <div id="section-content-gender" className="study-requirements-section__content">
-            {genderGroups.length === 0 ? (
-              <div className="study-empty-state-card">
-                <p>No specific sex or gender quotas set.</p>
+          <div>
+            {genderGroups.map((grp) => {
+              const hasAgeRange =
+                expandedAgeRangeIds.has(grp.id ?? '') ||
+                (grp.ageRange && (grp.ageRange.min != null || grp.ageRange.max != null));
+
+              return (
+                <div key={grp.id} className="req-row">
+                  <div className="req-field">
+                    <label className="field-label">Group</label>
+                    <input
+                      type="text"
+                      className="group-input"
+                      placeholder="Group"
+                      value={grp.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStudyGroups((prev) =>
+                          prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
+                        );
+                      }}
+                      onBlur={handleBlurStudyGroups}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Group name for ${grp.label || 'group'}`}
+                    />
+                  </div>
+
+                  <div className="req-field">
+                    <label className="field-label">Sample Size</label>
+                    <input
+                      type="text"
+                      className="sample-size-input"
+                      placeholder="Sample Size"
+                      value={grp.sampleSize}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStudyGroups((prev) =>
+                          prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
+                        );
+                      }}
+                      onBlur={handleBlurStudyGroups}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Sample size for ${grp.label || 'group'}`}
+                    />
+                  </div>
+
+                  <div>
+                    {!hasAgeRange ? (
+                      canManageSettings && !isArchived && (
+                        <div
+                          className="btn-add-item"
+                          style={{ marginBottom: 0 }}
+                          onClick={() => grp.id && handleEnableAgeRange(grp.id)}
+                        >
+                          Add Age Range
+                        </div>
+                      )
+                    ) : (
+                      <div className="req-field">
+                        <label className="field-label">Age Range</label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="number-input"
+                          placeholder="1"
+                          value={grp.ageRange?.min ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            setStudyGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
+                                  : g
+                              )
+                            );
+                          }}
+                          onBlur={handleBlurStudyGroups}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          disabled={!canManageSettings || isArchived}
+                          aria-label={`Minimum age for ${grp.label || 'group'}`}
+                        />
+                        <span className="range-separator">to</span>
+                        <input
+                          type="number"
+                          min="0"
+                          className="number-input"
+                          placeholder="1"
+                          value={grp.ageRange?.max ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            setStudyGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
+                                  : g
+                              )
+                            );
+                          }}
+                          onBlur={handleBlurStudyGroups}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          disabled={!canManageSettings || isArchived}
+                          aria-label={`Maximum age for ${grp.label || 'group'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {canManageSettings && !isArchived && grp.id && (
+                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        className="btn-trash"
+                        onClick={() =>
+                          setConfirmDeleteModal({
+                            type: 'group',
+                            id: grp.id!,
+                            name: `Sex/Gender Group "${grp.label}"`,
+                          })
+                        }
+                        aria-label={`Delete sex group ${grp.label}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {canManageSettings && !isArchived && (
+              <div className="btn-add-item marginbottom40" onClick={handleAddGenderGroup}>
+                Add gender group
               </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4 & 5. ETHNIC & RACIAL CATEGORIES (*US CENSUS/NIH CLASSIFICATION) */}
+      {/* ========================================================================= */}
+      <div>
+        <div
+          className="sub-heading underlined"
+          onClick={() => {
+            const isAllCollapsed = collapsedSections.ethnicity && collapsedSections.race;
+            const nextVal = !isAllCollapsed;
+            setCollapsedSections((prev) => ({ ...prev, ethnicity: nextVal, race: nextVal }));
+          }}
+          role="button"
+          tabIndex={0}
+          aria-expanded={!(collapsedSections.ethnicity && collapsedSections.race)}
+          id="ethnic-racial-heading"
+        >
+          <span>Ethnic &amp; Racial Categories (*US Census/NIH Classification)</span>
+          <div className="toggle-section">
+            {collapsedSections.ethnicity && collapsedSections.race ? (
+              <ChevronRight size={14} />
             ) : (
-              <div className="study-table-container">
-                <table className="study-table" aria-label="Sex and Gender Groups">
-                  <thead>
-                    <tr>
-                      <th>Sex / Gender Category</th>
-                      <th>Target Sample Size (N)</th>
-                      <th className="text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {genderGroups.map((grp) => (
-                      <tr key={grp.id}>
-                        <td>
-                          <strong>{grp.label}</strong>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            className="study-form-input study-form-input--inline"
-                            value={grp.sampleSize}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setStudyGroups((prev) =>
-                                prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                              );
-                              markDirty();
-                            }}
-                            disabled={!canManageSettings || isArchived}
-                            aria-label={`Sample target for ${grp.label}`}
-                          />
-                        </td>
-                        <td className="text-right">
-                          {canManageSettings && !isArchived && grp.id && (
-                            <button
-                              type="button"
-                              className="study-action-btn study-action-btn--danger"
-                              onClick={() =>
-                                setConfirmDeleteModal({
-                                  type: 'group',
-                                  id: grp.id!,
-                                  name: `Sex/Gender Group "${grp.label}"`,
+              <ChevronDown size={14} />
+            )}
+          </div>
+        </div>
+
+        {!(collapsedSections.ethnicity && collapsedSections.race) && (
+          <div>
+            {/* Ethnicity Category Rows */}
+            {ethnicityGroups.map((grp) => {
+              const hasAgeRange =
+                expandedAgeRangeIds.has(grp.id ?? '') ||
+                (grp.ageRange && (grp.ageRange.min != null || grp.ageRange.max != null));
+
+              return (
+                <div key={grp.id} className="req-row">
+                  <div className="req-field">
+                    <label className="field-label">Group</label>
+                    <input
+                      type="text"
+                      className="group-input"
+                      placeholder="Group"
+                      value={grp.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStudyGroups((prev) =>
+                          prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
+                        );
+                      }}
+                      onBlur={handleBlurStudyGroups}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Ethnicity Category Name for ${grp.label || 'group'}`}
+                    />
+                  </div>
+
+                  <div className="req-field">
+                    <label className="field-label">Sample Size</label>
+                    <input
+                      type="text"
+                      className="sample-size-input"
+                      placeholder="Sample Size"
+                      value={grp.sampleSize}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStudyGroups((prev) =>
+                          prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
+                        );
+                      }}
+                      onBlur={handleBlurStudyGroups}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Sample target for ${grp.label || 'group'}`}
+                    />
+                  </div>
+
+                  <div>
+                    {!hasAgeRange ? (
+                      canManageSettings && !isArchived && (
+                        <div
+                          className="btn-add-item"
+                          style={{ marginBottom: 0 }}
+                          onClick={() => grp.id && handleEnableAgeRange(grp.id)}
+                        >
+                          Add Age Range
+                        </div>
+                      )
+                    ) : (
+                      <div className="req-field">
+                        <label className="field-label">Age Range</label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="number-input"
+                          placeholder="1"
+                          value={grp.ageRange?.min ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            setStudyGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
+                                  : g
+                              )
+                            );
+                          }}
+                          onBlur={handleBlurStudyGroups}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          disabled={!canManageSettings || isArchived}
+                          aria-label={`Minimum age for ${grp.label || 'group'}`}
+                        />
+                        <span className="range-separator">to</span>
+                        <input
+                          type="number"
+                          min="0"
+                          className="number-input"
+                          placeholder="1"
+                          value={grp.ageRange?.max ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            setStudyGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
+                                  : g
+                              )
+                            );
+                          }}
+                          onBlur={handleBlurStudyGroups}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          disabled={!canManageSettings || isArchived}
+                          aria-label={`Maximum age for ${grp.label || 'group'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Gender group inputs */}
+                  <div>
+                    {grp.genderGroups && grp.genderGroups.length > 0 ? (
+                      <div className="nested-gender-list" style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
+                        {grp.genderGroups.map((gg) => (
+                          <div key={gg.id || gg.gender} className="nested-gender-row" style={{ marginBottom: 0 }}>
+                            <select
+                              className="select-gender"
+                              value={gg.gender}
+                              onChange={(e) =>
+                                grp.id &&
+                                gg.id &&
+                                handleUpdateNestedGender(grp.id, gg.id, { gender: e.target.value })
+                              }
+                              onBlur={handleBlurStudyGroups}
+                              disabled={!canManageSettings || isArchived}
+                              aria-label="Select gender"
+                            >
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              className="number-input"
+                              placeholder="0"
+                              value={gg.participants || ''}
+                              onChange={(e) =>
+                                grp.id &&
+                                gg.id &&
+                                handleUpdateNestedGender(grp.id, gg.id, {
+                                  participants: parseInt(e.target.value, 10) || 0,
                                 })
                               }
-                              aria-label={`Delete sex group ${grp.label}`}
+                              onBlur={handleBlurStudyGroups}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur();
+                              }}
+                              disabled={!canManageSettings || isArchived}
+                            />
+                            <span className="field-label" style={{ margin: 0 }}>Participants</span>
+                            {canManageSettings && !isArchived && grp.id && gg.id && (
+                              <button
+                                type="button"
+                                className="btn-trash"
+                                style={{ width: '22px', height: '22px', padding: 0 }}
+                                onClick={() => handleDeleteNestedGender(grp.id!, gg.id!)}
+                                aria-label={`Delete nested gender ${gg.gender}`}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        {canManageSettings && !isArchived && grp.id && (
+                          <div
+                            className="btn-add-item"
+                            style={{ marginBottom: 0, marginTop: '2px' }}
+                            onClick={() => handleAddNestedGender(grp.id!)}
+                          >
+                            Add gender group
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      canManageSettings && !isArchived && grp.id && (
+                        <div
+                          className="btn-add-item"
+                          style={{ marginBottom: 0 }}
+                          onClick={() => handleAddNestedGender(grp.id!)}
+                        >
+                          Add gender group
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  {canManageSettings && !isArchived && grp.id && (
+                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        className="btn-trash"
+                        onClick={() =>
+                          setConfirmDeleteModal({
+                            type: 'group',
+                            id: grp.id!,
+                            name: `Ethnicity Category "${grp.label}"`,
+                          })
+                        }
+                        aria-label={`Delete ethnicity group ${grp.label}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {canManageSettings && !isArchived && (
+              <div className="btn-add-item marginbottom40" onClick={handleAddEthnicityGroup}>
+                Add ethnicity
+              </div>
+            )}
+
+            {/* Sub-heading divider between Ethnicity and Race */}
+            <div className="sub-heading underlined" style={{ marginTop: '20px', marginBottom: '20px' }} />
+
+            {/* Race Category Rows */}
+            {raceGroups.map((grp) => {
+              const hasAgeRange =
+                expandedAgeRangeIds.has(grp.id ?? '') ||
+                (grp.ageRange && (grp.ageRange.min != null || grp.ageRange.max != null));
+
+              return (
+                <div key={grp.id} className="req-row">
+                  <div className="req-field">
+                    <label className="field-label">Group</label>
+                    <input
+                      type="text"
+                      className="group-input"
+                      placeholder="Group"
+                      value={grp.label}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStudyGroups((prev) =>
+                          prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
+                        );
+                      }}
+                      onBlur={handleBlurStudyGroups}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Race Category Name for ${grp.label || 'group'}`}
+                    />
+                  </div>
+
+                  <div className="req-field">
+                    <label className="field-label">Sample Size</label>
+                    <input
+                      type="text"
+                      className="sample-size-input"
+                      placeholder="Sample Size"
+                      value={grp.sampleSize}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setStudyGroups((prev) =>
+                          prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
+                        );
+                      }}
+                      onBlur={handleBlurStudyGroups}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Sample target for ${grp.label || 'group'}`}
+                    />
+                  </div>
+
+                  <div>
+                    {!hasAgeRange ? (
+                      canManageSettings && !isArchived && (
+                        <div
+                          className="btn-add-item"
+                          style={{ marginBottom: 0 }}
+                          onClick={() => grp.id && handleEnableAgeRange(grp.id)}
+                        >
+                          Add Age Range
+                        </div>
+                      )
+                    ) : (
+                      <div className="req-field">
+                        <label className="field-label">Age Range</label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="number-input"
+                          placeholder="1"
+                          value={grp.ageRange?.min ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            setStudyGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
+                                  : g
+                              )
+                            );
+                          }}
+                          onBlur={handleBlurStudyGroups}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          disabled={!canManageSettings || isArchived}
+                          aria-label={`Minimum age for ${grp.label || 'group'}`}
+                        />
+                        <span className="range-separator">to</span>
+                        <input
+                          type="number"
+                          min="0"
+                          className="number-input"
+                          placeholder="1"
+                          value={grp.ageRange?.max ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                            setStudyGroups((prev) =>
+                              prev.map((g) =>
+                                g.id === grp.id
+                                  ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
+                                  : g
+                              )
+                            );
+                          }}
+                          onBlur={handleBlurStudyGroups}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                          }}
+                          disabled={!canManageSettings || isArchived}
+                          aria-label={`Maximum age for ${grp.label || 'group'}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Gender group inputs */}
+                  <div>
+                    {grp.genderGroups && grp.genderGroups.length > 0 ? (
+                      <div className="nested-gender-list" style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
+                        {grp.genderGroups.map((gg) => (
+                          <div key={gg.id || gg.gender} className="nested-gender-row" style={{ marginBottom: 0 }}>
+                            <select
+                              className="select-gender"
+                              value={gg.gender}
+                              onChange={(e) =>
+                                grp.id &&
+                                gg.id &&
+                                handleUpdateNestedGender(grp.id, gg.id, { gender: e.target.value })
+                              }
+                              onBlur={handleBlurStudyGroups}
+                              disabled={!canManageSettings || isArchived}
+                              aria-label="Select gender"
                             >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ========================================================================= */}
-      {/* 4. ETHNICITY REQUIREMENTS */}
-      {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-ethnic-reqs">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
-          onClick={() => toggleSection('ethnicity')}
-          aria-expanded={!collapsedSections.ethnicity}
-          aria-controls="section-content-ethnicity"
-        >
-          <div className="study-requirements-section__header-left">
-            <Layers size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-ethnic-reqs">Ethnicity Requirements</h3>
-            <span className="study-badge study-badge--neutral">{ethnicityGroups.length} Categories</span>
-          </div>
-          <div className="study-requirements-section__header-right">
-            {canManageSettings && !isArchived && (
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddEthnicityModal(true);
-                }}
-                aria-label="Add Ethnicity Group"
-              >
-                <Plus size={13} /> Add Category
-              </button>
-            )}
-            {collapsedSections.ethnicity ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
-
-        {!collapsedSections.ethnicity && (
-          <div id="section-content-ethnicity" className="study-requirements-section__content">
-            {ethnicityGroups.length === 0 ? (
-              <div className="study-empty-state-card">
-                <p>No ethnicity distribution requirements specified.</p>
-              </div>
-            ) : (
-              <div className="study-demographic-cards">
-                {ethnicityGroups.map((grp) => (
-                  <div key={grp.id} className="study-card study-demo-group-card">
-                    <div className="study-card__header-flex">
-                      <div>
-                        <span className="study-badge study-badge--info">Ethnicity</span>
-                        <h4 className="study-card__title" style={{ marginTop: '4px' }}>
-                          {grp.label}
-                        </h4>
-                      </div>
-                      <div className="study-card__actions">
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              className="number-input"
+                              placeholder="0"
+                              value={gg.participants || ''}
+                              onChange={(e) =>
+                                grp.id &&
+                                gg.id &&
+                                handleUpdateNestedGender(grp.id, gg.id, {
+                                  participants: parseInt(e.target.value, 10) || 0,
+                                })
+                              }
+                              onBlur={handleBlurStudyGroups}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') e.currentTarget.blur();
+                              }}
+                              disabled={!canManageSettings || isArchived}
+                            />
+                            <span className="field-label" style={{ margin: 0 }}>Participants</span>
+                            {canManageSettings && !isArchived && grp.id && gg.id && (
+                              <button
+                                type="button"
+                                className="btn-trash"
+                                style={{ width: '22px', height: '22px', padding: 0 }}
+                                onClick={() => handleDeleteNestedGender(grp.id!, gg.id!)}
+                                aria-label={`Delete nested gender ${gg.gender}`}
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
                         {canManageSettings && !isArchived && grp.id && (
-                          <button
-                            type="button"
-                            className="study-action-btn study-action-btn--danger"
-                            onClick={() =>
-                              setConfirmDeleteModal({
-                                type: 'group',
-                                id: grp.id!,
-                                name: `Ethnicity category "${grp.label}"`,
-                              })
-                            }
-                            aria-label={`Delete ethnicity group ${grp.label}`}
+                          <div
+                            className="btn-add-item"
+                            style={{ marginBottom: 0, marginTop: '2px' }}
+                            onClick={() => handleAddNestedGender(grp.id!)}
                           >
-                            <Trash2 size={14} />
-                          </button>
+                            Add gender group
+                          </div>
                         )}
                       </div>
-                    </div>
-
-                    <div className="study-form-group" style={{ maxWidth: '240px', marginTop: '10px' }}>
-                      <label className="study-form-label">Total Category Target (N)</label>
-                      <input
-                        type="text"
-                        className="study-form-input"
-                        value={grp.sampleSize}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setStudyGroups((prev) =>
-                            prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                          );
-                          markDirty();
-                        }}
-                        disabled={!canManageSettings || isArchived}
-                      />
-                    </div>
-
-                    {/* Nested Gender Breakdown */}
-                    <div className="study-demo-gender-breakdown">
-                      <h5 className="study-demo-gender-breakdown__title">Gender Sub-Targets</h5>
-                      <div className="study-demo-gender-grid">
-                        {['Male', 'Female', 'Other'].map((gender) => {
-                          const currentVal =
-                            grp.genderGroups?.find((g) => g.gender.toLowerCase() === gender.toLowerCase())
-                              ?.participants ?? '';
-                          return (
-                            <div key={gender} className="study-demo-gender-item">
-                              <label className="study-form-label">{gender}</label>
-                              <input
-                                type="number"
-                                min="0"
-                                className="study-form-input study-form-input--sm"
-                                placeholder="Target"
-                                value={currentVal}
-                                onChange={(e) =>
-                                  handleUpdateGroupNestedGender(grp.id!, gender, e.target.value)
-                                }
-                                disabled={!canManageSettings || isArchived}
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    ) : (
+                      canManageSettings && !isArchived && grp.id && (
+                        <div
+                          className="btn-add-item"
+                          style={{ marginBottom: 0 }}
+                          onClick={() => handleAddNestedGender(grp.id!)}
+                        >
+                          Add gender group
+                        </div>
+                      )
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
 
-      {/* ========================================================================= */}
-      {/* 5. RACE REQUIREMENTS */}
-      {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-race-reqs">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
-          onClick={() => toggleSection('race')}
-          aria-expanded={!collapsedSections.race}
-          aria-controls="section-content-race"
-        >
-          <div className="study-requirements-section__header-left">
-            <Layers size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-race-reqs">Race Requirements</h3>
-            <span className="study-badge study-badge--neutral">{raceGroups.length} Categories</span>
-          </div>
-          <div className="study-requirements-section__header-right">
+                  {canManageSettings && !isArchived && grp.id && (
+                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        className="btn-trash"
+                        onClick={() =>
+                          setConfirmDeleteModal({
+                            type: 'group',
+                            id: grp.id!,
+                            name: `Race Category "${grp.label}"`,
+                          })
+                        }
+                        aria-label={`Delete race group ${grp.label}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
             {canManageSettings && !isArchived && (
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddRaceModal(true);
-                }}
-                aria-label="Add Race Category"
-              >
-                <Plus size={13} /> Add Category
-              </button>
-            )}
-            {collapsedSections.race ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
-
-        {!collapsedSections.race && (
-          <div id="section-content-race" className="study-requirements-section__content">
-            {raceGroups.length === 0 ? (
-              <div className="study-empty-state-card">
-                <p>No race distribution requirements specified.</p>
-              </div>
-            ) : (
-              <div className="study-demographic-cards">
-                {raceGroups.map((grp) => (
-                  <div key={grp.id} className="study-card study-demo-group-card">
-                    <div className="study-card__header-flex">
-                      <div>
-                        <span className="study-badge study-badge--info">Race</span>
-                        <h4 className="study-card__title" style={{ marginTop: '4px' }}>
-                          {grp.label}
-                        </h4>
-                      </div>
-                      <div className="study-card__actions">
-                        {canManageSettings && !isArchived && grp.id && (
-                          <button
-                            type="button"
-                            className="study-action-btn study-action-btn--danger"
-                            onClick={() =>
-                              setConfirmDeleteModal({
-                                type: 'group',
-                                id: grp.id!,
-                                name: `Race category "${grp.label}"`,
-                              })
-                            }
-                            aria-label={`Delete race group ${grp.label}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="study-form-group" style={{ maxWidth: '240px', marginTop: '10px' }}>
-                      <label className="study-form-label">Total Category Target (N)</label>
-                      <input
-                        type="text"
-                        className="study-form-input"
-                        value={grp.sampleSize}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setStudyGroups((prev) =>
-                            prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                          );
-                          markDirty();
-                        }}
-                        disabled={!canManageSettings || isArchived}
-                      />
-                    </div>
-
-                    {/* Nested Gender Breakdown */}
-                    <div className="study-demo-gender-breakdown">
-                      <h5 className="study-demo-gender-breakdown__title">Gender Sub-Targets</h5>
-                      <div className="study-demo-gender-grid">
-                        {['Male', 'Female', 'Other'].map((gender) => {
-                          const currentVal =
-                            grp.genderGroups?.find((g) => g.gender.toLowerCase() === gender.toLowerCase())
-                              ?.participants ?? '';
-                          return (
-                            <div key={gender} className="study-demo-gender-item">
-                              <label className="study-form-label">{gender}</label>
-                              <input
-                                type="number"
-                                min="0"
-                                className="study-form-input study-form-input--sm"
-                                placeholder="Target"
-                                value={currentVal}
-                                onChange={(e) =>
-                                  handleUpdateGroupNestedGender(grp.id!, gender, e.target.value)
-                                }
-                                disabled={!canManageSettings || isArchived}
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="btn-add-item marginbottom40" onClick={handleAddRaceGroup}>
+                Add race
               </div>
             )}
           </div>
         )}
-      </section>
+      </div>
+
+      {/* Helper function to render a custom variable card matching legacy Ripple UI */}
+      {(() => null)()}
 
       {/* ========================================================================= */}
       {/* 6. CUSTOM PROTOCOL VARIABLES & VARIABLE GROUPS */}
       {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-custom-vars">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
+      <div>
+        <div
+          className="sub-heading underlined"
           onClick={() => toggleSection('customVars')}
+          role="button"
+          tabIndex={0}
           aria-expanded={!collapsedSections.customVars}
-          aria-controls="section-content-customvars"
+          id="heading-custom-vars"
         >
-          <div className="study-requirements-section__header-left">
-            <Tag size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-custom-vars">Custom Protocol Variables & Groups</h3>
-            <span className="study-badge study-badge--neutral">
-              {customVariables.length} Variables | {variableGroups.length} Groups
-            </span>
+          <span>Custom Variables</span>
+          <div className="toggle-section">
+            {collapsedSections.customVars ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </div>
-          <div className="study-requirements-section__header-right">
-            {collapsedSections.customVars ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
+        </div>
 
         {!collapsedSections.customVars && (
-          <div id="section-content-customvars" className="study-requirements-section__content">
+          <div>
             {/* Top Action & Search Bar */}
-            <div className="study-search-filter-bar">
-              <div className="study-search-wrap">
-                <Search size={16} className="study-search-icon" />
-                <input
-                  type="text"
-                  className="study-search-input"
-                  placeholder="Filter variables by name, type, or option..."
-                  value={variableSearch}
-                  onChange={(e) => setVariableSearch(e.target.value)}
-                  aria-label="Filter custom variables"
-                />
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+              <div className="search-input-container">
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    style={{ width: '240px', borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                    placeholder="Search by name..."
+                    value={variableSearch}
+                    onChange={(e) => setVariableSearch(e.target.value)}
+                    aria-label="Filter custom variables"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    style={{
+                      backgroundColor: '#1f5fd0',
+                      borderColor: '#1f5fd0',
+                      borderTopLeftRadius: 0,
+                      borderBottomLeftRadius: 0,
+                    }}
+                    title="Search"
+                  >
+                    <Search size={14} />
+                  </button>
+                </div>
               </div>
 
               {canManageSettings && !isArchived && (
-                <div className="study-requirements-section__header-actions">
+                <div>
                   <button
                     type="button"
-                    className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--sm"
-                    onClick={() => setShowAddGlobalVarModal(true)}
-                    aria-label="Add Global Variable"
-                  >
-                    <Globe size={14} />
-                    <span>Add Global Variable</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--sm"
+                    className="btn btn-sm btn-primary"
+                    style={{
+                      backgroundColor: '#1f5fd0',
+                      borderColor: '#1f5fd0',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
                     onClick={() => setShowAddGroupModal(true)}
-                    aria-label="Add Variable Group"
                   >
-                    <FolderPlus size={14} />
-                    <span>Add Group</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--sm"
-                    onClick={() => setShowAddCustomVarModal(true)}
-                    aria-label="Add Custom Variable"
-                  >
-                    <Plus size={14} />
-                    <span>Add Variable</span>
+                    <FolderPlus size={14} /> New Group
                   </button>
                 </div>
               )}
@@ -1429,87 +2332,96 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     const group = variableGroups.find((g) => g.id === item.refId);
                     if (!group) return null;
                     const groupVars = customVariables.filter((v) =>
-                      (group.variableIds || []).includes(v.id || '')
+                      getGroupVariableIds(group).includes(v.id || '')
                     );
 
                     return (
-                      <div key={item.id || group.id} className="study-variable-group-card" role="listitem">
-                        <div className="study-variable-group-card__header">
-                          <div className="study-variable-group-card__title-wrap">
+                      <div key={item.id || group.id} className="cv-sortable-row">
+                        <div className="drag-handle-col">
+                          <div className="drag-handle-btn" title="Reorder">
+                            <GripVertical size={16} />
+                          </div>
+                          {canManageSettings && !isArchived && (
+                            <div className="order-actions">
+                              <button
+                                type="button"
+                                className="btn-move-arrow"
+                                disabled={index === 0}
+                                onClick={() => handleMoveLayoutItem(index, 'up')}
+                                title="Move Group Up"
+                                aria-label={`Move group ${group.name} up`}
+                              >
+                                <ChevronUp size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-move-arrow"
+                                disabled={index === layout.length - 1}
+                                onClick={() => handleMoveLayoutItem(index, 'down')}
+                                title="Move Group Down"
+                                aria-label={`Move group ${group.name} down`}
+                              >
+                                <ChevronDown size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="variable-group-block">
+                          <div className="variable-group-header">
+                            <ChevronDown size={14} />
                             {renamingGroupId === group.id ? (
-                              <div className="study-inline-rename-wrap">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <input
                                   type="text"
-                                  className="study-form-input study-form-input--sm"
+                                  className="group-name-input"
                                   value={renameGroupValue}
                                   onChange={(e) => setRenameGroupValue(e.target.value)}
-                                  aria-label="Rename Group"
+                                  autoFocus
                                 />
                                 <button
                                   type="button"
-                                  className="study-action-btn study-action-btn--primary"
+                                  className="btn btn-sm btn-primary"
+                                  style={{ padding: '2px 8px', fontSize: '12px' }}
                                   onClick={() => handleRenameGroup(group.id!)}
-                                  title="Save Group Name"
                                 >
-                                  <Check size={14} />
+                                  Save
                                 </button>
                                 <button
                                   type="button"
-                                  className="study-action-btn"
+                                  className="btn btn-sm btn-light"
+                                  style={{ padding: '2px 8px', fontSize: '12px' }}
                                   onClick={() => setRenamingGroupId(null)}
-                                  title="Cancel Rename"
                                 >
-                                  <X size={14} />
+                                  Cancel
                                 </button>
                               </div>
                             ) : (
-                              <>
-                                <h4 className="study-variable-group-card__name">{group.name}</h4>
-                                <span className="study-badge study-badge--neutral">
-                                  {groupVars.length} variables
-                                </span>
-                              </>
+                              <span>{group.name}</span>
                             )}
-                          </div>
 
-                          <div className="study-variable-group-card__controls">
+                            <span className="group-count-badge">
+                              {groupVars.length} {groupVars.length === 1 ? 'variable' : 'variables'}
+                            </span>
+
                             {canManageSettings && !isArchived && (
-                              <>
+                              <div className="group-actions">
                                 <button
                                   type="button"
-                                  className="study-action-btn"
-                                  disabled={index === 0}
-                                  onClick={() => handleMoveLayoutItem(index, 'up')}
-                                  title="Move Group Up"
-                                  aria-label={`Move group ${group.name} up`}
-                                >
-                                  <ArrowUp size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="study-action-btn"
-                                  disabled={index === layout.length - 1}
-                                  onClick={() => handleMoveLayoutItem(index, 'down')}
-                                  title="Move Group Down"
-                                  aria-label={`Move group ${group.name} down`}
-                                >
-                                  <ArrowDown size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="study-action-btn"
+                                  className="btn btn-sm btn-light"
+                                  style={{ padding: '2px 8px', fontSize: '12px', border: '1px solid #cbd5e1' }}
                                   onClick={() => {
                                     setRenamingGroupId(group.id!);
                                     setRenameGroupValue(group.name);
                                   }}
                                   title="Rename Group"
-                                  aria-label={`Rename group ${group.name}`}
                                 >
-                                  <Edit2 size={14} />
+                                  <Edit2 size={12} />
                                 </button>
                                 <button
                                   type="button"
-                                  className="study-action-btn study-action-btn--danger"
+                                  className="btn-trash"
+                                  style={{ width: '24px', height: '24px', padding: 0 }}
                                   onClick={() =>
                                     setConfirmDeleteModal({
                                       type: 'variableGroup',
@@ -1518,52 +2430,25 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                                     })
                                   }
                                   title="Delete Group"
-                                  aria-label={`Delete group ${group.name}`}
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={12} />
                                 </button>
-                              </>
+                              </div>
                             )}
                           </div>
-                        </div>
 
-                        {/* Group Variables */}
-                        <div className="study-variable-group-card__body">
-                          {groupVars.length === 0 ? (
-                            <p className="study-variable-group-card__empty">
-                              No variables assigned to this group. Use the dropdown on ungrouped variables to assign.
-                            </p>
-                          ) : (
-                            <div className="study-variable-chips">
-                              {groupVars.map((v) => (
-                                <div key={v.id} className="study-variable-chip">
-                                  <span className="study-variable-chip__name">{v.name}</span>
-                                  <span className="study-badge study-badge--sm">{v.variableType}</span>
-                                  {v.isGlobal && (
-                                    <span className="study-badge study-badge--global study-badge--sm" title="Global Variable">
-                                      <Globe size={10} />
-                                    </span>
-                                  )}
-                                  {v.isBlind && (
-                                    <span className="study-badge study-badge--blind study-badge--sm" title="Double Blind">
-                                      <EyeOff size={10} />
-                                    </span>
-                                  )}
-                                  {canManageSettings && !isArchived && (
-                                    <button
-                                      type="button"
-                                      className="study-variable-chip__remove"
-                                      onClick={() => handleAssignVariableToGroup(v.id!, '')}
-                                      title="Remove from group"
-                                      aria-label={`Remove ${v.name} from group`}
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          {/* Member variables of this group */}
+                          <div className="variable-group-items">
+                            {groupVars.length === 0 ? (
+                              <p style={{ margin: '8px 0', fontSize: '13px', color: '#64748b' }}>
+                                No variables in this group yet. Use the pin button on variables to assign them.
+                              </p>
+                            ) : (
+                              groupVars.map((v, vIdx) =>
+                                renderCustomVariableCard(v, vIdx, true, group.id)
+                              )
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1575,399 +2460,211 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
 
                   // Check if variable is already assigned into any group
                   const isAssignedToAnyGroup = variableGroups.some((vg) =>
-                    (vg.variableIds || []).includes(variable.id || '')
+                    getGroupVariableIds(vg).includes(variable.id || '')
                   );
                   if (isAssignedToAnyGroup) return null;
 
-                  const locked = isVariableLocked(variable);
-
-                  return (
-                    <div key={item.id || variable.id} className="study-variable-item-card" role="listitem">
-                      <div className="study-variable-item-card__main">
-                        <div className="study-variable-item-card__header-line">
-                          <strong className="study-variable-item-card__title">{variable.name}</strong>
-                          <span className="study-badge study-badge--info">{variable.variableType}</span>
-                          {variable.isGlobal && (
-                            <span className="study-badge study-badge--global" title="Global Variable across tenant">
-                              <Globe size={11} /> Global
-                            </span>
-                          )}
-                          {variable.isBlind && (
-                            <span className="study-badge study-badge--blind" title="Double Blind Masked">
-                              <EyeOff size={11} /> Blind
-                            </span>
-                          )}
-                          {variable.isGlobal && locked && (
-                            <span className="study-badge study-badge--locked" title="Locked Global Variable">
-                              <Lock size={11} /> Locked
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Options Preview for Single/Multi */}
-                        {variable.options && variable.options.length > 0 && (
-                          <div className="study-variable-item-card__options">
-                            <span className="study-variable-options-label">Options:</span>
-                            {variable.options.map((opt) => (
-                              <span key={opt.value || opt.label} className="study-variable-option-pill">
-                                {opt.label}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions & Reordering */}
-                      <div className="study-variable-item-card__actions">
-                        {/* Lock / Unlock Toggle for Global Variables */}
-                        {variable.isGlobal && locked && canManageSettings && !isArchived && (
-                          <button
-                            type="button"
-                            className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--xs"
-                            onClick={() => setUnlockPromptVariable(variable)}
-                            title="Unlock to make changes across all studies"
-                            aria-label={`Unlock global variable ${variable.name}`}
-                          >
-                            <Unlock size={12} /> Unlock
-                          </button>
-                        )}
-
-                        {/* Edit Variable Button */}
-                        {canManageSettings && !isArchived && (
-                          <button
-                            type="button"
-                            className="study-action-btn"
-                            disabled={locked}
-                            onClick={() => handleOpenEditVariable(variable)}
-                            title={locked ? 'Unlock variable to edit' : 'Edit Variable & Options'}
-                            aria-label={`Edit ${variable.name}`}
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                        )}
-
-                        {/* Convert to Multi-Select (for Single Select variables) */}
-                        {canManageSettings && !isArchived && variable.variableType === 'single' && (
-                          <button
-                            type="button"
-                            className="study-settings-btn study-settings-btn--outline-secondary study-settings-btn--xs"
-                            disabled={locked}
-                            onClick={() => handleConvertToMulti(variable.id!)}
-                            title={locked ? 'Unlock variable to convert' : 'Convert single select to multi-select'}
-                          >
-                            Convert to Multi
-                          </button>
-                        )}
-
-                        {/* Group Assignment Selector */}
-                        {canManageSettings && !isArchived && variableGroups.length > 0 && (
-                          <select
-                            className="study-form-select study-form-select--xs"
-                            onChange={(e) => handleAssignVariableToGroup(variable.id!, e.target.value)}
-                            defaultValue=""
-                            aria-label={`Assign ${variable.name} to group`}
-                          >
-                            <option value="" disabled>
-                              Assign to group...
-                            </option>
-                            {variableGroups.map((vg) => (
-                              <option key={vg.id} value={vg.id}>
-                                {vg.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-
-                        {canManageSettings && !isArchived && (
-                          <>
-                            <button
-                              type="button"
-                              className="study-action-btn"
-                              disabled={index === 0}
-                              onClick={() => handleMoveLayoutItem(index, 'up')}
-                              title="Move Up"
-                              aria-label={`Move variable ${variable.name} up`}
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="study-action-btn"
-                              disabled={index === layout.length - 1}
-                              onClick={() => handleMoveLayoutItem(index, 'down')}
-                              title="Move Down"
-                              aria-label={`Move variable ${variable.name} down`}
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="study-action-btn study-action-btn--danger"
-                              disabled={locked}
-                              onClick={() =>
-                                setConfirmDeleteModal({
-                                  type: 'variable',
-                                  id: variable.id!,
-                                  name: variable.name,
-                                  isGlobal: variable.isGlobal,
-                                })
-                              }
-                              title={locked ? 'Unlock variable to remove' : 'Delete or Remove Variable'}
-                              aria-label={`Delete custom variable ${variable.name}`}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
+                  return renderCustomVariableCard(variable, index, false);
                 })}
+              </div>
+            )}
+
+            {/* Bottom Actions: Create a New Custom Variable & Add an Existing Global Variable */}
+            {canManageSettings && !isArchived && (
+              <div className="d-flex align-items-center gap-3 mt-3 mb-4">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: '#1f5fd0',
+                    borderColor: '#1f5fd0',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 500,
+                  }}
+                  onClick={() => setShowAddCustomVarModal(true)}
+                >
+                  <Plus size={14} /> Create a New Custom Variable
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: '#1f5fd0',
+                    borderColor: '#1f5fd0',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 500,
+                  }}
+                  onClick={() => setShowAddGlobalVarModal(true)}
+                >
+                  <Plus size={14} /> Add an Existing Global Variable
+                </button>
               </div>
             )}
           </div>
         )}
-      </section>
+      </div>
 
       {/* ========================================================================= */}
       {/* 7. CONTACT RELATIONSHIPS */}
       {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-contact-rel">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
+      <div>
+        <div
+          className="sub-heading underlined"
           onClick={() => toggleSection('relationships')}
+          role="button"
+          tabIndex={0}
           aria-expanded={!collapsedSections.relationships}
-          aria-controls="section-content-relationships"
+          id="heading-contact-rel"
         >
-          <div className="study-requirements-section__header-left">
-            <PhoneCall size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-contact-rel">Contact Relationships</h3>
-            <span className="study-badge study-badge--neutral">{contactRelationships.length} Options</span>
+          <span>Contact Relationships</span>
+          <div className="toggle-section">
+            {collapsedSections.relationships ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </div>
-          <div className="study-requirements-section__header-right">
-            {canManageSettings && !isArchived && (
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddTaxonomyModal('relationship');
-                }}
-                aria-label="Add Contact Relationship"
-              >
-                <Plus size={13} /> Add Relationship
-              </button>
-            )}
-            {collapsedSections.relationships ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
+        </div>
 
         {!collapsedSections.relationships && (
-          <div id="section-content-relationships" className="study-requirements-section__content">
-            <p className="study-card__description">
-              Taxonomy options for participant contact relationships (e.g., Mother, Father, Guardian, Spouse, Self).
-            </p>
-            {contactRelationships.length === 0 ? (
-              <div className="study-empty-state-card">
-                <p>No contact relationships configured.</p>
-              </div>
-            ) : (
-              <div className="study-taxonomy-list">
-                {contactRelationships.map((r) => {
-                  const itemId = r.id || r.name;
-                  const isRenaming = renamingTaxonomyId === itemId;
-                  return (
-                    <div key={itemId} className="study-taxonomy-item">
-                      {isRenaming ? (
-                        <div className="study-inline-rename-wrap" style={{ flex: 1, marginRight: '10px' }}>
-                          <input
-                            type="text"
-                            className="study-form-input study-form-input--sm"
-                            value={renameTaxonomyValue}
-                            onChange={(e) => setRenameTaxonomyValue(e.target.value)}
-                            aria-label="Edit Relationship Title"
-                          />
-                          <button
-                            type="button"
-                            className="study-action-btn study-action-btn--primary"
-                            onClick={() => handleRenameTaxonomy(itemId, 'relationship')}
-                            title="Save Title"
-                          >
-                            <Check size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="study-action-btn"
-                            onClick={() => setRenamingTaxonomyId(null)}
-                            title="Cancel"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <span>{r.name}</span>
-                      )}
-
-                      {!isRenaming && canManageSettings && !isArchived && (
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            type="button"
-                            className="study-action-btn"
-                            onClick={() => {
-                              setRenamingTaxonomyId(itemId);
-                              setRenameTaxonomyValue(r.name);
-                            }}
-                            title="Edit Relationship"
-                            aria-label={`Edit ${r.name}`}
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="study-action-btn study-action-btn--danger"
-                            onClick={() =>
-                              setConfirmDeleteModal({
-                                type: 'taxonomy',
-                                id: itemId,
-                                name: `Relationship "${r.name}"`,
-                              })
-                            }
-                            title="Delete Relationship"
-                            aria-label={`Delete relationship ${r.name}`}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
+          <div>
+            {contactRelationships.map((r) => {
+              const itemId = r.id || r.name;
+              return (
+                <div key={itemId} className="req-row">
+                  <div className="req-field">
+                    <label className="field-label">Relationship</label>
+                    <input
+                      type="text"
+                      className="group-input"
+                      value={r.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setContactRelationships((prev) =>
+                          prev.map((item) => ((item.id || item.name) === itemId ? { ...item, name: val } : item))
+                        );
+                      }}
+                      onBlur={() => {
+                        const current = contactRelationships.find((item) => (item.id || item.name) === itemId);
+                        if (current && current.name !== r.name) {
+                          handleRenameTaxonomy(itemId, 'relationship');
+                        }
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Relationship name for ${r.name}`}
+                    />
+                  </div>
+                  {canManageSettings && !isArchived && r.name !== 'Other' && (
+                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        className="btn-trash"
+                        onClick={() =>
+                          setConfirmDeleteModal({
+                            type: 'taxonomy',
+                            id: itemId,
+                            name: `Relationship "${r.name}"`,
+                          })
+                        }
+                        aria-label={`Delete relationship ${r.name}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              );
+            })}
+            {canManageSettings && !isArchived && (
+              <div
+                className="btn-add-item marginbottom40"
+                onClick={() => setShowAddTaxonomyModal('relationship')}
+              >
+                Add relationship
               </div>
             )}
           </div>
         )}
-      </section>
+      </div>
 
       {/* ========================================================================= */}
       {/* 8. CONTACT OUTCOMES */}
       {/* ========================================================================= */}
-      <section className="study-requirements-section" aria-labelledby="heading-contact-outcomes">
-        <button
-          type="button"
-          className="study-requirements-section__toggle-header"
+      <div>
+        <div
+          className="sub-heading underlined"
           onClick={() => toggleSection('outcomes')}
+          role="button"
+          tabIndex={0}
           aria-expanded={!collapsedSections.outcomes}
-          aria-controls="section-content-outcomes"
+          id="heading-contact-outcomes"
         >
-          <div className="study-requirements-section__header-left">
-            <PhoneCall size={18} className="study-requirements-section__icon" />
-            <h3 id="heading-contact-outcomes">Contact Outcomes</h3>
-            <span className="study-badge study-badge--neutral">{contactOutcomes.length} Options</span>
+          <span>Contact Outcomes</span>
+          <div className="toggle-section">
+            {collapsedSections.outcomes ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
           </div>
-          <div className="study-requirements-section__header-right">
-            {canManageSettings && !isArchived && (
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--outline-primary study-settings-btn--xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddTaxonomyModal('outcome');
-                }}
-                aria-label="Add Contact Outcome"
-              >
-                <Plus size={13} /> Add Outcome
-              </button>
-            )}
-            {collapsedSections.outcomes ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-          </div>
-        </button>
+        </div>
 
         {!collapsedSections.outcomes && (
-          <div id="section-content-outcomes" className="study-requirements-section__content">
-            <p className="study-card__description">
-              Taxonomy options for logging contact call and message outcomes (e.g., Call Completed, Voicemail Left, Participant Added).
-            </p>
-            {contactOutcomes.length === 0 ? (
-              <div className="study-empty-state-card">
-                <p>No contact outcomes configured.</p>
-              </div>
-            ) : (
-              <div className="study-taxonomy-list">
-                {contactOutcomes.map((o) => {
-                  const itemId = o.id || o.name;
-                  const isRenaming = renamingTaxonomyId === itemId;
-                  return (
-                    <div key={itemId} className="study-taxonomy-item">
-                      {isRenaming ? (
-                        <div className="study-inline-rename-wrap" style={{ flex: 1, marginRight: '10px' }}>
-                          <input
-                            type="text"
-                            className="study-form-input study-form-input--sm"
-                            value={renameTaxonomyValue}
-                            onChange={(e) => setRenameTaxonomyValue(e.target.value)}
-                            aria-label="Edit Outcome Title"
-                          />
-                          <button
-                            type="button"
-                            className="study-action-btn study-action-btn--primary"
-                            onClick={() => handleRenameTaxonomy(itemId, 'outcome')}
-                            title="Save Title"
-                          >
-                            <Check size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="study-action-btn"
-                            onClick={() => setRenamingTaxonomyId(null)}
-                            title="Cancel"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <span>{o.name}</span>
-                      )}
-
-                      {!isRenaming && canManageSettings && !isArchived && (
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            type="button"
-                            className="study-action-btn"
-                            onClick={() => {
-                              setRenamingTaxonomyId(itemId);
-                              setRenameTaxonomyValue(o.name);
-                            }}
-                            title="Edit Outcome"
-                            aria-label={`Edit ${o.name}`}
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="study-action-btn study-action-btn--danger"
-                            onClick={() =>
-                              setConfirmDeleteModal({
-                                type: 'taxonomy',
-                                id: itemId,
-                                name: `Outcome "${o.name}"`,
-                              })
-                            }
-                            title="Delete Outcome"
-                            aria-label={`Delete outcome ${o.name}`}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
+          <div>
+            {contactOutcomes.map((o) => {
+              const itemId = o.id || o.name;
+              return (
+                <div key={itemId} className="req-row">
+                  <div className="req-field">
+                    <label className="field-label">Outcome</label>
+                    <input
+                      type="text"
+                      className="group-input"
+                      value={o.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setContactOutcomes((prev) =>
+                          prev.map((item) => ((item.id || item.name) === itemId ? { ...item, name: val } : item))
+                        );
+                      }}
+                      onBlur={() => {
+                        const current = contactOutcomes.find((item) => (item.id || item.name) === itemId);
+                        if (current && current.name !== o.name) {
+                          handleRenameTaxonomy(itemId, 'outcome');
+                        }
+                      }}
+                      disabled={!canManageSettings || isArchived}
+                      aria-label={`Outcome name for ${o.name}`}
+                    />
+                  </div>
+                  {canManageSettings && !isArchived && o.name !== 'Other' && (
+                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        className="btn-trash"
+                        onClick={() =>
+                          setConfirmDeleteModal({
+                            type: 'taxonomy',
+                            id: itemId,
+                            name: `Outcome "${o.name}"`,
+                          })
+                        }
+                        aria-label={`Delete outcome ${o.name}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              );
+            })}
+            {canManageSettings && !isArchived && (
+              <div
+                className="btn-add-item marginbottom40"
+                onClick={() => setShowAddTaxonomyModal('outcome')}
+              >
+                Add outcome
               </div>
             )}
           </div>
         )}
-      </section>
+      </div>
 
       {/* ========================================================================= */}
       {/* MODALS */}
@@ -2038,6 +2735,77 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                 disabled={!newMilestoneDate || !newMilestoneTarget}
               >
                 Add Milestone
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Milestone Modal */}
+      {editingMilestone && (
+        <div className="study-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-edit-milestone-title">
+          <div className="study-modal study-modal--sm">
+            <div className="study-modal__header">
+              <h3 id="modal-edit-milestone-title">Edit Recruitment Milestone</h3>
+              <button
+                type="button"
+                className="study-modal__close"
+                onClick={() => setEditingMilestone(null)}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="study-modal__body">
+              <div className="study-form-group">
+                <label className="study-form-label">Milestone Date (YYYY-MM-DD)</label>
+                <input
+                  type="date"
+                  className="study-form-input"
+                  value={editMilestoneDate}
+                  onChange={(e) => setEditMilestoneDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="study-form-group">
+                <label className="study-form-label">Target Participants</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="study-form-input"
+                  placeholder="e.g. 50"
+                  value={editMilestoneTarget}
+                  onChange={(e) => setEditMilestoneTarget(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="study-form-group">
+                <label className="study-form-label">Description (Optional)</label>
+                <input
+                  type="text"
+                  className="study-form-input"
+                  placeholder="e.g. Phase 1 Cohort Enrollment Target"
+                  value={editMilestoneDesc}
+                  onChange={(e) => setEditMilestoneDesc(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="study-modal__footer">
+              <button
+                type="button"
+                className="study-settings-btn study-settings-btn--outline-secondary"
+                onClick={() => setEditingMilestone(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="study-settings-btn study-settings-btn--primary"
+                onClick={handleSaveEditedMilestone}
+                disabled={!editMilestoneDate || !editMilestoneTarget}
+              >
+                Save Milestone
               </button>
             </div>
           </div>

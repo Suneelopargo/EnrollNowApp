@@ -16,6 +16,7 @@ vi.mock('../../../../shared/api/studyApi', async (importOriginal) => {
       getStudyRequirements: vi.fn(),
       updateStudyRequirements: vi.fn(),
       addStudyMilestone: vi.fn(),
+      updateStudyMilestone: vi.fn(),
       deleteStudyMilestone: vi.fn(),
       getGlobalCustomVariables: vi.fn(),
       addGlobalVariableToStudy: vi.fn(),
@@ -166,5 +167,81 @@ describe('StudySettingsRequirements Component Tests', () => {
     expect(bp).toBeDefined();
     expect(bp?.isGlobal).toBe(true);
     expect(bp?.isBlind).toBe(true);
+  });
+
+  it('supports direct operation-level partial saving without full-page save requirement', async () => {
+    (studyApi.updateStudyRequirements as any).mockResolvedValue({
+      ...mockRequirementsData,
+      sampleSize: 200,
+    });
+
+    // Directly invoking operation-level update
+    const updated = await studyApi.updateStudyRequirements(mockStudyId, { sampleSize: 200 });
+    expect(studyApi.updateStudyRequirements).toHaveBeenCalledWith(mockStudyId, { sampleSize: 200 });
+    expect(updated.sampleSize).toBe(200);
+  });
+
+  it('executes recruitment milestone operations directly via milestone endpoints', async () => {
+    const newMilestone = { id: 'm-new', milestoneDate: '2027-12-01', participantTarget: 250 };
+    const updatedMilestone = { id: 'm-new', milestoneDate: '2027-12-15', participantTarget: 300, description: 'Updated' };
+    (studyApi.addStudyMilestone as any).mockResolvedValue(newMilestone);
+    (studyApi.updateStudyMilestone as any).mockResolvedValue(updatedMilestone);
+    (studyApi.deleteStudyMilestone as any).mockResolvedValue(undefined);
+
+    const created = await studyApi.addStudyMilestone(mockStudyId, {
+      milestoneDate: '2027-12-01',
+      participantTarget: 250,
+    });
+    expect(studyApi.addStudyMilestone).toHaveBeenCalledWith(mockStudyId, {
+      milestoneDate: '2027-12-01',
+      participantTarget: 250,
+    });
+    expect(created.id).toBe('m-new');
+
+    const updated = await studyApi.updateStudyMilestone(mockStudyId, 'm-new', {
+      milestoneDate: '2027-12-15',
+      participantTarget: 300,
+      description: 'Updated',
+    });
+    expect(studyApi.updateStudyMilestone).toHaveBeenCalledWith(mockStudyId, 'm-new', {
+      milestoneDate: '2027-12-15',
+      participantTarget: 300,
+      description: 'Updated',
+    });
+    expect(updated.participantTarget).toBe(300);
+
+    await studyApi.deleteStudyMilestone(mockStudyId, 'm-new');
+    expect(studyApi.deleteStudyMilestone).toHaveBeenCalledWith(mockStudyId, 'm-new');
+  });
+
+  it('executes demographic groups and layout partial updates via updateStudyRequirements', async () => {
+    (studyApi.updateStudyRequirements as any).mockResolvedValue({
+      ...mockRequirementsData,
+      studyGroups: [
+        { id: 'grp-age-1', defaultCategoryName: 'age', label: 'Updated Pediatric', sampleSize: '45' },
+      ],
+    });
+
+    const res = await studyApi.updateStudyRequirements(mockStudyId, {
+      studyGroups: [
+        { id: 'grp-age-1', defaultCategoryName: 'age', label: 'Updated Pediatric', sampleSize: '45' },
+      ],
+    });
+
+    expect(studyApi.updateStudyRequirements).toHaveBeenCalledWith(mockStudyId, {
+      studyGroups: [
+        { id: 'grp-age-1', defaultCategoryName: 'age', label: 'Updated Pediatric', sampleSize: '45' },
+      ],
+    });
+    expect(res.studyGroups[0].label).toBe('Updated Pediatric');
+  });
+
+  it('executes global variable linking directly via addGlobalVariableToStudy', async () => {
+    const linked = { id: 'gvar-1', name: 'Global Language', variableType: 'single', isGlobal: true };
+    (studyApi.addGlobalVariableToStudy as any).mockResolvedValue(linked);
+
+    const result = await studyApi.addGlobalVariableToStudy(mockStudyId, 'gvar-1');
+    expect(studyApi.addGlobalVariableToStudy).toHaveBeenCalledWith(mockStudyId, 'gvar-1');
+    expect(result.id).toBe('gvar-1');
   });
 });

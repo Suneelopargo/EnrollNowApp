@@ -723,10 +723,105 @@ class StudyConfigurationServiceTest {
         assertEquals(75, added.getParticipantTarget());
 
         dto.setParticipantTarget(90);
+        dto.setDescription("Updated Phase 1 Milestone");
+        dto.setMilestoneDate("2027-01-15");
         StudyMilestoneDto updated = configurationService.updateStudyMilestone(tenantId, studyId, milestoneId.toString(), dto);
         assertNotNull(updated);
+        assertEquals(90, m1.getParticipantTarget());
+        assertEquals("Updated Phase 1 Milestone", m1.getDescription());
 
         configurationService.deleteStudyMilestone(tenantId, studyId, milestoneId.toString());
         verify(studyMilestoneRepository).delete(m1);
+    }
+
+    @Test
+    void updateStudyRequirements_explicitNullSampleSizeClearsSampleSize() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setSampleSize(500);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRequirementRepository.save(any(StudyRequirement.class))).thenAnswer(i -> i.getArgument(0));
+
+        // Explicit null in JSON: {"sampleSize": null}
+        UpdateStudyRequirementsRequest req = objectMapper.readValue("{\"sampleSize\": null}", UpdateStudyRequirementsRequest.class);
+        assertTrue(req.isSampleSizeSet());
+        assertNull(req.getSampleSize());
+
+        StudyRequirementsResponse res = configurationService.updateStudyRequirements(tenantId, studyId, req, true);
+
+        assertNotNull(res);
+        assertNull(res.getSampleSize());
+        assertNull(existing.getSampleSize());
+    }
+
+    @Test
+    void updateStudyRequirements_omittedSampleSizePreservesExistingSampleSize() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setSampleSize(350);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRequirementRepository.save(any(StudyRequirement.class))).thenAnswer(i -> i.getArgument(0));
+
+        // Omitted sampleSize in JSON: {"studyGroups": []}
+        UpdateStudyRequirementsRequest req = objectMapper.readValue("{\"studyGroups\": []}", UpdateStudyRequirementsRequest.class);
+        assertFalse(req.isSampleSizeSet());
+
+        StudyRequirementsResponse res = configurationService.updateStudyRequirements(tenantId, studyId, req, true);
+
+        assertNotNull(res);
+        assertEquals(350, res.getSampleSize());
+        assertEquals(350, existing.getSampleSize());
+    }
+
+    @Test
+    void updateStudyRequirements_partialUpdatePreservesUnrelatedSections() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setSampleSize(200);
+        existing.setConfiguration("{" +
+                "\"customVariables\":[{\"_id\":\"var_preserved\",\"name\":\"Preserved Variable\",\"type\":\"text\",\"isGlobal\":true}]," +
+                "\"variableGroups\":[{\"_id\":\"grp_preserved\",\"name\":\"Preserved Group\",\"members\":[\"var_preserved\"]}]," +
+                "\"layout\":[{\"id\":\"var_preserved\",\"type\":\"variable\",\"rank\":0}]" +
+                "}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRequirementRepository.save(any(StudyRequirement.class))).thenAnswer(i -> i.getArgument(0));
+
+        // Update ONLY studyGroups
+        DemographicGroupDto newGroup = new DemographicGroupDto();
+        newGroup.setLabel("Youth");
+        newGroup.setDefaultCategoryName("age");
+        newGroup.setSampleSize("50");
+
+        UpdateStudyRequirementsRequest req = new UpdateStudyRequirementsRequest();
+        req.setStudyGroups(List.of(newGroup));
+
+        StudyRequirementsResponse res = configurationService.updateStudyRequirements(tenantId, studyId, req, true);
+
+        assertNotNull(res);
+        // Study groups updated
+        assertEquals(1, res.getStudyGroups().size());
+        assertEquals("Youth", res.getStudyGroups().get(0).getLabel());
+
+        // Sample size preserved
+        assertEquals(200, res.getSampleSize());
+
+        // Custom variables preserved
+        assertEquals(1, res.getCustomVariables().size());
+        assertEquals("Preserved Variable", res.getCustomVariables().get(0).getName());
+
+        // Variable groups preserved
+        assertEquals(1, res.getVariableGroups().size());
+        assertEquals("Preserved Group", res.getVariableGroups().get(0).getName());
+
+        // Layout preserved
+        assertEquals(1, res.getCustomVariableLayout().size());
     }
 }

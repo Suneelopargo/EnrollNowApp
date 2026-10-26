@@ -323,6 +323,7 @@ export interface StudyVariableGroup {
   id?: string;
   name: string;
   variableIds?: string[];
+  members?: string[];
   rank?: number;
 }
 
