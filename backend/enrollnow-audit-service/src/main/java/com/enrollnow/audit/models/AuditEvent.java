@@ -1,16 +1,42 @@
-package com.enrollnow.identity.models;
+package com.enrollnow.audit.models;
 
-import jakarta.persistence.*;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+/**
+ * Persistent audit event.
+ *
+ * Represents one business/security action such as:
+ *
+ * USER_CREATED
+ * USER_DISABLED
+ * STUDY_ACCESS_GRANTED
+ * STUDY_PERMISSION_CHANGED
+ * STUDY_ACCESS_REMOVED
+ *
+ * The table is append-only at database level.
+ *
+ * IMPORTANT:
+ * Do not store passwords, password hashes, JWTs, invitation/reset
+ * tokens, credentials, API keys or secrets in beforeData/afterData.
+ */
 @Entity
-@Table(name = "audit_events", schema = "enrollnow")
+@Table(name = "audit_events")
 public class AuditEvent {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
     @Column(name = "tenant_id", nullable = false)
@@ -34,21 +60,27 @@ public class AuditEvent {
     @Column(name = "source", nullable = false, length = 50)
     private String source = "APPLICATION";
 
+    @Column(name = "correlation_id")
+    private UUID correlationId;
+
+    @Column(name = "request_id", length = 255)
+    private String requestId;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "before_data", columnDefinition = "jsonb")
+    private Map<String, Object> beforeData;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "after_data", columnDefinition = "jsonb")
+    private Map<String, Object> afterData;
+
     @Column(name = "occurred_at", nullable = false)
     private OffsetDateTime occurredAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-    @PrePersist
-    protected void onCreate() {
-        OffsetDateTime now = OffsetDateTime.now();
-        if (occurredAt == null) {
-            occurredAt = now;
-        }
-        if (createdAt == null) {
-            createdAt = now;
-        }
+    public AuditEvent() {
     }
 
     public UUID getId() {
@@ -113,6 +145,38 @@ public class AuditEvent {
 
     public void setSource(String source) {
         this.source = source;
+    }
+
+    public UUID getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(UUID correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public Map<String, Object> getBeforeData() {
+        return beforeData;
+    }
+
+    public void setBeforeData(Map<String, Object> beforeData) {
+        this.beforeData = beforeData;
+    }
+
+    public Map<String, Object> getAfterData() {
+        return afterData;
+    }
+
+    public void setAfterData(Map<String, Object> afterData) {
+        this.afterData = afterData;
     }
 
     public OffsetDateTime getOccurredAt() {

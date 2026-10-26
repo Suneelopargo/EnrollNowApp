@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +44,8 @@ public class SecuritySettingsService {
     private UserSessionService userSessionService;
     private UserActionTokenRepository userActionTokenRepository;
     private InvitationEmailService invitationEmailService;
-    private AuditEventRepository auditEventRepository;
+   // private AuditEventRepository auditEventRepository;
+    private AuditRecorder auditRecorder;
 
     public SecuritySettingsService(
             SecuritySettingsRepository securitySettingsRepository,
@@ -60,7 +64,7 @@ public class SecuritySettingsService {
             @Autowired(required = false) UserSessionService userSessionService,
             @Autowired(required = false) UserActionTokenRepository userActionTokenRepository,
             @Autowired(required = false) InvitationEmailService invitationEmailService,
-            @Autowired(required = false) AuditEventRepository auditEventRepository) {
+            @Autowired(required = false) AuditRecorder auditRecorder) {
         this.securitySettingsRepository = securitySettingsRepository;
         this.siteAuthorizationService = siteAuthorizationService;
         this.userRepository = userRepository;
@@ -69,7 +73,7 @@ public class SecuritySettingsService {
         this.userSessionService = userSessionService;
         this.userActionTokenRepository = userActionTokenRepository;
         this.invitationEmailService = invitationEmailService;
-        this.auditEventRepository = auditEventRepository;
+        this.auditRecorder = auditRecorder;
     }
 
     @Autowired(required = false)
@@ -103,8 +107,8 @@ public class SecuritySettingsService {
     }
 
     @Autowired(required = false)
-    public void setAuditEventRepository(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public void setAuditRecorder(AuditRecorder auditRecorder) {
+        this.auditRecorder = auditRecorder;
     }
 
     @Transactional
@@ -300,20 +304,26 @@ public class SecuritySettingsService {
         }
 
         // Record audit event
-        if (auditEventRepository != null) {
-            try {
-                AuditEvent audit = new AuditEvent();
-                audit.setTenantId(tenantId);
-                audit.setActorUserId(callerUserId);
-                audit.setEntityType("SECURITY_SETTINGS");
-                audit.setEntityId(tenantId);
-                audit.setAction("FORCE_RESET_ALL_PASSWORDS");
-                audit.setDescription("Administrator forced password reset for " + eligibleUsers.size() + " users in tenant");
-                audit.setSource("APPLICATION");
-                auditEventRepository.save(audit);
-            } catch (Exception ex) {
-                log.warn("Failed to record audit event for force reset: {}", ex.getMessage());
-            }
+     // Record audit event in the same business transaction.
+        if (auditRecorder != null) {
+            auditRecorder.record(
+                    new AuditEventCommand(
+                            tenantId,
+                            null,
+                            "SECURITY_SETTINGS",
+                            tenantId,
+                            "FORCE_RESET_ALL_PASSWORDS",
+                            "Administrator forced password reset for "
+                                    + eligibleUsers.size()
+                                    + " users in tenant",
+                            "APPLICATION",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null
+                    )
+            );
         }
 
         String msg = "Successfully forced password reset for " + eligibleUsers.size() + " users.";

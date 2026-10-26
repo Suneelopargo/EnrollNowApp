@@ -26,6 +26,10 @@ import com.enrollnow.identity.dtos.AssignRoleRequest;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
 
+import java.util.Map;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
+
 import java.util.Locale;
 import com.enrollnow.identity.models.Site;
 import com.enrollnow.identity.repositories.SiteRepository;
@@ -43,6 +47,7 @@ public class UserService {
 	private final UserRoleAssignmentRepository userRoleAssignmentRepository;
 	private final SiteRepository siteRepository;
 	private final SitePermissionService sitePermissionService;
+	private final AuditRecorder auditRecorder;
 
 	public UserService(
 	        UserRepository userRepository,
@@ -59,6 +64,7 @@ public class UserService {
 	            roleRepository,
 	            userRoleAssignmentRepository,
 	            siteRepository,
+	            null,
 	            null
 	    );
 	}
@@ -71,7 +77,8 @@ public class UserService {
 	        RoleRepository roleRepository,
 	        UserRoleAssignmentRepository userRoleAssignmentRepository,
 	        SiteRepository siteRepository,
-	        SitePermissionService sitePermissionService
+	        SitePermissionService sitePermissionService,
+	        AuditRecorder auditRecorder
 	) {
 	    this.userRepository = userRepository;
 	    this.userEmailRepository = userEmailRepository;
@@ -80,6 +87,7 @@ public class UserService {
 	    this.userRoleAssignmentRepository = userRoleAssignmentRepository;
 	    this.siteRepository = siteRepository;
 	    this.sitePermissionService = sitePermissionService;
+	    this.auditRecorder = auditRecorder;
 	}
 
 	public UserSummaryResponse getUser(UUID tenantId, UUID userId) {
@@ -178,6 +186,33 @@ public class UserService {
 		securityState.setFailedLoginAttempts(0);
 
 		userSecurityStateRepository.save(securityState);
+		
+		// Audit transaction
+		
+		if (auditRecorder != null) {
+		    auditRecorder.record(
+		            new AuditEventCommand(
+		                    tenantId,
+		                    null,
+		                    "USER",
+		                    user.getId(),
+		                    "USER_CREATED",
+		                    "User account created",
+		                    "API",
+		                    null,
+		                    null,
+		                    null,
+		                    Map.of(
+		                            "firstName", user.getFirstName(),
+		                            "lastName", user.getLastName(),
+		                            "title", user.getTitle(),
+		                            "status", user.getStatus(),
+		                            "email", normalizedEmail
+		                    ),
+		                    null
+		            )
+		    );
+		}
 
 		UserSummaryResponse summary = new UserSummaryResponse(
 		        user.getId(),

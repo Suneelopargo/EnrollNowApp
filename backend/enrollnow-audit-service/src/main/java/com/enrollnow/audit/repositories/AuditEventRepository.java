@@ -1,10 +1,11 @@
-package com.enrollnow.identity.repositories;
+package com.enrollnow.audit.repositories;
 
-import com.enrollnow.identity.models.AuditEvent;
+import java.util.UUID;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.UUID;
+import com.enrollnow.audit.models.AuditEvent;
 
 @Repository
 public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
