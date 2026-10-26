@@ -8,6 +8,12 @@ import com.enrollnow.study.dtos.SaveBulkTaskRequest;
 import com.enrollnow.study.dtos.StudyAdminSummary;
 import com.enrollnow.study.dtos.StudyBulkTasksResponse;
 import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
+import com.enrollnow.study.dtos.SaveEmailTemplateRequest;
+import com.enrollnow.study.dtos.SaveTextTemplateRequest;
+import com.enrollnow.study.dtos.StudyEmailTemplateDto;
+import com.enrollnow.study.dtos.StudyEmailTextSettingsResponse;
+import com.enrollnow.study.dtos.StudyScheduledActionDto;
+import com.enrollnow.study.dtos.StudyTextTemplateDto;
 import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
@@ -22,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Service
 public class StudyConfigurationService {
@@ -1807,5 +1814,681 @@ public class StudyConfigurationService {
             }
         }
         return cleaned;
+    }
+
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@(.+)$");
+
+    @Transactional(readOnly = true)
+    public StudyEmailTextSettingsResponse getEmailAndTextConfiguration(
+            UUID tenantId,
+            UUID studyId,
+            boolean canManage
+    ) {
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+
+        List<StudyBulkTasksResponse.StudyEventOptionDto> events = new ArrayList<>();
+        if (configMap.get("events") instanceof List<?> rawEvents) {
+            for (Object obj : rawEvents) {
+                if (obj instanceof Map<?, ?> evtMap) {
+                    events.add(new StudyBulkTasksResponse.StudyEventOptionDto(
+                            String.valueOf(evtMap.get("_id")),
+                            evtMap.get("name") != null ? evtMap.get("name").toString() : ""
+                    ));
+                }
+            }
+        }
+
+        Map<String, StudyScheduledActionDto> scheduledActionMap = new HashMap<>();
+        if (configMap.get("scheduledActions") instanceof List<?> rawActions) {
+            for (Object obj : rawActions) {
+                if (obj instanceof Map<?, ?> saMap) {
+                    String tId = saMap.get("templateId") != null ? String.valueOf(saMap.get("templateId")) : null;
+                    if (tId != null) {
+                        scheduledActionMap.put(tId, toScheduledActionDto(saMap, events));
+                    }
+                }
+            }
+        }
+
+        List<StudyEmailTemplateDto> emailDtos = new ArrayList<>();
+        if (configMap.get("emailTemplates") instanceof List<?> rawEmailTemps) {
+            for (Object obj : rawEmailTemps) {
+                if (obj instanceof Map<?, ?> etMap) {
+                    StudyEmailTemplateDto dto = new StudyEmailTemplateDto();
+                    dto.set_id(String.valueOf(etMap.get("_id")));
+                    dto.setStudyId(etMap.get("studyId") != null ? String.valueOf(etMap.get("studyId")) : studyId.toString());
+                    dto.setName(etMap.get("name") != null ? etMap.get("name").toString() : "");
+                    dto.setDescription(etMap.get("description") != null ? etMap.get("description").toString() : "");
+                    dto.setSubject(etMap.get("subject") != null ? etMap.get("subject").toString() : "");
+                    dto.setMessage(etMap.get("message") != null ? etMap.get("message").toString() : "");
+                    dto.setDesign(etMap.get("design") != null ? etMap.get("design").toString() : "");
+                    dto.setMessageIsHtml(Boolean.TRUE.equals(etMap.get("messageIsHtml")));
+                    dto.setReplyTo(etMap.get("replyTo") != null ? etMap.get("replyTo").toString() : "");
+                    dto.setSenderName(etMap.get("senderName") != null ? etMap.get("senderName").toString() : "");
+                    dto.setAttachmentFileIds(sanitizeAttachmentFileIds(etMap.get("attachmentFileIds") instanceof List<?> l ? (List<?>) l : null));
+                    dto.setArchived(Boolean.TRUE.equals(etMap.get("archived")));
+                    dto.setRank(etMap.get("rank") instanceof Number n ? n.intValue() : 0);
+                    dto.setScheduledAction(scheduledActionMap.get(dto.get_id()));
+                    emailDtos.add(dto);
+                }
+            }
+        }
+
+        emailDtos.sort((a, b) -> {
+            if (a.isArchived() != b.isArchived()) return a.isArchived() ? 1 : -1;
+            return Integer.compare(a.getRank(), b.getRank());
+        });
+
+        List<StudyTextTemplateDto> textDtos = new ArrayList<>();
+        if (configMap.get("textTemplates") instanceof List<?> rawTextTemps) {
+            for (Object obj : rawTextTemps) {
+                if (obj instanceof Map<?, ?> ttMap) {
+                    StudyTextTemplateDto dto = new StudyTextTemplateDto();
+                    dto.set_id(String.valueOf(ttMap.get("_id")));
+                    dto.setStudyId(ttMap.get("studyId") != null ? String.valueOf(ttMap.get("studyId")) : studyId.toString());
+                    dto.setName(ttMap.get("name") != null ? ttMap.get("name").toString() : "");
+                    dto.setDescription(ttMap.get("description") != null ? ttMap.get("description").toString() : "");
+                    dto.setMessage(ttMap.get("message") != null ? ttMap.get("message").toString() : "");
+                    dto.setArchived(Boolean.TRUE.equals(ttMap.get("archived")));
+                    dto.setRank(ttMap.get("rank") instanceof Number n ? n.intValue() : 0);
+                    dto.setScheduledAction(scheduledActionMap.get(dto.get_id()));
+                    textDtos.add(dto);
+                }
+            }
+        }
+
+        textDtos.sort((a, b) -> {
+            if (a.isArchived() != b.isArchived()) return a.isArchived() ? 1 : -1;
+            return Integer.compare(a.getRank(), b.getRank());
+        });
+
+        StudyEmailTextSettingsResponse response = new StudyEmailTextSettingsResponse();
+        response.setStudyId(studyId.toString());
+        response.setCanManage(canManage);
+        response.setTextMessagingEnabled(true);
+        response.setEmailTemplates(emailDtos);
+        response.setTextTemplates(textDtos);
+        response.setEvents(events);
+        return response;
+    }
+
+    @Transactional
+    public void createEmailTemplate(UUID tenantId, UUID studyId, SaveEmailTemplateRequest request) {
+        if (request == null || request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new InvalidStudyException("Email template name is required.");
+        }
+        if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new InvalidStudyException("Email subject is required.");
+        }
+        String name = request.getName().trim();
+        validateEmailTemplateName(name, tenantId, studyId, null);
+
+        if (request.getReplyTo() != null && !request.getReplyTo().trim().isEmpty()) {
+            validateEmailAddress(request.getReplyTo().trim());
+        }
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> emailTemplates = getMutableList(configMap, "emailTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        int maxRank = -1;
+        for (Map<String, Object> t : emailTemplates) {
+            if (t.get("rank") instanceof Number n && n.intValue() > maxRank) {
+                maxRank = n.intValue();
+            }
+        }
+
+        String templateId = "et_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        Map<String, Object> newTemplate = new LinkedHashMap<>();
+        newTemplate.put("_id", templateId);
+        newTemplate.put("studyId", studyId.toString());
+        newTemplate.put("name", name);
+        newTemplate.put("subject", request.getSubject().trim());
+        newTemplate.put("description", request.getDescription() != null ? request.getDescription().trim() : "");
+        newTemplate.put("message", request.getMessage() != null ? request.getMessage() : "");
+        newTemplate.put("design", request.getDesign() != null ? request.getDesign() : "");
+        newTemplate.put("messageIsHtml", Boolean.TRUE.equals(request.getMessageIsHtml()));
+        newTemplate.put("replyTo", request.getReplyTo() != null ? request.getReplyTo().trim() : "");
+        newTemplate.put("senderName", request.getSenderName() != null ? request.getSenderName().trim() : "");
+        newTemplate.put("attachmentFileIds", sanitizeAttachmentFileIds(request.getAttachmentFileIds()));
+        newTemplate.put("archived", false);
+        newTemplate.put("rank", maxRank + 1);
+        newTemplate.put("createdAt", OffsetDateTime.now().toString());
+
+        emailTemplates.add(newTemplate);
+        configMap.put("emailTemplates", emailTemplates);
+
+        if (request.getScheduledAction() != null && request.getScheduledAction().getAction() != null
+                && request.getScheduledAction().getAction().getActionTriggerId() != null
+                && !request.getScheduledAction().getAction().getActionTriggerId().isBlank()) {
+            Map<String, Object> saMap = buildScheduledActionMap(templateId, "email", studyId.toString(), request.getScheduledAction());
+            scheduledActions.add(saMap);
+            configMap.put("scheduledActions", scheduledActions);
+        }
+
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void updateEmailTemplate(UUID tenantId, UUID studyId, String templateId, SaveEmailTemplateRequest request) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Email template ID is required.");
+        }
+        if (request == null || request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new InvalidStudyException("Email template name is required.");
+        }
+        if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new InvalidStudyException("Email subject is required.");
+        }
+        String name = request.getName().trim();
+        validateEmailTemplateName(name, tenantId, studyId, templateId);
+
+        if (request.getReplyTo() != null && !request.getReplyTo().trim().isEmpty()) {
+            validateEmailAddress(request.getReplyTo().trim());
+        }
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> emailTemplates = getMutableList(configMap, "emailTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        Map<String, Object> target = emailTemplates.stream()
+                .filter(t -> templateId.equals(String.valueOf(t.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Email template not found: " + templateId));
+
+        target.put("name", name);
+        target.put("subject", request.getSubject().trim());
+        target.put("description", request.getDescription() != null ? request.getDescription().trim() : "");
+        target.put("message", request.getMessage() != null ? request.getMessage() : "");
+        target.put("design", request.getDesign() != null ? request.getDesign() : "");
+        target.put("messageIsHtml", Boolean.TRUE.equals(request.getMessageIsHtml()));
+        target.put("replyTo", request.getReplyTo() != null ? request.getReplyTo().trim() : "");
+        target.put("senderName", request.getSenderName() != null ? request.getSenderName().trim() : "");
+        target.put("attachmentFileIds", sanitizeAttachmentFileIds(request.getAttachmentFileIds()));
+        target.put("updatedAt", OffsetDateTime.now().toString());
+
+        scheduledActions.removeIf(sa -> templateId.equals(String.valueOf(sa.get("templateId"))));
+        if (request.getScheduledAction() != null && request.getScheduledAction().getAction() != null
+                && request.getScheduledAction().getAction().getActionTriggerId() != null
+                && !request.getScheduledAction().getAction().getActionTriggerId().isBlank()) {
+            Map<String, Object> saMap = buildScheduledActionMap(templateId, "email", studyId.toString(), request.getScheduledAction());
+            scheduledActions.add(saMap);
+        }
+
+        configMap.put("emailTemplates", emailTemplates);
+        configMap.put("scheduledActions", scheduledActions);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void copyEmailTemplate(UUID tenantId, UUID studyId, String templateId) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Email template ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> emailTemplates = getMutableList(configMap, "emailTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        Map<String, Object> orig = emailTemplates.stream()
+                .filter(t -> templateId.equals(String.valueOf(t.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Email template not found: " + templateId));
+
+        int maxRank = -1;
+        for (Map<String, Object> t : emailTemplates) {
+            if (t.get("rank") instanceof Number n && n.intValue() > maxRank) {
+                maxRank = n.intValue();
+            }
+        }
+
+        String newId = "et_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        Map<String, Object> copy = new LinkedHashMap<>(orig);
+        copy.put("_id", newId);
+        copy.put("name", "Copy of " + orig.get("name"));
+        copy.put("archived", false);
+        copy.put("rank", maxRank + 1);
+        copy.put("createdAt", OffsetDateTime.now().toString());
+        copy.remove("updatedAt");
+
+        emailTemplates.add(copy);
+        configMap.put("emailTemplates", emailTemplates);
+
+        Optional<Map<String, Object>> origSa = scheduledActions.stream()
+                .filter(sa -> templateId.equals(String.valueOf(sa.get("templateId"))))
+                .findFirst();
+        if (origSa.isPresent()) {
+            Map<String, Object> copySa = new LinkedHashMap<>(origSa.get());
+            copySa.put("_id", "sa_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            copySa.put("templateId", newId);
+            scheduledActions.add(copySa);
+            configMap.put("scheduledActions", scheduledActions);
+        }
+
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void archiveEmailTemplate(UUID tenantId, UUID studyId, String templateId) {
+        setTemplateArchived(tenantId, studyId, "emailTemplates", templateId, true);
+    }
+
+    @Transactional
+    public void restoreEmailTemplate(UUID tenantId, UUID studyId, String templateId) {
+        setTemplateArchived(tenantId, studyId, "emailTemplates", templateId, false);
+    }
+
+    @Transactional
+    public void deleteEmailTemplate(UUID tenantId, UUID studyId, String templateId) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Email template ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> emailTemplates = getMutableList(configMap, "emailTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        boolean removed = emailTemplates.removeIf(t -> templateId.equals(String.valueOf(t.get("_id"))));
+        if (!removed) {
+            throw new InvalidStudyException("Email template not found: " + templateId);
+        }
+        scheduledActions.removeIf(sa -> templateId.equals(String.valueOf(sa.get("templateId"))));
+
+        configMap.put("emailTemplates", emailTemplates);
+        configMap.put("scheduledActions", scheduledActions);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void reorderEmailTemplates(UUID tenantId, UUID studyId, List<String> sortedIds) {
+        if (sortedIds == null || sortedIds.isEmpty()) return;
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> emailTemplates = getMutableList(configMap, "emailTemplates");
+
+        for (Map<String, Object> t : emailTemplates) {
+            String id = String.valueOf(t.get("_id"));
+            int idx = sortedIds.indexOf(id);
+            if (idx >= 0) {
+                t.put("rank", idx);
+            }
+        }
+        configMap.put("emailTemplates", emailTemplates);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void createTextTemplate(UUID tenantId, UUID studyId, SaveTextTemplateRequest request) {
+        if (request == null || request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new InvalidStudyException("Text template name is required.");
+        }
+        if (request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+            throw new InvalidStudyException("Text message is required.");
+        }
+        if (request.getMessage().length() > 1600) {
+            throw new InvalidStudyException("Text message cannot exceed 1600 characters.");
+        }
+        String name = request.getName().trim();
+        validateTextTemplateName(name, tenantId, studyId, null);
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> textTemplates = getMutableList(configMap, "textTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        int maxRank = -1;
+        for (Map<String, Object> t : textTemplates) {
+            if (t.get("rank") instanceof Number n && n.intValue() > maxRank) {
+                maxRank = n.intValue();
+            }
+        }
+
+        String templateId = "tt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        Map<String, Object> newTemplate = new LinkedHashMap<>();
+        newTemplate.put("_id", templateId);
+        newTemplate.put("studyId", studyId.toString());
+        newTemplate.put("name", name);
+        newTemplate.put("description", request.getDescription() != null ? request.getDescription().trim() : "");
+        newTemplate.put("message", request.getMessage());
+        newTemplate.put("archived", false);
+        newTemplate.put("rank", maxRank + 1);
+        newTemplate.put("createdAt", OffsetDateTime.now().toString());
+
+        textTemplates.add(newTemplate);
+        configMap.put("textTemplates", textTemplates);
+
+        if (request.getScheduledAction() != null && request.getScheduledAction().getAction() != null
+                && request.getScheduledAction().getAction().getActionTriggerId() != null
+                && !request.getScheduledAction().getAction().getActionTriggerId().isBlank()) {
+            Map<String, Object> saMap = buildScheduledActionMap(templateId, "text", studyId.toString(), request.getScheduledAction());
+            scheduledActions.add(saMap);
+            configMap.put("scheduledActions", scheduledActions);
+        }
+
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void updateTextTemplate(UUID tenantId, UUID studyId, String templateId, SaveTextTemplateRequest request) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Text template ID is required.");
+        }
+        if (request == null || request.getName() == null || request.getName().trim().isEmpty()) {
+            throw new InvalidStudyException("Text template name is required.");
+        }
+        if (request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+            throw new InvalidStudyException("Text message is required.");
+        }
+        if (request.getMessage().length() > 1600) {
+            throw new InvalidStudyException("Text message cannot exceed 1600 characters.");
+        }
+        String name = request.getName().trim();
+        validateTextTemplateName(name, tenantId, studyId, templateId);
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> textTemplates = getMutableList(configMap, "textTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        Map<String, Object> target = textTemplates.stream()
+                .filter(t -> templateId.equals(String.valueOf(t.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Text template not found: " + templateId));
+
+        target.put("name", name);
+        target.put("description", request.getDescription() != null ? request.getDescription().trim() : "");
+        target.put("message", request.getMessage());
+        target.put("updatedAt", OffsetDateTime.now().toString());
+
+        scheduledActions.removeIf(sa -> templateId.equals(String.valueOf(sa.get("templateId"))));
+        if (request.getScheduledAction() != null && request.getScheduledAction().getAction() != null
+                && request.getScheduledAction().getAction().getActionTriggerId() != null
+                && !request.getScheduledAction().getAction().getActionTriggerId().isBlank()) {
+            Map<String, Object> saMap = buildScheduledActionMap(templateId, "text", studyId.toString(), request.getScheduledAction());
+            scheduledActions.add(saMap);
+        }
+
+        configMap.put("textTemplates", textTemplates);
+        configMap.put("scheduledActions", scheduledActions);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void copyTextTemplate(UUID tenantId, UUID studyId, String templateId) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Text template ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> textTemplates = getMutableList(configMap, "textTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        Map<String, Object> orig = textTemplates.stream()
+                .filter(t -> templateId.equals(String.valueOf(t.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Text template not found: " + templateId));
+
+        int maxRank = -1;
+        for (Map<String, Object> t : textTemplates) {
+            if (t.get("rank") instanceof Number n && n.intValue() > maxRank) {
+                maxRank = n.intValue();
+            }
+        }
+
+        String newId = "tt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        Map<String, Object> copy = new LinkedHashMap<>(orig);
+        copy.put("_id", newId);
+        copy.put("name", "Copy of " + orig.get("name"));
+        copy.put("archived", false);
+        copy.put("rank", maxRank + 1);
+        copy.put("createdAt", OffsetDateTime.now().toString());
+        copy.remove("updatedAt");
+
+        textTemplates.add(copy);
+        configMap.put("textTemplates", textTemplates);
+
+        Optional<Map<String, Object>> origSa = scheduledActions.stream()
+                .filter(sa -> templateId.equals(String.valueOf(sa.get("templateId"))))
+                .findFirst();
+        if (origSa.isPresent()) {
+            Map<String, Object> copySa = new LinkedHashMap<>(origSa.get());
+            copySa.put("_id", "sa_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            copySa.put("templateId", newId);
+            scheduledActions.add(copySa);
+            configMap.put("scheduledActions", scheduledActions);
+        }
+
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void archiveTextTemplate(UUID tenantId, UUID studyId, String templateId) {
+        setTemplateArchived(tenantId, studyId, "textTemplates", templateId, true);
+    }
+
+    @Transactional
+    public void restoreTextTemplate(UUID tenantId, UUID studyId, String templateId) {
+        setTemplateArchived(tenantId, studyId, "textTemplates", templateId, false);
+    }
+
+    @Transactional
+    public void deleteTextTemplate(UUID tenantId, UUID studyId, String templateId) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Text template ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> textTemplates = getMutableList(configMap, "textTemplates");
+        List<Map<String, Object>> scheduledActions = getMutableList(configMap, "scheduledActions");
+
+        boolean removed = textTemplates.removeIf(t -> templateId.equals(String.valueOf(t.get("_id"))));
+        if (!removed) {
+            throw new InvalidStudyException("Text template not found: " + templateId);
+        }
+        scheduledActions.removeIf(sa -> templateId.equals(String.valueOf(sa.get("templateId"))));
+
+        configMap.put("textTemplates", textTemplates);
+        configMap.put("scheduledActions", scheduledActions);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional
+    public void reorderTextTemplates(UUID tenantId, UUID studyId, List<String> sortedIds) {
+        if (sortedIds == null || sortedIds.isEmpty()) return;
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> textTemplates = getMutableList(configMap, "textTemplates");
+
+        for (Map<String, Object> t : textTemplates) {
+            String id = String.valueOf(t.get("_id"));
+            int idx = sortedIds.indexOf(id);
+            if (idx >= 0) {
+                t.put("rank", idx);
+            }
+        }
+        configMap.put("textTemplates", textTemplates);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    private void setTemplateArchived(UUID tenantId, UUID studyId, String listKey, String templateId, boolean archived) {
+        if (templateId == null || templateId.isBlank()) {
+            throw new InvalidStudyException("Template ID is required.");
+        }
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> templates = getMutableList(configMap, listKey);
+
+        Map<String, Object> target = templates.stream()
+                .filter(t -> templateId.equals(String.valueOf(t.get("_id"))))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Template not found: " + templateId));
+
+        if (!archived) {
+            String name = target.get("name") != null ? target.get("name").toString() : "";
+            for (Map<String, Object> t : templates) {
+                String id = String.valueOf(t.get("_id"));
+                if (!id.equals(templateId) && !Boolean.TRUE.equals(t.get("archived"))) {
+                    String existingName = t.get("name") != null ? t.get("name").toString() : "";
+                    if (name.equalsIgnoreCase(existingName.trim())) {
+                        throw new InvalidStudyException("Cannot restore template: an active template with the name '" + name + "' already exists.");
+                    }
+                }
+            }
+        }
+
+        target.put("archived", archived);
+        target.put("updatedAt", OffsetDateTime.now().toString());
+
+        configMap.put(listKey, templates);
+        saveStudyRequirement(tenantId, studyId, requirement.getSampleSize() != null ? requirement.getSampleSize() : 100, configMap);
+    }
+
+    private void validateEmailTemplateName(String name, UUID tenantId, UUID studyId, String excludeTemplateId) {
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> emailTemplates = getMutableList(configMap, "emailTemplates");
+        for (Map<String, Object> t : emailTemplates) {
+            String id = String.valueOf(t.get("_id"));
+            if (excludeTemplateId != null && excludeTemplateId.equals(id)) continue;
+            if (Boolean.TRUE.equals(t.get("archived"))) continue;
+            String existingName = t.get("name") != null ? t.get("name").toString().trim() : "";
+            if (name.equalsIgnoreCase(existingName)) {
+                throw new InvalidStudyException("An email template with the same name already exists.");
+            }
+        }
+    }
+
+    private void validateTextTemplateName(String name, UUID tenantId, UUID studyId, String excludeTemplateId) {
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> textTemplates = getMutableList(configMap, "textTemplates");
+        for (Map<String, Object> t : textTemplates) {
+            String id = String.valueOf(t.get("_id"));
+            if (excludeTemplateId != null && excludeTemplateId.equals(id)) continue;
+            if (Boolean.TRUE.equals(t.get("archived"))) continue;
+            String existingName = t.get("name") != null ? t.get("name").toString().trim() : "";
+            if (name.equalsIgnoreCase(existingName)) {
+                throw new InvalidStudyException("A text template with the same name already exists.");
+            }
+        }
+    }
+
+    private void validateEmailAddress(String email) {
+        if (!EMAIL_PATTERN.matcher(email).matches()) {
+            throw new InvalidStudyException("Invalid reply to address.");
+        }
+    }
+
+    private List<String> sanitizeAttachmentFileIds(List<?> raw) {
+        if (raw == null) return Collections.emptyList();
+        List<String> list = new ArrayList<>();
+        for (Object o : raw) {
+            if (o != null && !o.toString().isBlank()) {
+                list.add(o.toString().trim());
+                if (list.size() >= 1) break; // Legacy Ripple restricts to at most 1 attachment
+            }
+        }
+        return list;
+    }
+
+    private Map<String, Object> buildScheduledActionMap(
+            String templateId,
+            String actionType,
+            String studyId,
+            StudyScheduledActionDto saDto
+    ) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("_id", "sa_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+        map.put("templateId", templateId);
+
+        Map<String, Object> actionMap = new LinkedHashMap<>();
+        actionMap.put("actionTriggerStudyId", studyId);
+        actionMap.put("actionType", actionType);
+        if (saDto.getAction() != null) {
+            actionMap.put("actionTriggerType", saDto.getAction().getActionTriggerType() != null ? saDto.getAction().getActionTriggerType() : "event");
+            actionMap.put("actionTriggerId", saDto.getAction().getActionTriggerId() != null ? saDto.getAction().getActionTriggerId() : "");
+        }
+        map.put("action", actionMap);
+
+        Map<String, Object> scheduleMap = new LinkedHashMap<>();
+        if (saDto.getSchedule() != null) {
+            scheduleMap.put("relativeInterval", saDto.getSchedule().getRelativeInterval());
+            scheduleMap.put("relativeUnit", saDto.getSchedule().getRelativeUnit() != null ? saDto.getSchedule().getRelativeUnit() : "days");
+            scheduleMap.put("relativeBeforeOrAfter", saDto.getSchedule().getRelativeBeforeOrAfter() != null ? saDto.getSchedule().getRelativeBeforeOrAfter() : "before");
+            scheduleMap.put("dateType", saDto.getSchedule().getDateType() != null ? saDto.getSchedule().getDateType() : "scheduled");
+        } else {
+            scheduleMap.put("relativeInterval", 0);
+            scheduleMap.put("relativeUnit", "days");
+            scheduleMap.put("relativeBeforeOrAfter", "before");
+            scheduleMap.put("dateType", "scheduled");
+        }
+        map.put("schedule", scheduleMap);
+        return map;
+    }
+
+    private StudyScheduledActionDto toScheduledActionDto(
+            Map<?, ?> saMap,
+            List<StudyBulkTasksResponse.StudyEventOptionDto> events
+    ) {
+        StudyScheduledActionDto dto = new StudyScheduledActionDto();
+        if (saMap.get("action") instanceof Map<?, ?> aMap) {
+            StudyScheduledActionDto.ActionDetailsDto aDto = new StudyScheduledActionDto.ActionDetailsDto();
+            aDto.setActionTriggerStudyId(aMap.get("actionTriggerStudyId") != null ? aMap.get("actionTriggerStudyId").toString() : null);
+            aDto.setActionType(aMap.get("actionType") != null ? aMap.get("actionType").toString() : null);
+            aDto.setActionTriggerType(aMap.get("actionTriggerType") != null ? aMap.get("actionTriggerType").toString() : null);
+            String triggerId = aMap.get("actionTriggerId") != null ? aMap.get("actionTriggerId").toString() : null;
+            aDto.setActionTriggerId(triggerId);
+            if (triggerId != null) {
+                for (StudyBulkTasksResponse.StudyEventOptionDto ev : events) {
+                    if (triggerId.equals(ev.get_id())) {
+                        aDto.setTriggerName(ev.getName());
+                        break;
+                    }
+                }
+            }
+            dto.setAction(aDto);
+        }
+        if (saMap.get("schedule") instanceof Map<?, ?> sMap) {
+            StudyScheduledActionDto.ScheduleInformationDto sDto = new StudyScheduledActionDto.ScheduleInformationDto();
+            sDto.setRelativeInterval(sMap.get("relativeInterval") instanceof Number n ? n.intValue() : 0);
+            sDto.setRelativeUnit(sMap.get("relativeUnit") != null ? sMap.get("relativeUnit").toString() : "days");
+            sDto.setRelativeBeforeOrAfter(sMap.get("relativeBeforeOrAfter") != null ? sMap.get("relativeBeforeOrAfter").toString() : "before");
+            sDto.setDateType(sMap.get("dateType") != null ? sMap.get("dateType").toString() : "scheduled");
+            dto.setSchedule(sDto);
+        }
+        return dto;
     }
 }

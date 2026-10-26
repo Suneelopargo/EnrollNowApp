@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { StudySettingsDetails } from './StudySettingsDetails';
 import { StudySettingsDisplay } from './StudySettingsDisplay';
 import { StudySettingsBulkTasks } from './StudySettingsBulkTasks';
+import { StudySettingsEmailAndText } from './StudySettingsEmailAndText';
 import { ChevronDown, ChevronRight, Info } from 'lucide-react';
 
 export interface StudySettingsWorkspaceProps {
@@ -10,6 +11,7 @@ export interface StudySettingsWorkspaceProps {
   studyName: string;
   isArchived?: boolean;
   canManageSettings?: boolean;
+  initialSubmenu?: StudySettingsSubmenuId;
   onStudyUpdated?: () => void;
 }
 
@@ -31,9 +33,10 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
   studyName,
   isArchived = false,
   canManageSettings = true,
+  initialSubmenu = 'details',
   onStudyUpdated,
 }) => {
-  const [activeSubmenu, setActiveSubmenu] = useState<StudySettingsSubmenuId>('details');
+  const [activeSubmenu, setActiveSubmenu] = useState<StudySettingsSubmenuId>(initialSubmenu);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true);
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(true);
   const [isDetailsDirty, setIsDetailsDirty] = useState(false);
@@ -248,6 +251,14 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
           />
         ) : activeSubmenu === 'bulk_tasks' ? (
           <StudySettingsBulkTasks
+            studyId={studyId}
+            studyName={studyName}
+            isArchived={isArchived}
+            canManageSettings={canManageSettings}
+            onStudyUpdated={onStudyUpdated}
+          />
+        ) : activeSubmenu === 'email_and_text' ? (
+          <StudySettingsEmailAndText
             studyId={studyId}
             studyName={studyName}
             isArchived={isArchived}

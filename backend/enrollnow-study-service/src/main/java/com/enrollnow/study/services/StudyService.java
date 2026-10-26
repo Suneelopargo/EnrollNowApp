@@ -15,11 +15,15 @@ import com.enrollnow.study.dtos.ImportStudyResponse;
 import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.dtos.ReorderBulkTasksRequest;
 import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
+import com.enrollnow.study.dtos.ReorderTemplatesRequest;
 import com.enrollnow.study.dtos.SaveBulkTaskRequest;
+import com.enrollnow.study.dtos.SaveEmailTemplateRequest;
+import com.enrollnow.study.dtos.SaveTextTemplateRequest;
 import com.enrollnow.study.dtos.StudyAdminSummary;
 import com.enrollnow.study.dtos.StudyBulkTasksResponse;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
 import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
+import com.enrollnow.study.dtos.StudyEmailTextSettingsResponse;
 import com.enrollnow.study.dtos.StudyGrantDto;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
@@ -1574,5 +1578,233 @@ public class StudyService {
             return studyRepository.findByTenantIdAndStudyCode(tenantId, studyId.trim());
         }
         return Optional.empty();
+    }
+
+
+    // --- Study Settings: Email & Text Templates ---
+
+    @Transactional(readOnly = true)
+    public StudyEmailTextSettingsResponse getStudyEmailTextSettings(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        boolean canManage = resolveCanManageStudySettings(study, studyId, callerUserId, canManageSiteAdmins);
+        return buildEmailTextSettingsResponse(study, canManage);
+    }
+
+    private StudyEmailTextSettingsResponse buildEmailTextSettingsResponse(Study study, boolean canManage) {
+        if (studyConfigurationService != null) {
+            return studyConfigurationService.getEmailAndTextConfiguration(
+                    study.getTenantId(),
+                    study.getId(),
+                    canManage
+            );
+        }
+        StudyEmailTextSettingsResponse response = new StudyEmailTextSettingsResponse();
+        response.setStudyId(study.getId().toString());
+        response.setCanManage(canManage);
+        response.setTextMessagingEnabled(true);
+        response.setEmailTemplates(new ArrayList<>());
+        response.setTextTemplates(new ArrayList<>());
+        response.setEvents(new ArrayList<>());
+        return response;
+    }
+
+    private Study requireEmailTextManage(UUID tenantId, String studyId, UUID callerUserId, boolean canManageSiteAdmins) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new InvalidStudyException("Study configuration service is unavailable.");
+        }
+        return study;
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse createEmailTemplate(
+            UUID tenantId,
+            String studyId,
+            SaveEmailTemplateRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.createEmailTemplate(study.getTenantId(), study.getId(), request);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse updateEmailTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            SaveEmailTemplateRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.updateEmailTemplate(study.getTenantId(), study.getId(), templateId, request);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse copyEmailTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.copyEmailTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse archiveEmailTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.archiveEmailTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse restoreEmailTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.restoreEmailTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse deleteEmailTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.deleteEmailTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse reorderEmailTemplates(
+            UUID tenantId,
+            String studyId,
+            ReorderTemplatesRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.reorderEmailTemplates(study.getTenantId(), study.getId(), request != null ? request.getSortedIds() : Collections.emptyList());
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse createTextTemplate(
+            UUID tenantId,
+            String studyId,
+            SaveTextTemplateRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.createTextTemplate(study.getTenantId(), study.getId(), request);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse updateTextTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            SaveTextTemplateRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.updateTextTemplate(study.getTenantId(), study.getId(), templateId, request);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse copyTextTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.copyTextTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse archiveTextTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.archiveTextTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse restoreTextTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.restoreTextTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse deleteTextTemplate(
+            UUID tenantId,
+            String studyId,
+            String templateId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.deleteTextTemplate(study.getTenantId(), study.getId(), templateId);
+        return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional
+    public StudyEmailTextSettingsResponse reorderTextTemplates(
+            UUID tenantId,
+            String studyId,
+            ReorderTemplatesRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
+        studyConfigurationService.reorderTextTemplates(study.getTenantId(), study.getId(), request != null ? request.getSortedIds() : Collections.emptyList());
+        return buildEmailTextSettingsResponse(study, true);
     }
 }

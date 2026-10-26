@@ -11,7 +11,11 @@ import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
 import com.enrollnow.study.dtos.SaveBulkTaskRequest;
 import com.enrollnow.study.dtos.StudyBulkTasksResponse;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.ReorderTemplatesRequest;
+import com.enrollnow.study.dtos.SaveEmailTemplateRequest;
+import com.enrollnow.study.dtos.SaveTextTemplateRequest;
 import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
+import com.enrollnow.study.dtos.StudyEmailTextSettingsResponse;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
@@ -785,6 +789,431 @@ public class StudyController {
         return false;
     }
 
+    // --- Study Settings: Email & Text Templates ---
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/email-text-settings", "/studies/{studyId}/email-text-settings"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> getStudyEmailTextSettings(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.getStudyEmailTextSettings(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates", "/studies/{studyId}/email-templates"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> createEmailTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody SaveEmailTemplateRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.createEmailTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Email template created successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates/{templateId}", "/studies/{studyId}/email-templates/{templateId}"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> updateEmailTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId,
+            @RequestBody SaveEmailTemplateRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.updateEmailTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Email template updated successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates/{templateId}/copy", "/studies/{studyId}/email-templates/{templateId}/copy"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> copyEmailTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.copyEmailTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Email template copied successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates/{templateId}/archive", "/studies/{studyId}/email-templates/{templateId}/archive"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> archiveEmailTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.archiveEmailTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Email template archived successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates/{templateId}/restore", "/studies/{studyId}/email-templates/{templateId}/restore"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> restoreEmailTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.restoreEmailTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Email template restored successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates/{templateId}", "/studies/{studyId}/email-templates/{templateId}"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> deleteEmailTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.deleteEmailTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Email template deleted successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/email-templates/order", "/studies/{studyId}/email-templates/order"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> reorderEmailTemplates(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody ReorderTemplatesRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.reorderEmailTemplates(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Email templates reordered successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates", "/studies/{studyId}/text-templates"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> createTextTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody SaveTextTemplateRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.createTextTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Text template created successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates/{templateId}", "/studies/{studyId}/text-templates/{templateId}"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> updateTextTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId,
+            @RequestBody SaveTextTemplateRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.updateTextTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Text template updated successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates/{templateId}/copy", "/studies/{studyId}/text-templates/{templateId}/copy"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> copyTextTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.copyTextTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Text template copied successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates/{templateId}/archive", "/studies/{studyId}/text-templates/{templateId}/archive"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> archiveTextTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.archiveTextTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Text template archived successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates/{templateId}/restore", "/studies/{studyId}/text-templates/{templateId}/restore"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> restoreTextTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.restoreTextTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Text template restored successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates/{templateId}", "/studies/{studyId}/text-templates/{templateId}"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> deleteTextTemplate(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String templateId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.deleteTextTemplate(
+                    effectiveTenantId,
+                    studyId,
+                    templateId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Text template deleted successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/text-templates/order", "/studies/{studyId}/text-templates/order"})
+    public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> reorderTextTemplates(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody ReorderTemplatesRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyEmailTextSettingsResponse response = studyService.reorderTextTemplates(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Text templates reordered successfully", response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
     private UUID resolveCallerUserId() {
         if (siteAuthorizationService != null) {
             Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();

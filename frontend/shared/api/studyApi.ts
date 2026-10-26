@@ -199,6 +199,83 @@ export interface SaveBulkTaskPayload {
   assignedTo?: string[];
 }
 
+export interface StudyScheduledActionDetails {
+  actionTriggerStudyId?: string;
+  actionType?: 'email' | 'text' | string;
+  actionTriggerType?: 'event' | 'variable' | 'customVariable' | string;
+  actionTriggerId?: string;
+  triggerName?: string;
+}
+
+export interface StudyScheduledActionSchedule {
+  relativeInterval: number;
+  relativeUnit: 'hours' | 'days' | 'weeks' | 'months' | string;
+  relativeBeforeOrAfter: 'before' | 'after' | string;
+  dateType?: 'scheduled' | 'actual' | string;
+}
+
+export interface StudyScheduledAction {
+  action?: StudyScheduledActionDetails;
+  schedule?: StudyScheduledActionSchedule;
+}
+
+export interface StudyEmailTemplate {
+  _id: string;
+  studyId?: string;
+  name: string;
+  description?: string;
+  subject: string;
+  message: string;
+  design?: string;
+  messageIsHtml?: boolean;
+  replyTo?: string;
+  senderName?: string;
+  attachmentFileIds?: string[];
+  archived: boolean;
+  rank: number;
+  scheduledAction?: StudyScheduledAction | null;
+}
+
+export interface StudyTextTemplate {
+  _id: string;
+  studyId?: string;
+  name: string;
+  description?: string;
+  message: string;
+  archived: boolean;
+  rank: number;
+  scheduledAction?: StudyScheduledAction | null;
+}
+
+export interface StudyEmailTextSettingsData {
+  studyId: string;
+  canManage: boolean;
+  textMessagingEnabled: boolean;
+  emailTemplates: StudyEmailTemplate[];
+  textTemplates: StudyTextTemplate[];
+  events: StudyEventOption[];
+}
+
+export interface SaveEmailTemplatePayload {
+  name: string;
+  subject: string;
+  description?: string;
+  message: string;
+  design?: string;
+  messageIsHtml?: boolean;
+  replyTo?: string;
+  senderName?: string;
+  attachmentFileIds?: string[];
+  scheduledAction?: StudyScheduledAction | null;
+}
+
+export interface SaveTextTemplatePayload {
+  name: string;
+  description?: string;
+  message: string;
+  scheduledAction?: StudyScheduledAction | null;
+}
+
 export interface ImportStudyResult {
   studyId: string;
   studyCode: string;
@@ -396,6 +473,147 @@ export const studyApi = {
     const res = await apiClient.put(
       `/api/v1/studies/${studyId}/bulk-task-groups/${groupId}/tasks/order`,
       { taskIds },
+      config
+    );
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async getStudyEmailTextSettings(id: string | number, config?: StudyApiRequestConfig): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/email-text-settings`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async createEmailTemplate(
+    studyId: string | number,
+    payload: SaveEmailTemplatePayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.post(`/api/v1/studies/${studyId}/email-templates`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateEmailTemplate(
+    studyId: string | number,
+    templateId: string,
+    payload: SaveEmailTemplatePayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/email-templates/${templateId}`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async copyEmailTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.post(`/api/v1/studies/${studyId}/email-templates/${templateId}/copy`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async archiveEmailTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/email-templates/${templateId}/archive`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async restoreEmailTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/email-templates/${templateId}/restore`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async deleteEmailTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.delete(`/api/v1/studies/${studyId}/email-templates/${templateId}`, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async reorderEmailTemplates(
+    studyId: string | number,
+    templateIds: string[],
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(
+      `/api/v1/studies/${studyId}/email-templates/order`,
+      { templateIds },
+      config
+    );
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async createTextTemplate(
+    studyId: string | number,
+    payload: SaveTextTemplatePayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.post(`/api/v1/studies/${studyId}/text-templates`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateTextTemplate(
+    studyId: string | number,
+    templateId: string,
+    payload: SaveTextTemplatePayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/text-templates/${templateId}`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async copyTextTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.post(`/api/v1/studies/${studyId}/text-templates/${templateId}/copy`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async archiveTextTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/text-templates/${templateId}/archive`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async restoreTextTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(`/api/v1/studies/${studyId}/text-templates/${templateId}/restore`, {}, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async deleteTextTemplate(
+    studyId: string | number,
+    templateId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.delete(`/api/v1/studies/${studyId}/text-templates/${templateId}`, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async reorderTextTemplates(
+    studyId: string | number,
+    templateIds: string[],
+    config?: StudyApiRequestConfig
+  ): Promise<StudyEmailTextSettingsData> {
+    const res = await apiClient.put(
+      `/api/v1/studies/${studyId}/text-templates/order`,
+      { templateIds },
       config
     );
     return (res.data as any)?.data ?? res.data;

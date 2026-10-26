@@ -467,4 +467,159 @@ class StudyConfigurationServiceTest {
             if ("t_2".equals(id)) assertEquals(2, rank);
         }
     }
+
+    // =========================================================================
+    // Email and Text Templates Tests
+    // =========================================================================
+
+    @Test
+    void emailTemplates_createUpdateCopyArchiveRestoreDeleteWorkflow() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        // 1. Create Email Template with Scheduled Action
+        SaveEmailTemplateRequest createReq = new SaveEmailTemplateRequest();
+        createReq.setName("Consent Confirmation");
+        createReq.setSubject("Your Consent Confirmation");
+        createReq.setDescription("Automated confirmation after consent");
+        createReq.setMessage("Hello {{firstName}}, welcome to {{studyName}}.");
+        createReq.setReplyTo("study@clinic.org");
+
+        StudyScheduledActionDto sa = new StudyScheduledActionDto();
+        StudyScheduledActionDto.ActionDetailsDto action = new StudyScheduledActionDto.ActionDetailsDto();
+        action.setActionType("email");
+        action.setActionTriggerType("event");
+        action.setActionTriggerId("evt_screening");
+        sa.setAction(action);
+        StudyScheduledActionDto.ScheduleInformationDto schedule = new StudyScheduledActionDto.ScheduleInformationDto();
+        schedule.setRelativeInterval(1);
+        schedule.setRelativeUnit("days");
+        schedule.setRelativeBeforeOrAfter("before");
+        schedule.setDateType("scheduled");
+        sa.setSchedule(schedule);
+        createReq.setScheduledAction(sa);
+
+        configurationService.createEmailTemplate(tenantId, studyId, createReq);
+
+        ArgumentCaptor<StudyRequirement> captor1 = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captor1.capture());
+        StudyRequirement saved1 = captor1.getValue();
+
+        Map<String, Object> config1 = objectMapper.readValue(
+                saved1.getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> emailTemplates1 = (List<?>) config1.get("emailTemplates");
+        List<?> scheduledActions1 = (List<?>) config1.get("scheduledActions");
+        assertEquals(1, emailTemplates1.size());
+        assertEquals(1, scheduledActions1.size());
+
+        Map<?, ?> createdTemplate = (Map<?, ?>) emailTemplates1.get(0);
+        String createdTemplateId = (String) createdTemplate.get("_id");
+        assertEquals("Consent Confirmation", createdTemplate.get("name"));
+        assertEquals(false, createdTemplate.get("archived"));
+        assertEquals(0, ((Number) createdTemplate.get("rank")).intValue());
+
+        // 2. Reject duplicate active email template name
+        existing.setConfiguration(saved1.getConfiguration());
+        SaveEmailTemplateRequest dupReq = new SaveEmailTemplateRequest();
+        dupReq.setName("consent confirmation"); // case-insensitive check
+        dupReq.setSubject("Duplicate");
+        dupReq.setMessage("Test");
+        assertThrows(InvalidStudyException.class, () ->
+                configurationService.createEmailTemplate(tenantId, studyId, dupReq));
+
+        // 3. Copy Email Template
+        configurationService.copyEmailTemplate(tenantId, studyId, createdTemplateId);
+        ArgumentCaptor<StudyRequirement> captorCopy = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captorCopy.capture());
+        Map<String, Object> configCopy = objectMapper.readValue(
+                captorCopy.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> emailTemplatesCopy = (List<?>) configCopy.get("emailTemplates");
+        assertEquals(2, emailTemplatesCopy.size());
+        Map<?, ?> copiedTemplate = (Map<?, ?>) emailTemplatesCopy.get(1);
+        assertEquals("Copy of Consent Confirmation", copiedTemplate.get("name"));
+
+        // 4. Archive Email Template
+        existing.setConfiguration(captorCopy.getValue().getConfiguration());
+        configurationService.archiveEmailTemplate(tenantId, studyId, createdTemplateId);
+        ArgumentCaptor<StudyRequirement> captorArch = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captorArch.capture());
+        Map<String, Object> configArch = objectMapper.readValue(
+                captorArch.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> emailTemplatesArch = (List<?>) configArch.get("emailTemplates");
+        Map<?, ?> archT = (Map<?, ?>) emailTemplatesArch.get(0);
+        assertEquals(true, archT.get("archived"));
+
+        // 5. Restore Email Template
+        existing.setConfiguration(captorArch.getValue().getConfiguration());
+        configurationService.restoreEmailTemplate(tenantId, studyId, createdTemplateId);
+        ArgumentCaptor<StudyRequirement> captorRest = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captorRest.capture());
+        Map<String, Object> configRest = objectMapper.readValue(
+                captorRest.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> emailTemplatesRest = (List<?>) configRest.get("emailTemplates");
+        Map<?, ?> restT = (Map<?, ?>) emailTemplatesRest.get(0);
+        assertEquals(false, restT.get("archived"));
+
+        // 6. Delete Email Template -> Removes template and any attached scheduled action
+        existing.setConfiguration(captorRest.getValue().getConfiguration());
+        configurationService.deleteEmailTemplate(tenantId, studyId, createdTemplateId);
+        ArgumentCaptor<StudyRequirement> captorDel = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captorDel.capture());
+        Map<String, Object> configDel = objectMapper.readValue(
+                captorDel.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> emailTemplatesDel = (List<?>) configDel.get("emailTemplates");
+        assertEquals(1, emailTemplatesDel.size()); // only copy remains
+        assertFalse(((Map<?, ?>) emailTemplatesDel.get(0)).get("_id").equals(createdTemplateId));
+    }
+
+    @Test
+    void textTemplates_enforce1600CharLimitAndCrud() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        // 1. Text message > 1600 chars throws InvalidStudyException
+        SaveTextTemplateRequest tooLongReq = new SaveTextTemplateRequest();
+        tooLongReq.setName("Long SMS");
+        tooLongReq.setMessage("A".repeat(1601));
+        assertThrows(InvalidStudyException.class, () ->
+                configurationService.createTextTemplate(tenantId, studyId, tooLongReq));
+
+        // 2. Valid text message succeeds
+        SaveTextTemplateRequest validReq = new SaveTextTemplateRequest();
+        validReq.setName("Appointment Reminder");
+        validReq.setDescription("SMS 24h prior");
+        validReq.setMessage("Hi {{firstName}}, your study visit is tomorrow at 10 AM.");
+
+        configurationService.createTextTemplate(tenantId, studyId, validReq);
+
+        ArgumentCaptor<StudyRequirement> captor = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository, atLeastOnce()).save(captor.capture());
+        Map<String, Object> config = objectMapper.readValue(
+                captor.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> texts = (List<?>) config.get("textTemplates");
+        assertEquals(1, texts.size());
+        Map<?, ?> textMap = (Map<?, ?>) texts.get(0);
+        assertEquals("Appointment Reminder", textMap.get("name"));
+        assertEquals(0, ((Number) textMap.get("rank")).intValue());
+    }
 }
