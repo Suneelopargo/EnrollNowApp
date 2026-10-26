@@ -49,25 +49,28 @@ public class StudyConfigurationService {
 
     private final StudyRequirementRepository studyRequirementRepository;
     private final ObjectMapper objectMapper;
-
-    @Autowired(required = false)
     private StudyMilestoneRepository studyMilestoneRepository;
 
     public StudyConfigurationService(
             StudyRequirementRepository studyRequirementRepository,
             ObjectMapper objectMapper
     ) {
-        this.studyRequirementRepository = studyRequirementRepository;
-        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        this(studyRequirementRepository, objectMapper, null);
     }
 
+    @Autowired
     public StudyConfigurationService(
             StudyRequirementRepository studyRequirementRepository,
             ObjectMapper objectMapper,
-            StudyMilestoneRepository studyMilestoneRepository
+            @Autowired(required = false) StudyMilestoneRepository studyMilestoneRepository
     ) {
         this.studyRequirementRepository = studyRequirementRepository;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        this.studyMilestoneRepository = studyMilestoneRepository;
+    }
+
+    @Autowired(required = false)
+    public void setStudyMilestoneRepository(StudyMilestoneRepository studyMilestoneRepository) {
         this.studyMilestoneRepository = studyMilestoneRepository;
     }
 
@@ -549,7 +552,7 @@ public class StudyConfigurationService {
         return updated;
     }
 
-    private StudyRequirement saveStudyRequirement(UUID tenantId, UUID studyId, int sampleSize, Map<String, Object> configMap) {
+    private StudyRequirement saveStudyRequirement(UUID tenantId, UUID studyId, Integer sampleSize, Map<String, Object> configMap) {
         String json;
         try {
             json = objectMapper.writeValueAsString(configMap);
@@ -566,7 +569,9 @@ public class StudyConfigurationService {
                     return req;
                 });
 
-        requirement.setSampleSize(sampleSize);
+        if (sampleSize != null) {
+            requirement.setSampleSize(sampleSize);
+        }
         requirement.setConfiguration(json);
         requirement.setUpdatedAt(OffsetDateTime.now());
 
@@ -2523,15 +2528,25 @@ public class StudyConfigurationService {
 
     @Transactional(readOnly = true)
     public StudyRequirementsResponse getStudyRequirements(UUID tenantId, UUID studyId, boolean canManage) {
-        StudyRequirement requirement = studyRequirementRepository
-                .findByTenantIdAndStudyId(tenantId, studyId)
-                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+        Optional<StudyRequirement> requirementOpt = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId);
+        StudyRequirement requirement = requirementOpt.orElse(null);
 
-        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        Map<String, Object> configMap;
+        if (requirement != null && requirement.getConfiguration() != null && !requirement.getConfiguration().isBlank()) {
+            try {
+                configMap = objectMapper.readValue(requirement.getConfiguration(), new TypeReference<Map<String, Object>>() {});
+            } catch (Exception ex) {
+                log.warn("Corrupted configuration JSON for study {}: {}", studyId, ex.getMessage());
+                configMap = new LinkedHashMap<>();
+            }
+        } else {
+            configMap = new LinkedHashMap<>();
+        }
 
         StudyRequirementsResponse response = new StudyRequirementsResponse();
         response.setStudyId(studyId.toString());
-        response.setSampleSize(requirement.getSampleSize() != null ? requirement.getSampleSize() : 100);
+        response.setSampleSize(requirement != null && requirement.getSampleSize() != null ? requirement.getSampleSize() : 100);
         response.setCanManage(canManage);
 
         // 1. Milestones
@@ -3087,7 +3102,7 @@ public class StudyConfigurationService {
 
     private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName, List<String> defaultValues) {
         List<ContactTaxonomyDto> result = new ArrayList<>();
-        if (raw instanceof List<?> list && !list.isEmpty()) {
+        if (raw instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
                     String id = map.get("_id") != null ? map.get("_id").toString() : (map.get("id") != null ? map.get("id").toString() : "");
@@ -3100,10 +3115,12 @@ public class StudyConfigurationService {
             return result;
         }
 
-        // Initialize defaults with "Other" guaranteed
-        int idx = 1;
-        for (String def : defaultValues) {
-            result.add(new ContactTaxonomyDto("tax_" + (idx++), def));
+        // Initialize defaults with "Other" guaranteed only when not configured yet (raw == null)
+        if (raw == null && defaultValues != null) {
+            int idx = 1;
+            for (String def : defaultValues) {
+                result.add(new ContactTaxonomyDto("tax_" + (idx++), def));
+            }
         }
         return result;
     }

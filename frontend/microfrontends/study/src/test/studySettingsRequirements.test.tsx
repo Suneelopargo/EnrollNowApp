@@ -142,4 +142,29 @@ describe('StudySettingsRequirements Component Tests', () => {
     expect(html).toContain('Loading study details');
     expect(html).not.toContain('study-settings-placeholder');
   });
+
+  it('provides comprehensive requirements data structures with all 8 legacy sections', async () => {
+    const res = await studyApi.getStudyRequirements(mockStudyId);
+    expect(res.sampleSize).toBe(150);
+    expect(res.milestones).toHaveLength(2);
+    expect(res.studyGroups).toHaveLength(3);
+    expect(res.customVariables).toHaveLength(2);
+    expect(res.variableGroups).toHaveLength(1);
+    expect(res.customVariableLayout).toHaveLength(2);
+    expect(res.contactRelationships).toHaveLength(2);
+    expect(res.contactOutcomes).toHaveLength(2);
+    expect(res.globalVariables).toHaveLength(1);
+
+    // Verify custom variable options and flags
+    const handedness = res.customVariables.find((v: any) => v.name === 'Handedness');
+    expect(handedness).toBeDefined();
+    expect(handedness?.variableType).toBe('single');
+    expect(handedness?.options).toHaveLength(2);
+    expect(handedness?.isGlobal).toBe(false);
+
+    const bp = res.customVariables.find((v: any) => v.name === 'Systolic BP');
+    expect(bp).toBeDefined();
+    expect(bp?.isGlobal).toBe(true);
+    expect(bp?.isBlind).toBe(true);
+  });
 });

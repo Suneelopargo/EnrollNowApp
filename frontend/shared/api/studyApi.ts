@@ -280,6 +280,7 @@ export interface StudyMilestone {
   id?: string;
   milestoneDate: string;
   participantTarget: number;
+  description?: string;
 }
 
 export interface AgeRange {

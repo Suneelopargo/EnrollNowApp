@@ -65,7 +65,7 @@ Status classifications:
 - Features Passing: **40 (100%)**
 - Features Partial / Missing: **0**
 - Automated Backend Tests Executed: **175 tests passing** (110 study service + 65 participant service, 0 failures)
-- Automated Frontend Tests Executed: **110 tests passing** (81 study microfrontend + 29 participant microfrontend, 0 failures)
-- Total Automated Tests Passing: **285 tests**
+- Automated Frontend Tests Executed: **111 tests passing** (82 study microfrontend + 29 participant microfrontend, 0 failures)
+- Total Automated Tests Passing: **286 tests**
 - Monorepo Typecheck: **13 workspaces passing (0 errors)**
 - Production Build: **Emitted successfully**
