@@ -5,8 +5,6 @@ import {
   Upload,
   Plus,
   Trash2,
-  AlertCircle,
-  CheckCircle2,
   Loader2,
   Lock,
   ChevronDown,
@@ -18,6 +16,7 @@ import {
   StudyGrant,
   UpdateStudyDetailsPayload,
 } from '../../../../shared/api/studyApi';
+import { toast } from '../../../../shared/toaster';
 
 export interface StudySettingsDetailsProps {
   studyId: string;
@@ -88,8 +87,6 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   const [importCategories, setImportCategories] = useState<ImportCategory[]>([]);
   const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({});
   const [openCategory, setOpenCategory] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -101,7 +98,6 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   const loadDetails = useCallback(async () => {
     if (!studyId) return;
     setLoading(true);
-    setError(null);
     try {
       const data = await studyApi.getStudyDetails(studyId);
       setDetails(data);
@@ -130,7 +126,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       setInitialLoadedForm(mapped);
       setFieldErrors({});
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to load study details.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to load study details.');
     } finally {
       setLoading(false);
     }
@@ -304,17 +300,12 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   const handleDiscard = () => {
     setForm(initialLoadedForm);
     setFieldErrors({});
-    setSuccessMessage(null);
-    setError(null);
   };
 
   // Save changes
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly || saving) return;
-
-    setError(null);
-    setSuccessMessage(null);
 
     if (!validate()) {
       return;
@@ -369,10 +360,10 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
 
       setForm(mapped);
       setInitialLoadedForm(mapped);
-      setSuccessMessage('Study details updated successfully.');
+      toast.success('Study details updated successfully.');
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to update study details.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to update study details.');
     } finally {
       setSaving(false);
     }
@@ -396,7 +387,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to export study.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to export study.');
     } finally {
       setExporting(false);
     }
@@ -407,11 +398,10 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       if (!selected.name.toLowerCase().endsWith('.json')) {
-        setError('Please select a valid .json file.');
+        toast.error('Please select a valid .json file.');
         return;
       }
       setImportFile(selected);
-      setError(null);
 
       try {
         const text = await selected.text();
@@ -442,7 +432,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
           setOpenCategory(cats[0].key);
         }
       } catch (parseErr: any) {
-        setError('File contents lack proper JSON format, please try again.');
+        toast.error('File contents lack proper JSON format, please try again.');
         setParsedData(null);
         setImportCategories([]);
         setSelectedItems({});
@@ -477,12 +467,11 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     if (!importFile || !parsedData) return;
 
     if (totalSelectedCount === 0) {
-      setError('Please select at least one component to import.');
+      toast.error('Please select at least one component to import.');
       return;
     }
 
     setImporting(true);
-    setError(null);
     try {
       const componentsToImport: Record<string, any[]> = {};
       importCategories.forEach((cat) => {
@@ -498,11 +487,11 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       setParsedData(null);
       setImportCategories([]);
       setSelectedItems({});
-      setSuccessMessage('Successfully imported unique study components.');
+      toast.success('Successfully imported unique study components.');
       await loadDetails();
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to import study components.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to import study components.');
     } finally {
       setImporting(false);
     }
@@ -550,20 +539,6 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       </div>
 
       {/* Alert Notices */}
-      {error && (
-        <div className="study-alert study-alert--error" role="alert">
-          <AlertCircle size={16} />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {successMessage && (
-        <div className="study-alert study-alert--success" role="status">
-          <CheckCircle2 size={16} />
-          <span>{successMessage}</span>
-        </div>
-      )}
-
       {isReadOnly && (
         <div className="study-alert study-alert--info" role="status">
           <Lock size={15} />

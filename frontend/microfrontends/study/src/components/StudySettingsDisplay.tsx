@@ -11,13 +11,13 @@ import {
   Globe,
   Plus,
   Trash2,
-  CheckCircle2,
   AlertCircle,
   Loader2,
   Info,
   Columns,
   MessageSquare,
 } from 'lucide-react';
+import { toast } from '../../../../shared/toaster';
 
 export interface StudySettingsDisplayProps {
   studyId: string;
@@ -63,8 +63,6 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
   const [locale, setLocale] = useState<string>('en-US');
   const [showGlobalComments, setShowGlobalComments] = useState<boolean>(false);
@@ -132,19 +130,17 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
   ) => {
     if (!canEdit) return;
     setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(null);
     try {
       const updated = await studyApi.updateStudyDisplaySettings(studyId, partialPayload);
       applyResponseState(updated);
-      setSaveSuccess(successMessage);
+      toast.success(successMessage);
       onStudyUpdated?.();
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
         'Failed to update display settings.';
-      setSaveError(msg);
+      toast.error(msg);
       // Roll back optimistic UI changes to the last persisted server state.
       if (lastServerStateRef.current) {
         applyResponseState(lastServerStateRef.current);
@@ -245,8 +241,7 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
 
   const handleRemovePotentialColumn = async (index: number) => {
     if (potentialParticipantColumns.length <= 1) {
-      setSaveSuccess(null);
-      setSaveError('Must have at least one column for display.');
+      toast.error('Must have at least one column for display.');
       return;
     }
     const nextCols = potentialParticipantColumns.filter((_, idx) => idx !== index);
@@ -296,8 +291,7 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
 
   const handleRemoveEnrolledColumn = async (index: number) => {
     if (enrolledParticipantColumns.length <= 1) {
-      setSaveSuccess(null);
-      setSaveError('Must have at least one column for display.');
+      toast.error('Must have at least one column for display.');
       return;
     }
     const nextCols = enrolledParticipantColumns.filter((_, idx) => idx !== index);
@@ -361,28 +355,6 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
               ? 'This study is archived. Display settings are in read-only mode.'
               : 'You have read-only access to this study. Only Study Admins or Site Admins can modify study display settings.'}
           </span>
-        </div>
-      )}
-
-      {saveError && (
-        <div
-          className="study-settings-banner study-settings-banner--error"
-          role="alert"
-          data-testid="study-display-save-error"
-        >
-          <AlertCircle size={16} />
-          <span>{saveError}</span>
-        </div>
-      )}
-
-      {saveSuccess && (
-        <div
-          className="study-settings-banner study-settings-banner--success"
-          role="status"
-          data-testid="study-display-save-success"
-        >
-          <CheckCircle2 size={16} />
-          <span>{saveSuccess}</span>
         </div>
       )}
 

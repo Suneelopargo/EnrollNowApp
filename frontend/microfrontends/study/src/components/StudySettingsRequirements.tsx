@@ -12,6 +12,7 @@ import {
   ContactTaxonomy,
   VariableOption,
 } from '../../../../shared/api/studyApi';
+import { toast } from '../../../../shared/toaster';
 import {
   Users,
   Calendar,
@@ -22,9 +23,7 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  AlertCircle,
   AlertTriangle,
-  CheckCircle2,
   Loader2,
   X,
   Search,
@@ -62,8 +61,6 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   // Loading & Action states
   const [loading, setLoading] = useState<boolean>(true);
   const [isSavingOperation, setIsSavingOperation] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Requirements Data State
   const [sampleSize, setSampleSize] = useState<number | ''>('');
@@ -218,7 +215,6 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     ): Promise<boolean> => {
       if (!canManageSettings || isArchived) return false;
       setIsSavingOperation(true);
-      setError(null);
       try {
         const updated = await studyApi.updateStudyRequirements(studyId, partial);
         if (partial.sampleSize !== undefined) {
@@ -244,14 +240,13 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
           setContactOutcomes(updated.contactOutcomes || []);
         }
         if (successMsg) {
-          setSuccessMessage(successMsg);
-          setTimeout(() => setSuccessMessage(null), 3000);
+          toast.success(successMsg);
         }
         onStudyUpdated?.();
         return true;
       } catch (err: any) {
         console.error('Failed to persist requirements operation:', err);
-        setError(err?.response?.data?.message || err?.message || 'Failed to save changes.');
+        toast.error(err?.response?.data?.message || err?.message || 'Failed to save changes.');
         return false;
       } finally {
         setIsSavingOperation(false);
@@ -264,7 +259,6 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const loadRequirements = useCallback(async () => {
     if (!studyId) return;
     setLoading(true);
-    setError(null);
     try {
       const data: StudyRequirementsData = await studyApi.getStudyRequirements(studyId);
       const sSize = data.sampleSize ?? '';
@@ -282,7 +276,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       onDirtyChange?.(false);
     } catch (err: any) {
       console.error('Failed to load study requirements:', err);
-      setError(err?.response?.data?.message || err?.message || 'Failed to load study requirements.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to load study requirements.');
     } finally {
       setLoading(false);
     }
@@ -310,11 +304,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     if (!newMilestoneDate || !newMilestoneTarget) return;
     const target = parseInt(newMilestoneTarget, 10);
     if (isNaN(target) || target <= 0) {
-      setError('Milestone target must be a positive integer.');
+      toast.error('Milestone target must be a positive integer.');
       return;
     }
     setIsSavingOperation(true);
-    setError(null);
     try {
       const newM = await studyApi.addStudyMilestone(studyId, {
         milestoneDate: newMilestoneDate,
@@ -326,11 +319,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setNewMilestoneDate('');
       setNewMilestoneTarget('');
       setNewMilestoneDesc('');
-      setSuccessMessage('Recruitment milestone added.');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast.success('Recruitment milestone added.');
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
     } finally {
       setIsSavingOperation(false);
     }
@@ -347,11 +339,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     if (!editingMilestone || !editingMilestone.id || !editMilestoneDate || !editMilestoneTarget) return;
     const target = parseInt(editMilestoneTarget, 10);
     if (isNaN(target) || target <= 0) {
-      setError('Milestone target must be a positive integer.');
+      toast.error('Milestone target must be a positive integer.');
       return;
     }
     setIsSavingOperation(true);
-    setError(null);
     try {
       const updated = await studyApi.updateStudyMilestone(studyId, editingMilestone.id, {
         milestoneDate: editMilestoneDate,
@@ -364,11 +355,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
           .sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate))
       );
       setEditingMilestone(null);
-      setSuccessMessage('Milestone updated.');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast.success('Milestone updated.');
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
     } finally {
       setIsSavingOperation(false);
     }
@@ -387,11 +377,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         participantTarget: 0,
       });
       setMilestones((prev) => [...prev, newM].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate)));
-      setSuccessMessage('Recruitment milestone added.');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast.success('Recruitment milestone added.');
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
     } finally {
       setIsSavingOperation(false);
     }
@@ -416,11 +405,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
           .map((item) => (item.id === m.id ? updated : item))
           .sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate))
       );
-      setSuccessMessage('Milestone updated.');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast.success('Milestone updated.');
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
     } finally {
       setIsSavingOperation(false);
     }
@@ -432,11 +420,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       await studyApi.deleteStudyMilestone(studyId, milestoneId);
       setMilestones((prev) => prev.filter((m) => m.id !== milestoneId));
       setConfirmDeleteModal(null);
-      setSuccessMessage('Milestone deleted.');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast.success('Milestone deleted.');
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to delete milestone.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to delete milestone.');
     } finally {
       setIsSavingOperation(false);
     }
@@ -620,8 +607,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       return next;
     });
     setUnlockPromptVariable(null);
-    setSuccessMessage(`Unlocked global variable "${v.name}" for edits.`);
-    setTimeout(() => setSuccessMessage(null), 3000);
+    toast.success(`Unlocked global variable "${v.name}" for edits.`);
   };
 
   const handleAddCustomVariable = async () => {
@@ -722,7 +708,6 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const handleAddGlobalVariable = async (globalVar: StudyCustomVariable) => {
     if (!globalVar.id) return;
     setIsSavingOperation(true);
-    setError(null);
     try {
       const added = await studyApi.addGlobalVariableToStudy(studyId, globalVar.id);
       const updatedVars = [...customVariables, added];
@@ -734,11 +719,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setCustomVariables(updatedVars);
       setLayout(updatedLayout);
       setShowAddGlobalVarModal(false);
-      setSuccessMessage(`Global variable "${added.name}" added to study.`);
-      setTimeout(() => setSuccessMessage(null), 3000);
+      toast.success(`Global variable "${added.name}" added to study.`);
       onStudyUpdated?.();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Failed to add global variable.');
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to add global variable.');
     } finally {
       setIsSavingOperation(false);
     }
@@ -1331,26 +1315,6 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   return (
     <div className="study-requirements-page study-settings-requirements" data-testid="study-settings-requirements">
       <h3 className="settings-header">Edit Participant Requirements</h3>
-
-      {/* Notifications */}
-      {error && (
-        <div className="study-alert study-alert--error" role="alert">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
-            <X size={14} />
-          </button>
-        </div>
-      )}
-      {successMessage && (
-        <div className="study-alert study-alert--success" role="status">
-          <CheckCircle2 size={18} />
-          <span>{successMessage}</span>
-          <button type="button" onClick={() => setSuccessMessage(null)} aria-label="Dismiss success">
-            <X size={14} />
-          </button>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* 1. GENERAL SAMPLE REQUIREMENTS */}

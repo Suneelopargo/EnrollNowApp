@@ -24,6 +24,7 @@ import {
   Edit3,
   Zap,
 } from 'lucide-react';
+import { toast } from '../../../../shared/toaster';
 
 export interface StudySettingsBulkTasksProps {
   studyId: string;
@@ -42,8 +43,6 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [bannerError, setBannerError] = useState<string | null>(null);
-  const [bannerSuccess, setBannerSuccess] = useState<string | null>(null);
 
   const [groups, setGroups] = useState<BulkTaskGroup[]>([]);
   const [studyEvents, setStudyEvents] = useState<StudyEventOption[]>([]);
@@ -181,8 +180,6 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     e.preventDefault();
     if (!canEdit) return;
     setGroupModalError(null);
-    setBannerError(null);
-    setBannerSuccess(null);
 
     const trimmedName = groupName.trim();
     if (!trimmedName) {
@@ -213,10 +210,10 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     try {
       if (editingGroup) {
         applySnapshot(await studyApi.updateBulkTaskGroup(studyId, editingGroup._id, payload));
-        setBannerSuccess(`Bulk task group "${trimmedName}" updated.`);
+        toast.success(`Bulk task group "${trimmedName}" updated.`);
       } else {
         applySnapshot(await studyApi.createBulkTaskGroup(studyId, payload));
-        setBannerSuccess(`Bulk task group "${trimmedName}" created.`);
+        toast.success(`Bulk task group "${trimmedName}" created.`);
       }
       setGroupModalOpen(false);
       setEditingGroup(null);
@@ -236,15 +233,13 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     if (!canEdit || !editingGroup) return;
     setSubmitting(true);
     setGroupModalError(null);
-    setBannerError(null);
-    setBannerSuccess(null);
     try {
       const deletedName = editingGroup.name;
       applySnapshot(await studyApi.deleteBulkTaskGroup(studyId, editingGroup._id));
       setGroupModalOpen(false);
       setEditingGroup(null);
       setConfirmDeleteGroup(false);
-      setBannerSuccess(`Bulk task group "${deletedName}" and its tasks were deleted.`);
+      toast.success(`Bulk task group "${deletedName}" and its tasks were deleted.`);
       onStudyUpdated?.();
     } catch (err: any) {
       const msg =
@@ -299,8 +294,6 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     e.preventDefault();
     if (!canEdit) return;
     setTaskModalError(null);
-    setBannerError(null);
-    setBannerSuccess(null);
 
     const trimmedName = taskName.trim();
     if (!trimmedName) {
@@ -318,7 +311,7 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
             assignedTo: taskAssignedTo,
           })
         );
-        setBannerSuccess(`Task "${trimmedName}" updated.`);
+        toast.success(`Task "${trimmedName}" updated.`);
       } else {
         applySnapshot(
           await studyApi.createBulkTask(studyId, activeGroupIdForTask, {
@@ -327,7 +320,7 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
             assignedTo: taskAssignedTo,
           })
         );
-        setBannerSuccess(`Task "${trimmedName}" added.`);
+        toast.success(`Task "${trimmedName}" added.`);
       }
       setTaskModalOpen(false);
       setEditingTask(null);
@@ -347,15 +340,13 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     if (!canEdit || !editingTask) return;
     setSubmitting(true);
     setTaskModalError(null);
-    setBannerError(null);
-    setBannerSuccess(null);
     try {
       const deletedName = editingTask.name;
       applySnapshot(await studyApi.deleteBulkTask(studyId, editingTask._id));
       setTaskModalOpen(false);
       setEditingTask(null);
       setConfirmDeleteTask(false);
-      setBannerSuccess(`Task "${deletedName}" deleted.`);
+      toast.success(`Task "${deletedName}" deleted.`);
       onStudyUpdated?.();
     } catch (err: any) {
       const msg =
@@ -391,16 +382,15 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
       )
     );
 
-    setBannerError(null);
     try {
       applySnapshot(await studyApi.reorderBulkTasks(studyId, group._id, orderedIds));
-      setBannerSuccess('Task order updated.');
+      toast.success('Task order updated.');
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||
         err?.message ||
         'Failed to reorder bulk tasks.';
-      setBannerError(msg);
+      toast.error(msg);
       await fetchBulkTasks();
     }
   };
@@ -461,28 +451,6 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
               ? 'This study is archived. Bulk Tasks are in read-only mode.'
               : 'You have read-only access to this study. Only Study Admins or Site Admins can modify bulk tasks.'}
           </span>
-        </div>
-      )}
-
-      {bannerError && (
-        <div
-          className="study-settings-banner study-settings-banner--error"
-          role="alert"
-          data-testid="study-bulk-tasks-banner-error"
-        >
-          <AlertCircle size={16} />
-          <span>{bannerError}</span>
-        </div>
-      )}
-
-      {bannerSuccess && (
-        <div
-          className="study-settings-banner study-settings-banner--success"
-          role="status"
-          data-testid="study-bulk-tasks-banner-success"
-        >
-          <CheckCircle2 size={16} />
-          <span>{bannerSuccess}</span>
         </div>
       )}
 

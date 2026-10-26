@@ -355,30 +355,28 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       ) : selectedStudy || permissions ? (
         /* 4. Active Selected Study Workspace */
         <section className="study-dashboard" aria-labelledby="study-dashboard-title">
-          {/* Header Context Banner */}
+          {/* Header Context Banner with Navigation Side-by-Side */}
           <header className="study-dashboard__header">
-            <div>
-              
+            <div className="study-dashboard__title-wrap">
               <h1 id="study-dashboard-title">{studyTitle}</h1>
-              
+              {isArchived && (
+                <div className="study-archived-badge" role="status">
+                  Archived Study
+                </div>
+              )}
             </div>
-            {isArchived && (
-              <div className="study-archived-badge" role="status">
-                Archived Study
-              </div>
+
+            {/* Study Navigation Tabs Strip Side-by-Side */}
+            {permissions && (
+              <StudyNavigation
+                permissions={permissions}
+                activeTab={activeTab}
+                activeSubTab={activeSubTab}
+                onSelectTab={handleSelectTab}
+                isParticipantUser={Boolean(context?.user?.roles?.includes('PARTICIPANT'))}
+              />
             )}
           </header>
-
-          {/* Legacy Ripple Study Navigation Tabs Strip */}
-          {permissions && (
-            <StudyNavigation
-              permissions={permissions}
-              activeTab={activeTab}
-              activeSubTab={activeSubTab}
-              onSelectTab={handleSelectTab}
-              isParticipantUser={Boolean(context?.user?.roles?.includes('PARTICIPANT'))}
-            />
-          )}
 
           {/* Archived Study Warning */}
           {isArchived && (

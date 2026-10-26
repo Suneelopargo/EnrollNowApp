@@ -28,6 +28,7 @@ import {
   Clock,
   ExternalLink,
 } from 'lucide-react';
+import { toast } from '../../../../shared/toaster';
 
 export interface StudySettingsEmailAndTextProps {
   studyId: string;
@@ -92,8 +93,6 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [bannerError, setBannerError] = useState<string | null>(null);
-  const [bannerSuccess, setBannerSuccess] = useState<string | null>(null);
 
   const [emailTemplates, setEmailTemplates] = useState<StudyEmailTemplate[]>([]);
   const [textTemplates, setTextTemplates] = useState<StudyTextTemplate[]>([]);
@@ -336,10 +335,10 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       let updatedSnapshot: StudyEmailTextSettingsData;
       if (editingEmail) {
         updatedSnapshot = await studyApi.updateEmailTemplate(studyId, editingEmail._id, payload);
-        setBannerSuccess(`Email template "${trimmedName}" updated successfully.`);
+        toast.success(`Email template "${trimmedName}" updated successfully.`);
       } else {
         updatedSnapshot = await studyApi.createEmailTemplate(studyId, payload);
-        setBannerSuccess(`Email template "${trimmedName}" created successfully.`);
+        toast.success(`Email template "${trimmedName}" created successfully.`);
       }
       updateSnapshot(updatedSnapshot);
       setEmailModalOpen(false);
@@ -473,10 +472,10 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       let updatedSnapshot: StudyEmailTextSettingsData;
       if (editingText) {
         updatedSnapshot = await studyApi.updateTextTemplate(studyId, editingText._id, payload);
-        setBannerSuccess(`Text template "${trimmedName}" updated successfully.`);
+        toast.success(`Text template "${trimmedName}" updated successfully.`);
       } else {
         updatedSnapshot = await studyApi.createTextTemplate(studyId, payload);
-        setBannerSuccess(`Text template "${trimmedName}" created successfully.`);
+        toast.success(`Text template "${trimmedName}" created successfully.`);
       }
       updateSnapshot(updatedSnapshot);
       setTextModalOpen(false);
@@ -492,12 +491,11 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
     e.stopPropagation();
     try {
       setSubmitting(true);
-      setBannerError(null);
       const updated = await studyApi.copyEmailTemplate(studyId, template._id);
       updateSnapshot(updated);
-      setBannerSuccess(`Template copy created for "${template.name}".`);
+      toast.success(`Template copy created for "${template.name}".`);
     } catch (err: any) {
-      setBannerError(err?.message || 'Template copy could not be created.');
+      toast.error(err?.message || 'Template copy could not be created.');
     } finally {
       setSubmitting(false);
     }
@@ -507,12 +505,11 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
     e.stopPropagation();
     try {
       setSubmitting(true);
-      setBannerError(null);
       const updated = await studyApi.copyTextTemplate(studyId, template._id);
       updateSnapshot(updated);
-      setBannerSuccess(`Template copy created for "${template.name}".`);
+      toast.success(`Template copy created for "${template.name}".`);
     } catch (err: any) {
-      setBannerError(err?.message || 'Template copy could not be created.');
+      toast.error(err?.message || 'Template copy could not be created.');
     } finally {
       setSubmitting(false);
     }
@@ -536,7 +533,6 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
 
     try {
       setSubmitting(true);
-      setBannerError(null);
       let updated: StudyEmailTextSettingsData;
       const tId = targetTemplate._id;
       const tName = targetTemplate.name;
@@ -544,31 +540,31 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       if (confirmKind === 'email') {
         if (confirmAction === 'archive') {
           updated = await studyApi.archiveEmailTemplate(studyId, tId);
-          setBannerSuccess(`Email template "${tName}" archived.`);
+          toast.success(`Email template "${tName}" archived.`);
         } else if (confirmAction === 'restore') {
           updated = await studyApi.restoreEmailTemplate(studyId, tId);
-          setBannerSuccess(`Email template "${tName}" restored.`);
+          toast.success(`Email template "${tName}" restored.`);
         } else {
           updated = await studyApi.deleteEmailTemplate(studyId, tId);
-          setBannerSuccess(`Email template "${tName}" deleted.`);
+          toast.success(`Email template "${tName}" deleted.`);
         }
       } else {
         if (confirmAction === 'archive') {
           updated = await studyApi.archiveTextTemplate(studyId, tId);
-          setBannerSuccess(`Text template "${tName}" archived.`);
+          toast.success(`Text template "${tName}" archived.`);
         } else if (confirmAction === 'restore') {
           updated = await studyApi.restoreTextTemplate(studyId, tId);
-          setBannerSuccess(`Text template "${tName}" restored.`);
+          toast.success(`Text template "${tName}" restored.`);
         } else {
           updated = await studyApi.deleteTextTemplate(studyId, tId);
-          setBannerSuccess(`Text template "${tName}" deleted.`);
+          toast.success(`Text template "${tName}" deleted.`);
         }
       }
 
       updateSnapshot(updated);
       setConfirmModalOpen(false);
     } catch (err: any) {
-      setBannerError(err?.message || `Failed to ${confirmAction} template.`);
+      toast.error(err?.message || `Failed to ${confirmAction} template.`);
     } finally {
       setSubmitting(false);
     }
@@ -587,7 +583,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       const updated = await studyApi.reorderEmailTemplates(studyId, templateIds);
       updateSnapshot(updated);
     } catch (err: any) {
-      setBannerError(err?.message || 'Failed to reorder email templates.');
+      toast.error(err?.message || 'Failed to reorder email templates.');
     } finally {
       setSubmitting(false);
     }
@@ -606,7 +602,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       const updated = await studyApi.reorderTextTemplates(studyId, templateIds);
       updateSnapshot(updated);
     } catch (err: any) {
-      setBannerError(err?.message || 'Failed to reorder text templates.');
+      toast.error(err?.message || 'Failed to reorder text templates.');
     } finally {
       setSubmitting(false);
     }
@@ -649,36 +645,6 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
               ? 'This study is archived. Email and Text settings are read-only.'
               : 'You have read-only access to Email and Text settings.'}
           </span>
-        </div>
-      )}
-
-      {bannerError && (
-        <div className="study-settings-banner study-settings-banner--error" role="alert">
-          <AlertCircle size={16} />
-          <span>{bannerError}</span>
-          <button
-            type="button"
-            className="study-settings-banner__close"
-            onClick={() => setBannerError(null)}
-            aria-label="Dismiss alert"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {bannerSuccess && (
-        <div className="study-settings-banner study-settings-banner--success" role="status">
-          <CheckCircle2 size={16} />
-          <span>{bannerSuccess}</span>
-          <button
-            type="button"
-            className="study-settings-banner__close"
-            onClick={() => setBannerSuccess(null)}
-            aria-label="Dismiss success message"
-          >
-            <X size={14} />
-          </button>
         </div>
       )}
 
