@@ -84,6 +84,9 @@ class ParticipantSpecificationsTest {
         lenient().when(cb.concat(any(Expression.class), anyString())).thenReturn(lowerExpr);
         lenient().when(cb.concat(any(Expression.class), any(Expression.class))).thenReturn(lowerExpr);
         lenient().when(cb.exists(any())).thenReturn(mockPredicate);
+        lenient().when(cb.literal(any())).thenReturn(mock(Expression.class));
+        lenient().when(cb.function(eq("jsonb_path_exists"), eq(Boolean.class), any(), any())).thenReturn(mock(Expression.class));
+        lenient().when(cb.disjunction()).thenReturn(mockPredicate);
         lenient().when(cb.function(eq("month"), eq(Integer.class), any())).thenReturn(monthExpr);
         lenient().when(monthExpr.in(anyCollection())).thenReturn(mockPredicate);
         lenient().when(lowerExpr.in(anyCollection())).thenReturn(mockPredicate);
@@ -199,14 +202,15 @@ class ParticipantSpecificationsTest {
                 tenantId, null, null, "all", "all", null, List.of(assignedRule)
         );
         spec1.toPredicate(root, query, cb);
-        verify(cb).isNotNull(customAttributesPath);
+        verify(cb, atLeastOnce()).function(eq("jsonb_path_exists"), eq(Boolean.class), eq(customAttributesPath), any());
+        verify(cb, atLeastOnce()).isTrue(any());
 
         CustomFilterRuleDto notAssignedRule = new CustomFilterRuleDto("2", "custom_123", "has no value", "", "");
         Specification<Participant> spec2 = ParticipantSpecifications.buildSpecification(
                 tenantId, null, null, "all", "all", null, List.of(notAssignedRule)
         );
         spec2.toPredicate(root, query, cb);
-        verify(cb).isNull(customAttributesPath);
+        verify(cb, atLeastOnce()).isFalse(any());
     }
 
     @Test
@@ -258,13 +262,117 @@ class ParticipantSpecificationsTest {
                 tenantId, null, null, "all", "all", null, List.of(containsRule)
         );
         spec1.toPredicate(root, query, cb);
-        verify(cb, atLeastOnce()).like(any(), contains("eligible"));
+        verify(cb, atLeastOnce()).function(eq("jsonb_path_exists"), eq(Boolean.class), eq(customAttributesPath), any());
+        verify(cb, atLeastOnce()).isTrue(any());
 
         CustomFilterRuleDto notEqualRule = new CustomFilterRuleDto("2", "custom_notes", "not equal to", "ineligible", "");
         Specification<Participant> spec2 = ParticipantSpecifications.buildSpecification(
                 tenantId, null, null, "all", "all", null, List.of(notEqualRule)
         );
         spec2.toPredicate(root, query, cb);
-        verify(cb, atLeastOnce()).notLike(any(), contains("ineligible"));
+        verify(cb, atLeastOnce()).isFalse(any());
+    }
+
+    @Test
+    void buildSpecification_preventsCrossVariableCollision() {
+        // Variable A: "dose" with value "50"
+        CustomFilterRuleDto ruleA = new CustomFilterRuleDto("1", "custom_dose", "equal to", "50", "");
+        Specification<Participant> specA = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(ruleA)
+        );
+        specA.toPredicate(root, query, cb);
+
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"dose\"") && path.toString().contains("@.value == \"50\"")));
+
+        // Variable B: "dose_mg" with value "500"
+        CustomFilterRuleDto ruleB = new CustomFilterRuleDto("2", "custom_dose_mg", "equal to", "500", "");
+        Specification<Participant> specB = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(ruleB)
+        );
+        specB.toPredicate(root, query, cb);
+
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"dose_mg\"") && path.toString().contains("@.value == \"500\"")));
+    }
+
+    @Test
+    void buildSpecification_handlesCustomNumericGreaterThanLessThanBetween() {
+        // Numeric Greater Than
+        CustomFilterRuleDto gtRule = new CustomFilterRuleDto("1", "custom_heart_rate", "greater than", "70", "");
+        Specification<Participant> specGt = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(gtRule)
+        );
+        specGt.toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"heart_rate\"") && path.toString().contains("@.value.double() > 70.0")));
+
+        // Numeric Less Than
+        CustomFilterRuleDto ltRule = new CustomFilterRuleDto("2", "custom_heart_rate", "less than", "100", "");
+        Specification<Participant> specLt = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(ltRule)
+        );
+        specLt.toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"heart_rate\"") && path.toString().contains("@.value.double() < 100.0")));
+
+        // Numeric Between
+        CustomFilterRuleDto betweenRule = new CustomFilterRuleDto("3", "custom_heart_rate", "between", "", "60", "90", null, "");
+        Specification<Participant> specBetween = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(betweenRule)
+        );
+        specBetween.toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"heart_rate\"") &&
+                path.toString().contains("@.value.double() >= 60.0") &&
+                path.toString().contains("@.value.double() <= 90.0")));
+    }
+
+    @Test
+    void buildSpecification_handlesCustomDateComparisons() {
+        CustomFilterRuleDto dateBetweenRule = new CustomFilterRuleDto("1", "custom_exam_date", "between", "", "2026-01-01", "2026-06-30", null, "");
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(dateBetweenRule)
+        );
+        spec.toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"exam_date\"") &&
+                path.toString().contains("@.value >= \"2026-01-01\"") &&
+                path.toString().contains("@.value <= \"2026-06-30\"")));
+    }
+
+    @Test
+    void buildSpecification_handlesCustomCategoricalMultiSelect() {
+        CustomFilterRuleDto catRule = new CustomFilterRuleDto("1", "custom_cohort", "equal to", "", "", "", List.of("Alpha", "Beta"), "");
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(catRule)
+        );
+        spec.toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"cohort\"") &&
+                path.toString().contains("@.value == \"Alpha\" || @.value == \"Beta\"")));
+    }
+
+    @Test
+    void buildSpecification_handlesSafeJsonKeysWithSpecialCharacters() {
+        CustomFilterRuleDto specialKeyRule = new CustomFilterRuleDto("1", "custom_bp.systolic/mmHg", "equal to", "120", "");
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(specialKeyRule)
+        );
+        spec.toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"bp.systolic/mmhg\"") &&
+                path.toString().contains("@.value == \"120\"")));
+    }
+
+    @Test
+    void buildSpecification_unsupportedOrInvalidCustomRuleReturnsDisjunction() {
+        // Missing range boundaries on between operator
+        CustomFilterRuleDto invalidRule = new CustomFilterRuleDto("1", "custom_var", "between", "", "", "", null, "");
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(invalidRule)
+        );
+        spec.toPredicate(root, query, cb);
+        verify(cb).disjunction();
     }
 }

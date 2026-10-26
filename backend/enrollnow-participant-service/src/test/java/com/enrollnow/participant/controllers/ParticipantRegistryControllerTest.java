@@ -155,8 +155,8 @@ class ParticipantRegistryControllerTest {
     @Test
     void getParticipants_rejectsUnauthorizedCrossTenantAccess() {
         UUID otherTenantId = UUID.randomUUID();
-        doThrow(new AccessDeniedException("Access denied: cross-tenant operation is not permitted"))
-                .when(siteAuthorizationService).requireTenantMatch(otherTenantId);
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
 
         assertThrows(AccessDeniedException.class, () ->
                 controller.getParticipants(otherTenantId, null, null, null, "all", "all", null, null, 0, 25, "name", "asc")
@@ -166,8 +166,32 @@ class ParticipantRegistryControllerTest {
     }
 
     @Test
+    void getParticipants_rejectsUnauthenticatedAccess() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.empty());
+
+        assertThrows(org.springframework.security.authentication.InsufficientAuthenticationException.class, () ->
+                controller.getParticipants(null, null, null, null, "all", "all", null, null, 0, 25, "name", "asc")
+        );
+
+        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+    }
+
+    @Test
+    void getParticipants_rejectsMalformedCustomFiltersJson() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () ->
+                controller.getParticipants(null, null, null, null, "all", "all", null, "{invalid-json", 0, 25, "name", "asc")
+        );
+    }
+
+    @Test
     void getParticipants_rejectsUnauthorizedSiteRegistryAccess() {
         UUID unauthorizedSiteId = UUID.randomUUID();
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         doThrow(new AccessDeniedException("Access denied: Registry access requires SITE_REGISTRY, SITE_MANAGER, or SITE_ADMIN role"))
                 .when(siteAuthorizationService).requireRegistryAccess(tenantId, unauthorizedSiteId);
 
@@ -185,6 +209,8 @@ class ParticipantRegistryControllerTest {
         request.setFirstName("Unauthorized");
         request.setLastName("User");
 
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         doThrow(new AccessDeniedException("Access denied: Registry access requires SITE_REGISTRY, SITE_MANAGER, or SITE_ADMIN role"))
                 .when(siteAuthorizationService).requireRegistryAccess(tenantId, unauthorizedSiteId);
 
@@ -202,6 +228,8 @@ class ParticipantRegistryControllerTest {
         p.setFirstName("Alice");
         p.setLastName("Walker");
 
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         when(registryService.findDuplicatesByName(tenantId, "Alice", "Walker"))
                 .thenReturn(List.of(p));
 
@@ -216,6 +244,8 @@ class ParticipantRegistryControllerTest {
 
     @Test
     void exportRegistry_rejectsUnauthorizedAccess() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         doThrow(new AccessDeniedException("Access denied: Registry access requires SITE_REGISTRY, SITE_MANAGER, or SITE_ADMIN role"))
                 .when(siteAuthorizationService).requireRegistryAccess(tenantId, null);
 
@@ -228,6 +258,8 @@ class ParticipantRegistryControllerTest {
 
     @Test
     void savedSearches_rejectsUnauthorizedAccess() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         doThrow(new AccessDeniedException("Access denied: Registry access requires SITE_REGISTRY, SITE_MANAGER, or SITE_ADMIN role"))
                 .when(siteAuthorizationService).requireRegistryAccess(tenantId, null);
 

@@ -52,8 +52,8 @@ Status classifications:
 | **REQ-34** | Registry Integration | Dynamic Filter Card Fields | Registry filter field dropdown includes custom variables. | `getAllFilterFields()` injects dynamic custom variables into `FilterCard.tsx` select options. | `filterMetadata.ts:199`, `FilterCard.tsx:221` | **PASS** |
 | **REQ-35** | Registry Integration | Type-Aware Operators | Categorical vs numeric vs date custom variables get appropriate operators. | `getOperatorsForField()` resolves `ALL_NUMERIC_OPERATORS`, `ALL_DATE_OPERATORS`, or `CATEGORICAL_OPERATORS`. | `filterMetadata.ts:225` | **PASS** |
 | **REQ-36** | Registry Integration | Dynamic Dropdown Options | Single/multi select custom variables populate option pills/badges in filter. | Dropdown options from backend metadata populate option selectors in `FilterCard.tsx`. | `filterMetadata.ts:210`, `RegistryDashboard.tsx:195` | **PASS** |
-| **REQ-37** | Registry Integration | Backend Query & Specification | Filter queries evaluate custom variables in database and in-memory registry. | `ParticipantSpecifications.java` and `ParticipantRegistryService.java` evaluate numeric, date, and text rules. | `ParticipantSpecifications.java:672`, `ParticipantRegistryService.java:1010` | **PASS** |
-| **REQ-38** | Authorization | Tenant Isolation & Access Control | Checked study admin or coordinator permissions in Meteor methods. | Enforces `SiteAuthorizationService` tenant matching and `STUDY_SETTINGS_MANAGE` role permission. | `StudyController.java:1225`, `StudyService.java:1040` | **PASS** |
+| **REQ-37** | Registry Integration | Backend Query & Specification | Filter queries evaluate custom variables in database and in-memory registry. | `ParticipantSpecifications.java` uses type-safe PostgreSQL JSONPath (`jsonb_path_exists`) isolating target variable in `$.variables[*]` with zero collision risk; `ParticipantRegistryService.java` validates filter rules and evaluates in-memory matches across numeric, date, and multi-select values. | `ParticipantSpecifications.java`, `ParticipantRegistryService.java` | **PASS** |
+| **REQ-38** | Authorization | Tenant Isolation & Access Control | Checked study admin or coordinator permissions in Meteor methods. | Enforces fail-closed caller identity, tenant match validation, and `STUDY_SETTINGS_MANAGE` role permission without hardcoded production fallbacks. | `ParticipantRegistryController.java`, `StudyController.java` | **PASS** |
 | **REQ-39** | Usability & Layout | Dirty Tracking & Layout Navigation | Prevents accidental navigation with unsaved changes. | Tracks dirty state and prompts confirmation before navigating away from modified requirements. | `StudySettingsWorkspace.tsx:50`, `StudySettingsRequirements.tsx:140` | **PASS** |
 | **REQ-40** | Backward Compatibility | Legacy Ripple Import Format | Supports legacy `groups`, `genderGroups`, and `layout` keys. | Dual-format parsing in `StudyConfigurationService` seamlessly reads both legacy and modern formats. | `StudyConfigurationService.java:2569`, `StudyConfigurationService.java:2845` | **PASS** |
 
@@ -64,7 +64,8 @@ Status classifications:
 - Total Features Assessed: **40**
 - Features Passing: **40 (100%)**
 - Features Partial / Missing: **0**
-- Automated Backend Tests Executed: **159 tests passing** (110 study service + 49 participant service)
-- Automated Frontend Tests Executed: **109 tests passing** (81 study microfrontend + 28 participant microfrontend)
-- Monorepo Typecheck: **13 workspaces passing**
+- Automated Backend Tests Executed: **175 tests passing** (110 study service + 65 participant service, 0 failures)
+- Automated Frontend Tests Executed: **110 tests passing** (81 study microfrontend + 29 participant microfrontend, 0 failures)
+- Total Automated Tests Passing: **285 tests**
+- Monorepo Typecheck: **13 workspaces passing (0 errors)**
 - Production Build: **Emitted successfully**

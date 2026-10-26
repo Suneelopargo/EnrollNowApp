@@ -220,21 +220,29 @@ export function getFieldDefinition(fieldId: string): FilterFieldOption {
 
 export function getOperatorsForField(fieldId: string): string[] {
   const fieldDef = getFieldDefinition(fieldId);
+  const isCustom = fieldId.startsWith('custom_') || dynamicCustomFields.some(f => f.id.toLowerCase() === fieldId.toLowerCase());
+
   switch (fieldDef.type) {
     case 'number':
-      return ALL_NUMERIC_OPERATORS;
+      return isCustom
+        ? [...ALL_NUMERIC_OPERATORS, 'has any value', 'has no value']
+        : ALL_NUMERIC_OPERATORS;
     case 'date':
-      return ALL_DATE_OPERATORS;
+      return isCustom
+        ? [...ALL_DATE_OPERATORS, 'has any value', 'has no value']
+        : ALL_DATE_OPERATORS;
     case 'multiselect':
     case 'select':
-      return CATEGORICAL_OPERATORS;
+      return isCustom
+        ? [...CATEGORICAL_OPERATORS, 'has any value', 'has no value']
+        : CATEGORICAL_OPERATORS;
     case 'text':
     default:
       if (['firstName', 'lastName', 'phone'].includes(fieldDef.id)) {
         return ['equal to'];
       }
-      if (fieldId.startsWith('custom_')) {
-        return CUSTOM_VARIABLE_OPERATORS;
+      if (isCustom) {
+        return ['equal to', 'not equal to', 'contains', 'has any value', 'has no value'];
       }
       return TEXT_OPERATORS;
   }

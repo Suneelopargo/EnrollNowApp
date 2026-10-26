@@ -581,6 +581,8 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     const catOps = getOperatorsForField('custom_handedness');
     expect(catOps).toContain('equal to');
     expect(catOps).toContain('not equal to');
+    expect(catOps).toContain('has any value');
+    expect(catOps).toContain('has no value');
   });
 
   it('queries /api/v1/registry/filter-metadata via participantApi.getFilterMetadata', async () => {
@@ -601,5 +603,50 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     );
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('custom_var1');
+  });
+
+  it('validates filter rules with range boundaries and presence operators', async () => {
+    const { validateFilterRule } = await import('../constants/filterMetadata');
+
+    // Valid range
+    const validRange = validateFilterRule({
+      id: '1',
+      field: 'age',
+      operator: 'between',
+      minValue: '20',
+      maxValue: '40',
+    });
+    expect(validRange.isValid).toBe(true);
+
+    // Inverted numeric range
+    const invertedRange = validateFilterRule({
+      id: '2',
+      field: 'age',
+      operator: 'between',
+      minValue: '50',
+      maxValue: '20',
+    });
+    expect(invertedRange.isValid).toBe(false);
+    expect(invertedRange.error).toContain('Minimum value cannot be greater than maximum value');
+
+    // Missing range boundary
+    const missingBound = validateFilterRule({
+      id: '3',
+      field: 'age',
+      operator: 'between',
+      minValue: '20',
+      maxValue: '',
+    });
+    expect(missingBound.isValid).toBe(false);
+    expect(missingBound.error).toContain('Both minimum and maximum values are required');
+
+    // Presence operator requires no values
+    const presenceRule = validateFilterRule({
+      id: '4',
+      field: 'custom_marker',
+      operator: 'has any value',
+      value: '',
+    });
+    expect(presenceRule.isValid).toBe(true);
   });
 });

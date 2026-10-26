@@ -7,6 +7,7 @@ import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,8 +19,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -941,26 +944,208 @@ public class ParticipantRegistryService {
         return false;
     }
 
+    public void validateFilterRules(UUID tenantId, List<CustomFilterRuleDto> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return;
+        }
+
+        List<Map<String, Object>> metadata = getFilterMetadata(tenantId, null);
+        Map<String, String> fieldTypes = new HashMap<>();
+
+        // Standard registry fields
+        fieldTypes.put("age", "number");
+        fieldTypes.put("gender", "select");
+        fieldTypes.put("sex", "select");
+        fieldTypes.put("status", "select");
+        fieldTypes.put("datecreated", "date");
+        fieldTypes.put("lastcontact", "date");
+        fieldTypes.put("birthmonth", "select");
+        fieldTypes.put("city", "text");
+        fieldTypes.put("state", "text");
+        fieldTypes.put("zipcode", "text");
+        fieldTypes.put("zip", "text");
+        fieldTypes.put("postalcode", "text");
+        fieldTypes.put("phone", "text");
+        fieldTypes.put("phonenumber", "text");
+        fieldTypes.put("firstname", "text");
+        fieldTypes.put("first_name", "text");
+        fieldTypes.put("lastname", "text");
+        fieldTypes.put("last_name", "text");
+        fieldTypes.put("tags", "select");
+        fieldTypes.put("ethnicity", "select");
+        fieldTypes.put("race", "select");
+        fieldTypes.put("studies", "select");
+
+        for (Map<String, Object> meta : metadata) {
+            String id = (String) meta.get("id");
+            String type = (String) meta.get("type");
+            if (id != null) {
+                fieldTypes.put(id.toLowerCase().trim(), type != null ? type : "text");
+                if (id.startsWith("custom_")) {
+                    fieldTypes.put(id.substring(7).toLowerCase().trim(), type != null ? type : "text");
+                }
+            }
+        }
+
+        for (CustomFilterRuleDto rule : rules) {
+            if (rule.getField() == null || rule.getField().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filter rule field cannot be empty");
+            }
+            String field = rule.getField().toLowerCase().trim();
+            if (!fieldTypes.containsKey(field) && !field.startsWith("custom_")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown filter field: " + rule.getField());
+            }
+
+            String fieldType = fieldTypes.getOrDefault(field, "text");
+            String op = rule.getOperator() != null ? rule.getOperator().toLowerCase().trim() : "";
+            if (op.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Operator cannot be empty for field: " + rule.getField());
+            }
+
+            String normalizedOp = normalizeOperator(op);
+            validateOperatorForFieldType(fieldType, normalizedOp, rule.getField());
+
+            // Validate range boundaries
+            if ("between".equals(normalizedOp) || "not_between".equals(normalizedOp)) {
+                String min = rule.getEffectiveMinValue();
+                String max = rule.getEffectiveMaxValue();
+                if (min == null || min.isBlank() || max == null || max.isBlank()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Range filter for field '" + rule.getField() + "' requires both minimum and maximum boundaries");
+                }
+                if ("number".equals(fieldType) || "age".equals(field)) {
+                    try {
+                        double minD = Double.parseDouble(min.trim());
+                        double maxD = Double.parseDouble(max.trim());
+                        if (minD > maxD) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "Minimum value (" + min + ") cannot be greater than maximum value (" + max + ") for field '" + rule.getField() + "'");
+                        }
+                    } catch (NumberFormatException e) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Invalid numeric boundary for field '" + rule.getField() + "': " + e.getMessage());
+                    }
+                } else if ("date".equals(fieldType) || "datetime".equals(fieldType) || "datecreated".equals(field) || "lastcontact".equals(field)) {
+                    LocalDate dMin = parseDate(min);
+                    LocalDate dMax = parseDate(max);
+                    if (dMin == null || dMax == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Invalid date boundary for field '" + rule.getField() + "'");
+                    }
+                    if (dMin.isAfter(dMax)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Start date cannot be after end date for field '" + rule.getField() + "'");
+                    }
+                }
+            } else if (!"assigned".equals(normalizedOp) && !"not_assigned".equals(normalizedOp)) {
+                String val = rule.getValue();
+                List<String> values = rule.getEffectiveValues();
+                if ((val == null || val.isBlank()) && (values == null || values.isEmpty())) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Value is required for operator '" + rule.getOperator() + "' on field '" + rule.getField() + "'");
+                }
+            }
+        }
+    }
+
+    private String normalizeOperator(String op) {
+        if (op == null) return "equal";
+        String lower = op.toLowerCase().trim();
+        switch (lower) {
+            case "equal to":
+            case "equal":
+            case "equals":
+            case "=":
+                return "equal";
+            case "not equal to":
+            case "not_equal":
+            case "not_equals":
+            case "!=":
+                return "not_equal";
+            case "greater than":
+            case "greater_than":
+            case ">":
+                return "greater_than";
+            case "less than":
+            case "less_than":
+            case "<":
+                return "less_than";
+            case "between":
+                return "between";
+            case "not between":
+            case "not_between":
+                return "not_between";
+            case "has any value":
+            case "assigned":
+                return "assigned";
+            case "has no value":
+            case "not_assigned":
+                return "not_assigned";
+            case "contains":
+                return "contains";
+            case "does not contain":
+            case "not_contains":
+                return "not_contains";
+            default:
+                return lower;
+        }
+    }
+
+    private void validateOperatorForFieldType(String fieldType, String normalizedOp, String fieldName) {
+        if ("assigned".equals(normalizedOp) || "not_assigned".equals(normalizedOp)) {
+            return;
+        }
+
+        switch (fieldType.toLowerCase()) {
+            case "number":
+                if (!Set.of("equal", "not_equal", "greater_than", "less_than", "between", "not_between").contains(normalizedOp)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Operator '" + normalizedOp + "' is not supported for numeric field '" + fieldName + "'");
+                }
+                break;
+            case "date":
+            case "datetime":
+                if (!Set.of("equal", "not_equal", "greater_than", "less_than", "between", "not_between").contains(normalizedOp)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Operator '" + normalizedOp + "' is not supported for date field '" + fieldName + "'");
+                }
+                break;
+            case "select":
+            case "multiselect":
+            case "single":
+            case "multi":
+                if (!Set.of("equal", "not_equal").contains(normalizedOp)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Operator '" + normalizedOp + "' is not supported for categorical field '" + fieldName + "'");
+                }
+                break;
+            case "text":
+            default:
+                if (!Set.of("equal", "not_equal", "contains", "not_contains", "starts_with", "ends_with").contains(normalizedOp)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Operator '" + normalizedOp + "' is not supported for text field '" + fieldName + "'");
+                }
+                break;
+        }
+    }
+
     private boolean applyCustomRule(RegistryParticipantDto p, CustomFilterRuleDto rule) {
         String field = rule.getField().toLowerCase().trim();
-        String op = rule.getOperator().toLowerCase().trim();
+        String op = normalizeOperator(rule.getOperator());
         String targetVal = rule.getValue() != null ? rule.getValue().trim() : "";
         List<String> values = rule.getEffectiveValues();
 
         String actualVal = getFieldValue(p, field);
 
-        if ("has any value".equals(op) || "assigned".equals(op)) {
+        if ("assigned".equals(op)) {
             return actualVal != null && !actualVal.isBlank();
         }
-        if ("has no value".equals(op) || "not_assigned".equals(op)) {
+        if ("not_assigned".equals(op)) {
             return actualVal == null || actualVal.isBlank();
         }
 
         switch (op) {
-            case "equal to":
-            case "equals":
             case "equal":
-            case "=":
                 if ("birthmonth".equals(field)) {
                     return matchesBirthMonth(p.getBirthMonth(), targetVal);
                 }
@@ -968,14 +1153,11 @@ public class ParticipantRegistryService {
                     return p.getAgeNumeric() != null && targetVal.equals(String.valueOf(p.getAgeNumeric()));
                 }
                 if (!values.isEmpty()) {
-                    return values.stream().anyMatch(v -> actualVal != null && actualVal.equalsIgnoreCase(v));
+                    return values.stream().anyMatch(v -> matchesValueOrOption(actualVal, v));
                 }
-                return actualVal != null && actualVal.equalsIgnoreCase(targetVal);
+                return matchesValueOrOption(actualVal, targetVal);
 
-            case "not equal to":
-            case "not_equals":
             case "not_equal":
-            case "!=":
                 if ("birthmonth".equals(field)) {
                     return !matchesBirthMonth(p.getBirthMonth(), targetVal);
                 }
@@ -983,115 +1165,133 @@ public class ParticipantRegistryService {
                     return p.getAgeNumeric() == null || !targetVal.equals(String.valueOf(p.getAgeNumeric()));
                 }
                 if (!values.isEmpty()) {
-                    return values.stream().noneMatch(v -> actualVal != null && actualVal.equalsIgnoreCase(v));
+                    return values.stream().noneMatch(v -> matchesValueOrOption(actualVal, v));
                 }
-                return actualVal == null || !actualVal.equalsIgnoreCase(targetVal);
+                return actualVal == null || !matchesValueOrOption(actualVal, targetVal);
 
             case "contains":
                 return actualVal != null && actualVal.toLowerCase().contains(targetVal.toLowerCase());
 
-            case "does not contain":
             case "not_contains":
                 return actualVal == null || !actualVal.toLowerCase().contains(targetVal.toLowerCase());
 
-            case "starts with":
             case "starts_with":
                 return actualVal != null && actualVal.toLowerCase().startsWith(targetVal.toLowerCase());
 
-            case "ends with":
             case "ends_with":
                 return actualVal != null && actualVal.toLowerCase().endsWith(targetVal.toLowerCase());
 
-            case "greater than":
             case "greater_than":
-            case ">":
                 if ("age".equals(field)) {
                     try {
                         int threshold = Integer.parseInt(targetVal);
                         return p.getAgeNumeric() != null && p.getAgeNumeric() > threshold;
                     } catch (NumberFormatException ignored) {}
                 }
+                if (actualVal == null || actualVal.isBlank()) return false;
                 try {
                     double actualNum = Double.parseDouble(actualVal);
                     double targetNum = Double.parseDouble(targetVal);
                     return actualNum > targetNum;
-                } catch (Exception ignored) {}
-                return actualVal != null && actualVal.compareToIgnoreCase(targetVal) > 0;
+                } catch (NumberFormatException e) {
+                    LocalDate dActual = parseDate(actualVal);
+                    LocalDate dTarget = parseDate(targetVal);
+                    if (dActual != null && dTarget != null) {
+                        return dActual.isAfter(dTarget);
+                    }
+                }
+                return false;
 
-            case "less than":
             case "less_than":
-            case "<":
                 if ("age".equals(field)) {
                     try {
                         int threshold = Integer.parseInt(targetVal);
                         return p.getAgeNumeric() != null && p.getAgeNumeric() < threshold;
                     } catch (NumberFormatException ignored) {}
                 }
+                if (actualVal == null || actualVal.isBlank()) return false;
                 try {
                     double actualNum = Double.parseDouble(actualVal);
                     double targetNum = Double.parseDouble(targetVal);
                     return actualNum < targetNum;
-                } catch (Exception ignored) {}
-                return actualVal != null && actualVal.compareToIgnoreCase(targetVal) < 0;
-
-            case "is empty":
-                return actualVal == null || actualVal.isBlank();
-
-            case "is not empty":
-                return actualVal != null && !actualVal.isBlank();
+                } catch (NumberFormatException e) {
+                    LocalDate dActual = parseDate(actualVal);
+                    LocalDate dTarget = parseDate(targetVal);
+                    if (dActual != null && dTarget != null) {
+                        return dActual.isBefore(dTarget);
+                    }
+                }
+                return false;
 
             case "between":
+                if (actualVal == null || actualVal.isBlank()) return false;
+                String minStr = rule.getEffectiveMinValue();
+                String maxStr = rule.getEffectiveMaxValue();
+                if (minStr == null || maxStr == null) return false;
                 if ("age".equals(field) && p.getAgeNumeric() != null) {
                     try {
-                        String minStr = rule.getEffectiveMinValue();
-                        String maxStr = rule.getEffectiveMaxValue();
-                        if (minStr != null && maxStr != null) {
-                            double low = Double.parseDouble(minStr);
-                            double high = Double.parseDouble(maxStr);
-                            return p.getAgeNumeric() >= low && p.getAgeNumeric() <= high;
-                        }
+                        double low = Double.parseDouble(minStr);
+                        double high = Double.parseDouble(maxStr);
+                        return p.getAgeNumeric() >= low && p.getAgeNumeric() <= high;
                     } catch (Exception ignored) {}
                 }
                 try {
-                    String minStr = rule.getEffectiveMinValue();
-                    String maxStr = rule.getEffectiveMaxValue();
-                    if (minStr != null && maxStr != null && actualVal != null && !actualVal.isBlank()) {
-                        double actualNum = Double.parseDouble(actualVal);
-                        double low = Double.parseDouble(minStr);
-                        double high = Double.parseDouble(maxStr);
-                        return actualNum >= low && actualNum <= high;
+                    double actualNum = Double.parseDouble(actualVal);
+                    double low = Double.parseDouble(minStr);
+                    double high = Double.parseDouble(maxStr);
+                    return actualNum >= low && actualNum <= high;
+                } catch (NumberFormatException e) {
+                    LocalDate dActual = parseDate(actualVal);
+                    LocalDate dMin = parseDate(minStr);
+                    LocalDate dMax = parseDate(maxStr);
+                    if (dActual != null && dMin != null && dMax != null) {
+                        return !dActual.isBefore(dMin) && !dActual.isAfter(dMax);
                     }
-                } catch (Exception ignored) {}
-                return true;
+                }
+                return false;
 
-            case "not between":
             case "not_between":
+                if (actualVal == null || actualVal.isBlank()) return false;
+                String nMinStr = rule.getEffectiveMinValue();
+                String nMaxStr = rule.getEffectiveMaxValue();
+                if (nMinStr == null || nMaxStr == null) return false;
                 if ("age".equals(field) && p.getAgeNumeric() != null) {
                     try {
-                        String minStr = rule.getEffectiveMinValue();
-                        String maxStr = rule.getEffectiveMaxValue();
-                        if (minStr != null && maxStr != null) {
-                            double low = Double.parseDouble(minStr);
-                            double high = Double.parseDouble(maxStr);
-                            return p.getAgeNumeric() < low || p.getAgeNumeric() > high;
-                        }
+                        double low = Double.parseDouble(nMinStr);
+                        double high = Double.parseDouble(nMaxStr);
+                        return p.getAgeNumeric() < low || p.getAgeNumeric() > high;
                     } catch (Exception ignored) {}
                 }
                 try {
-                    String minStr = rule.getEffectiveMinValue();
-                    String maxStr = rule.getEffectiveMaxValue();
-                    if (minStr != null && maxStr != null && actualVal != null && !actualVal.isBlank()) {
-                        double actualNum = Double.parseDouble(actualVal);
-                        double low = Double.parseDouble(minStr);
-                        double high = Double.parseDouble(maxStr);
-                        return actualNum < low || actualNum > high;
+                    double actualNum = Double.parseDouble(actualVal);
+                    double low = Double.parseDouble(nMinStr);
+                    double high = Double.parseDouble(nMaxStr);
+                    return actualNum < low || actualNum > high;
+                } catch (NumberFormatException e) {
+                    LocalDate dActual = parseDate(actualVal);
+                    LocalDate dMin = parseDate(nMinStr);
+                    LocalDate dMax = parseDate(nMaxStr);
+                    if (dActual != null && dMin != null && dMax != null) {
+                        return dActual.isBefore(dMin) || dActual.isAfter(dMax);
                     }
-                } catch (Exception ignored) {}
-                return true;
+                }
+                return false;
 
             default:
-                return true;
+                return false;
         }
+    }
+
+    private boolean matchesValueOrOption(String actualVal, String targetVal) {
+        if (actualVal == null || targetVal == null) return false;
+        if (actualVal.equalsIgnoreCase(targetVal.trim())) return true;
+        if (actualVal.contains(",")) {
+            String[] parts = actualVal.split(",");
+            for (String part : parts) {
+                if (part.trim().equalsIgnoreCase(targetVal.trim())) return true;
+            }
+        }
+        return false;
     }
 
     private String getFieldValue(RegistryParticipantDto p, String field) {
@@ -1133,10 +1333,7 @@ public class ParticipantRegistryService {
                     String customKey = field.substring(7);
                     if (p.getVariables() != null) {
                         for (ParticipantVariableDto var : p.getVariables()) {
-                            if (customKey.equalsIgnoreCase(var.getId()) ||
-                                customKey.equalsIgnoreCase(var.getName()) ||
-                                field.equalsIgnoreCase(var.getId()) ||
-                                field.equalsIgnoreCase(var.getName())) {
+                            if (matchesVariableKey(var, customKey, field)) {
                                 return var.getValue() != null ? var.getValue() : "";
                             }
                         }
@@ -1145,7 +1342,7 @@ public class ParticipantRegistryService {
                 }
                 if (p.getVariables() != null) {
                     for (ParticipantVariableDto var : p.getVariables()) {
-                        if (field.equalsIgnoreCase(var.getId()) || field.equalsIgnoreCase(var.getName())) {
+                        if (matchesVariableKey(var, field, field)) {
                             return var.getValue() != null ? var.getValue() : "";
                         }
                     }
@@ -1154,14 +1351,40 @@ public class ParticipantRegistryService {
         }
     }
 
+    private boolean matchesVariableKey(ParticipantVariableDto var, String key, String fullField) {
+        if (var == null) return false;
+        if (key.equalsIgnoreCase(var.getId()) || key.equalsIgnoreCase(var.getName())) {
+            return true;
+        }
+        if (fullField.equalsIgnoreCase(var.getId()) || fullField.equalsIgnoreCase(var.getName())) {
+            return true;
+        }
+        if (key.contains("_")) {
+            String suffix = key.substring(key.indexOf('_') + 1);
+            if (suffix.equalsIgnoreCase(var.getId()) || suffix.equalsIgnoreCase(var.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getFilterMetadata(UUID tenantId, String studyId) {
-        List<Map<String, Object>> customFields = new ArrayList<>();
         if (studyRequirementRepository == null || tenantId == null) {
-            return customFields;
+            return Collections.emptyList();
         }
+
         List<StudyRequirement> reqList = studyRequirementRepository.findByTenantId(tenantId);
-        Map<String, Map<String, Object>> fieldMap = new LinkedHashMap<>();
+        if (reqList == null || reqList.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<UUID, Study> studiesMap = studyRepository != null
+                ? studyRepository.findByTenantId(tenantId).stream().collect(Collectors.toMap(Study::getId, s -> s, (a, b) -> a))
+                : Collections.emptyMap();
+
+        Map<String, Map<String, Object>> globalVariables = new LinkedHashMap<>();
+        List<Map<String, Object>> studyVariables = new ArrayList<>();
 
         for (StudyRequirement req : reqList) {
             if (req.getConfiguration() == null || req.getConfiguration().isBlank()) {
@@ -1170,54 +1393,149 @@ public class ParticipantRegistryService {
             try {
                 JsonNode root = objectMapper.readTree(req.getConfiguration());
                 JsonNode varsNode = root.get("customVariables");
-                if (varsNode != null && varsNode.isArray()) {
-                    for (JsonNode v : varsNode) {
-                        String id = v.has("id") ? v.get("id").asText() : "";
-                        String name = v.has("name") ? v.get("name").asText() : "";
-                        String type = v.has("type") ? v.get("type").asText() : "text";
-                        boolean isGlobal = v.has("isGlobal") && v.get("isGlobal").asBoolean();
+                if (varsNode == null || !varsNode.isArray()) {
+                    continue;
+                }
 
-                        if (id.isBlank() && name.isBlank()) continue;
-                        String fieldKey = "custom_" + (!id.isBlank() ? id : name);
+                UUID reqStudyId = req.getStudyId();
+                Study study = reqStudyId != null ? studiesMap.get(reqStudyId) : null;
+                String studyName = study != null ? study.getName() : (reqStudyId != null ? reqStudyId.toString() : "Unknown");
 
-                        if (studyId != null && !studyId.isBlank()) {
-                            boolean matchesStudy = req.getStudyId() != null && req.getStudyId().toString().equalsIgnoreCase(studyId);
-                            if (!matchesStudy && !isGlobal) {
-                                continue;
+                for (JsonNode v : varsNode) {
+                    String id = v.has("id") ? v.get("id").asText().trim() : "";
+                    String name = v.has("name") ? v.get("name").asText().trim() : "";
+                    String type = v.has("type") ? v.get("type").asText().trim() : "text";
+                    boolean isGlobal = (v.has("isGlobal") && v.get("isGlobal").asBoolean()) ||
+                                       (v.has("global") && v.get("global").asBoolean());
+
+                    if (id.isEmpty() && name.isEmpty()) {
+                        continue;
+                    }
+
+                    String canonicalId = !id.isEmpty() ? id : name;
+                    String fieldKey = "custom_" + canonicalId;
+
+                    List<Map<String, String>> options = new ArrayList<>();
+                    if (v.has("options") && v.get("options").isArray()) {
+                        for (JsonNode opt : v.get("options")) {
+                            String label = opt.has("label") ? opt.get("label").asText().trim() : "";
+                            String val = opt.has("value") ? opt.get("value").asText().trim() : label;
+                            if (!val.isEmpty()) {
+                                Map<String, String> o = new HashMap<>();
+                                o.put("label", label.isEmpty() ? val : label);
+                                o.put("value", val);
+                                options.add(o);
                             }
                         }
+                    }
 
-                        if (!fieldMap.containsKey(fieldKey)) {
-                            Map<String, Object> fieldDef = new LinkedHashMap<>();
-                            fieldDef.put("id", fieldKey);
-                            fieldDef.put("label", name.isBlank() ? id : name);
-                            fieldDef.put("type", type);
-                            fieldDef.put("global", isGlobal);
-                            if (req.getStudyId() != null) {
-                                fieldDef.put("studyId", req.getStudyId().toString());
+                    Map<String, Object> fieldDef = new LinkedHashMap<>();
+                    fieldDef.put("id", fieldKey);
+                    fieldDef.put("label", !name.isEmpty() ? name : id);
+                    fieldDef.put("type", type);
+                    fieldDef.put("global", isGlobal);
+                    if (reqStudyId != null) {
+                        fieldDef.put("studyId", reqStudyId.toString());
+                        fieldDef.put("studyName", studyName);
+                    }
+                    fieldDef.put("options", options);
+
+                    if (isGlobal) {
+                        if (!globalVariables.containsKey(fieldKey)) {
+                            globalVariables.put(fieldKey, fieldDef);
+                        } else {
+                            Map<String, Object> existing = globalVariables.get(fieldKey);
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, String>> existingOpts = (List<Map<String, String>>) existing.get("options");
+                            Set<String> existingVals = existingOpts.stream().map(o -> o.get("value")).collect(Collectors.toSet());
+                            for (Map<String, String> opt : options) {
+                                if (!existingVals.contains(opt.get("value"))) {
+                                    existingOpts.add(opt);
+                                    existingVals.add(opt.get("value"));
+                                }
                             }
+                        }
+                    } else {
+                        studyVariables.add(fieldDef);
+                    }
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Failed to parse Requirements JSON for study requirement studyId={}: syntax error at line {} col {}",
+                        req.getStudyId(),
+                        e.getLocation() != null ? e.getLocation().getLineNr() : -1,
+                        e.getLocation() != null ? e.getLocation().getColumnNr() : -1);
+            } catch (Exception e) {
+                log.error("Unexpected error processing requirements configuration for study requirement studyId={}: {}", req.getStudyId(), e.getMessage());
+            }
+        }
 
-                            List<Map<String, String>> options = new ArrayList<>();
-                            if (v.has("options") && v.get("options").isArray()) {
-                                for (JsonNode opt : v.get("options")) {
-                                    String label = opt.has("label") ? opt.get("label").asText() : "";
-                                    String val = opt.has("value") ? opt.get("value").asText() : label;
-                                    if (!val.isBlank()) {
-                                        Map<String, String> o = new HashMap<>();
-                                        o.put("label", label.isBlank() ? val : label);
-                                        o.put("value", val);
-                                        options.add(o);
+        Map<String, Map<String, Object>> resultMap = new LinkedHashMap<>();
+
+        // Global variables are authoritative
+        for (Map.Entry<String, Map<String, Object>> entry : globalVariables.entrySet()) {
+            resultMap.put(entry.getKey(), entry.getValue());
+        }
+
+        if (studyId != null && !studyId.isBlank()) {
+            for (Map<String, Object> sVar : studyVariables) {
+                String sVarStudyId = (String) sVar.get("studyId");
+                if (sVarStudyId != null && sVarStudyId.equalsIgnoreCase(studyId.trim())) {
+                    String fieldKey = (String) sVar.get("id");
+                    if (!globalVariables.containsKey(fieldKey)) {
+                        resultMap.put(fieldKey, sVar);
+                    }
+                }
+            }
+        } else {
+            Map<String, List<Map<String, Object>>> groupedByField = new LinkedHashMap<>();
+            for (Map<String, Object> sVar : studyVariables) {
+                String fieldKey = (String) sVar.get("id");
+                if (globalVariables.containsKey(fieldKey)) {
+                    continue;
+                }
+                groupedByField.computeIfAbsent(fieldKey, k -> new ArrayList<>()).add(sVar);
+            }
+
+            for (Map.Entry<String, List<Map<String, Object>>> entry : groupedByField.entrySet()) {
+                String fieldKey = entry.getKey();
+                List<Map<String, Object>> defs = entry.getValue();
+                if (defs.size() == 1) {
+                    resultMap.put(fieldKey, defs.get(0));
+                } else {
+                    boolean sameType = defs.stream().map(d -> (String) d.get("type")).distinct().count() == 1;
+                    if (sameType) {
+                        Map<String, Object> merged = new LinkedHashMap<>(defs.get(0));
+                        List<Map<String, String>> allOpts = new ArrayList<>();
+                        Set<String> seenVals = new HashSet<>();
+                        for (Map<String, Object> def : defs) {
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, String>> opts = (List<Map<String, String>>) def.get("options");
+                            if (opts != null) {
+                                for (Map<String, String> o : opts) {
+                                    if (seenVals.add(o.get("value"))) {
+                                        allOpts.add(o);
                                     }
                                 }
                             }
-                            fieldDef.put("options", options);
-                            fieldMap.put(fieldKey, fieldDef);
+                        }
+                        merged.put("options", allOpts);
+                        resultMap.put(fieldKey, merged);
+                    } else {
+                        for (Map<String, Object> def : defs) {
+                            String sId = (String) def.get("studyId");
+                            String sName = (String) def.get("studyName");
+                            String disambiguatedKey = fieldKey + "_" + (sId != null ? sId.replace("-", "") : "study");
+                            Map<String, Object> disambiguatedDef = new LinkedHashMap<>(def);
+                            disambiguatedDef.put("id", disambiguatedKey);
+                            disambiguatedDef.put("label", def.get("label") + " (" + sName + ")");
+                            resultMap.put(disambiguatedKey, disambiguatedDef);
                         }
                     }
                 }
-            } catch (Exception ignored) {}
+            }
         }
-        return new ArrayList<>(fieldMap.values());
+
+        return new ArrayList<>(resultMap.values());
     }
 
     private Sort resolveSort(String sortBy, String sortDirection) {

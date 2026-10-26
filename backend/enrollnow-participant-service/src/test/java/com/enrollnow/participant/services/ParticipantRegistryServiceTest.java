@@ -4,7 +4,9 @@ import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,12 +18,15 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -37,6 +42,7 @@ class ParticipantRegistryServiceTest {
     @Mock private StudyCandidateRepository candidateRepository;
     @Mock private StudyEnrollmentRepository enrollmentRepository;
     @Mock private StudyRepository studyRepository;
+    @Mock private StudyRequirementRepository studyRequirementRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ParticipantRegistryService service;
@@ -59,6 +65,7 @@ class ParticipantRegistryServiceTest {
                 studyRepository,
                 objectMapper
         );
+        ReflectionTestUtils.setField(service, "studyRequirementRepository", studyRequirementRepository);
     }
 
     @Test
@@ -533,6 +540,180 @@ class ParticipantRegistryServiceTest {
             assertThat(identifier.getIssuingSystem()).isEqualTo("STUDY-101");
             return true;
         }));
+    }
+
+    @Test
+    void getFilterMetadata_resolvesGlobalVariablesAuthoritatively() {
+        UUID study1Id = UUID.randomUUID();
+        UUID study2Id = UUID.randomUUID();
+
+        StudyRequirement req1 = new StudyRequirement();
+        req1.setStudyId(study1Id);
+        req1.setTenantId(tenantId);
+        req1.setConfiguration("{\"customVariables\":[{\"id\":\"blood_group\",\"name\":\"Blood Group\",\"type\":\"single\",\"isGlobal\":true,\"options\":[{\"label\":\"A+\",\"value\":\"A+\"}]}]}");
+
+        StudyRequirement req2 = new StudyRequirement();
+        req2.setStudyId(study2Id);
+        req2.setTenantId(tenantId);
+        req2.setConfiguration("{\"customVariables\":[{\"id\":\"blood_group\",\"name\":\"Blood Group\",\"type\":\"single\",\"isGlobal\":false,\"options\":[{\"label\":\"O+\",\"value\":\"O+\"}]}]}");
+
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(req1, req2));
+
+        List<Map<String, Object>> metadata = service.getFilterMetadata(tenantId, null);
+
+        assertThat(metadata).hasSize(1);
+        Map<String, Object> var = metadata.get(0);
+        assertThat(var.get("id")).isEqualTo("custom_blood_group");
+        assertThat(var.get("global")).isEqualTo(true);
+        // Study copy cannot override global, but options can be merged
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> opts = (List<Map<String, String>>) var.get("options");
+        assertThat(opts).isNotEmpty();
+    }
+
+    @Test
+    void getFilterMetadata_studySpecificContext_onlyReturnsGlobalsAndTargetStudyVariables() {
+        UUID targetStudyId = UUID.randomUUID();
+        UUID otherStudyId = UUID.randomUUID();
+
+        StudyRequirement reqTarget = new StudyRequirement();
+        reqTarget.setStudyId(targetStudyId);
+        reqTarget.setTenantId(tenantId);
+        reqTarget.setConfiguration("{\"customVariables\":[{\"id\":\"target_var\",\"name\":\"Target Var\",\"type\":\"text\",\"isGlobal\":false}]}");
+
+        StudyRequirement reqOther = new StudyRequirement();
+        reqOther.setStudyId(otherStudyId);
+        reqOther.setTenantId(tenantId);
+        reqOther.setConfiguration("{\"customVariables\":[{\"id\":\"other_var\",\"name\":\"Other Var\",\"type\":\"text\",\"isGlobal\":false}]}");
+
+        StudyRequirement reqGlobal = new StudyRequirement();
+        reqGlobal.setStudyId(otherStudyId);
+        reqGlobal.setTenantId(tenantId);
+        reqGlobal.setConfiguration("{\"customVariables\":[{\"id\":\"global_var\",\"name\":\"Global Var\",\"type\":\"text\",\"isGlobal\":true}]}");
+
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(reqTarget, reqOther, reqGlobal));
+
+        List<Map<String, Object>> metadata = service.getFilterMetadata(tenantId, targetStudyId.toString());
+
+        List<String> ids = metadata.stream().map(m -> (String) m.get("id")).toList();
+        assertThat(ids).contains("custom_target_var", "custom_global_var");
+        assertThat(ids).doesNotContain("custom_other_var");
+    }
+
+    @Test
+    void getFilterMetadata_resolvesConflictingStudyVariablesDeterministically() {
+        UUID study1Id = UUID.randomUUID();
+        UUID study2Id = UUID.randomUUID();
+
+        Study study1 = new Study();
+        study1.setId(study1Id);
+        study1.setName("Study One");
+
+        Study study2 = new Study();
+        study2.setId(study2Id);
+        study2.setName("Study Two");
+
+        when(studyRepository.findByTenantId(tenantId)).thenReturn(List.of(study1, study2));
+
+        // Study 1 defines "Severity" as number, Study 2 defines "Severity" as single select
+        StudyRequirement req1 = new StudyRequirement();
+        req1.setStudyId(study1Id);
+        req1.setTenantId(tenantId);
+        req1.setConfiguration("{\"customVariables\":[{\"id\":\"severity\",\"name\":\"Severity\",\"type\":\"number\",\"isGlobal\":false}]}");
+
+        StudyRequirement req2 = new StudyRequirement();
+        req2.setStudyId(study2Id);
+        req2.setTenantId(tenantId);
+        req2.setConfiguration("{\"customVariables\":[{\"id\":\"severity\",\"name\":\"Severity\",\"type\":\"single\",\"isGlobal\":false}]}");
+
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(req1, req2));
+
+        List<Map<String, Object>> metadata = service.getFilterMetadata(tenantId, null);
+
+        // Neither should be arbitrarily dropped: both should be disambiguated with study context
+        assertThat(metadata).hasSize(2);
+        List<String> labels = metadata.stream().map(m -> (String) m.get("label")).toList();
+        assertThat(labels).anyMatch(l -> l.contains("Study One"));
+        assertThat(labels).anyMatch(l -> l.contains("Study Two"));
+    }
+
+    @Test
+    void getFilterMetadata_handlesMalformedJsonGracefully() {
+        UUID study1Id = UUID.randomUUID();
+        UUID study2Id = UUID.randomUUID();
+
+        StudyRequirement badReq = new StudyRequirement();
+        badReq.setStudyId(study1Id);
+        badReq.setTenantId(tenantId);
+        badReq.setConfiguration("{malformed:json, missing quotes");
+
+        StudyRequirement goodReq = new StudyRequirement();
+        goodReq.setStudyId(study2Id);
+        goodReq.setTenantId(tenantId);
+        goodReq.setConfiguration("{\"customVariables\":[{\"id\":\"valid_var\",\"name\":\"Valid Var\",\"type\":\"text\",\"isGlobal\":true}]}");
+
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(badReq, goodReq));
+
+        List<Map<String, Object>> metadata = service.getFilterMetadata(tenantId, null);
+
+        // Does not throw exception and continues to load valid requirement
+        assertThat(metadata).hasSize(1);
+        assertThat(metadata.get(0).get("id")).isEqualTo("custom_valid_var");
+    }
+
+    @Test
+    void validateFilterRules_acceptsValidRules() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        List<CustomFilterRuleDto> rules = List.of(
+                new CustomFilterRuleDto("1", "age", "between", "", "20", "50", null, ""),
+                new CustomFilterRuleDto("2", "gender", "equal to", "Male", ""),
+                new CustomFilterRuleDto("3", "city", "contains", "Chicago", "")
+        );
+
+        service.validateFilterRules(tenantId, rules);
+    }
+
+    @Test
+    void validateFilterRules_rejectsUnknownField() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        List<CustomFilterRuleDto> rules = List.of(
+                new CustomFilterRuleDto("1", "unknown_field", "equal to", "val", "")
+        );
+
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, rules));
+    }
+
+    @Test
+    void validateFilterRules_rejectsUnsupportedOperatorForFieldType() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        // "greater than" is not supported for text or select fields like "gender"
+        List<CustomFilterRuleDto> rules = List.of(
+                new CustomFilterRuleDto("1", "gender", "greater than", "Male", "")
+        );
+
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, rules));
+    }
+
+    @Test
+    void validateFilterRules_rejectsInvalidNumericAndDateRanges() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        // Inverted range min > max
+        List<CustomFilterRuleDto> rules = List.of(
+                new CustomFilterRuleDto("1", "age", "between", "", "60", "20", null, "")
+        );
+
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, rules));
+
+        // Missing range boundary
+        List<CustomFilterRuleDto> missingBound = List.of(
+                new CustomFilterRuleDto("2", "age", "between", "", "20", "", null, "")
+        );
+
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, missingBound));
     }
 
     private Participant createMockParticipant(UUID id, String firstName, String lastName, LocalDate dob, String status) {

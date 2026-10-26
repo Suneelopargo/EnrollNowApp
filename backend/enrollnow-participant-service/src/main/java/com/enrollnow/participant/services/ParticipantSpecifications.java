@@ -191,30 +191,26 @@ public class ParticipantSpecifications {
             CriteriaBuilder cb,
             UUID tenantId) {
 
-        String field = rule.getField().toLowerCase().trim();
+        String field = rule.getField() != null ? rule.getField().toLowerCase().trim() : "";
+        if (field.isEmpty()) {
+            return cb.disjunction();
+        }
         String op = normalizeOperator(rule.getOperator());
         List<String> values = rule.getEffectiveValues();
         String rawVal = rule.getValue() != null ? rule.getValue().trim() : "";
         String minVal = rule.getEffectiveMinValue();
         String maxVal = rule.getEffectiveMaxValue();
 
-        // Handle Special No-Value Operators First
+        // Custom variable rules go directly to custom attribute predicate
+        if (field.startsWith("custom_")) {
+            return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, values, root, cb);
+        }
+
+        // Handle Special No-Value Operators for Standard Fields
         if ("assigned".equals(op)) {
-            if (field.startsWith("custom_")) {
-                return cb.and(
-                        cb.isNotNull(root.get("customAttributes")),
-                        cb.notEqual(root.get("customAttributes"), "{}")
-                );
-            }
             return cb.isNotNull(getFieldExpression(root, field));
         }
         if ("not_assigned".equals(op)) {
-            if (field.startsWith("custom_")) {
-                return cb.or(
-                        cb.isNull(root.get("customAttributes")),
-                        cb.equal(root.get("customAttributes"), "{}")
-                );
-            }
             return cb.isNull(getFieldExpression(root, field));
         }
 
@@ -271,10 +267,8 @@ public class ParticipantSpecifications {
                 return buildJsonbFieldPredicate("race", op, values, rawVal, root, cb);
 
             default:
-                if (field.startsWith("custom_")) {
-                    return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, root, cb);
-                }
-                return null;
+                // Treat any unrecognized non-standard field as a custom variable
+                return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, values, root, cb);
         }
     }
 
@@ -671,36 +665,148 @@ public class ParticipantSpecifications {
 
     private static Predicate buildCustomAttributePredicate(
             String customKey, String op, String rawVal, String minVal, String maxVal,
-            Root<Participant> root, CriteriaBuilder cb) {
+            List<String> values, Root<Participant> root, CriteriaBuilder cb) {
 
-        if ("is_empty".equalsIgnoreCase(op) || "is empty".equalsIgnoreCase(op) || "has no value".equalsIgnoreCase(op) || "not_assigned".equalsIgnoreCase(op)) {
-            return cb.or(
-                    cb.isNull(root.get("customAttributes")),
-                    cb.equal(root.get("customAttributes"), "{}")
-            );
-        }
-        if ("is_not_empty".equalsIgnoreCase(op) || "is not empty".equalsIgnoreCase(op) || "has any value".equalsIgnoreCase(op) || "assigned".equalsIgnoreCase(op)) {
-            return cb.and(
-                    cb.isNotNull(root.get("customAttributes")),
-                    cb.notEqual(root.get("customAttributes"), "{}")
-            );
+        String key = (customKey != null && customKey.startsWith("custom_")) ? customKey.substring(7) : (customKey != null ? customKey : "");
+        if (key.isBlank()) {
+            return cb.disjunction();
         }
 
-        String actualKey = (customKey != null && customKey.startsWith("custom_")) ? customKey.substring(7) : (customKey != null ? customKey : "");
-        if (rawVal != null && !rawVal.isBlank()) {
-            String val = "%" + rawVal.trim().toLowerCase() + "%";
-            String keyAndVal = "%" + actualKey.toLowerCase() + "%" + rawVal.trim().toLowerCase() + "%";
-            if ("equal".equalsIgnoreCase(op) || "equals".equalsIgnoreCase(op) || "contains".equalsIgnoreCase(op) || "=".equals(op)) {
-                return cb.or(
-                        cb.like(cb.lower(root.get("customAttributes")), keyAndVal),
-                        cb.like(cb.lower(root.get("customAttributes")), val)
-                );
-            } else if ("not_equal".equalsIgnoreCase(op) || "not_equals".equalsIgnoreCase(op) || "does not contain".equalsIgnoreCase(op) || "!=".equals(op)) {
-                return cb.notLike(cb.lower(root.get("customAttributes")), val);
-            } else if ("starts_with".equalsIgnoreCase(op) || "starts with".equalsIgnoreCase(op)) {
-                return cb.like(cb.lower(root.get("customAttributes")), "%" + rawVal.trim().toLowerCase() + "%");
+        String safeKey = key.replace("\\", "\\\\").replace("\"", "\\\"");
+
+        // 1. Presence operators
+        if ("assigned".equals(op)) {
+            String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && exists(@.value) && @.value != \"\")";
+            return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+        }
+        if ("not_assigned".equals(op)) {
+            String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && exists(@.value) && @.value != \"\")";
+            return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+        }
+
+        // 2. Equality / Categorical / Multi-select
+        if ("equal".equals(op)) {
+            if (values != null && !values.isEmpty()) {
+                StringBuilder valueMatches = new StringBuilder();
+                for (int i = 0; i < values.size(); i++) {
+                    if (i > 0) valueMatches.append(" || ");
+                    String safeV = values.get(i).replace("\\", "\\\\").replace("\"", "\\\"");
+                    valueMatches.append("@.value == \"").append(safeV).append("\"");
+                }
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && (" + valueMatches + "))";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+            if (rawVal != null && !rawVal.isBlank()) {
+                String safeVal = rawVal.replace("\\", "\\\\").replace("\"", "\\\"");
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value == \"" + safeVal + "\")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+            return cb.disjunction();
+        }
+
+        if ("not_equal".equals(op)) {
+            if (values != null && !values.isEmpty()) {
+                StringBuilder valueMatches = new StringBuilder();
+                for (int i = 0; i < values.size(); i++) {
+                    if (i > 0) valueMatches.append(" || ");
+                    String safeV = values.get(i).replace("\\", "\\\\").replace("\"", "\\\"");
+                    valueMatches.append("@.value == \"").append(safeV).append("\"");
+                }
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && (" + valueMatches + "))";
+                return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+            if (rawVal != null && !rawVal.isBlank()) {
+                String safeVal = rawVal.replace("\\", "\\\\").replace("\"", "\\\"");
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value == \"" + safeVal + "\")";
+                return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+            return cb.disjunction();
+        }
+
+        // 3. Numeric comparisons
+        if ("greater_than".equals(op)) {
+            if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
+            try {
+                double num = Double.parseDouble(rawVal.trim());
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value.double() > " + num + ")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            } catch (NumberFormatException e) {
+                // ISO date comparison
+                String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value > \"" + safeVal + "\")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
             }
         }
-        return null;
+
+        if ("less_than".equals(op)) {
+            if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
+            try {
+                double num = Double.parseDouble(rawVal.trim());
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value.double() < " + num + ")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            } catch (NumberFormatException e) {
+                // ISO date comparison
+                String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value < \"" + safeVal + "\")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+        }
+
+        if ("between".equals(op)) {
+            if (minVal == null || maxVal == null || minVal.isBlank() || maxVal.isBlank()) {
+                return cb.disjunction();
+            }
+            try {
+                double low = Double.parseDouble(minVal.trim());
+                double high = Double.parseDouble(maxVal.trim());
+                if (low > high) {
+                    double tmp = low; low = high; high = tmp;
+                }
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value.double() >= " + low + " && @.value.double() <= " + high + ")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            } catch (NumberFormatException e) {
+                String safeMin = minVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+                String safeMax = maxVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value >= \"" + safeMin + "\" && @.value <= \"" + safeMax + "\")";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+        }
+
+        if ("not_between".equals(op)) {
+            if (minVal == null || maxVal == null || minVal.isBlank() || maxVal.isBlank()) {
+                return cb.disjunction();
+            }
+            try {
+                double low = Double.parseDouble(minVal.trim());
+                double high = Double.parseDouble(maxVal.trim());
+                if (low > high) {
+                    double tmp = low; low = high; high = tmp;
+                }
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && (@.value.double() < " + low + " || @.value.double() > " + high + "))";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            } catch (NumberFormatException e) {
+                String safeMin = minVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+                String safeMax = maxVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && (@.value < \"" + safeMin + "\" || @.value > \"" + safeMax + "\"))";
+                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            }
+        }
+
+        // 4. Text Contains
+        if ("contains".equals(op)) {
+            if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
+            String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+            String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value like_regex \"" + safeVal + "\" flag \"i\")";
+            return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+        }
+
+        if ("not_contains".equals(op) || "does not contain".equals(op)) {
+            if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
+            String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+            String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value like_regex \"" + safeVal + "\" flag \"i\")";
+            return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+        }
+
+        return cb.disjunction();
     }
 }

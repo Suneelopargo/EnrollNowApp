@@ -134,19 +134,37 @@ The legacy Ripple application (`ripple-develop`) implemented participant study r
   - Add and delete with confirmation safeguard.
 
 ### 3.7 Participant Registry Dynamic Custom Variable Integration
-- **Backend Metadata Endpoint**:
-  - `GET /api/v1/registry/filter-metadata`: Scans tenant study requirements, extracts unique global and study-specific custom variables with types and options.
-- **Backend Query Execution**:
+- **Backend Metadata Resolution & Deterministic Conflict Handling**:
+  - `GET /api/v1/registry/filter-metadata`: Scans tenant study requirements with deterministic scoping:
+    - In study context (`studyId != null`), returns only global custom variables and active study variables.
+    - Global variables are authoritative tenant-wide and can never be overridden or shadowed by study-specific variables.
+    - In tenant-wide context (`studyId == null`), merges identically named and typed variables, while disambiguating conflicting types with study name attribution.
+    - Handles malformed configuration safely with structured logging and without exposing sensitive data.
+- **Filter Rule Validation**:
+  - `ParticipantRegistryService.validateFilterRules`:
+    - Checks that requested filter fields exist in authorized metadata.
+    - Validates operator compatibility with declared field data types (`validateOperatorForFieldType`).
+    - Enforces numeric and date range boundaries (`min <= max`) and non-empty boundary values.
+    - Returns `HTTP 400 Bad Request` with descriptive messaging for invalid rules, preventing invalid queries.
+- **Type-Safe Query Execution (PostgreSQL JSONPath & JPA)**:
   - `ParticipantSpecifications.java`:
-    - Numeric comparison support: `greater than`, `less than`, `between`, `not between`.
-    - Date comparison support.
-    - Presence checks: `has any value` / `has no value`.
-    - Text matching across `customAttributes` JSON payload.
+    - Replaced vulnerable whole-string matching with PostgreSQL `jsonb_path_exists` targeting `$.variables[*] ? ((@.id == "target" || @.name == "target") && ...)`.
+    - Zero cross-variable false positive leakage: evaluation strictly isolates the target variable item inside the `variables` array.
+    - Type-safe operations:
+      - Strict equality (`@.value == "val"`) and inequality (`!exists(...)`).
+      - Numeric comparisons and ranges (`@.value.double() > num`, `< num`, `>= low && <= high`).
+      - Date and datetime comparisons (`@.value >= "..." && @.value <= "..."`).
+      - Categorical multi-select matching with disjunctions (`@.value == "A" || @.value == "B"`).
+      - Presence checks (`assigned` / `not_assigned`).
+      - Text contains with case-insensitive regex flag (`like_regex "..." flag "i"`).
+    - Escapes JSONPath strings (`\\`, `\"`) to guarantee safe handling of special characters.
+    - Unsupported or invalid custom rules return JPA disjunctions (`cb.disjunction()`), ensuring unsupported filters never become unrestricted queries.
   - `ParticipantRegistryService.java`:
-    - `getFieldValue`: dynamically resolves custom variable values from `ParticipantVariableDto` by variable ID or name.
-    - `applyCustomRule`: evaluates numeric, date, and categorical multi-select rules against actual participant variable values.
+    - In-memory `getFieldValue` and `applyCustomRule` parse `ParticipantVariableDto` by exact ID/name match.
+    - Accurately evaluates numeric bounds, date comparisons, and multi-select comma-separated values.
+    - Invalid ranges return `false` preventing unrestricted in-memory matches.
 - **Frontend Registry UI**:
-  - `filterMetadata.ts`: registers dynamic filter fields and provides type-aware operator resolution (`ALL_NUMERIC_OPERATORS`, `ALL_DATE_OPERATORS`, `CATEGORICAL_OPERATORS`).
+  - `filterMetadata.ts`: registers dynamic filter fields and provides type-aware operator resolution (`ALL_NUMERIC_OPERATORS`, `ALL_DATE_OPERATORS`, `CATEGORICAL_OPERATORS`, plus presence operators `has any value` / `has no value`).
   - `FilterCard.tsx`: populates filter field dropdown from `getAllFilterFields()`, automatically adapts input controls (date picker, numeric input, multi-select badges) based on variable type.
   - `RegistryDashboard.tsx`: automatically fetches dynamic filter metadata on mount and on queue refresh.
 
@@ -154,13 +172,17 @@ The legacy Ripple application (`ripple-develop`) implemented participant study r
 
 ## 4. Security & Tenant Isolation
 
-1. **Tenant Scoping**:
+1. **Fail-Closed Authentication & Caller Resolution**:
+   - Eliminated production fallbacks to hardcoded `DEFAULT_TENANT_ID` and `DEFAULT_USER_ID`.
+   - Missing authenticated caller identity throws `InsufficientAuthenticationException` (401/403).
+   - Cross-tenant requests throw `AccessDeniedException` (403).
+2. **Tenant Scoping**:
    - Every API endpoint requires an authenticated caller identity and enforces tenant boundary validation via `SiteAuthorizationService.requireTenantMatch(tenantId)`.
    - All repository queries filter by `tenantId`.
-2. **Permission Checks**:
+3. **Permission Checks**:
    - Modifying study requirements or milestones requires `STUDY_SETTINGS_MANAGE` permission or `STUDY_ADMIN` role or Site Admin authority.
    - Read-only users cannot mutate requirements; mutation controls in the UI are disabled or hidden.
-3. **Double-Blind Protection**:
+4. **Double-Blind Protection**:
    - `isBlind` flag persists in custom variable definitions, enabling downstream blind masking in participant views.
 
 ---
@@ -173,26 +195,42 @@ All automated test suites were executed directly against the workspace codebase.
 - **`enrollnow-study-service`**:
   - Command: `mvn -f backend/pom.xml test -pl enrollnow-study-service`
   - Result: **110 tests passed**, 0 failures, 0 errors, 0 skipped.
-  - Includes new comprehensive tests for:
+  - Includes comprehensive tests for:
     - `getStudyRequirements_retrievesAllSectionsCorrectly`
     - `updateStudyRequirements_persistsAllSectionsCorrectly`
     - `milestoneManagement_addUpdateDelete`
 - **`enrollnow-participant-service`**:
   - Command: `mvn -f backend/pom.xml test -pl enrollnow-participant-service`
-  - Result: **49 tests passed**, 0 failures, 0 errors, 0 skipped.
-  - Verifies custom attribute specifications, registry saved searches, and export.
+  - Result: **65 tests passed**, 0 failures, 0 errors, 0 skipped.
+  - Includes targeted tests for:
+    - `getParticipants_rejectsUnauthenticatedAccess`
+    - `getParticipants_rejectsMalformedCustomFiltersJson`
+    - `buildSpecification_preventsCrossVariableCollision`
+    - `buildSpecification_handlesCustomNumericGreaterThanLessThanBetween`
+    - `buildSpecification_handlesCustomDateComparisons`
+    - `buildSpecification_handlesCustomCategoricalMultiSelect`
+    - `buildSpecification_handlesSafeJsonKeysWithSpecialCharacters`
+    - `buildSpecification_unsupportedOrInvalidCustomRuleReturnsDisjunction`
+    - `getFilterMetadata_resolvesGlobalVariablesAuthoritatively`
+    - `getFilterMetadata_studySpecificContext_onlyReturnsGlobalsAndTargetStudyVariables`
+    - `getFilterMetadata_resolvesConflictingStudyVariablesDeterministically`
+    - `getFilterMetadata_handlesMalformedJsonGracefully`
+    - `validateFilterRules_acceptsValidRules`
+    - `validateFilterRules_rejectsUnknownField`
+    - `validateFilterRules_rejectsUnsupportedOperatorForFieldType`
+    - `validateFilterRules_rejectsInvalidNumericAndDateRanges`
 
 ### 5.2 Frontend Verification
 - **Study Microfrontend (`enrollnow-study-mfe`)**:
   - Command: `npm --prefix frontend/microfrontends/study run typecheck` -> **Passed** (0 errors).
   - Command: `npm --prefix frontend/microfrontends/study test`
   - Result: **8 test files passed (81 tests)**, 0 failures.
-  - Includes new suite: `studySettingsRequirements.test.tsx` (3 tests verifying requirements rendering, workspace navigation integration, and submenus preservation).
+  - Includes suite: `studySettingsRequirements.test.tsx` (verifying requirements rendering, workspace navigation integration, and submenus preservation).
 - **Participant Microfrontend (`@enrollnow/mfe-participant`)**:
   - Command: `npm --prefix frontend/microfrontends/participant run typecheck` -> **Passed** (0 errors).
   - Command: `npm --prefix frontend/microfrontends/participant test`
-  - Result: **1 test file passed (28 tests)**, 0 failures.
-  - Includes new tests for dynamic custom variable metadata registration and operator adaptation.
+  - Result: **1 test file passed (29 tests)**, 0 failures.
+  - Includes tests for dynamic custom variable metadata registration, operator adaptation, presence operators, and boundary validations.
 - **Frontend Monorepo Typecheck**:
   - Command: `npm --prefix frontend run typecheck`
   - Result: **Passed cleanly across all 13 workspaces**.

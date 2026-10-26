@@ -14,7 +14,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -25,8 +28,6 @@ import java.util.*;
 public class ParticipantRegistryController {
 
     private static final Logger log = LoggerFactory.getLogger(ParticipantRegistryController.class);
-    private static final UUID DEFAULT_TENANT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID DEFAULT_USER_ID = UUID.fromString("4e1941de-e712-4fe0-b0ea-845094e86349");
 
     private final ParticipantRegistryService registryService;
     private final RegistrySavedSearchService savedSearchService;
@@ -48,23 +49,27 @@ public class ParticipantRegistryController {
     }
 
     private UUID resolveTenantId(UUID queryTenantId) {
+        SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
+                .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to access Registry resources"));
+        if (caller.tenantId() != null) {
+            if (queryTenantId != null && !caller.tenantId().equals(queryTenantId)) {
+                throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
+            }
+            return caller.tenantId();
+        }
         if (queryTenantId != null) {
-            siteAuthorizationService.requireTenantMatch(queryTenantId);
             return queryTenantId;
         }
-        Optional<SiteAuthorizationService.CallerIdentity> caller = siteAuthorizationService.getAuthenticatedCaller();
-        if (caller.isPresent() && caller.get().tenantId() != null) {
-            return caller.get().tenantId();
-        }
-        return DEFAULT_TENANT_ID;
+        throw new AccessDeniedException("Authenticated caller is not associated with any tenant");
     }
 
     private UUID resolveUserId() {
-        Optional<SiteAuthorizationService.CallerIdentity> caller = siteAuthorizationService.getAuthenticatedCaller();
-        if (caller.isPresent()) {
-            return caller.get().userId();
+        SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
+                .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to access Registry resources"));
+        if (caller.userId() != null) {
+            return caller.userId();
         }
-        return DEFAULT_USER_ID;
+        throw new AccessDeniedException("Authenticated caller has no user ID");
     }
 
     @GetMapping("/participants")
@@ -93,7 +98,9 @@ public class ParticipantRegistryController {
                 rules = objectMapper.readValue(customFiltersJson, new TypeReference<List<CustomFilterRuleDto>>() {});
             } catch (Exception e) {
                 log.warn("Failed to parse customFiltersJson: {}", customFiltersJson);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Malformed customFilters parameter: invalid JSON");
             }
+            registryService.validateFilterRules(resolvedTenantId, rules);
         }
 
         RegistryPagedResponse<RegistryParticipantDto> response = registryService.searchParticipants(
@@ -290,7 +297,9 @@ public class ParticipantRegistryController {
                 rules = objectMapper.readValue(customFiltersJson, new TypeReference<List<CustomFilterRuleDto>>() {});
             } catch (Exception e) {
                 log.warn("Failed to parse customFiltersJson for export: {}", customFiltersJson);
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Malformed customFilters parameter: invalid JSON");
             }
+            registryService.validateFilterRules(resolvedTenantId, rules);
         }
 
         List<RegistryParticipantDto> matching = registryService.getAllMatchingParticipants(
