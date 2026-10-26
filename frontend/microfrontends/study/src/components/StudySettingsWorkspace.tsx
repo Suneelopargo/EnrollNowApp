@@ -41,7 +41,6 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true);
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(true);
   const [isDetailsDirty, setIsDetailsDirty] = useState(false);
-  const [isRequirementsDirty, setIsRequirementsDirty] = useState(false);
 
   const handleSubmenuSelect = (target: StudySettingsSubmenuId) => {
     if (target === activeSubmenu) return;
@@ -51,12 +50,7 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
       );
       if (!proceed) return;
     }
-    if (activeSubmenu === 'participants_requirements' && isRequirementsDirty) {
-      const proceed = window.confirm(
-        'You have unsaved changes in Study Requirements. Are you sure you want to discard your changes and leave?'
-      );
-      if (!proceed) return;
-    }
+    // Note: 'participants_requirements' automatically persists uncommitted changes on leave/unmount
     setActiveSubmenu(target);
   };
 
@@ -280,7 +274,6 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
             isArchived={isArchived}
             canManageSettings={canManageSettings}
             onStudyUpdated={onStudyUpdated}
-            onDirtyChange={(dirty) => setIsRequirementsDirty(dirty)}
           />
         ) : (
           <div className="study-settings-placeholder" role="region" aria-label="Submenu coming soon">

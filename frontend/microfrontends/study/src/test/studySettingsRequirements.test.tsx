@@ -244,4 +244,20 @@ describe('StudySettingsRequirements Component Tests', () => {
     expect(studyApi.addGlobalVariableToStudy).toHaveBeenCalledWith(mockStudyId, 'gvar-1');
     expect(result.id).toBe('gvar-1');
   });
+
+  it('supports skipLoader and silent background sync for requirements operations without flashing UI loaders', async () => {
+    (studyApi.updateStudyRequirements as any).mockResolvedValue({
+      ...mockRequirementsData,
+      sampleSize: 180,
+    });
+
+    const silentConfig = { skipLoader: true, headers: { 'x-skip-loader': 'true' } };
+    await studyApi.updateStudyRequirements(mockStudyId, { sampleSize: 180 }, silentConfig as any);
+
+    expect(studyApi.updateStudyRequirements).toHaveBeenCalledWith(
+      mockStudyId,
+      { sampleSize: 180 },
+      silentConfig
+    );
+  });
 });

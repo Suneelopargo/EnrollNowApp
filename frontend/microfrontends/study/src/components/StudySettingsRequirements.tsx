@@ -1,5 +1,5 @@
 // frontend/microfrontends/study/src/components/StudySettingsRequirements.tsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   studyApi,
   StudyRequirementsData,
@@ -207,6 +207,26 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     isGlobal?: boolean;
   } | null>(null);
 
+  // Uncommitted changes tracking and silent auto-save references
+  const studyGroupsRef = useRef(studyGroups);
+  const customVariablesRef = useRef(customVariables);
+  const lastSavedStudyGroupsRef = useRef<string>('');
+  const lastSavedCustomVarsRef = useRef<string>('');
+  const isDirtyRef = useRef(false);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+
+  useEffect(() => {
+    studyGroupsRef.current = studyGroups;
+  }, [studyGroups]);
+
+  useEffect(() => {
+    customVariablesRef.current = customVariables;
+  }, [customVariables]);
+
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange;
+  }, [onDirtyChange]);
+
   // Operation-level persistence helper (replaces page-level dirty/save workflow)
   const persistPartial = useCallback(
     async (
@@ -216,16 +236,23 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       if (!canManageSettings || isArchived) return false;
       setIsSavingOperation(true);
       try {
-        const updated = await studyApi.updateStudyRequirements(studyId, partial);
+        const updated = await studyApi.updateStudyRequirements(studyId, partial, {
+          skipLoader: true,
+          headers: { 'x-skip-loader': 'true' },
+        } as any);
         if (partial.sampleSize !== undefined) {
           setSampleSize(updated.sampleSize ?? '');
           setLastSavedSampleSize(updated.sampleSize ?? '');
         }
         if (partial.studyGroups !== undefined) {
           setStudyGroups(updated.studyGroups || []);
+          studyGroupsRef.current = updated.studyGroups || [];
+          lastSavedStudyGroupsRef.current = JSON.stringify(updated.studyGroups || []);
         }
         if (partial.customVariables !== undefined) {
           setCustomVariables(updated.customVariables || []);
+          customVariablesRef.current = updated.customVariables || [];
+          lastSavedCustomVarsRef.current = JSON.stringify(updated.customVariables || []);
         }
         if (partial.variableGroups !== undefined) {
           setVariableGroups(updated.variableGroups || []);
@@ -239,10 +266,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         if (partial.contactOutcomes !== undefined) {
           setContactOutcomes(updated.contactOutcomes || []);
         }
+        isDirtyRef.current = false;
+        onDirtyChangeRef.current?.(false);
         if (successMsg) {
           toast.success(successMsg);
         }
-        onStudyUpdated?.();
         return true;
       } catch (err: any) {
         console.error('Failed to persist requirements operation:', err);
@@ -252,35 +280,68 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         setIsSavingOperation(false);
       }
     },
-    [studyId, canManageSettings, isArchived, onStudyUpdated]
+    [studyId, canManageSettings, isArchived]
   );
 
-  // Fetch study requirements
+  // Auto-save uncommitted groups/options when user navigates away or moves page
+  useEffect(() => {
+    return () => {
+      if (isDirtyRef.current && canManageSettings && !isArchived) {
+        studyApi
+          .updateStudyRequirements(
+            studyId,
+            {
+              studyGroups: studyGroupsRef.current,
+              customVariables: customVariablesRef.current,
+            },
+            { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any
+          )
+          .then(() => {
+            toast.success('Study requirements auto-saved.');
+          })
+          .catch((err) => {
+            console.error('Auto-save on leave failed:', err);
+          });
+      }
+    };
+  }, [studyId, canManageSettings, isArchived]);
+
+  // Fetch study requirements - ONLY re-fetches when studyId changes!
   const loadRequirements = useCallback(async () => {
     if (!studyId) return;
     setLoading(true);
     try {
-      const data: StudyRequirementsData = await studyApi.getStudyRequirements(studyId);
+      const data: StudyRequirementsData = await studyApi.getStudyRequirements(studyId, {
+        skipLoader: true,
+        headers: { 'x-skip-loader': 'true' },
+      } as any);
       const sSize = data.sampleSize ?? '';
       setSampleSize(sSize);
       setLastSavedSampleSize(sSize);
       setMilestones(data.milestones || []);
-      setStudyGroups(data.studyGroups || []);
-      setCustomVariables(data.customVariables || []);
+      const groups = data.studyGroups || [];
+      setStudyGroups(groups);
+      studyGroupsRef.current = groups;
+      lastSavedStudyGroupsRef.current = JSON.stringify(groups);
+      const vars = data.customVariables || [];
+      setCustomVariables(vars);
+      customVariablesRef.current = vars;
+      lastSavedCustomVarsRef.current = JSON.stringify(vars);
       setVariableGroups(data.variableGroups || []);
       setLayout(data.customVariableLayout || []);
       setContactRelationships(data.contactRelationships || []);
       setContactOutcomes(data.contactOutcomes || []);
       setGlobalVariables(data.globalVariables || []);
       setUnlockedVariableIds(new Set());
-      onDirtyChange?.(false);
+      isDirtyRef.current = false;
+      onDirtyChangeRef.current?.(false);
     } catch (err: any) {
       console.error('Failed to load study requirements:', err);
       toast.error(err?.response?.data?.message || err?.message || 'Failed to load study requirements.');
     } finally {
       setLoading(false);
     }
-  }, [studyId, onDirtyChange]);
+  }, [studyId]);
 
   useEffect(() => {
     loadRequirements();
@@ -294,9 +355,16 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     await persistPartial({ sampleSize: val }, 'Target study sample size (N) saved.');
   };
 
-  // Group Quotas - persists onBlur of sampleSize / gender breakdown inputs
+  // Group Quotas - persists onBlur of sampleSize / gender breakdown inputs ONLY when changed
   const handleBlurStudyGroups = async () => {
-    await persistPartial({ studyGroups }, 'Demographic quota target saved.');
+    const currentJson = JSON.stringify(studyGroups);
+    if (currentJson === lastSavedStudyGroupsRef.current) {
+      return;
+    }
+    const ok = await persistPartial({ studyGroups }, 'Demographic quota target saved.');
+    if (ok) {
+      lastSavedStudyGroupsRef.current = currentJson;
+    }
   };
 
   // Milestone Actions
@@ -313,7 +381,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         milestoneDate: newMilestoneDate,
         participantTarget: target,
         description: newMilestoneDesc.trim() || undefined,
-      });
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
       setMilestones((prev) => [...prev, newM].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate)));
       setShowAddMilestoneModal(false);
       setNewMilestoneDate('');
@@ -348,7 +416,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         milestoneDate: editMilestoneDate,
         participantTarget: target,
         description: editMilestoneDesc.trim() || undefined,
-      });
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
       setMilestones((prev) =>
         prev
           .map((m) => (m.id === editingMilestone.id ? updated : m))
@@ -375,7 +443,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       const newM = await studyApi.addStudyMilestone(studyId, {
         milestoneDate: today,
         participantTarget: 0,
-      });
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
       setMilestones((prev) => [...prev, newM].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate)));
       toast.success('Recruitment milestone added.');
       onStudyUpdated?.();
@@ -399,7 +467,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         milestoneDate: newDate,
         participantTarget: newTarget,
         description: m.description,
-      });
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
       setMilestones((prev) =>
         prev
           .map((item) => (item.id === m.id ? updated : item))
@@ -417,7 +485,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const handleDeleteMilestoneDirect = async (milestoneId: string) => {
     try {
       setIsSavingOperation(true);
-      await studyApi.deleteStudyMilestone(studyId, milestoneId);
+      await studyApi.deleteStudyMilestone(studyId, milestoneId, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
       setMilestones((prev) => prev.filter((m) => m.id !== milestoneId));
       setConfirmDeleteModal(null);
       toast.success('Milestone deleted.');
@@ -442,17 +510,26 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'age');
   }, [studyGroups]);
 
-  const handleAddAgeGroup = async () => {
+  const handleAddAgeGroup = () => {
+    const label = newAgeGroupName.trim();
     const newGroup: DemographicGroup = {
       id: 'grp_age_' + Date.now(),
       defaultCategoryName: 'age',
-      label: '',
-      sampleSize: '',
+      label: label || '',
+      sampleSize: newAgeGroupSample || '',
       ageRange: { min: 1, max: 1 },
     };
     const updated = [...studyGroups, newGroup];
     setStudyGroups(updated);
-    await persistPartial({ studyGroups: updated }, 'Age group added.');
+    studyGroupsRef.current = updated;
+    isDirtyRef.current = true;
+
+    if (showAddAgeGroupModal) {
+      setShowAddAgeGroupModal(false);
+      setNewAgeGroupName('');
+      setNewAgeGroupSample('');
+      persistPartial({ studyGroups: updated }, 'Age group added.');
+    }
   };
 
   // Sex / Gender Groups
@@ -460,16 +537,25 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'sex');
   }, [studyGroups]);
 
-  const handleAddGenderGroup = async () => {
+  const handleAddGenderGroup = () => {
+    const label = newGenderName.trim();
     const newGroup: DemographicGroup = {
       id: 'grp_gen_' + Date.now(),
       defaultCategoryName: 'sex',
-      label: '',
-      sampleSize: '',
+      label: label || '',
+      sampleSize: newGenderSample || '',
     };
     const updated = [...studyGroups, newGroup];
     setStudyGroups(updated);
-    await persistPartial({ studyGroups: updated }, 'Gender group added.');
+    studyGroupsRef.current = updated;
+    isDirtyRef.current = true;
+
+    if (showAddGenderModal) {
+      setShowAddGenderModal(false);
+      setNewGenderName('');
+      setNewGenderSample('');
+      persistPartial({ studyGroups: updated }, 'Gender group added.');
+    }
   };
 
   // Ethnicity Groups
@@ -477,16 +563,25 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'ethnicity');
   }, [studyGroups]);
 
-  const handleAddEthnicityGroup = async () => {
+  const handleAddEthnicityGroup = () => {
+    const label = newEthLabel.trim();
     const newGroup: DemographicGroup = {
       id: 'grp_eth_' + Date.now(),
       defaultCategoryName: 'ethnicity',
-      label: '',
-      sampleSize: '',
+      label: label || '',
+      sampleSize: newEthSample || '',
     };
     const updated = [...studyGroups, newGroup];
     setStudyGroups(updated);
-    await persistPartial({ studyGroups: updated }, 'Ethnicity category added.');
+    studyGroupsRef.current = updated;
+    isDirtyRef.current = true;
+
+    if (showAddEthnicityModal) {
+      setShowAddEthnicityModal(false);
+      setNewEthLabel('');
+      setNewEthSample('');
+      persistPartial({ studyGroups: updated }, 'Ethnicity category added.');
+    }
   };
 
   // Race Groups
@@ -494,26 +589,38 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     return studyGroups.filter((g) => g.defaultCategoryName === 'race');
   }, [studyGroups]);
 
-  const handleAddRaceGroup = async () => {
+  const handleAddRaceGroup = () => {
+    const label = newRaceLabel.trim();
     const newGroup: DemographicGroup = {
       id: 'grp_race_' + Date.now(),
       defaultCategoryName: 'race',
-      label: '',
-      sampleSize: '',
+      label: label || '',
+      sampleSize: newRaceSample || '',
     };
     const updated = [...studyGroups, newGroup];
     setStudyGroups(updated);
-    await persistPartial({ studyGroups: updated }, 'Race category added.');
+    studyGroupsRef.current = updated;
+    isDirtyRef.current = true;
+
+    if (showAddRaceModal) {
+      setShowAddRaceModal(false);
+      setNewRaceLabel('');
+      setNewRaceSample('');
+      persistPartial({ studyGroups: updated }, 'Race category added.');
+    }
   };
 
   const handleEnableAgeRange = (groupId: string) => {
     setExpandedAgeRangeIds((prev) => new Set(prev).add(groupId));
-    setStudyGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, ageRange: { min: 1, max: 1 } } : g))
+    const updated = studyGroups.map((g) =>
+      g.id === groupId ? { ...g, ageRange: { min: 1, max: 1 } } : g
     );
+    setStudyGroups(updated);
+    studyGroupsRef.current = updated;
+    isDirtyRef.current = true;
   };
 
-  const handleAddNestedGender = async (groupId: string) => {
+  const handleAddNestedGender = (groupId: string) => {
     setExpandedGenderGroupIds((prev) => new Set(prev).add(groupId));
     const targetGroup = studyGroups.find((g) => g.id === groupId);
     const currentGenders = targetGroup?.genderGroups || [];
@@ -526,7 +633,17 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       g.id === groupId ? { ...g, genderGroups: [...currentGenders, newNested] } : g
     );
     setStudyGroups(updatedGroups);
-    await persistPartial({ studyGroups: updatedGroups }, 'Gender quota added.');
+    studyGroupsRef.current = updatedGroups;
+    isDirtyRef.current = true;
+  };
+
+  const handleUpdateGroupField = (groupId: string, updater: (group: DemographicGroup) => DemographicGroup) => {
+    setStudyGroups((prev) => {
+      const updated = prev.map((g) => (g.id === groupId ? updater(g) : g));
+      studyGroupsRef.current = updated;
+      return updated;
+    });
+    isDirtyRef.current = true;
   };
 
   const handleUpdateNestedGender = (
@@ -543,6 +660,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       return { ...g, genderGroups: updatedGenders };
     });
     setStudyGroups(updatedGroups);
+    studyGroupsRef.current = updatedGroups;
+    isDirtyRef.current = true;
   };
 
   const handleDeleteNestedGender = async (groupId: string, nestedId: string) => {
@@ -552,13 +671,14 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       return { ...g, genderGroups: currentGenders.filter((gg) => gg.id !== nestedId) };
     });
     setStudyGroups(updatedGroups);
+    studyGroupsRef.current = updatedGroups;
     await persistPartial({ studyGroups: updatedGroups }, 'Gender quota removed.');
   };
 
   const handleUpdateGroupNestedGender = (groupId: string, gender: string, targetStr: string) => {
     const target = targetStr ? parseInt(targetStr, 10) : null;
-    setStudyGroups((prev) =>
-      prev.map((g) => {
+    setStudyGroups((prev) => {
+      const updated = prev.map((g) => {
         if (g.id !== groupId) return g;
         const currentGenders = g.genderGroups || [];
         const existingIdx = currentGenders.findIndex((item) => item.gender.toLowerCase() === gender.toLowerCase());
@@ -569,8 +689,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
           updatedGenders.push({ id: 'gen_' + Date.now(), gender, participants: target });
         }
         return { ...g, genderGroups: updatedGenders };
-      })
-    );
+      });
+      studyGroupsRef.current = updated;
+      return updated;
+    });
+    isDirtyRef.current = true;
   };
 
   const handleDeleteGroup = async (groupId: string) => {
@@ -709,14 +832,22 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     if (!globalVar.id) return;
     setIsSavingOperation(true);
     try {
-      const added = await studyApi.addGlobalVariableToStudy(studyId, globalVar.id);
+      const added = await studyApi.addGlobalVariableToStudy(studyId, globalVar.id, {
+        skipLoader: true,
+        headers: { 'x-skip-loader': 'true' },
+      } as any);
       const updatedVars = [...customVariables, added];
       const updatedLayout: StudyLayoutItem[] = [
         ...layout,
         { id: 'lay_' + added.id, type: 'variable' as const, refId: added.id || '', rank: layout.length },
       ];
-      await studyApi.updateStudyRequirements(studyId, { customVariableLayout: updatedLayout });
+      await studyApi.updateStudyRequirements(
+        studyId,
+        { customVariableLayout: updatedLayout },
+        { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any
+      );
       setCustomVariables(updatedVars);
+      customVariablesRef.current = updatedVars;
       setLayout(updatedLayout);
       setShowAddGlobalVarModal(false);
       toast.success(`Global variable "${added.name}" added to study.`);
@@ -851,15 +982,25 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   };
 
   const handleUpdateVariableName = (varId: string, name: string) => {
-    setCustomVariables((prev) =>
-      prev.map((v) => (v.id === varId ? { ...v, name } : v))
-    );
+    setCustomVariables((prev) => {
+      const updated = prev.map((v) => (v.id === varId ? { ...v, name } : v));
+      customVariablesRef.current = updated;
+      return updated;
+    });
+    isDirtyRef.current = true;
   };
 
   const handleSaveVariableName = async (varId: string) => {
     const targetVar = customVariables.find((v) => v.id === varId);
     if (!targetVar || !targetVar.name.trim()) return;
-    await persistPartial({ customVariables }, 'Variable name updated.');
+    const currentJson = JSON.stringify(customVariables);
+    if (currentJson === lastSavedCustomVarsRef.current) {
+      return;
+    }
+    const ok = await persistPartial({ customVariables }, 'Variable name updated.');
+    if (ok) {
+      lastSavedCustomVarsRef.current = currentJson;
+    }
   };
 
   const handleToggleGlobal = async (varId: string) => {
@@ -879,23 +1020,33 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   };
 
   const handleUpdateOptionLabel = (varId: string, optionIdx: number, newLabel: string) => {
-    setCustomVariables((prev) =>
-      prev.map((v) => {
+    setCustomVariables((prev) => {
+      const updated = prev.map((v) => {
         if (v.id !== varId) return v;
         const opts = [...(v.options || [])];
         if (opts[optionIdx]) {
           opts[optionIdx] = { ...opts[optionIdx], label: newLabel, value: newLabel };
         }
         return { ...v, options: opts };
-      })
-    );
+      });
+      customVariablesRef.current = updated;
+      return updated;
+    });
+    isDirtyRef.current = true;
   };
 
   const handleSaveOption = async () => {
-    await persistPartial({ customVariables }, 'Option updated.');
+    const currentJson = JSON.stringify(customVariables);
+    if (currentJson === lastSavedCustomVarsRef.current) {
+      return;
+    }
+    const ok = await persistPartial({ customVariables }, 'Option updated.');
+    if (ok) {
+      lastSavedCustomVarsRef.current = currentJson;
+    }
   };
 
-  const handleAddOptionInline = async (varId: string) => {
+  const handleAddOptionInline = (varId: string) => {
     const updated = customVariables.map((v) => {
       if (v.id !== varId) return v;
       const opts = [...(v.options || [])];
@@ -904,7 +1055,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       return { ...v, options: opts };
     });
     setCustomVariables(updated);
-    await persistPartial({ customVariables: updated }, 'Option added.');
+    customVariablesRef.current = updated;
+    isDirtyRef.current = true;
   };
 
   const handleDeleteOption = async (varId: string, optionIdx: number) => {
@@ -1447,12 +1599,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     className="group-input"
                     placeholder="Group"
                     value={grp.label}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setStudyGroups((prev) =>
-                        prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
-                      );
-                    }}
+                    onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, label: e.target.value }))}
                     onBlur={handleBlurStudyGroups}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') e.currentTarget.blur();
@@ -1469,12 +1616,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     className="sample-size-input"
                     placeholder="Sample Size"
                     value={grp.sampleSize}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setStudyGroups((prev) =>
-                        prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                      );
-                    }}
+                    onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, sampleSize: e.target.value }))}
                     onBlur={handleBlurStudyGroups}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') e.currentTarget.blur();
@@ -1494,13 +1636,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     value={grp.ageRange?.min ?? ''}
                     onChange={(e) => {
                       const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                      setStudyGroups((prev) =>
-                        prev.map((g) =>
-                          g.id === grp.id
-                            ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
-                            : g
-                        )
-                      );
+                      handleUpdateGroupField(grp.id!, (g) => ({
+                        ...g,
+                        ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null },
+                      }));
                     }}
                     onBlur={handleBlurStudyGroups}
                     onKeyDown={(e) => {
@@ -1518,13 +1657,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     value={grp.ageRange?.max ?? ''}
                     onChange={(e) => {
                       const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                      setStudyGroups((prev) =>
-                        prev.map((g) =>
-                          g.id === grp.id
-                            ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
-                            : g
-                        )
-                      );
+                      handleUpdateGroupField(grp.id!, (g) => ({
+                        ...g,
+                        ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val },
+                      }));
                     }}
                     onBlur={handleBlurStudyGroups}
                     onKeyDown={(e) => {
@@ -1599,12 +1735,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       className="group-input"
                       placeholder="Group"
                       value={grp.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStudyGroups((prev) =>
-                          prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
-                        );
-                      }}
+                      onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, label: e.target.value }))}
                       onBlur={handleBlurStudyGroups}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
@@ -1621,12 +1752,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       className="sample-size-input"
                       placeholder="Sample Size"
                       value={grp.sampleSize}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStudyGroups((prev) =>
-                          prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                        );
-                      }}
+                      onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, sampleSize: e.target.value }))}
                       onBlur={handleBlurStudyGroups}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
@@ -1658,13 +1784,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           value={grp.ageRange?.min ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                            setStudyGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === grp.id
-                                  ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
-                                  : g
-                              )
-                            );
+                            handleUpdateGroupField(grp.id!, (g) => ({
+                              ...g,
+                              ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null },
+                            }));
                           }}
                           onBlur={handleBlurStudyGroups}
                           onKeyDown={(e) => {
@@ -1682,13 +1805,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           value={grp.ageRange?.max ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                            setStudyGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === grp.id
-                                  ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
-                                  : g
-                              )
-                            );
+                            handleUpdateGroupField(grp.id!, (g) => ({
+                              ...g,
+                              ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val },
+                            }));
                           }}
                           onBlur={handleBlurStudyGroups}
                           onKeyDown={(e) => {
@@ -1775,12 +1895,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       className="group-input"
                       placeholder="Group"
                       value={grp.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStudyGroups((prev) =>
-                          prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
-                        );
-                      }}
+                      onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, label: e.target.value }))}
                       onBlur={handleBlurStudyGroups}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
@@ -1797,12 +1912,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       className="sample-size-input"
                       placeholder="Sample Size"
                       value={grp.sampleSize}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStudyGroups((prev) =>
-                          prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                        );
-                      }}
+                      onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, sampleSize: e.target.value }))}
                       onBlur={handleBlurStudyGroups}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
@@ -1834,13 +1944,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           value={grp.ageRange?.min ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                            setStudyGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === grp.id
-                                  ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
-                                  : g
-                              )
-                            );
+                            handleUpdateGroupField(grp.id!, (g) => ({
+                              ...g,
+                              ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null },
+                            }));
                           }}
                           onBlur={handleBlurStudyGroups}
                           onKeyDown={(e) => {
@@ -1858,13 +1965,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           value={grp.ageRange?.max ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                            setStudyGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === grp.id
-                                  ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
-                                  : g
-                              )
-                            );
+                            handleUpdateGroupField(grp.id!, (g) => ({
+                              ...g,
+                              ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val },
+                            }));
                           }}
                           onBlur={handleBlurStudyGroups}
                           onKeyDown={(e) => {
@@ -2001,12 +2105,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       className="group-input"
                       placeholder="Group"
                       value={grp.label}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStudyGroups((prev) =>
-                          prev.map((g) => (g.id === grp.id ? { ...g, label: val } : g))
-                        );
-                      }}
+                      onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, label: e.target.value }))}
                       onBlur={handleBlurStudyGroups}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
@@ -2023,12 +2122,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       className="sample-size-input"
                       placeholder="Sample Size"
                       value={grp.sampleSize}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setStudyGroups((prev) =>
-                          prev.map((g) => (g.id === grp.id ? { ...g, sampleSize: val } : g))
-                        );
-                      }}
+                      onChange={(e) => handleUpdateGroupField(grp.id!, (g) => ({ ...g, sampleSize: e.target.value }))}
                       onBlur={handleBlurStudyGroups}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') e.currentTarget.blur();
@@ -2060,13 +2154,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           value={grp.ageRange?.min ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                            setStudyGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === grp.id
-                                  ? { ...g, ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null } }
-                                  : g
-                              )
-                            );
+                            handleUpdateGroupField(grp.id!, (g) => ({
+                              ...g,
+                              ageRange: { ...g.ageRange, min: val, max: g.ageRange?.max ?? null },
+                            }));
                           }}
                           onBlur={handleBlurStudyGroups}
                           onKeyDown={(e) => {
@@ -2084,13 +2175,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           value={grp.ageRange?.max ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                            setStudyGroups((prev) =>
-                              prev.map((g) =>
-                                g.id === grp.id
-                                  ? { ...g, ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val } }
-                                  : g
-                              )
-                            );
+                            handleUpdateGroupField(grp.id!, (g) => ({
+                              ...g,
+                              ageRange: { ...g.ageRange, min: g.ageRange?.min ?? null, max: val },
+                            }));
                           }}
                           onBlur={handleBlurStudyGroups}
                           onKeyDown={(e) => {

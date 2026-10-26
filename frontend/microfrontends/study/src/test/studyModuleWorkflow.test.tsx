@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StudyModule } from '../remoteEntry';
+import { StudyDirectory } from '../components/StudyDirectory';
 import { studyApi } from '../../../../shared/api/studyApi';
 
 // Mock react-router-dom hooks
@@ -16,6 +17,22 @@ vi.mock('react-router-dom', () => ({
     pathname: mockPathname,
   }),
   useNavigate: () => mockNavigate,
+}));
+
+vi.mock('../../../../shared/design-system/components/DataGrid', () => ({
+  DataGrid: (props: any) => {
+    return (
+      <div data-testid="mock-data-grid" className="enl-ag-grid ag-theme-quartz">
+        {props.rowData?.map((study: any) => (
+          <div key={study.id} className="study-grid-row">
+            <span>{study.title || study.name}</span>
+            <span>{study.protocolId || study.protocolNumber || study.studyCode}</span>
+            <button>Dashboard</button>
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 describe('Study Workspace & Dynamic Study Selection Navigation Workflow', () => {
@@ -147,6 +164,61 @@ describe('Study Workspace & Dynamic Study Selection Navigation Workflow', () => 
 
       const html = renderToStaticMarkup(<StudyModule />);
       expect(html).toBeDefined();
+    });
+  });
+
+  describe('StudyDirectory and Quick Study Switcher Component Tests', () => {
+    const mockStudies = [
+      {
+        id: 'study-001',
+        title: 'CardioTrial 2026',
+        protocolId: 'CT-2026',
+        studyRole: 'Study Admin',
+        status: 'ACTIVE',
+        enrolledParticipants: 45,
+        targetParticipants: 100,
+      },
+      {
+        id: 'study-002',
+        title: 'NeuroStudy Alpha',
+        protocolId: 'NS-002',
+        studyRole: 'Coordinator',
+        status: 'RECRUITING',
+        enrolledParticipants: 20,
+        targetParticipants: 50,
+      },
+    ];
+
+    it('renders list of assigned studies with title, protocol, role and targets', () => {
+      const handleSelect = vi.fn();
+      const handleAdd = vi.fn();
+
+      const html = renderToStaticMarkup(
+        <StudyDirectory
+          studies={mockStudies}
+          onSelectStudy={handleSelect}
+          onAddStudy={handleAdd}
+        />
+      );
+
+      expect(html).toContain('Active Studies');
+      expect(html).toContain('Add Study');
+      expect(html).toContain('Export');
+      expect(html).toContain('CardioTrial 2026');
+      expect(html).toContain('CT-2026');
+      expect(html).toContain('NeuroStudy Alpha');
+      expect(html).toContain('NS-002');
+      expect(html).toContain('Dashboard');
+    });
+
+    it('renders empty prompt when zero studies are assigned', () => {
+      const html = renderToStaticMarkup(
+        <StudyDirectory studies={[]} onSelectStudy={vi.fn()} onAddStudy={vi.fn()} />
+      );
+
+      expect(html).toContain('Select a study to continue');
+      expect(html).toContain('Use Select Study in the top navigation');
+      expect(html).toContain('Add Study');
     });
   });
 });

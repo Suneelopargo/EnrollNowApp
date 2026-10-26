@@ -1,8 +1,8 @@
 // frontend/microfrontends/study/src/remoteEntry.tsx - Study MFE Remote Entry & Multi-Tab Navigation
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MfeContext } from '../../../shared/contracts';
-import { Plus, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Plus, ShieldAlert, AlertTriangle, ArrowLeftRight, ChevronDown, Check } from 'lucide-react';
 import { dashboardApi } from '../../../shared/api/dashboardApi';
 import { participantApi } from '../../../shared/api/participantApi';
 import { studyApi, StudyNavigationPermissions } from '../../../shared/api/studyApi';
@@ -17,6 +17,7 @@ import { StudyDashboardTab } from './components/StudyDashboardTab';
 import { StudyTabPlaceholder } from './components/StudyTabPlaceholder';
 import { StudyUnauthorizedTab } from './components/StudyUnauthorizedTab';
 import { StudySettingsWorkspace } from './components/StudySettingsWorkspace';
+import { StudyDirectory } from './components/StudyDirectory';
 
 export interface StudyModuleProps {
   context?: MfeContext;
@@ -27,6 +28,8 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddStudy, setShowAddStudy] = useState(false);
+  const [isStudySwitcherOpen, setIsStudySwitcherOpen] = useState(false);
+  const studySwitcherRef = useRef<HTMLDivElement>(null);
 
   // Study-specific permissions & navigation state
   const [permissions, setPermissions] = useState<StudyNavigationPermissions | null>(null);
@@ -75,13 +78,30 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
     }
   }, [location.search, navigate]);
 
-  const fetchStudies = useCallback(async () => {
-    setLoading(true);
+  // Click-outside listener for Change Study switcher dropdown
+  useEffect(() => {
+    if (!isStudySwitcherOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (studySwitcherRef.current && !studySwitcherRef.current.contains(e.target as Node)) {
+        setIsStudySwitcherOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isStudySwitcherOpen]);
+
+  const fetchStudies = useCallback(async (isSilent = false) => {
+    if (!isSilent) {
+      setLoading(true);
+    }
     try {
+      const reqConfig = isSilent
+        ? ({ skipToast: true, skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any)
+        : ({ skipToast: true } as any);
       const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
-        studyApi.getStudies(),
-        dashboardApi.getOverview({ skipToast: true } as any),
-        participantApi.getParticipants({ skipToast: true } as any),
+        studyApi.getStudies(reqConfig),
+        dashboardApi.getOverview(reqConfig),
+        participantApi.getParticipants(reqConfig),
       ]);
       const registryStudies =
         studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value) ? studiesRes.value : [];
@@ -364,6 +384,77 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
                   Archived Study
                 </div>
               )}
+
+              {/* Quick Study Switcher / Change Study Option */}
+              <div className="study-switcher-wrap" ref={studySwitcherRef}>
+                <button
+                  type="button"
+                  className="study-switcher-btn"
+                  onClick={() => setIsStudySwitcherOpen((prev) => !prev)}
+                  aria-expanded={isStudySwitcherOpen}
+                  aria-haspopup="menu"
+                  title="Switch or change study"
+                >
+                  <ArrowLeftRight size={13} />
+                  <span>Change Study</span>
+                  <ChevronDown
+                    size={13}
+                    className={`study-switcher-chevron ${isStudySwitcherOpen ? 'is-open' : ''}`}
+                  />
+                </button>
+                {isStudySwitcherOpen && (
+                  <div className="study-switcher-dropdown" role="menu">
+                    <div className="study-switcher-header">
+                      <span>Assigned Studies</span>
+                      <button
+                        type="button"
+                        className="study-switcher-add-btn"
+                        onClick={() => {
+                          setIsStudySwitcherOpen(false);
+                          setShowAddStudy(true);
+                        }}
+                      >
+                        <Plus size={13} />
+                        <span>Add Study</span>
+                      </button>
+                    </div>
+                    <div className="study-switcher-list">
+                      {tableData.map((s) => {
+                        const isCurrent = String(s.id) === String(selectedStudy?.id ?? selectedStudyId);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className={`study-switcher-item ${isCurrent ? 'is-active' : ''}`}
+                            onClick={() => {
+                              setIsStudySwitcherOpen(false);
+                              navigate(`/studies?studyId=${encodeURIComponent(String(s.id))}&tab=${activeTab}`);
+                            }}
+                          >
+                            <div className="study-switcher-item-main">
+                              <span className="study-switcher-item-name">{s.title || s.name}</span>
+                              <span className="study-switcher-item-code">{s.protocolId || s.studyCode || ''}</span>
+                            </div>
+                            {isCurrent && <Check size={14} className="study-switcher-item-check" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="study-switcher-footer">
+                      <button
+                        type="button"
+                        className="study-switcher-all-btn"
+                        onClick={() => {
+                          setIsStudySwitcherOpen(false);
+                          navigate('/studies');
+                        }}
+                      >
+                        <span>View All Assigned Studies</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Study Navigation Tabs Strip Side-by-Side */}
@@ -413,7 +504,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
                   context?.user?.roles?.includes('SITE_ADMIN')
                 )}
                 onStudyUpdated={() => {
-                  fetchStudies();
+                  fetchStudies(true);
                 }}
               />
             ) : (
@@ -426,18 +517,16 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
           </div>
         </section>
       ) : (
-        /* 5. Empty State: No Study Selected */
-        <section className="study-selection-empty" aria-live="polite">
-          <div className="study-selection-empty__icon">
-            <Plus size={22} />
-          </div>
-          <h1>{selectedStudyId ? 'Study not found' : 'Select a study to continue'}</h1>
-          <p>
-            {selectedStudyId
-              ? 'Choose another study from Select Study in the top navigation.'
-              : 'Use Select Study in the top navigation to open its recruitment dashboard, or choose Add Study to create a study.'}
-          </p>
-        </section>
+        /* 5. Assigned Studies Directory / Selection */
+        <StudyDirectory
+          studies={tableData}
+          loading={loading}
+          onSelectStudy={(studyId, tab) => {
+            navigate(`/studies?studyId=${encodeURIComponent(studyId)}&tab=${tab || 'dashboard'}`);
+          }}
+          onAddStudy={() => setShowAddStudy(true)}
+          onRefresh={() => fetchStudies()}
+        />
       )}
 
       <AddStudyModal
