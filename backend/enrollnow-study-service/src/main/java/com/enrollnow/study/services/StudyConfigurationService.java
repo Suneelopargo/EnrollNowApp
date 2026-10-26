@@ -17,15 +17,27 @@ import com.enrollnow.study.dtos.StudyTextTemplateDto;
 import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
+import com.enrollnow.study.dtos.ContactTaxonomyDto;
+import com.enrollnow.study.dtos.DemographicGroupDto;
+import com.enrollnow.study.dtos.StudyCustomVariableDto;
+import com.enrollnow.study.dtos.StudyLayoutItemDto;
+import com.enrollnow.study.dtos.StudyMilestoneDto;
+import com.enrollnow.study.dtos.StudyRequirementsResponse;
+import com.enrollnow.study.dtos.StudyVariableGroupDto;
+import com.enrollnow.study.dtos.UpdateStudyRequirementsRequest;
+import com.enrollnow.study.models.StudyMilestone;
 import com.enrollnow.study.models.StudyRequirement;
+import com.enrollnow.study.repositories.StudyMilestoneRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -38,12 +50,25 @@ public class StudyConfigurationService {
     private final StudyRequirementRepository studyRequirementRepository;
     private final ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private StudyMilestoneRepository studyMilestoneRepository;
+
     public StudyConfigurationService(
             StudyRequirementRepository studyRequirementRepository,
             ObjectMapper objectMapper
     ) {
         this.studyRequirementRepository = studyRequirementRepository;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
+
+    public StudyConfigurationService(
+            StudyRequirementRepository studyRequirementRepository,
+            ObjectMapper objectMapper,
+            StudyMilestoneRepository studyMilestoneRepository
+    ) {
+        this.studyRequirementRepository = studyRequirementRepository;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        this.studyMilestoneRepository = studyMilestoneRepository;
     }
 
     @Transactional
@@ -1018,7 +1043,7 @@ public class StudyConfigurationService {
             new LocaleOptionDto("nl-BE", "nl-BE - Flemish"),
             new LocaleOptionDto("da", "da - Danish"),
             new LocaleOptionDto("sv", "sv - Swedish"),
-            new LocaleOptionDto("nb", "nb - Norwegian Bokmål"),
+            new LocaleOptionDto("nb", "nb - Norwegian BokmÃ¥l"),
             new LocaleOptionDto("fi", "fi - Finnish"),
             new LocaleOptionDto("pl", "pl - Polish"),
             new LocaleOptionDto("cs", "cs - Czech"),
@@ -2490,5 +2515,611 @@ public class StudyConfigurationService {
             dto.setSchedule(sDto);
         }
         return dto;
+    }
+
+    // =========================================================================
+    // STUDY REQUIREMENTS & PARTICIPANT SPECIFICATIONS
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public StudyRequirementsResponse getStudyRequirements(UUID tenantId, UUID studyId, boolean canManage) {
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+
+        StudyRequirementsResponse response = new StudyRequirementsResponse();
+        response.setStudyId(studyId.toString());
+        response.setSampleSize(requirement.getSampleSize() != null ? requirement.getSampleSize() : 100);
+        response.setCanManage(canManage);
+
+        // 1. Milestones
+        List<StudyMilestoneDto> milestoneDtos = new ArrayList<>();
+        if (studyMilestoneRepository != null) {
+            try {
+                List<StudyMilestone> milestones = studyMilestoneRepository
+                        .findByTenantIdAndStudyIdOrderByMilestoneDateAsc(tenantId, studyId);
+                for (StudyMilestone m : milestones) {
+                    milestoneDtos.add(new StudyMilestoneDto(
+                            m.getId().toString(),
+                            m.getMilestoneDate() != null ? m.getMilestoneDate().toString() : "",
+                            m.getParticipantTarget(),
+                            m.getDescription()
+                    ));
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to load milestones from repository for study {}: {}", studyId, ex.getMessage());
+            }
+        }
+        if (milestoneDtos.isEmpty() && configMap.get("milestones") instanceof List<?> rawMilestones) {
+            for (Object obj : rawMilestones) {
+                if (obj instanceof Map<?, ?> mMap) {
+                    String id = mMap.get("_id") != null ? mMap.get("_id").toString() : (mMap.get("id") != null ? mMap.get("id").toString() : "");
+                    String date = mMap.get("date") != null ? mMap.get("date").toString() : (mMap.get("milestoneDate") != null ? mMap.get("milestoneDate").toString() : "");
+                    Integer target = mMap.get("numParticipants") instanceof Number n ? n.intValue() : (mMap.get("participantTarget") instanceof Number n2 ? n2.intValue() : null);
+                    String desc = mMap.get("description") != null ? mMap.get("description").toString() : "";
+                    milestoneDtos.add(new StudyMilestoneDto(id, date, target, desc));
+                }
+            }
+        }
+        response.setMilestones(milestoneDtos);
+
+        // 2. Demographic Groups
+        Object rawGroups = configMap.get("studyGroups") != null ? configMap.get("studyGroups") : configMap.get("groups");
+        List<DemographicGroupDto> groups = parseDemographicGroups(rawGroups);
+        Object rawGenderGroups = configMap.get("genderGroups");
+        if (rawGenderGroups instanceof List<?> gList) {
+            for (Object gObj : gList) {
+                if (gObj instanceof Map<?, ?> gMap) {
+                    DemographicGroupDto gDto = new DemographicGroupDto();
+                    gDto.setId(gMap.get("_id") != null ? gMap.get("_id").toString() : UUID.randomUUID().toString());
+                    gDto.setDefaultCategoryName("sex");
+                    gDto.setLabel(gMap.get("name") != null ? gMap.get("name").toString() : (gMap.get("label") != null ? gMap.get("label").toString() : ""));
+                    gDto.setSampleSize(gMap.get("sample") != null ? gMap.get("sample").toString() : (gMap.get("sampleSize") != null ? gMap.get("sampleSize").toString() : ""));
+                    groups.add(gDto);
+                }
+            }
+        }
+        response.setStudyGroups(groups);
+
+        // 3. Custom Variables
+        List<StudyCustomVariableDto> cvs = parseCustomVariables(configMap.get("customVariables"));
+        response.setCustomVariables(cvs);
+
+        // 4. Variable Groups
+        List<StudyVariableGroupDto> vgs = parseVariableGroups(configMap.get("variableGroups"));
+        response.setVariableGroups(vgs);
+
+        // 5. Custom Variable Layout
+        Object rawLayout = configMap.get("customVariableLayout") != null ? configMap.get("customVariableLayout") : configMap.get("layout");
+        List<StudyLayoutItemDto> layout = parseLayoutItems(rawLayout, cvs, vgs);
+        response.setCustomVariableLayout(layout);
+
+        // 6. Contact Relationships
+        List<ContactTaxonomyDto> relationships = parseContactTaxonomy(configMap.get("contactRelationships"), "relationship", List.of("Mother", "Father", "Guardian", "Self", "Spouse", "Other"));
+        response.setContactRelationships(relationships);
+
+        // 7. Contact Outcomes
+        List<ContactTaxonomyDto> outcomes = parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome", List.of("Participant Added", "Call Completed", "Voicemail Left", "Email Sent", "Other"));
+        response.setContactOutcomes(outcomes);
+
+        // 8. Global Variables Discovery in Tenant
+        List<StudyCustomVariableDto> globals = findTenantGlobalVariables(tenantId);
+        response.setGlobalVariables(globals);
+
+        return response;
+    }
+
+    @Transactional
+    public StudyRequirementsResponse updateStudyRequirements(
+            UUID tenantId,
+            UUID studyId,
+            UpdateStudyRequirementsRequest request,
+            boolean canManage
+    ) {
+        if (request == null) {
+            throw new InvalidStudyException("Update study requirements request cannot be null.");
+        }
+
+        StudyRequirement requirement = studyRequirementRepository
+                .findByTenantIdAndStudyId(tenantId, studyId)
+                .orElseGet(() -> createDefaultConfiguration(tenantId, studyId, 100));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+
+        if (request.getSampleSize() != null) {
+            if (request.getSampleSize() < 0) {
+                throw new InvalidStudyException("Sample size (N) cannot be negative.");
+            }
+            requirement.setSampleSize(request.getSampleSize());
+        }
+
+        if (request.getStudyGroups() != null) {
+            configMap.put("studyGroups", serializeDemographicGroups(request.getStudyGroups(), studyId.toString()));
+        }
+        if (request.getCustomVariables() != null) {
+            configMap.put("customVariables", serializeCustomVariables(request.getCustomVariables()));
+        }
+        if (request.getVariableGroups() != null) {
+            configMap.put("variableGroups", serializeVariableGroups(request.getVariableGroups()));
+        }
+        if (request.getCustomVariableLayout() != null) {
+            configMap.put("customVariableLayout", serializeLayoutItems(request.getCustomVariableLayout()));
+        }
+        if (request.getContactRelationships() != null) {
+            configMap.put("contactRelationships", serializeContactTaxonomy(request.getContactRelationships(), "relationship"));
+        }
+        if (request.getContactOutcomes() != null) {
+            configMap.put("contactOutcomes", serializeContactTaxonomy(request.getContactOutcomes(), "outcome"));
+        }
+
+        saveStudyRequirement(
+                tenantId,
+                studyId,
+                requirement.getSampleSize() != null ? requirement.getSampleSize() : 100,
+                configMap
+        );
+
+        return getStudyRequirements(tenantId, studyId, canManage);
+    }
+
+    @Transactional
+    public StudyMilestoneDto addStudyMilestone(UUID tenantId, UUID studyId, StudyMilestoneDto dto) {
+        String dateStr = dto != null && dto.getMilestoneDate() != null ? dto.getMilestoneDate().trim() : "";
+        LocalDate date = LocalDate.now();
+        if (!dateStr.isBlank()) {
+            try {
+                date = LocalDate.parse(dateStr.substring(0, Math.min(10, dateStr.length())));
+            } catch (Exception ignored) {}
+        }
+        Integer target = dto != null && dto.getParticipantTarget() != null ? dto.getParticipantTarget() : 0;
+        String desc = dto != null && dto.getDescription() != null ? dto.getDescription().trim() : "";
+
+        String milestoneId = UUID.randomUUID().toString();
+        if (studyMilestoneRepository != null) {
+            StudyMilestone entity = new StudyMilestone();
+            entity.setTenantId(tenantId);
+            entity.setStudyId(studyId);
+            entity.setMilestoneDate(date);
+            entity.setParticipantTarget(target);
+            entity.setDescription(desc);
+            StudyMilestone saved = studyMilestoneRepository.save(entity);
+            milestoneId = saved.getId().toString();
+        }
+
+        // Also update in configMap for fallback consistency
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> mList = getMutableList(configMap, "milestones");
+        Map<String, Object> mMap = new LinkedHashMap<>();
+        mMap.put("_id", milestoneId);
+        mMap.put("date", date.toString());
+        mMap.put("numParticipants", target);
+        mMap.put("description", desc);
+        mList.add(mMap);
+        configMap.put("milestones", mList);
+        StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
+        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+
+        return new StudyMilestoneDto(milestoneId, date.toString(), target, desc);
+    }
+
+    @Transactional
+    public StudyMilestoneDto updateStudyMilestone(UUID tenantId, UUID studyId, String milestoneId, StudyMilestoneDto dto) {
+        if (milestoneId == null || milestoneId.isBlank()) {
+            throw new InvalidStudyException("Milestone ID is required.");
+        }
+        LocalDate date = null;
+        if (dto != null && dto.getMilestoneDate() != null && !dto.getMilestoneDate().isBlank()) {
+            try {
+                date = LocalDate.parse(dto.getMilestoneDate().substring(0, Math.min(10, dto.getMilestoneDate().length())));
+            } catch (Exception ignored) {}
+        }
+        Integer target = dto != null ? dto.getParticipantTarget() : null;
+        String desc = dto != null ? dto.getDescription() : null;
+
+        if (studyMilestoneRepository != null) {
+            try {
+                UUID mUuid = UUID.fromString(milestoneId);
+                Optional<StudyMilestone> opt = studyMilestoneRepository.findByTenantIdAndStudyIdAndId(tenantId, studyId, mUuid);
+                if (opt.isPresent()) {
+                    StudyMilestone m = opt.get();
+                    if (date != null) m.setMilestoneDate(date);
+                    if (target != null) m.setParticipantTarget(target);
+                    if (desc != null) m.setDescription(desc);
+                    studyMilestoneRepository.save(m);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // Update in configMap
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> mList = getMutableList(configMap, "milestones");
+        for (Map<String, Object> m : mList) {
+            if (milestoneId.equals(m.get("_id")) || milestoneId.equals(m.get("id"))) {
+                if (date != null) m.put("date", date.toString());
+                if (target != null) m.put("numParticipants", target);
+                if (desc != null) m.put("description", desc);
+                break;
+            }
+        }
+        configMap.put("milestones", mList);
+        StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
+        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+
+        return new StudyMilestoneDto(milestoneId, date != null ? date.toString() : "", target, desc);
+    }
+
+    @Transactional
+    public void deleteStudyMilestone(UUID tenantId, UUID studyId, String milestoneId) {
+        if (milestoneId == null || milestoneId.isBlank()) {
+            throw new InvalidStudyException("Milestone ID is required.");
+        }
+        if (studyMilestoneRepository != null) {
+            try {
+                UUID mUuid = UUID.fromString(milestoneId);
+                studyMilestoneRepository.findByTenantIdAndStudyIdAndId(tenantId, studyId, mUuid)
+                        .ifPresent(studyMilestoneRepository::delete);
+            } catch (Exception ignored) {}
+        }
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> mList = getMutableList(configMap, "milestones");
+        mList.removeIf(m -> milestoneId.equals(m.get("_id")) || milestoneId.equals(m.get("id")));
+        configMap.put("milestones", mList);
+        StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
+        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudyCustomVariableDto> findTenantGlobalVariables(UUID tenantId) {
+        Map<String, StudyCustomVariableDto> globalVars = new LinkedHashMap<>();
+        try {
+            List<StudyRequirement> allReqs = studyRequirementRepository.findByTenantId(tenantId);
+            for (StudyRequirement req : allReqs) {
+                if (req.getConfiguration() == null || req.getConfiguration().isBlank()) continue;
+                try {
+                    Map<String, Object> cfg = objectMapper.readValue(req.getConfiguration(), new TypeReference<Map<String, Object>>() {});
+                    List<StudyCustomVariableDto> cvList = parseCustomVariables(cfg.get("customVariables"));
+                    for (StudyCustomVariableDto cv : cvList) {
+                        if (cv.isGlobal()) {
+                            globalVars.putIfAbsent(cv.getName().toLowerCase().trim(), cv);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to discover global variables for tenant {}: {}", tenantId, ex.getMessage());
+        }
+        return new ArrayList<>(globalVars.values());
+    }
+
+    @Transactional
+    public StudyCustomVariableDto addGlobalVariableToStudy(UUID tenantId, UUID studyId, String variableId) {
+        List<StudyCustomVariableDto> allGlobals = findTenantGlobalVariables(tenantId);
+        StudyCustomVariableDto target = allGlobals.stream()
+                .filter(v -> variableId.equals(v.getId()) || variableId.equalsIgnoreCase(v.getName()))
+                .findFirst()
+                .orElseThrow(() -> new InvalidStudyException("Global variable not found: " + variableId));
+
+        Map<String, Object> configMap = loadOrCreateStudyConfigMap(tenantId, studyId);
+        List<Map<String, Object>> cvList = getMutableList(configMap, "customVariables");
+
+        // Check if already in study
+        boolean alreadyExists = cvList.stream().anyMatch(v ->
+                target.getId().equals(v.get("_id")) || target.getId().equals(v.get("variableId")) ||
+                (v.get("name") != null && target.getName().equalsIgnoreCase(v.get("name").toString().trim()))
+        );
+        if (alreadyExists) {
+            throw new InvalidStudyException("Variable is already attached to this study.");
+        }
+
+        Map<String, Object> newCv = new LinkedHashMap<>();
+        newCv.put("_id", target.getId());
+        newCv.put("variableId", target.getId());
+        newCv.put("name", target.getName());
+        newCv.put("variableType", target.getVariableType());
+        newCv.put("isGlobal", true);
+        newCv.put("isBlind", target.isBlind());
+        newCv.put("rank", cvList.size());
+
+        List<Map<String, Object>> opts = new ArrayList<>();
+        if (target.getOptions() != null) {
+            for (StudyCustomVariableDto.VariableOptionDto o : target.getOptions()) {
+                Map<String, Object> optMap = new LinkedHashMap<>();
+                optMap.put("optionId", o.getOptionId());
+                optMap.put("name", o.getName());
+                opts.add(optMap);
+            }
+        }
+        newCv.put("options", opts);
+        cvList.add(newCv);
+        configMap.put("customVariables", cvList);
+
+        // Also add to customVariableLayout
+        List<Map<String, Object>> layout = getMutableList(configMap, "customVariableLayout");
+        Map<String, Object> layoutItem = new LinkedHashMap<>();
+        layoutItem.put("_id", "lay_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+        layoutItem.put("type", "variable");
+        layoutItem.put("refId", target.getId());
+        layoutItem.put("rank", layout.size());
+        layout.add(layoutItem);
+        configMap.put("customVariableLayout", layout);
+
+        StudyRequirement req = studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId).orElse(null);
+        saveStudyRequirement(tenantId, studyId, req != null && req.getSampleSize() != null ? req.getSampleSize() : 100, configMap);
+
+        return target;
+    }
+
+    // =========================================================================
+    // PARSING & SERIALIZATION HELPERS FOR REQUIREMENTS
+    // =========================================================================
+
+    private List<DemographicGroupDto> parseDemographicGroups(Object raw) {
+        List<DemographicGroupDto> groups = new ArrayList<>();
+        if (!(raw instanceof List<?> list)) return groups;
+
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                DemographicGroupDto dto = new DemographicGroupDto();
+                dto.setId(map.get("_id") != null ? map.get("_id").toString() : (map.get("id") != null ? map.get("id").toString() : UUID.randomUUID().toString()));
+                dto.setDefaultCategoryName(map.get("defaultCategoryName") != null ? map.get("defaultCategoryName").toString() : "age");
+                dto.setLabel(map.get("label") != null ? map.get("label").toString() : (map.get("name") != null ? map.get("name").toString() : ""));
+                dto.setSampleSize(map.get("sampleSize") != null ? map.get("sampleSize").toString() : (map.get("sample") != null ? map.get("sample").toString() : ""));
+
+                if (map.get("ageRange") instanceof Map<?, ?> arMap) {
+                    Integer min = arMap.get("min") instanceof Number n ? n.intValue() : null;
+                    Integer max = arMap.get("max") instanceof Number n ? n.intValue() : null;
+                    dto.setAgeRange(new DemographicGroupDto.AgeRangeDto(min, max));
+                } else if (map.get("minAge") != null || map.get("maxAge") != null) {
+                    Integer min = map.get("minAge") instanceof Number n ? n.intValue() : null;
+                    Integer max = map.get("maxAge") instanceof Number n ? n.intValue() : null;
+                    dto.setAgeRange(new DemographicGroupDto.AgeRangeDto(min, max));
+                }
+
+                List<DemographicGroupDto.GenderGroupDto> genderList = new ArrayList<>();
+                if (map.get("genderGroups") instanceof List<?> gList) {
+                    for (Object gObj : gList) {
+                        if (gObj instanceof Map<?, ?> gMap) {
+                            String gId = gMap.get("_id") != null ? gMap.get("_id").toString() : (gMap.get("id") != null ? gMap.get("id").toString() : UUID.randomUUID().toString());
+                            String gender = gMap.get("gender") != null ? gMap.get("gender").toString() : "Other";
+                            Integer participants = gMap.get("participants") instanceof Number n ? n.intValue() : null;
+                            genderList.add(new DemographicGroupDto.GenderGroupDto(gId, gender, participants));
+                        }
+                    }
+                }
+                dto.setGenderGroups(genderList);
+                groups.add(dto);
+            }
+        }
+        return groups;
+    }
+
+    private List<Map<String, Object>> serializeDemographicGroups(List<DemographicGroupDto> dtos, String studyId) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (dtos == null) return list;
+
+        for (DemographicGroupDto dto : dtos) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("_id", dto.getId() != null && !dto.getId().isBlank() ? dto.getId() : "grp_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            map.put("studyId", studyId);
+            map.put("defaultCategoryName", dto.getDefaultCategoryName() != null ? dto.getDefaultCategoryName() : "age");
+            map.put("label", dto.getLabel() != null ? dto.getLabel().trim() : "");
+            map.put("sampleSize", dto.getSampleSize() != null ? dto.getSampleSize().trim() : "");
+
+            if (dto.getAgeRange() != null && (dto.getAgeRange().getMin() != null || dto.getAgeRange().getMax() != null)) {
+                Map<String, Object> ar = new LinkedHashMap<>();
+                if (dto.getAgeRange().getMin() != null) ar.put("min", dto.getAgeRange().getMin());
+                if (dto.getAgeRange().getMax() != null) ar.put("max", dto.getAgeRange().getMax());
+                map.put("ageRange", ar);
+            }
+
+            if (dto.getGenderGroups() != null && !dto.getGenderGroups().isEmpty()) {
+                List<Map<String, Object>> ggList = new ArrayList<>();
+                for (DemographicGroupDto.GenderGroupDto gg : dto.getGenderGroups()) {
+                    Map<String, Object> ggMap = new LinkedHashMap<>();
+                    ggMap.put("_id", gg.getId() != null && !gg.getId().isBlank() ? gg.getId() : "gg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+                    ggMap.put("gender", gg.getGender() != null ? gg.getGender() : "Other");
+                    ggMap.put("participants", gg.getParticipants());
+                    ggList.add(ggMap);
+                }
+                map.put("genderGroups", ggList);
+            }
+            list.add(map);
+        }
+        return list;
+    }
+
+    private List<StudyCustomVariableDto> parseCustomVariables(Object raw) {
+        List<StudyCustomVariableDto> vars = new ArrayList<>();
+        if (!(raw instanceof List<?> list)) return vars;
+
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                StudyCustomVariableDto dto = new StudyCustomVariableDto();
+                dto.setId(map.get("_id") != null ? map.get("_id").toString() : (map.get("variableId") != null ? map.get("variableId").toString() : ""));
+                dto.setName(map.get("name") != null ? map.get("name").toString() : "");
+                dto.setVariableType(map.get("variableType") != null ? map.get("variableType").toString() : "short");
+                dto.setGlobal(Boolean.TRUE.equals(map.get("isGlobal")));
+                dto.setBlind(Boolean.TRUE.equals(map.get("isBlind")));
+                dto.setRank(map.get("rank") instanceof Number n ? n.intValue() : 0);
+
+                List<StudyCustomVariableDto.VariableOptionDto> options = new ArrayList<>();
+                if (map.get("options") instanceof List<?> optList) {
+                    for (Object optObj : optList) {
+                        if (optObj instanceof Map<?, ?> optMap) {
+                            String optId = optMap.get("optionId") != null ? optMap.get("optionId").toString() : "";
+                            String optName = optMap.get("name") != null ? optMap.get("name").toString() : (optMap.get("label") != null ? optMap.get("label").toString() : "");
+                            options.add(new StudyCustomVariableDto.VariableOptionDto(optId, optName));
+                        }
+                    }
+                }
+                dto.setOptions(options);
+                vars.add(dto);
+            }
+        }
+        return vars;
+    }
+
+    private List<Map<String, Object>> serializeCustomVariables(List<StudyCustomVariableDto> dtos) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (dtos == null) return list;
+
+        int rank = 0;
+        for (StudyCustomVariableDto dto : dtos) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            String id = dto.getId() != null && !dto.getId().isBlank() ? dto.getId() : "cv_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+            map.put("_id", id);
+            map.put("variableId", id);
+            map.put("name", dto.getName() != null ? dto.getName().trim() : "");
+            map.put("variableType", dto.getVariableType() != null ? dto.getVariableType() : "short");
+            map.put("isGlobal", dto.isGlobal());
+            map.put("isBlind", dto.isBlind());
+            map.put("rank", dto.getRank() >= 0 ? dto.getRank() : rank++);
+
+            List<Map<String, Object>> opts = new ArrayList<>();
+            if (dto.getOptions() != null) {
+                for (StudyCustomVariableDto.VariableOptionDto opt : dto.getOptions()) {
+                    Map<String, Object> oMap = new LinkedHashMap<>();
+                    oMap.put("optionId", opt.getOptionId() != null && !opt.getOptionId().isBlank() ? opt.getOptionId() : "opt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+                    oMap.put("name", opt.getName() != null ? opt.getName() : "");
+                    opts.add(oMap);
+                }
+            }
+            map.put("options", opts);
+            list.add(map);
+        }
+        return list;
+    }
+
+    private List<StudyVariableGroupDto> parseVariableGroups(Object raw) {
+        List<StudyVariableGroupDto> groups = new ArrayList<>();
+        if (!(raw instanceof List<?> list)) return groups;
+
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                StudyVariableGroupDto dto = new StudyVariableGroupDto();
+                dto.setId(map.get("_id") != null ? map.get("_id").toString() : (map.get("id") != null ? map.get("id").toString() : ""));
+                dto.setName(map.get("name") != null ? map.get("name").toString() : "");
+                dto.setCollapsed(Boolean.TRUE.equals(map.get("isCollapsed")));
+
+                List<String> members = new ArrayList<>();
+                if (map.get("members") instanceof List<?> mList) {
+                    for (Object m : mList) {
+                        if (m != null) members.add(m.toString());
+                    }
+                }
+                dto.setMembers(members);
+                groups.add(dto);
+            }
+        }
+        return groups;
+    }
+
+    private List<Map<String, Object>> serializeVariableGroups(List<StudyVariableGroupDto> dtos) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (dtos == null) return list;
+
+        for (StudyVariableGroupDto dto : dtos) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("_id", dto.getId() != null && !dto.getId().isBlank() ? dto.getId() : "vg_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            map.put("name", dto.getName() != null ? dto.getName().trim() : "");
+            map.put("isCollapsed", dto.isCollapsed());
+            map.put("members", dto.getMembers() != null ? dto.getMembers() : new ArrayList<>());
+            list.add(map);
+        }
+        return list;
+    }
+
+    private List<StudyLayoutItemDto> parseLayoutItems(
+            Object raw,
+            List<StudyCustomVariableDto> cvs,
+            List<StudyVariableGroupDto> vgs
+    ) {
+        List<StudyLayoutItemDto> layout = new ArrayList<>();
+        if (raw instanceof List<?> list && !list.isEmpty()) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    StudyLayoutItemDto dto = new StudyLayoutItemDto();
+                    dto.setId(map.get("_id") != null ? map.get("_id").toString() : (map.get("id") != null ? map.get("id").toString() : ""));
+                    dto.setType(map.get("type") != null ? map.get("type").toString() : "variable");
+                    dto.setRefId(map.get("refId") != null ? map.get("refId").toString() : "");
+                    dto.setRank(map.get("rank") instanceof Number n ? n.intValue() : layout.size());
+                    layout.add(dto);
+                }
+            }
+            return layout;
+        }
+
+        // If no persisted layout, build default layout: groups first, then ungrouped variables
+        Set<String> groupedVarIds = new HashSet<>();
+        for (StudyVariableGroupDto g : vgs) {
+            groupedVarIds.addAll(g.getMembers());
+        }
+
+        int rank = 0;
+        for (StudyVariableGroupDto g : vgs) {
+            layout.add(new StudyLayoutItemDto("lay_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), "group", g.getId(), rank++));
+        }
+        for (StudyCustomVariableDto v : cvs) {
+            if (!groupedVarIds.contains(v.getId())) {
+                layout.add(new StudyLayoutItemDto("lay_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), "variable", v.getId(), rank++));
+            }
+        }
+        return layout;
+    }
+
+    private List<Map<String, Object>> serializeLayoutItems(List<StudyLayoutItemDto> dtos) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (dtos == null) return list;
+
+        int rank = 0;
+        for (StudyLayoutItemDto dto : dtos) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("_id", dto.getId() != null && !dto.getId().isBlank() ? dto.getId() : "lay_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            map.put("type", dto.getType() != null ? dto.getType() : "variable");
+            map.put("refId", dto.getRefId() != null ? dto.getRefId() : "");
+            map.put("rank", dto.getRank() >= 0 ? dto.getRank() : rank++);
+            list.add(map);
+        }
+        return list;
+    }
+
+    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName, List<String> defaultValues) {
+        List<ContactTaxonomyDto> result = new ArrayList<>();
+        if (raw instanceof List<?> list && !list.isEmpty()) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    String id = map.get("_id") != null ? map.get("_id").toString() : (map.get("id") != null ? map.get("id").toString() : "");
+                    String val = map.get(fieldName) != null ? map.get(fieldName).toString() : (map.get("value") != null ? map.get("value").toString() : "");
+                    if (!val.isBlank()) {
+                        result.add(new ContactTaxonomyDto(id, val));
+                    }
+                }
+            }
+            return result;
+        }
+
+        // Initialize defaults with "Other" guaranteed
+        int idx = 1;
+        for (String def : defaultValues) {
+            result.add(new ContactTaxonomyDto("tax_" + (idx++), def));
+        }
+        return result;
+    }
+
+    private List<Map<String, Object>> serializeContactTaxonomy(List<ContactTaxonomyDto> dtos, String fieldName) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (dtos == null) return list;
+
+        for (ContactTaxonomyDto dto : dtos) {
+            if (dto.getValue() == null || dto.getValue().trim().isEmpty()) continue;
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("_id", dto.getId() != null && !dto.getId().isBlank() ? dto.getId() : "tax_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            map.put(fieldName, dto.getValue().trim());
+            map.put("value", dto.getValue().trim());
+            list.add(map);
+        }
+        return list;
     }
 }

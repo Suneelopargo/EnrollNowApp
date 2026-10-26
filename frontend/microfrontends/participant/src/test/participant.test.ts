@@ -535,4 +535,71 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).toContain('filter-card-no-value-notice');
     expect(html).toContain('No value input needed');
   });
+
+  it('fetches and registers dynamic custom filter metadata and adapts operators', async () => {
+    const {
+      registerDynamicFilterFields,
+      getAllFilterFields,
+      getFieldDefinition,
+      getOperatorsForField,
+    } = await import('../constants/filterMetadata');
+
+    const mockMetadata = [
+      {
+        id: 'custom_bp',
+        label: 'Blood Pressure',
+        placeholder: 'Filter by Blood Pressure...',
+        type: 'number' as const,
+      },
+      {
+        id: 'custom_handedness',
+        label: 'Handedness',
+        placeholder: 'Filter by Handedness...',
+        type: 'multiselect' as const,
+        options: [
+          { label: 'Right', value: 'right' },
+          { label: 'Left', value: 'left' },
+        ],
+      },
+    ];
+
+    registerDynamicFilterFields(mockMetadata);
+
+    const allFields = getAllFilterFields();
+    expect(allFields.some((f) => f.id === 'custom_bp')).toBe(true);
+    expect(allFields.some((f) => f.id === 'custom_handedness')).toBe(true);
+
+    const numDef = getFieldDefinition('custom_bp');
+    expect(numDef.type).toBe('number');
+    const numOps = getOperatorsForField('custom_bp');
+    expect(numOps).toContain('greater than');
+    expect(numOps).toContain('between');
+
+    const catDef = getFieldDefinition('custom_handedness');
+    expect(catDef.type).toBe('multiselect');
+    expect(catDef.options?.length).toBe(2);
+    const catOps = getOperatorsForField('custom_handedness');
+    expect(catOps).toContain('equal to');
+    expect(catOps).toContain('not equal to');
+  });
+
+  it('queries /api/v1/registry/filter-metadata via participantApi.getFilterMetadata', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 'custom_var1', label: 'Marker X', type: 'text' },
+        ],
+      },
+    } as any);
+
+    const result = await participantApi.getFilterMetadata('study-123');
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/registry/filter-metadata',
+      expect.objectContaining({
+        params: { studyId: 'study-123' },
+      })
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('custom_var1');
+  });
 });

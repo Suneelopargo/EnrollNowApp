@@ -3,6 +3,7 @@ import React from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import {
   REGISTRY_FILTER_FIELDS,
+  getAllFilterFields,
   getFieldDefinition,
   getOperatorsForField,
   isRangeOperator,
@@ -217,7 +218,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
             aria-label={`Filter rule ${index + 1} field`}
             className="filter-select filter-select--field"
           >
-            {REGISTRY_FILTER_FIELDS.map((f) => (
+            {getAllFilterFields().map((f) => (
               <option key={f.id} value={f.id}>
                 {f.label}
               </option>

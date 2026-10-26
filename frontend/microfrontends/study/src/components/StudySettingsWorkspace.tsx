@@ -4,6 +4,7 @@ import { StudySettingsDetails } from './StudySettingsDetails';
 import { StudySettingsDisplay } from './StudySettingsDisplay';
 import { StudySettingsBulkTasks } from './StudySettingsBulkTasks';
 import { StudySettingsEmailAndText } from './StudySettingsEmailAndText';
+import { StudySettingsRequirements } from './StudySettingsRequirements';
 import { ChevronDown, ChevronRight, Info } from 'lucide-react';
 
 export interface StudySettingsWorkspaceProps {
@@ -40,12 +41,19 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(true);
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(true);
   const [isDetailsDirty, setIsDetailsDirty] = useState(false);
+  const [isRequirementsDirty, setIsRequirementsDirty] = useState(false);
 
   const handleSubmenuSelect = (target: StudySettingsSubmenuId) => {
     if (target === activeSubmenu) return;
     if (activeSubmenu === 'details' && isDetailsDirty) {
       const proceed = window.confirm(
         'You have unsaved changes in Study Details. Are you sure you want to discard your changes and leave?'
+      );
+      if (!proceed) return;
+    }
+    if (activeSubmenu === 'participants_requirements' && isRequirementsDirty) {
+      const proceed = window.confirm(
+        'You have unsaved changes in Study Requirements. Are you sure you want to discard your changes and leave?'
       );
       if (!proceed) return;
     }
@@ -264,6 +272,15 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
             isArchived={isArchived}
             canManageSettings={canManageSettings}
             onStudyUpdated={onStudyUpdated}
+          />
+        ) : activeSubmenu === 'participants_requirements' ? (
+          <StudySettingsRequirements
+            studyId={studyId}
+            studyName={studyName}
+            isArchived={isArchived}
+            canManageSettings={canManageSettings}
+            onStudyUpdated={onStudyUpdated}
+            onDirtyChange={(dirty) => setIsRequirementsDirty(dirty)}
           />
         ) : (
           <div className="study-settings-placeholder" role="region" aria-label="Submenu coming soon">

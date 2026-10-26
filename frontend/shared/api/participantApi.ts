@@ -164,6 +164,14 @@ export const participantApi = {
     await apiClient.delete(`/api/v1/registry/saved-searches/${id}`);
   },
 
+  async getFilterMetadata(studyId?: string): Promise<any[]> {
+    const res = await apiClient.get('/api/v1/registry/filter-metadata', {
+      params: studyId ? { studyId } : undefined,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
   async exportRegistry(params?: RegistrySearchParams): Promise<Blob> {
     const res = await apiClient.get('/api/v1/registry/export', {
       params,

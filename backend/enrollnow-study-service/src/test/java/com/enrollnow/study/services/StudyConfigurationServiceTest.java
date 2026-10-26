@@ -3,7 +3,9 @@ package com.enrollnow.study.services;
 import com.enrollnow.study.dtos.*;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
+import com.enrollnow.study.models.StudyMilestone;
 import com.enrollnow.study.models.StudyRequirement;
+import com.enrollnow.study.repositories.StudyMilestoneRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +28,9 @@ class StudyConfigurationServiceTest {
     @Mock
     private StudyRequirementRepository studyRequirementRepository;
 
+    @Mock
+    private StudyMilestoneRepository studyMilestoneRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private StudyConfigurationService configurationService;
 
@@ -34,7 +39,7 @@ class StudyConfigurationServiceTest {
 
     @BeforeEach
     void setUp() {
-        configurationService = new StudyConfigurationService(studyRequirementRepository, objectMapper);
+        configurationService = new StudyConfigurationService(studyRequirementRepository, objectMapper, studyMilestoneRepository);
     }
 
     @Test
@@ -621,5 +626,107 @@ class StudyConfigurationServiceTest {
         Map<?, ?> textMap = (Map<?, ?>) texts.get(0);
         assertEquals("Appointment Reminder", textMap.get("name"));
         assertEquals(0, ((Number) textMap.get("rank")).intValue());
+    }
+
+    @Test
+    void getStudyRequirements_retrievesAllSectionsCorrectly() {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setSampleSize(150);
+        existing.setConfiguration("{" +
+                "\"groups\":[{\"_id\":\"age_1\",\"name\":\"Pediatric\",\"sample\":50,\"minAge\":1,\"maxAge\":12,\"ageGroup\":\"years\"}]," +
+                "\"genderGroups\":[{\"_id\":\"gen_1\",\"name\":\"Female\",\"sample\":75}]," +
+                "\"customVariables\":[{\"_id\":\"var_1\",\"name\":\"Handedness\",\"type\":\"single\",\"isGlobal\":false,\"options\":[{\"label\":\"Right\",\"value\":\"right\"}]}]," +
+                "\"variableGroups\":[{\"_id\":\"grp_1\",\"name\":\"Neurological Markers\"}]," +
+                "\"layout\":[{\"id\":\"var_1\",\"type\":\"variable\"}]" +
+                "}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyMilestoneRepository.findByTenantIdAndStudyIdOrderByMilestoneDateAsc(tenantId, studyId)).thenReturn(Collections.emptyList());
+
+        StudyRequirementsResponse res = configurationService.getStudyRequirements(tenantId, studyId, true);
+
+        assertNotNull(res);
+        assertEquals(studyId.toString(), res.getStudyId());
+        assertEquals(150, res.getSampleSize());
+        assertEquals(2, res.getStudyGroups().size()); // Pediatric (age) + Female (sex)
+        assertEquals("Pediatric", res.getStudyGroups().get(0).getLabel());
+        assertEquals(1, res.getCustomVariables().size());
+        assertEquals("Handedness", res.getCustomVariables().get(0).getName());
+        assertEquals(1, res.getVariableGroups().size());
+        assertEquals(1, res.getCustomVariableLayout().size());
+    }
+
+    @Test
+    void updateStudyRequirements_persistsAllSectionsCorrectly() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setSampleSize(50);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRequirementRepository.save(any(StudyRequirement.class))).thenAnswer(i -> i.getArgument(0));
+
+        UpdateStudyRequirementsRequest req = new UpdateStudyRequirementsRequest();
+        req.setSampleSize(250);
+
+        DemographicGroupDto ageGrp = new DemographicGroupDto();
+        ageGrp.setLabel("Adults");
+        ageGrp.setSampleSize("100");
+        ageGrp.setDefaultCategoryName("age");
+        ageGrp.setAgeRange(new DemographicGroupDto.AgeRangeDto(18, 65));
+        req.setStudyGroups(List.of(ageGrp));
+
+        StudyCustomVariableDto varDto = new StudyCustomVariableDto();
+        varDto.setName("Blood Pressure");
+        varDto.setVariableType("text");
+        varDto.setGlobal(true);
+        req.setCustomVariables(List.of(varDto));
+
+        StudyRequirementsResponse updated = configurationService.updateStudyRequirements(tenantId, studyId, req, true);
+
+        assertNotNull(updated);
+        assertEquals(250, updated.getSampleSize());
+        assertEquals(1, updated.getStudyGroups().size());
+        assertEquals("Adults", updated.getStudyGroups().get(0).getLabel());
+        assertEquals(1, updated.getCustomVariables().size());
+        assertEquals("Blood Pressure", updated.getCustomVariables().get(0).getName());
+        assertTrue(updated.getCustomVariables().get(0).isGlobal());
+    }
+
+    @Test
+    void milestoneManagement_addUpdateDelete() {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        StudyMilestone m1 = new StudyMilestone();
+        UUID milestoneId = UUID.randomUUID();
+        m1.setId(milestoneId);
+        m1.setTenantId(tenantId);
+        m1.setStudyId(studyId);
+        m1.setParticipantTarget(75);
+
+        when(studyMilestoneRepository.save(any(StudyMilestone.class))).thenReturn(m1);
+        when(studyMilestoneRepository.findByTenantIdAndStudyIdAndId(tenantId, studyId, milestoneId)).thenReturn(Optional.of(m1));
+
+        StudyMilestoneDto dto = new StudyMilestoneDto();
+        dto.setParticipantTarget(75);
+        dto.setMilestoneDate("2026-12-31");
+
+        StudyMilestoneDto added = configurationService.addStudyMilestone(tenantId, studyId, dto);
+        assertNotNull(added);
+        assertEquals(75, added.getParticipantTarget());
+
+        dto.setParticipantTarget(90);
+        StudyMilestoneDto updated = configurationService.updateStudyMilestone(tenantId, studyId, milestoneId.toString(), dto);
+        assertNotNull(updated);
+
+        configurationService.deleteStudyMilestone(tenantId, studyId, milestoneId.toString());
+        verify(studyMilestoneRepository).delete(m1);
     }
 }

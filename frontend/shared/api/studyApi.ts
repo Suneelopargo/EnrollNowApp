@@ -276,6 +276,92 @@ export interface SaveTextTemplatePayload {
   scheduledAction?: StudyScheduledAction | null;
 }
 
+export interface StudyMilestone {
+  id?: string;
+  milestoneDate: string;
+  participantTarget: number;
+}
+
+export interface AgeRange {
+  min?: number | null;
+  max?: number | null;
+}
+
+export interface GenderGroup {
+  id?: string;
+  gender: string;
+  participants?: number | null;
+}
+
+export interface DemographicGroup {
+  id?: string;
+  defaultCategoryName: string; // 'age' | 'sex' | 'ethnicity' | 'race'
+  label: string;
+  sampleSize: string;
+  ageRange?: AgeRange | null;
+  genderGroups?: GenderGroup[];
+}
+
+export interface VariableOption {
+  label: string;
+  value: string;
+  order?: number;
+}
+
+export interface StudyCustomVariable {
+  id?: string;
+  name: string;
+  variableType: string; // 'single' | 'multi' | 'short' | 'long' | 'number' | 'date' | 'dateTime'
+  options?: VariableOption[];
+  isGlobal?: boolean;
+  isBlind?: boolean;
+  rank?: number;
+}
+
+export interface StudyVariableGroup {
+  id?: string;
+  name: string;
+  variableIds?: string[];
+  rank?: number;
+}
+
+export interface StudyLayoutItem {
+  id?: string;
+  type: 'variable' | 'group';
+  refId: string;
+  rank?: number;
+}
+
+export interface ContactTaxonomy {
+  id?: string;
+  name: string;
+  type: string; // 'relationship' | 'outcome'
+}
+
+export interface StudyRequirementsData {
+  studyId: string;
+  sampleSize: number | null;
+  milestones: StudyMilestone[];
+  studyGroups: DemographicGroup[];
+  customVariables: StudyCustomVariable[];
+  variableGroups: StudyVariableGroup[];
+  customVariableLayout: StudyLayoutItem[];
+  contactRelationships: ContactTaxonomy[];
+  contactOutcomes: ContactTaxonomy[];
+  globalVariables: StudyCustomVariable[];
+  canManage?: boolean;
+}
+
+export interface UpdateStudyRequirementsPayload {
+  sampleSize?: number | null;
+  studyGroups?: DemographicGroup[];
+  customVariables?: StudyCustomVariable[];
+  variableGroups?: StudyVariableGroup[];
+  customVariableLayout?: StudyLayoutItem[];
+  contactRelationships?: ContactTaxonomy[];
+  contactOutcomes?: ContactTaxonomy[];
+}
+
 export interface ImportStudyResult {
   studyId: string;
   studyCode: string;
@@ -616,6 +702,64 @@ export const studyApi = {
       { templateIds },
       config
     );
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async getStudyRequirements(id: string | number, config?: StudyApiRequestConfig): Promise<StudyRequirementsData> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/requirements`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateStudyRequirements(
+    id: string | number,
+    payload: UpdateStudyRequirementsPayload,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyRequirementsData> {
+    const res = await apiClient.put(`/api/v1/studies/${id}/requirements`, payload, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async addStudyMilestone(
+    id: string | number,
+    milestone: StudyMilestone,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyMilestone> {
+    const res = await apiClient.post(`/api/v1/studies/${id}/milestones`, milestone, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async updateStudyMilestone(
+    id: string | number,
+    milestoneId: string,
+    milestone: StudyMilestone,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyMilestone> {
+    const res = await apiClient.put(`/api/v1/studies/${id}/milestones/${milestoneId}`, milestone, config);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async deleteStudyMilestone(
+    id: string | number,
+    milestoneId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<void> {
+    await apiClient.delete(`/api/v1/studies/${id}/milestones/${milestoneId}`, config);
+  },
+
+  async getGlobalCustomVariables(
+    id: string | number,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyCustomVariable[]> {
+    const res = await apiClient.get(`/api/v1/studies/${id}/global-variables`, { skipToast: true, ...config } as any);
+    return (res.data as any)?.data ?? res.data;
+  },
+
+  async addGlobalVariableToStudy(
+    id: string | number,
+    variableId: string,
+    config?: StudyApiRequestConfig
+  ): Promise<StudyCustomVariable> {
+    const res = await apiClient.post(`/api/v1/studies/${id}/global-variables/${variableId}`, {}, config);
     return (res.data as any)?.data ?? res.data;
   },
 

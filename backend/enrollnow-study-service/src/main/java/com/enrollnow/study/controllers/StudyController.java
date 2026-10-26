@@ -10,16 +10,20 @@ import com.enrollnow.study.dtos.ReorderBulkTasksRequest;
 import com.enrollnow.study.dtos.SaveBulkTaskGroupRequest;
 import com.enrollnow.study.dtos.SaveBulkTaskRequest;
 import com.enrollnow.study.dtos.StudyBulkTasksResponse;
+import com.enrollnow.study.dtos.StudyCustomVariableDto;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
+import com.enrollnow.study.dtos.StudyMilestoneDto;
 import com.enrollnow.study.dtos.ReorderTemplatesRequest;
 import com.enrollnow.study.dtos.SaveEmailTemplateRequest;
 import com.enrollnow.study.dtos.SaveTextTemplateRequest;
 import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
 import com.enrollnow.study.dtos.StudyEmailTextSettingsResponse;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
+import com.enrollnow.study.dtos.StudyRequirementsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
+import com.enrollnow.study.dtos.UpdateStudyRequirementsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
@@ -1214,6 +1218,215 @@ public class StudyController {
                     .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
         }
     }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/requirements", "/studies/{studyId}/requirements"})
+    public ResponseEntity<ApiResponse<StudyRequirementsResponse>> getStudyRequirements(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyRequirementsResponse response = studyService.getStudyRequirements(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/requirements", "/studies/{studyId}/requirements"})
+    public ResponseEntity<ApiResponse<StudyRequirementsResponse>> updateStudyRequirements(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody UpdateStudyRequirementsRequest request
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyRequirementsResponse updated = studyService.updateStudyRequirements(
+                    effectiveTenantId,
+                    studyId,
+                    request,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Study requirements updated successfully", updated));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "BAD_REQUEST", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/milestones", "/studies/{studyId}/milestones"})
+    public ResponseEntity<ApiResponse<StudyMilestoneDto>> addStudyMilestone(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @RequestBody StudyMilestoneDto dto
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyMilestoneDto created = studyService.addStudyMilestone(
+                    effectiveTenantId,
+                    studyId,
+                    dto,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Milestone created successfully", created));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "BAD_REQUEST", ex.getMessage()));
+        }
+    }
+
+    @PutMapping({"/tenants/{tenantId}/studies/{studyId}/milestones/{milestoneId}", "/studies/{studyId}/milestones/{milestoneId}"})
+    public ResponseEntity<ApiResponse<StudyMilestoneDto>> updateStudyMilestone(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String milestoneId,
+            @RequestBody StudyMilestoneDto dto
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyMilestoneDto updated = studyService.updateStudyMilestone(
+                    effectiveTenantId,
+                    studyId,
+                    milestoneId,
+                    dto,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Milestone updated successfully", updated));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "BAD_REQUEST", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping({"/tenants/{tenantId}/studies/{studyId}/milestones/{milestoneId}", "/studies/{studyId}/milestones/{milestoneId}"})
+    public ResponseEntity<ApiResponse<Void>> deleteStudyMilestone(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String milestoneId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            studyService.deleteStudyMilestone(
+                    effectiveTenantId,
+                    studyId,
+                    milestoneId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success("Milestone deleted successfully", null));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @GetMapping({"/tenants/{tenantId}/studies/{studyId}/global-variables", "/studies/{studyId}/global-variables"})
+    public ResponseEntity<ApiResponse<List<StudyCustomVariableDto>>> getGlobalCustomVariables(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            List<StudyCustomVariableDto> vars = studyService.getGlobalCustomVariables(
+                    effectiveTenantId,
+                    studyId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.ok(ApiResponse.success(vars));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PostMapping({"/tenants/{tenantId}/studies/{studyId}/global-variables/{variableId}", "/studies/{studyId}/global-variables/{variableId}"})
+    public ResponseEntity<ApiResponse<StudyCustomVariableDto>> addGlobalVariableToStudy(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable String studyId,
+            @PathVariable String variableId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
+
+        try {
+            StudyCustomVariableDto added = studyService.addGlobalVariableToStudy(
+                    effectiveTenantId,
+                    studyId,
+                    variableId,
+                    callerUserId,
+                    canManageSiteAdmins
+            );
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Global variable added to study successfully", added));
+        } catch (org.springframework.security.access.AccessDeniedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "FORBIDDEN", ex.getMessage()));
+        } catch (StudyNotFoundException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "STUDY_NOT_FOUND", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), "BAD_REQUEST", ex.getMessage()));
+        }
+    }
+
     private UUID resolveCallerUserId() {
         if (siteAuthorizationService != null) {
             Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();

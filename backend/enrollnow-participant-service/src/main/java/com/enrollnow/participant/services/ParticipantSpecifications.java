@@ -673,13 +673,33 @@ public class ParticipantSpecifications {
             String customKey, String op, String rawVal, String minVal, String maxVal,
             Root<Participant> root, CriteriaBuilder cb) {
 
-        if (rawVal == null || rawVal.isBlank()) return null;
-        String val = "%" + rawVal.trim().toLowerCase() + "%";
+        if ("is_empty".equalsIgnoreCase(op) || "is empty".equalsIgnoreCase(op) || "has no value".equalsIgnoreCase(op) || "not_assigned".equalsIgnoreCase(op)) {
+            return cb.or(
+                    cb.isNull(root.get("customAttributes")),
+                    cb.equal(root.get("customAttributes"), "{}")
+            );
+        }
+        if ("is_not_empty".equalsIgnoreCase(op) || "is not empty".equalsIgnoreCase(op) || "has any value".equalsIgnoreCase(op) || "assigned".equalsIgnoreCase(op)) {
+            return cb.and(
+                    cb.isNotNull(root.get("customAttributes")),
+                    cb.notEqual(root.get("customAttributes"), "{}")
+            );
+        }
 
-        if ("equal".equals(op) || "contains".equals(op)) {
-            return cb.like(cb.lower(root.get("customAttributes")), val);
-        } else if ("not_equal".equals(op)) {
-            return cb.notLike(cb.lower(root.get("customAttributes")), val);
+        String actualKey = (customKey != null && customKey.startsWith("custom_")) ? customKey.substring(7) : (customKey != null ? customKey : "");
+        if (rawVal != null && !rawVal.isBlank()) {
+            String val = "%" + rawVal.trim().toLowerCase() + "%";
+            String keyAndVal = "%" + actualKey.toLowerCase() + "%" + rawVal.trim().toLowerCase() + "%";
+            if ("equal".equalsIgnoreCase(op) || "equals".equalsIgnoreCase(op) || "contains".equalsIgnoreCase(op) || "=".equals(op)) {
+                return cb.or(
+                        cb.like(cb.lower(root.get("customAttributes")), keyAndVal),
+                        cb.like(cb.lower(root.get("customAttributes")), val)
+                );
+            } else if ("not_equal".equalsIgnoreCase(op) || "not_equals".equalsIgnoreCase(op) || "does not contain".equalsIgnoreCase(op) || "!=".equals(op)) {
+                return cb.notLike(cb.lower(root.get("customAttributes")), val);
+            } else if ("starts_with".equalsIgnoreCase(op) || "starts with".equalsIgnoreCase(op)) {
+                return cb.like(cb.lower(root.get("customAttributes")), "%" + rawVal.trim().toLowerCase() + "%");
+            }
         }
         return null;
     }

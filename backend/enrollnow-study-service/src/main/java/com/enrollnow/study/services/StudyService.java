@@ -21,14 +21,18 @@ import com.enrollnow.study.dtos.SaveEmailTemplateRequest;
 import com.enrollnow.study.dtos.SaveTextTemplateRequest;
 import com.enrollnow.study.dtos.StudyAdminSummary;
 import com.enrollnow.study.dtos.StudyBulkTasksResponse;
+import com.enrollnow.study.dtos.StudyCustomVariableDto;
 import com.enrollnow.study.dtos.StudyDetailsResponse;
 import com.enrollnow.study.dtos.StudyDisplaySettingsResponse;
 import com.enrollnow.study.dtos.StudyEmailTextSettingsResponse;
 import com.enrollnow.study.dtos.StudyGrantDto;
+import com.enrollnow.study.dtos.StudyMilestoneDto;
 import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
+import com.enrollnow.study.dtos.StudyRequirementsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
+import com.enrollnow.study.dtos.UpdateStudyRequirementsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
 import com.enrollnow.study.exceptions.DuplicateStudyNameException;
 import com.enrollnow.study.exceptions.InvalidStudyException;
@@ -1806,5 +1810,126 @@ public class StudyService {
         Study study = requireEmailTextManage(tenantId, studyId, callerUserId, canManageSiteAdmins);
         studyConfigurationService.reorderTextTemplates(study.getTenantId(), study.getId(), request != null ? request.getSortedIds() : Collections.emptyList());
         return buildEmailTextSettingsResponse(study, true);
+    }
+
+    @Transactional(readOnly = true)
+    public StudyRequirementsResponse getStudyRequirements(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        boolean canManage = resolveCanManageStudySettings(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService != null) {
+            return studyConfigurationService.getStudyRequirements(study.getTenantId(), study.getId(), canManage);
+        }
+        StudyRequirementsResponse fallback = new StudyRequirementsResponse();
+        fallback.setStudyId(study.getId().toString());
+        fallback.setCanManage(canManage);
+        return fallback;
+    }
+
+    @Transactional
+    public StudyRequirementsResponse updateStudyRequirements(
+            UUID tenantId,
+            String studyId,
+            UpdateStudyRequirementsRequest request,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new IllegalStateException("StudyConfigurationService is unavailable");
+        }
+        return studyConfigurationService.updateStudyRequirements(study.getTenantId(), study.getId(), request, true);
+    }
+
+    @Transactional
+    public StudyMilestoneDto addStudyMilestone(
+            UUID tenantId,
+            String studyId,
+            StudyMilestoneDto dto,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new IllegalStateException("StudyConfigurationService is unavailable");
+        }
+        return studyConfigurationService.addStudyMilestone(study.getTenantId(), study.getId(), dto);
+    }
+
+    @Transactional
+    public StudyMilestoneDto updateStudyMilestone(
+            UUID tenantId,
+            String studyId,
+            String milestoneId,
+            StudyMilestoneDto dto,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new IllegalStateException("StudyConfigurationService is unavailable");
+        }
+        return studyConfigurationService.updateStudyMilestone(study.getTenantId(), study.getId(), milestoneId, dto);
+    }
+
+    @Transactional
+    public void deleteStudyMilestone(
+            UUID tenantId,
+            String studyId,
+            String milestoneId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new IllegalStateException("StudyConfigurationService is unavailable");
+        }
+        studyConfigurationService.deleteStudyMilestone(study.getTenantId(), study.getId(), milestoneId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudyCustomVariableDto> getGlobalCustomVariables(
+            UUID tenantId,
+            String studyId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        resolveCanManageStudySettings(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            return Collections.emptyList();
+        }
+        return studyConfigurationService.findTenantGlobalVariables(study.getTenantId());
+    }
+
+    @Transactional
+    public StudyCustomVariableDto addGlobalVariableToStudy(
+            UUID tenantId,
+            String studyId,
+            String variableId,
+            UUID callerUserId,
+            boolean canManageSiteAdmins
+    ) {
+        Study study = findStudyByIdOrCode(tenantId, studyId)
+                .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
+        requireStudySettingsManage(study, studyId, callerUserId, canManageSiteAdmins);
+        if (studyConfigurationService == null) {
+            throw new IllegalStateException("StudyConfigurationService is unavailable");
+        }
+        return studyConfigurationService.addGlobalVariableToStudy(study.getTenantId(), study.getId(), variableId);
     }
 }

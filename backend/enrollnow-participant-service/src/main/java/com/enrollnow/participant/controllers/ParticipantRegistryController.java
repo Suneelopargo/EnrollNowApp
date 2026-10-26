@@ -218,6 +218,18 @@ public class ParticipantRegistryController {
         return ResponseEntity.ok().build();
     }
 
+    @GetMapping("/registry/filter-metadata")
+    public ResponseEntity<List<Map<String, Object>>> getFilterMetadata(
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) String studyId) {
+
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, null);
+
+        List<Map<String, Object>> metadata = registryService.getFilterMetadata(resolvedTenantId, studyId);
+        return ResponseEntity.ok(metadata);
+    }
+
     @GetMapping("/registry/saved-searches")
     public ResponseEntity<List<SavedSearchDto>> getSavedSearches(
             @RequestParam(required = false) UUID tenantId) {

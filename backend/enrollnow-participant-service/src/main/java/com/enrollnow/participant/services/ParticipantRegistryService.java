@@ -4,11 +4,15 @@ import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +45,13 @@ public class ParticipantRegistryService {
     private final StudyEnrollmentRepository enrollmentRepository;
     private final StudyRepository studyRepository;
     private final ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    private StudyRequirementRepository studyRequirementRepository;
+
+    public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
+        this.studyRequirementRepository = studyRequirementRepository;
+    }
 
     public ParticipantRegistryService(
             ParticipantRepository participantRepository,
@@ -1000,6 +1011,11 @@ public class ParticipantRegistryService {
                         return p.getAgeNumeric() != null && p.getAgeNumeric() > threshold;
                     } catch (NumberFormatException ignored) {}
                 }
+                try {
+                    double actualNum = Double.parseDouble(actualVal);
+                    double targetNum = Double.parseDouble(targetVal);
+                    return actualNum > targetNum;
+                } catch (Exception ignored) {}
                 return actualVal != null && actualVal.compareToIgnoreCase(targetVal) > 0;
 
             case "less than":
@@ -1011,6 +1027,11 @@ public class ParticipantRegistryService {
                         return p.getAgeNumeric() != null && p.getAgeNumeric() < threshold;
                     } catch (NumberFormatException ignored) {}
                 }
+                try {
+                    double actualNum = Double.parseDouble(actualVal);
+                    double targetNum = Double.parseDouble(targetVal);
+                    return actualNum < targetNum;
+                } catch (Exception ignored) {}
                 return actualVal != null && actualVal.compareToIgnoreCase(targetVal) < 0;
 
             case "is empty":
@@ -1031,6 +1052,16 @@ public class ParticipantRegistryService {
                         }
                     } catch (Exception ignored) {}
                 }
+                try {
+                    String minStr = rule.getEffectiveMinValue();
+                    String maxStr = rule.getEffectiveMaxValue();
+                    if (minStr != null && maxStr != null && actualVal != null && !actualVal.isBlank()) {
+                        double actualNum = Double.parseDouble(actualVal);
+                        double low = Double.parseDouble(minStr);
+                        double high = Double.parseDouble(maxStr);
+                        return actualNum >= low && actualNum <= high;
+                    }
+                } catch (Exception ignored) {}
                 return true;
 
             case "not between":
@@ -1046,6 +1077,16 @@ public class ParticipantRegistryService {
                         }
                     } catch (Exception ignored) {}
                 }
+                try {
+                    String minStr = rule.getEffectiveMinValue();
+                    String maxStr = rule.getEffectiveMaxValue();
+                    if (minStr != null && maxStr != null && actualVal != null && !actualVal.isBlank()) {
+                        double actualNum = Double.parseDouble(actualVal);
+                        double low = Double.parseDouble(minStr);
+                        double high = Double.parseDouble(maxStr);
+                        return actualNum < low || actualNum > high;
+                    }
+                } catch (Exception ignored) {}
                 return true;
 
             default:
@@ -1088,8 +1129,95 @@ public class ParticipantRegistryService {
             case "tags":
                 return p.getTags() != null ? String.join(",", p.getTags()) : "";
             default:
+                if (field.startsWith("custom_")) {
+                    String customKey = field.substring(7);
+                    if (p.getVariables() != null) {
+                        for (ParticipantVariableDto var : p.getVariables()) {
+                            if (customKey.equalsIgnoreCase(var.getId()) ||
+                                customKey.equalsIgnoreCase(var.getName()) ||
+                                field.equalsIgnoreCase(var.getId()) ||
+                                field.equalsIgnoreCase(var.getName())) {
+                                return var.getValue() != null ? var.getValue() : "";
+                            }
+                        }
+                    }
+                    return "";
+                }
+                if (p.getVariables() != null) {
+                    for (ParticipantVariableDto var : p.getVariables()) {
+                        if (field.equalsIgnoreCase(var.getId()) || field.equalsIgnoreCase(var.getName())) {
+                            return var.getValue() != null ? var.getValue() : "";
+                        }
+                    }
+                }
                 return "";
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getFilterMetadata(UUID tenantId, String studyId) {
+        List<Map<String, Object>> customFields = new ArrayList<>();
+        if (studyRequirementRepository == null || tenantId == null) {
+            return customFields;
+        }
+        List<StudyRequirement> reqList = studyRequirementRepository.findByTenantId(tenantId);
+        Map<String, Map<String, Object>> fieldMap = new LinkedHashMap<>();
+
+        for (StudyRequirement req : reqList) {
+            if (req.getConfiguration() == null || req.getConfiguration().isBlank()) {
+                continue;
+            }
+            try {
+                JsonNode root = objectMapper.readTree(req.getConfiguration());
+                JsonNode varsNode = root.get("customVariables");
+                if (varsNode != null && varsNode.isArray()) {
+                    for (JsonNode v : varsNode) {
+                        String id = v.has("id") ? v.get("id").asText() : "";
+                        String name = v.has("name") ? v.get("name").asText() : "";
+                        String type = v.has("type") ? v.get("type").asText() : "text";
+                        boolean isGlobal = v.has("isGlobal") && v.get("isGlobal").asBoolean();
+
+                        if (id.isBlank() && name.isBlank()) continue;
+                        String fieldKey = "custom_" + (!id.isBlank() ? id : name);
+
+                        if (studyId != null && !studyId.isBlank()) {
+                            boolean matchesStudy = req.getStudyId() != null && req.getStudyId().toString().equalsIgnoreCase(studyId);
+                            if (!matchesStudy && !isGlobal) {
+                                continue;
+                            }
+                        }
+
+                        if (!fieldMap.containsKey(fieldKey)) {
+                            Map<String, Object> fieldDef = new LinkedHashMap<>();
+                            fieldDef.put("id", fieldKey);
+                            fieldDef.put("label", name.isBlank() ? id : name);
+                            fieldDef.put("type", type);
+                            fieldDef.put("global", isGlobal);
+                            if (req.getStudyId() != null) {
+                                fieldDef.put("studyId", req.getStudyId().toString());
+                            }
+
+                            List<Map<String, String>> options = new ArrayList<>();
+                            if (v.has("options") && v.get("options").isArray()) {
+                                for (JsonNode opt : v.get("options")) {
+                                    String label = opt.has("label") ? opt.get("label").asText() : "";
+                                    String val = opt.has("value") ? opt.get("value").asText() : label;
+                                    if (!val.isBlank()) {
+                                        Map<String, String> o = new HashMap<>();
+                                        o.put("label", label.isBlank() ? val : label);
+                                        o.put("value", val);
+                                        options.add(o);
+                                    }
+                                }
+                            }
+                            fieldDef.put("options", options);
+                            fieldMap.put(fieldKey, fieldDef);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return new ArrayList<>(fieldMap.values());
     }
 
     private Sort resolveSort(String sortBy, String sortDirection) {

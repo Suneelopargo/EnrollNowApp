@@ -10,8 +10,8 @@ import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { ParticipantRecord, CustomFilterRule, SavedSearch } from '../types/participant';
-import { validateFilterRule } from '../constants/filterMetadata';
+import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem } from '../types/participant';
+import { validateFilterRule, registerDynamicFilterFields } from '../constants/filterMetadata';
 
 export interface RegistryDashboardProps {
   context?: MfeContext;
@@ -183,11 +183,45 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     }
   }, [tenantId, siteId]);
 
+  // Fetch dynamic custom variable filter metadata from backend
+  const fetchFilterMetadata = useCallback(async () => {
+    try {
+      const meta = await participantApi.getFilterMetadata();
+      if (Array.isArray(meta)) {
+        const dynamicFields: FilterFieldOption[] = meta.map((m: any) => {
+          let fieldType: FilterFieldOption['type'] = 'text';
+          if (m.type === 'number') fieldType = 'number';
+          else if (m.type === 'date' || m.type === 'dateTime') fieldType = 'date';
+          else if (m.type === 'single' || m.type === 'multi') fieldType = 'multiselect';
+
+          const options: FilterOptionItem[] = Array.isArray(m.options)
+            ? m.options.map((opt: any) => ({
+                label: opt.label || opt.value,
+                value: opt.value || opt.label,
+              }))
+            : [];
+
+          return {
+            id: m.id,
+            label: m.global ? `${m.label} (Global)` : m.label,
+            placeholder: `Filter by ${m.label}...`,
+            type: fieldType,
+            options: options.length > 0 ? options : undefined,
+          };
+        });
+        registerDynamicFilterFields(dynamicFields);
+      }
+    } catch (err) {
+      console.warn('Failed to load dynamic custom filter metadata:', err);
+    }
+  }, []);
+
   // Initial Load only on mount / tenant-site context change
   useEffect(() => {
     fetchParticipants();
     fetchSavedSearches();
-  }, [fetchParticipants, fetchSavedSearches]);
+    fetchFilterMetadata();
+  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata]);
 
   const selectedParticipant = useMemo(() => {
     return participants.find((p) => p.id === selectedParticipantId) || participants[0] || null;
@@ -202,6 +236,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const handleRefresh = () => {
     fetchParticipants(false);
     fetchSavedSearches();
+    fetchFilterMetadata();
     showNotification('Participant queue refreshed');
   };
 

@@ -188,9 +188,25 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
   },
 ];
 
+let dynamicCustomFields: FilterFieldOption[] = [];
+
+export function registerDynamicFilterFields(fields: FilterFieldOption[]): void {
+  dynamicCustomFields = fields;
+}
+
+export function getDynamicFilterFields(): FilterFieldOption[] {
+  return dynamicCustomFields;
+}
+
+export function getAllFilterFields(): FilterFieldOption[] {
+  return [...REGISTRY_FILTER_FIELDS, ...dynamicCustomFields];
+}
+
 export function getFieldDefinition(fieldId: string): FilterFieldOption {
   const found = REGISTRY_FILTER_FIELDS.find((f) => f.id === fieldId || f.id.toLowerCase() === fieldId.toLowerCase());
   if (found) return found;
+  const dynFound = dynamicCustomFields.find((f) => f.id === fieldId || f.id.toLowerCase() === fieldId.toLowerCase());
+  if (dynFound) return dynFound;
   if (fieldId.startsWith('custom_')) {
     return {
       id: fieldId,
@@ -204,9 +220,6 @@ export function getFieldDefinition(fieldId: string): FilterFieldOption {
 
 export function getOperatorsForField(fieldId: string): string[] {
   const fieldDef = getFieldDefinition(fieldId);
-  if (fieldId.startsWith('custom_')) {
-    return CUSTOM_VARIABLE_OPERATORS;
-  }
   switch (fieldDef.type) {
     case 'number':
       return ALL_NUMERIC_OPERATORS;
@@ -219,6 +232,9 @@ export function getOperatorsForField(fieldId: string): string[] {
     default:
       if (['firstName', 'lastName', 'phone'].includes(fieldDef.id)) {
         return ['equal to'];
+      }
+      if (fieldId.startsWith('custom_')) {
+        return CUSTOM_VARIABLE_OPERATORS;
       }
       return TEXT_OPERATORS;
   }
