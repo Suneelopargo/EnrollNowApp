@@ -4,24 +4,38 @@ import { Plus, AlertTriangle, Loader2 } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
 import { validateForm, validators } from '../../../../shared/design-system/validation';
-import { participantApi } from '../../../../shared/api/participantApi';
+import { participantApi, CreateParticipantPayload } from '../../../../shared/api/participantApi';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { ParticipantRecord } from '../types/participant';
 
-interface AddParticipantModalProps {
+export interface AddParticipantModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (participant: ParticipantRecord) => void;
+  onAdd?: (participant: ParticipantRecord | any) => void;
+  onSuccess?: (participant: any) => void;
+  tenantId?: string;
+  siteId?: string;
 }
 
-export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen, onClose, onAdd }) => {
+export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({
+  isOpen,
+  onClose,
+  onAdd,
+  onSuccess,
+  tenantId,
+  siteId,
+}) => {
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  
+
   const [firstNameError, setFirstNameError] = useState('');
   const [lastNameError, setLastNameError] = useState('');
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [participantExists, setParticipantExists] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{ count: number; name: string } | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const handleReset = useCallback(() => {
     setFirstName('');
@@ -30,7 +44,10 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
     setFirstNameError('');
     setLastNameError('');
     setIsCheckingDuplicate(false);
+    setIsSubmitting(false);
+    setParticipantExists(false);
     setDuplicateWarning(null);
+    setServerError(null);
   }, []);
 
   useEffect(() => {
@@ -46,58 +63,43 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
 
   if (!isOpen) return null;
 
-  const executeAdd = () => {
-    const fullName = `${firstName.trim()} ${middleName.trim() ? middleName.trim() + ' ' : ''}${lastName.trim()}`;
+  const submitParticipant = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setServerError(null);
 
-    const newParticipant: ParticipantRecord = {
-      id: String(Date.now()),
-      name: fullName,
+    const payload: CreateParticipantPayload = {
       firstName: firstName.trim(),
+      middleName: middleName.trim() || undefined,
       lastName: lastName.trim(),
-      familyId: `FAM-${Math.floor(10000 + Math.random() * 90000)}`,
-      dateCreated: new Date().toLocaleDateString('en-GB') + ', ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      globalId: firstName.trim().slice(0, 4).toUpperCase() + Math.floor(10 + Math.random() * 90),
-      timezone: 'America/New_York (EDT)',
-      tags: ['New Participant'],
-      contactForFutureStudies: true,
-      availableToAddStudy: true,
-      gender: 'Unspecified',
-      age: 'N/A',
-      lastContact: 'Just now',
-      status: 'Active',
-      studies: [],
-      globalDateOfLastContact: new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ' 09:00 AM',
-      contactMethods: {
-        primaryEmail: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@example.org`,
-        phone: '+1 (555) 019-2831',
-        address: 'Clinical Center, Suite 400',
-        preferredMethod: 'Email',
-      },
-      demographics: {
-        dob: '01/01/1995',
-        gender: 'Unspecified',
-        ethnicity: 'Not Disclosed',
-        race: 'Not Disclosed',
-        primaryLanguage: 'English',
-      },
-      family: {
-        familyRole: 'Proband',
-        membersCount: 1,
-        pedigreeTreeId: `PED-${Math.floor(1000 + Math.random() * 9000)}`,
-        guardianName: 'N/A',
-      },
-      variables: []
     };
 
-    onAdd(newParticipant);
-    handleReset();
-    onClose();
+    try {
+      const created = await participantApi.createParticipant(payload, {
+        params: { tenantId, siteId },
+      });
+
+      handleReset();
+      onClose();
+
+      if (onSuccess) {
+        onSuccess(created);
+      } else if (onAdd) {
+        onAdd(created);
+      }
+    } catch (err: any) {
+      const msg = getApiErrorMessage(err, 'Failed to add participant to registry. Please try again.');
+      setServerError(msg);
+      setIsSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError(null);
+
     const validationErrors = validateForm(
-      { firstName, lastName },
+      { firstName: firstName.trim(), lastName: lastName.trim() },
       {
         firstName: [validators.required('First Name'), validators.personName('First Name')],
         lastName: [validators.required('Last Name'), validators.personName('Last Name')],
@@ -107,11 +109,21 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
     setLastNameError(validationErrors.lastName || '');
     if (Object.keys(validationErrors).length > 0) return;
 
-    // Perform duplicate check before adding
+    // If duplicate confirmation already shown and user submits, proceed with creation
+    if (participantExists) {
+      await submitParticipant();
+      return;
+    }
+
+    // Phase 1: Duplicate check
     setIsCheckingDuplicate(true);
     try {
-      const duplicates = await participantApi.checkDuplicates(firstName.trim(), lastName.trim());
+      const duplicates = await participantApi.checkDuplicates(firstName.trim(), lastName.trim(), {
+        params: { tenantId, siteId },
+      });
+
       if (duplicates && duplicates.length > 0) {
+        setParticipantExists(true);
         setDuplicateWarning({
           count: duplicates.length,
           name: `${firstName.trim()} ${lastName.trim()}`,
@@ -119,13 +131,37 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
         setIsCheckingDuplicate(false);
         return;
       }
-    } catch {
-      // If duplicate check endpoint fails or is unavailable, allow continuing
+    } catch (err: any) {
+      // Safe failure policy: do not silently bypass required duplicate check
+      const msg = getApiErrorMessage(err, 'Failed to verify potential duplicates. Please check your connection and try again.');
+      setServerError(msg);
+      setIsCheckingDuplicate(false);
+      return;
     } finally {
       setIsCheckingDuplicate(false);
     }
 
-    executeAdd();
+    // Phase 2: If no duplicates, submit immediately
+    await submitParticipant();
+  };
+
+  const handleInputChange = (field: 'firstName' | 'middleName' | 'lastName', value: string) => {
+    if (field === 'firstName') {
+      setFirstName(value);
+      if (firstNameError) setFirstNameError('');
+    } else if (field === 'middleName') {
+      setMiddleName(value);
+    } else if (field === 'lastName') {
+      setLastName(value);
+      if (lastNameError) setLastNameError('');
+    }
+
+    // Reset duplicate state if user alters names
+    if (participantExists) {
+      setParticipantExists(false);
+      setDuplicateWarning(null);
+    }
+    if (serverError) setServerError(null);
   };
 
   return (
@@ -135,27 +171,78 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
       title="Add Participant"
       footer={(
         <>
+          {!participantExists ? (
+            <button
+              type="submit"
+              form="add-participant-form"
+              className="btn btn-primary"
+              id="add-participant-submit-btn"
+              disabled={isCheckingDuplicate || isSubmitting}
+            >
+              {isCheckingDuplicate ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Checking...
+                </>
+              ) : isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Adding...
+                </>
+              ) : (
+                <>
+                  <Plus size={16} /> Add Participant
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              id="confirm-add-participant-btn"
+              onClick={submitParticipant}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Adding...
+                </>
+              ) : (
+                <>
+                  <Plus size={16} /> Confirm Add Participant
+                </>
+              )}
+            </button>
+          )}
           <button
-            type="submit"
-            form="add-participant-form"
-            className="btn btn-primary"
-            disabled={isCheckingDuplicate}
+            type="button"
+            onClick={handleClose}
+            className="btn btn-secondary"
+            id="add-participant-cancel-btn"
+            disabled={isSubmitting}
           >
-            {isCheckingDuplicate ? (
-              <>
-                <Loader2 size={16} className="animate-spin" /> Checking...
-              </>
-            ) : (
-              <>
-                <Plus size={16} /> Add Participant
-              </>
-            )}
+            Cancel
           </button>
-          <button type="button" onClick={handleClose} className="btn btn-secondary">Cancel</button>
         </>
       )}
     >
       <form id="add-participant-form" onSubmit={handleSubmit} noValidate>
+        {serverError && (
+          <div
+            className="alert alert-error"
+            role="alert"
+            style={{
+              marginBottom: '1.25rem',
+              padding: '0.75rem 1rem',
+              backgroundColor: '#fee2e2',
+              color: '#b91c1c',
+              border: '1px solid #f87171',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+            }}
+          >
+            {serverError}
+          </div>
+        )}
+
         {duplicateWarning && (
           <div
             className="alert alert-warning"
@@ -177,21 +264,25 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
                 Potential Duplicate Participant
               </strong>
               <p style={{ margin: 0, fontSize: '0.875rem', color: '#b45309' }}>
-                Found {duplicateWarning.count} existing participant(s) named &ldquo;{duplicateWarning.name}&rdquo;.
-                Would you like to proceed with creating another participant?
+                A matching participant with the same First Name &amp; Last Name already exits. Please confim that you still want to add this participant.
               </p>
               <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
                 <button
                   type="button"
                   className="btn btn-sm btn-primary"
-                  onClick={executeAdd}
+                  onClick={submitParticipant}
+                  disabled={isSubmitting}
                 >
-                  Proceed Anyway
+                  Confirm Add Participant
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm btn-secondary"
-                  onClick={() => setDuplicateWarning(null)}
+                  onClick={() => {
+                    setParticipantExists(false);
+                    setDuplicateWarning(null);
+                  }}
+                  disabled={isSubmitting}
                 >
                   Review Name
                 </button>
@@ -212,24 +303,23 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
             <input
               {...fieldProps}
               type="text"
+              name="firstName"
               value={firstName}
-              onChange={(e) => {
-                setFirstName(e.target.value);
-                if (firstNameError) setFirstNameError('');
-                if (duplicateWarning) setDuplicateWarning(null);
-              }}
+              onChange={(e) => handleInputChange('firstName', e.target.value)}
               className="form-input"
+              autoFocus
             />
           )}
         </AccessibleField>
 
-        <div className="form-group">
+        <div className="form-group" style={{ marginBottom: '1rem' }}>
           <label className="form-label" htmlFor="participant-middle-name">Middle Name</label>
           <input
             id="participant-middle-name"
+            name="middleName"
             type="text"
             value={middleName}
-            onChange={(e) => setMiddleName(e.target.value)}
+            onChange={(e) => handleInputChange('middleName', e.target.value)}
             placeholder="Enter Middle Name"
             className="form-input"
           />
@@ -247,12 +337,9 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({ isOpen
             <input
               {...fieldProps}
               type="text"
+              name="lastName"
               value={lastName}
-              onChange={(e) => {
-                setLastName(e.target.value);
-                if (lastNameError) setLastNameError('');
-                if (duplicateWarning) setDuplicateWarning(null);
-              }}
+              onChange={(e) => handleInputChange('lastName', e.target.value)}
               className="form-input"
             />
           )}

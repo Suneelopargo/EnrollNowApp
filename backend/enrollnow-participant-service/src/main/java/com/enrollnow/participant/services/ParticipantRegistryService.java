@@ -30,6 +30,7 @@ import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class ParticipantRegistryService {
@@ -113,7 +114,7 @@ public class ParticipantRegistryService {
         int safePage = Math.max(0, page);
         int safePageSize = pageSize > 0 ? pageSize : 25;
         Sort sort = duplicatesOnly
-                ? Sort.by(Sort.Direction.ASC, "lastName", "firstName", "createdAt")
+                ? Sort.by(Sort.Direction.ASC, "lastName", "firstName", "dateOfBirth", "createdAt")
                 : resolveSort(sortBy, sortDirection);
         Pageable pageable = PageRequest.of(safePage, safePageSize, sort);
 
@@ -283,11 +284,18 @@ public class ParticipantRegistryService {
             }
         }
 
-        // 8b. Filter: potential duplicates only
+        // 8b. Filter: potential duplicates only (matches legacy Ripple grouping on lastName, firstName, birthday)
         if (duplicatesOnly) {
             Map<String, List<RegistryParticipantDto>> grouped = dtos.stream()
                     .filter(p -> p.getFirstName() != null && !p.getFirstName().isBlank() && p.getLastName() != null && !p.getLastName().isBlank())
-                    .collect(Collectors.groupingBy(p -> (p.getFirstName().trim().toLowerCase() + "|||" + p.getLastName().trim().toLowerCase())));
+                    .collect(Collectors.groupingBy(p -> {
+                        String fn = p.getFirstName().trim().toLowerCase();
+                        String ln = p.getLastName().trim().toLowerCase();
+                        String dob = (p.getDemographics() != null && p.getDemographics().getDob() != null && !p.getDemographics().getDob().isBlank())
+                                ? p.getDemographics().getDob().trim()
+                                : "NULL_DOB";
+                        return fn + "|||" + ln + "|||" + dob;
+                    }));
 
             Set<String> duplicateKeys = grouped.entrySet().stream()
                     .filter(e -> e.getValue().size() > 1)
@@ -296,8 +304,12 @@ public class ParticipantRegistryService {
 
             dtos = dtos.stream().filter(p -> {
                 if (p.getFirstName() == null || p.getLastName() == null) return false;
-                String key = p.getFirstName().trim().toLowerCase() + "|||" + p.getLastName().trim().toLowerCase();
-                return duplicateKeys.contains(key);
+                String fn = p.getFirstName().trim().toLowerCase();
+                String ln = p.getLastName().trim().toLowerCase();
+                String dob = (p.getDemographics() != null && p.getDemographics().getDob() != null && !p.getDemographics().getDob().isBlank())
+                        ? p.getDemographics().getDob().trim()
+                        : "NULL_DOB";
+                return duplicateKeys.contains(fn + "|||" + ln + "|||" + dob);
             }).collect(Collectors.toList());
         }
 
@@ -305,6 +317,7 @@ public class ParticipantRegistryService {
         Comparator<RegistryParticipantDto> comparator = duplicatesOnly
                 ? Comparator.comparing((RegistryParticipantDto p) -> p.getLastName() != null ? p.getLastName().toLowerCase() : "")
                         .thenComparing(p -> p.getFirstName() != null ? p.getFirstName().toLowerCase() : "")
+                        .thenComparing(p -> (p.getDemographics() != null && p.getDemographics().getDob() != null) ? p.getDemographics().getDob() : "")
                         .thenComparing(p -> p.getDateCreated() != null ? p.getDateCreated() : "")
                 : getComparator(sortBy, sortDirection);
         dtos.sort(comparator);
@@ -368,42 +381,72 @@ public class ParticipantRegistryService {
 
     @Transactional
     public RegistryParticipantDto createParticipant(UUID tenantId, UUID siteId, UUID userId, CreateParticipantRequest request) {
+        if (request.getFirstName() == null || request.getFirstName().isBlank()) {
+            throw new IllegalArgumentException("First name is required");
+        }
+        if (request.getLastName() == null || request.getLastName().isBlank()) {
+            throw new IllegalArgumentException("Last name is required");
+        }
+
         Participant participant = new Participant();
         participant.setTenantId(tenantId);
         participant.setSiteId(siteId);
-        participant.setFirstName(request.getFirstName());
-        participant.setMiddleName(request.getMiddleName());
-        participant.setLastName(request.getLastName());
-        participant.setPreferredName(request.getPreferredName());
-        participant.setStatus(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE");
+        participant.setFirstName(request.getFirstName().trim());
+        participant.setMiddleName(request.getMiddleName() != null && !request.getMiddleName().isBlank()
+                ? request.getMiddleName().trim() : null);
+        participant.setLastName(request.getLastName().trim());
+        participant.setPreferredName(request.getPreferredName() != null && !request.getPreferredName().isBlank()
+                ? request.getPreferredName().trim() : null);
+        participant.setStatus(request.getStatus() != null && !request.getStatus().isBlank()
+                ? request.getStatus().trim().toUpperCase() : "ACTIVE");
 
         if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
             participant.setDateOfBirth(parseDate(request.getDateOfBirth()));
         }
 
-        participant.setSexAtBirth(request.getSexAtBirth());
-        participant.setGenderIdentity(request.getGenderIdentity());
+        if (request.getSexAtBirth() != null && !request.getSexAtBirth().isBlank()) {
+            participant.setSexAtBirth(request.getSexAtBirth().trim());
+        }
+        if (request.getGenderIdentity() != null && !request.getGenderIdentity().isBlank()) {
+            participant.setGenderIdentity(request.getGenderIdentity().trim());
+        }
 
         Map<String, Object> attributes = new HashMap<>();
-        if (request.getTags() != null) {
-            attributes.put("tags", request.getTags());
+        // Creation metadata matching legacy Ripple creationInfo = { creationSource: 'registry' }
+        attributes.put("creationSource", "registry");
+        Map<String, Object> creationInfo = new HashMap<>();
+        creationInfo.put("creationSource", "registry");
+        attributes.put("creationInfo", creationInfo);
+
+        if (request.getTags() != null && !request.getTags().isEmpty()) {
+            Set<String> seen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+            List<String> cleanTags = new ArrayList<>();
+            for (String tag : request.getTags()) {
+                if (tag != null) {
+                    String trimmed = tag.trim();
+                    if (!trimmed.isBlank() && seen.add(trimmed)) {
+                        cleanTags.add(trimmed);
+                    }
+                }
+            }
+            attributes.put("tags", cleanTags);
         }
-        if (request.getFamilyRole() != null) {
-            attributes.put("familyRole", request.getFamilyRole());
+        if (request.getFamilyRole() != null && !request.getFamilyRole().isBlank()) {
+            attributes.put("familyRole", request.getFamilyRole().trim());
         }
-        if (request.getGuardianName() != null) {
-            attributes.put("guardianName", request.getGuardianName());
+        if (request.getGuardianName() != null && !request.getGuardianName().isBlank()) {
+            attributes.put("guardianName", request.getGuardianName().trim());
         }
-        if (request.getEthnicity() != null) {
-            attributes.put("ethnicity", request.getEthnicity());
+        if (request.getEthnicity() != null && !request.getEthnicity().isBlank()) {
+            attributes.put("ethnicity", request.getEthnicity().trim());
         }
-        if (request.getRace() != null) {
-            attributes.put("race", request.getRace());
+        if (request.getRace() != null && !request.getRace().isBlank()) {
+            attributes.put("race", request.getRace().trim());
         }
         try {
             participant.setCustomAttributes(objectMapper.writeValueAsString(attributes));
         } catch (Exception e) {
-            participant.setCustomAttributes("{}");
+            participant.setCustomAttributes("{\"creationSource\":\"registry\"}");
         }
 
         participant.setCreatedBy(userId);
@@ -413,22 +456,23 @@ public class ParticipantRegistryService {
 
         Participant saved = participantRepository.save(participant);
 
-        // Save Global/MRN Identifier
+        // Authoritative backend Global/MRN Identifier with collision safety
+        String globalIdValue = generateAuthoritativeGlobalId(tenantId, saved.getId());
         ParticipantIdentifier identifier = new ParticipantIdentifier();
         identifier.setTenantId(tenantId);
         identifier.setParticipantId(saved.getId());
         identifier.setIdentifierType("GLOBAL_ID");
-        identifier.setIdentifierValue("PART-" + saved.getId().toString().substring(0, 8).toUpperCase());
+        identifier.setIdentifierValue(globalIdValue);
         identifier.setPrimaryIdentifier(true);
         identifierRepository.save(identifier);
 
-        // Save Contact
+        // Save Contact only if explicitly provided (no synthetic defaults)
         if (request.getPrimaryEmail() != null && !request.getPrimaryEmail().isBlank()) {
             ParticipantContact emailContact = new ParticipantContact();
             emailContact.setTenantId(tenantId);
             emailContact.setParticipantId(saved.getId());
             emailContact.setContactType("EMAIL");
-            emailContact.setContactValue(request.getPrimaryEmail());
+            emailContact.setContactValue(request.getPrimaryEmail().trim());
             emailContact.setPrimaryContact(true);
             contactRepository.save(emailContact);
         }
@@ -438,12 +482,12 @@ public class ParticipantRegistryService {
             phoneContact.setTenantId(tenantId);
             phoneContact.setParticipantId(saved.getId());
             phoneContact.setContactType("PHONE");
-            phoneContact.setContactValue(request.getPhone());
-            phoneContact.setPrimaryContact(request.getPrimaryEmail() == null);
+            phoneContact.setContactValue(request.getPhone().trim());
+            phoneContact.setPrimaryContact(request.getPrimaryEmail() == null || request.getPrimaryEmail().isBlank());
             contactRepository.save(phoneContact);
         }
 
-        // Save Address
+        // Save Address only if explicitly provided (no synthetic defaults)
         if ((request.getAddressLine1() != null && !request.getAddressLine1().isBlank()) ||
                 (request.getCity() != null && !request.getCity().isBlank())) {
             ParticipantAddress address = new ParticipantAddress();
@@ -460,18 +504,34 @@ public class ParticipantRegistryService {
             addressRepository.save(address);
         }
 
-        // Save Preference
+        // Save Preference with business defaults
         ParticipantPreference pref = new ParticipantPreference();
         pref.setTenantId(tenantId);
         pref.setParticipantId(saved.getId());
         pref.setDoNotContact(request.getContactForFutureStudies() != null ? !request.getContactForFutureStudies() : false);
-        pref.setPreferredLanguage(request.getPrimaryLanguage() != null ? request.getPrimaryLanguage() : "English");
+        pref.setPreferredLanguage(request.getPrimaryLanguage() != null && !request.getPrimaryLanguage().isBlank()
+                ? request.getPrimaryLanguage().trim() : "English");
+        if (request.getTimezone() != null && !request.getTimezone().isBlank()) {
+            pref.setTimezone(request.getTimezone().trim());
+        }
+        pref.setAllowEmail(true);
+        pref.setAllowSms(true);
+        pref.setAllowPhone(true);
         preferenceRepository.save(pref);
 
-        // Optional Study Assignment
+        // Optional Study Assignment with strict validation (fails fast and transaction rolls back on invalid study)
         if (request.getStudyId() != null && !request.getStudyId().isBlank()) {
+            UUID studyUuid;
             try {
-                UUID studyUuid = UUID.fromString(request.getStudyId());
+                studyUuid = UUID.fromString(request.getStudyId().trim());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("Invalid studyId format: " + request.getStudyId());
+            }
+
+            Study study = studyRepository.findByTenantIdAndId(tenantId, studyUuid)
+                    .orElseThrow(() -> new IllegalArgumentException("Study not found in tenant: " + studyUuid));
+
+            if (candidateRepository.findByTenantIdAndStudyIdAndParticipantId(tenantId, studyUuid, saved.getId()).isEmpty()) {
                 StudyCandidate candidate = new StudyCandidate();
                 candidate.setTenantId(tenantId);
                 candidate.setStudyId(studyUuid);
@@ -484,25 +544,37 @@ public class ParticipantRegistryService {
                 candidate.setUpdatedBy(userId);
                 candidateRepository.save(candidate);
 
-                studyRepository.findByTenantIdAndId(tenantId, studyUuid).ifPresent(study -> {
-                    if (study.isCustomIdGenerationEnabled() && study.getPrefix() != null && !study.getPrefix().isBlank()) {
-                        String customId = generateStudyParticipantId(study);
-                        ParticipantIdentifier customIdentifier = new ParticipantIdentifier();
-                        customIdentifier.setTenantId(tenantId);
-                        customIdentifier.setParticipantId(saved.getId());
-                        customIdentifier.setIdentifierType("STUDY_CUSTOM_ID");
-                        customIdentifier.setIdentifierValue(customId);
-                        customIdentifier.setIssuingSystem(study.getStudyCode() != null ? study.getStudyCode() : study.getId().toString());
-                        customIdentifier.setPrimaryIdentifier(false);
-                        identifierRepository.save(customIdentifier);
-                    }
-                });
-            } catch (Exception e) {
-                log.warn("Invalid studyId {} provided during participant creation", request.getStudyId());
+                if (study.isCustomIdGenerationEnabled() && study.getPrefix() != null && !study.getPrefix().isBlank()) {
+                    String customId = generateStudyParticipantId(study);
+                    ParticipantIdentifier customIdentifier = new ParticipantIdentifier();
+                    customIdentifier.setTenantId(tenantId);
+                    customIdentifier.setParticipantId(saved.getId());
+                    customIdentifier.setIdentifierType("STUDY_CUSTOM_ID");
+                    customIdentifier.setIdentifierValue(customId);
+                    customIdentifier.setIssuingSystem(study.getStudyCode() != null ? study.getStudyCode() : study.getId().toString());
+                    customIdentifier.setPrimaryIdentifier(false);
+                    identifierRepository.save(customIdentifier);
+                }
             }
         }
 
         return getParticipantById(tenantId, saved.getId()).orElseThrow();
+    }
+
+    private String generateAuthoritativeGlobalId(UUID tenantId, UUID participantId) {
+        String raw = participantId.toString().replace("-", "").toUpperCase();
+        String base = "PART-" + raw.substring(0, 8);
+        String candidate = base;
+        int attempt = 0;
+        while (identifierRepository.findByTenantIdAndIdentifierTypeAndIdentifierValue(tenantId, "GLOBAL_ID", candidate).isPresent()) {
+            attempt++;
+            if (attempt <= 4 && (8 + attempt * 2) <= raw.length()) {
+                candidate = "PART-" + raw.substring(0, 8 + attempt * 2);
+            } else {
+                candidate = base + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+            }
+        }
+        return candidate;
     }
 
     @Transactional
@@ -520,10 +592,32 @@ public class ParticipantRegistryService {
         if (request.getSexAtBirth() != null) participant.setSexAtBirth(request.getSexAtBirth());
         if (request.getGenderIdentity() != null) participant.setGenderIdentity(request.getGenderIdentity());
         if (request.getStatus() != null) participant.setStatus(request.getStatus().toUpperCase());
+        if (request.getGlobalDateOfLastContact() != null) {
+            if (request.getGlobalDateOfLastContact().isBlank()) {
+                participant.setGlobalLastContactDate(null);
+            } else {
+                OffsetDateTime parsedContact = parseDateTime(request.getGlobalDateOfLastContact());
+                if (parsedContact != null) {
+                    participant.setGlobalLastContactDate(parsedContact);
+                }
+            }
+        }
 
         // Update custom attributes
         Map<String, Object> attrs = parseCustomAttributes(participant.getCustomAttributes());
-        if (request.getTags() != null) attrs.put("tags", request.getTags());
+        if (request.getTags() != null) {
+            Set<String> seen = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+            List<String> cleanTags = new ArrayList<>();
+            for (String tag : request.getTags()) {
+                if (tag != null) {
+                    String trimmed = tag.trim();
+                    if (!trimmed.isBlank() && seen.add(trimmed)) {
+                        cleanTags.add(trimmed);
+                    }
+                }
+            }
+            attrs.put("tags", cleanTags);
+        }
         if (request.getFamilyRole() != null) attrs.put("familyRole", request.getFamilyRole());
         if (request.getGuardianName() != null) attrs.put("guardianName", request.getGuardianName());
         if (request.getEthnicity() != null) attrs.put("ethnicity", request.getEthnicity());
@@ -791,10 +885,12 @@ public class ParticipantRegistryService {
 
         RegistryParticipantDto dto = new RegistryParticipantDto();
         dto.setId(p.getId().toString());
-        String fullName = ((p.getFirstName() != null ? p.getFirstName() : "") + " " +
-                (p.getLastName() != null ? p.getLastName() : "")).trim();
+        String fullName = Stream.of(p.getFirstName(), p.getMiddleName(), p.getLastName())
+                .filter(s -> s != null && !s.isBlank())
+                .collect(Collectors.joining(" "));
         dto.setName(fullName);
         dto.setFirstName(p.getFirstName());
+        dto.setMiddleName(p.getMiddleName());
         dto.setLastName(p.getLastName());
         dto.setStatus(p.getStatus() != null ? capitalize(p.getStatus()) : "Active");
 
@@ -809,7 +905,7 @@ public class ParticipantRegistryService {
             dto.setAgeNumeric(null);
         }
 
-        dto.setGender(p.getSexAtBirth() != null ? p.getSexAtBirth() : (p.getGenderIdentity() != null ? p.getGenderIdentity() : "Unspecified"));
+        dto.setGender(p.getSexAtBirth() != null ? p.getSexAtBirth() : (p.getGenderIdentity() != null ? p.getGenderIdentity() : ""));
 
         // Identifiers
         identifiers.stream().filter(i -> "GLOBAL_ID".equalsIgnoreCase(i.getIdentifierType())).findFirst()
@@ -932,8 +1028,8 @@ public class ParticipantRegistryService {
         DemographicsDto demo = new DemographicsDto(
                 p.getDateOfBirth() != null ? p.getDateOfBirth().toString() : "",
                 dto.getGender(),
-                customAttrs.getOrDefault("ethnicity", "Not Disclosed").toString(),
-                customAttrs.getOrDefault("race", "Not Disclosed").toString(),
+                customAttrs.getOrDefault("ethnicity", "").toString(),
+                customAttrs.getOrDefault("race", "").toString(),
                 pref != null && pref.getPreferredLanguage() != null ? pref.getPreferredLanguage() : "English"
         );
         dto.setDemographics(demo);
@@ -998,11 +1094,64 @@ public class ParticipantRegistryService {
         if (firstName == null || lastName == null || firstName.isBlank() || lastName.isBlank()) {
             return Collections.emptyList();
         }
-        List<Participant> matches = participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(
-                tenantId, firstName.trim(), lastName.trim());
+        List<Participant> matches = participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
+                tenantId, firstName.trim(), lastName.trim(), "DELETED");
+        if (matches == null || matches.isEmpty()) {
+            matches = participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(
+                    tenantId, firstName.trim(), lastName.trim());
+        }
         return matches.stream()
+                .filter(p -> p.getStatus() == null || !"DELETED".equalsIgnoreCase(p.getStatus()))
                 .map(p -> getParticipantById(tenantId, p.getId()).orElse(null))
                 .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getParticipantTags(UUID tenantId, UUID siteId, String search, int limit) {
+        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 100);
+        String cleanSearch = search != null ? search.trim() : null;
+        try {
+            List<String> tags = participantRepository.findDistinctTagsByTenantAndSearch(tenantId, siteId, cleanSearch, safeLimit);
+            if (tags != null) {
+                return tags;
+            }
+        } catch (Exception ex) {
+            log.warn("Database native tag aggregation query failed, falling back to in-memory aggregation: {}", ex.getMessage());
+        }
+        return getParticipantTagsFallback(tenantId, siteId, cleanSearch, safeLimit);
+    }
+
+    List<String> getParticipantTagsFallback(UUID tenantId, UUID siteId, String search, int limit) {
+        List<Participant> participants = participantRepository.findByTenantId(tenantId);
+        Map<String, Long> frequencyMap = new HashMap<>();
+        String searchLower = (search != null && !search.isBlank()) ? search.toLowerCase().trim() : null;
+
+        for (Participant p : participants) {
+            if (p.getStatus() != null && "DELETED".equalsIgnoreCase(p.getStatus())) continue;
+            if (siteId != null && p.getSiteId() != null && !siteId.equals(p.getSiteId())) continue;
+
+            Map<String, Object> attrs = parseCustomAttributes(p.getCustomAttributes());
+            if (attrs.get("tags") instanceof List) {
+                List<?> tagList = (List<?>) attrs.get("tags");
+                for (Object item : tagList) {
+                    if (item != null) {
+                        String tagStr = item.toString().trim();
+                        if (!tagStr.isEmpty()) {
+                            if (searchLower == null || tagStr.toLowerCase().contains(searchLower)) {
+                                frequencyMap.put(tagStr, frequencyMap.getOrDefault(tagStr, 0L) + 1L);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return frequencyMap.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<String, Long>>comparingLong(Map.Entry::getValue).reversed()
+                        .thenComparing(Map.Entry::getKey, String.CASE_INSENSITIVE_ORDER))
+                .limit(limit)
+                .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
     }
 
@@ -1693,6 +1842,33 @@ public class ParticipantRegistryService {
                         return LocalDate.of(Integer.parseInt(parts[2]), Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
                     }
                 }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private OffsetDateTime parseDateTime(String val) {
+        if (val == null || val.isBlank()) return null;
+        try {
+            return OffsetDateTime.parse(val.trim());
+        } catch (Exception ignored) {}
+        try {
+            return java.time.Instant.parse(val.trim()).atOffset(java.time.ZoneOffset.UTC);
+        } catch (Exception ignored) {}
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm a", Locale.US);
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(val.trim(), formatter);
+            return ldt.atOffset(java.time.ZoneOffset.UTC);
+        } catch (Exception ignored) {}
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm", Locale.US);
+            java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(val.trim(), formatter);
+            return ldt.atOffset(java.time.ZoneOffset.UTC);
+        } catch (Exception ignored) {}
+        try {
+            LocalDate ld = parseDate(val.trim());
+            if (ld != null) {
+                return ld.atStartOfDay().atOffset(java.time.ZoneOffset.UTC);
             }
         } catch (Exception ignored) {}
         return null;

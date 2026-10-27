@@ -349,6 +349,148 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void createParticipant_minimalRequiredFields_persistsAuthoritativeMetadataAndNoOptionalEntities() {
+        CreateParticipantRequest request = new CreateParticipantRequest();
+        request.setFirstName("Alice");
+        request.setLastName("Wonderland");
+
+        UUID generatedId = UUID.randomUUID();
+        when(participantRepository.save(any(Participant.class))).thenAnswer(invocation -> {
+            Participant p = invocation.getArgument(0);
+            p.setId(generatedId);
+            return p;
+        });
+
+        when(participantRepository.findByTenantIdAndId(tenantId, generatedId)).thenAnswer(inv -> {
+            Participant p = new Participant();
+            p.setId(generatedId);
+            p.setTenantId(tenantId);
+            p.setSiteId(siteId);
+            p.setFirstName("Alice");
+            p.setLastName("Wonderland");
+            p.setStatus("ACTIVE");
+            p.setCreatedBy(userId);
+            p.setCreatedAt(OffsetDateTime.now());
+            p.setCustomAttributes("{\"creationSource\":\"registry\",\"creationInfo\":{\"creationSource\":\"registry\"}}");
+            return Optional.of(p);
+        });
+
+        RegistryParticipantDto result = service.createParticipant(tenantId, siteId, userId, request);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getName()).isEqualTo("Alice Wonderland");
+        assertThat(result.getFirstName()).isEqualTo("Alice");
+        assertThat(result.getLastName()).isEqualTo("Wonderland");
+        assertThat(result.getStudies()).isEmpty();
+        assertThat(result.getTags()).isEmpty();
+        assertThat(result.getPhone()).isEmpty();
+
+        // Verify mandatory entities
+        verify(identifierRepository).save(argThat(i ->
+                "GLOBAL_ID".equals(i.getIdentifierType()) &&
+                i.getIdentifierValue().startsWith("PART-") &&
+                i.isPrimaryIdentifier()
+        ));
+        verify(preferenceRepository).save(argThat(pref ->
+                !pref.isDoNotContact() &&
+                "English".equals(pref.getPreferredLanguage()) &&
+                pref.isAllowEmail() &&
+                pref.isAllowSms() &&
+                pref.isAllowPhone()
+        ));
+
+        // Verify NO optional entities saved
+        verify(contactRepository, never()).save(any(ParticipantContact.class));
+        verify(addressRepository, never()).save(any(ParticipantAddress.class));
+        verify(candidateRepository, never()).save(any(StudyCandidate.class));
+    }
+
+    @Test
+    void createParticipant_withMiddleName_persistsMiddleNameAndFullName() {
+        CreateParticipantRequest request = new CreateParticipantRequest();
+        request.setFirstName("John");
+        request.setMiddleName("Quincy");
+        request.setLastName("Adams");
+
+        UUID generatedId = UUID.randomUUID();
+        when(participantRepository.save(any(Participant.class))).thenAnswer(invocation -> {
+            Participant p = invocation.getArgument(0);
+            p.setId(generatedId);
+            return p;
+        });
+
+        when(participantRepository.findByTenantIdAndId(tenantId, generatedId)).thenAnswer(inv -> {
+            Participant p = new Participant();
+            p.setId(generatedId);
+            p.setTenantId(tenantId);
+            p.setFirstName("John");
+            p.setMiddleName("Quincy");
+            p.setLastName("Adams");
+            p.setStatus("ACTIVE");
+            return Optional.of(p);
+        });
+
+        RegistryParticipantDto result = service.createParticipant(tenantId, siteId, userId, request);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getName()).isEqualTo("John Quincy Adams");
+        assertThat(result.getMiddleName()).isEqualTo("Quincy");
+    }
+
+    @Test
+    void createParticipant_missingRequiredName_throwsIllegalArgumentException() {
+        CreateParticipantRequest request = new CreateParticipantRequest();
+        request.setFirstName("  ");
+        request.setLastName("ValidLast");
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                service.createParticipant(tenantId, siteId, userId, request));
+
+        CreateParticipantRequest request2 = new CreateParticipantRequest();
+        request2.setFirstName("ValidFirst");
+        request2.setLastName("");
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                service.createParticipant(tenantId, siteId, userId, request2));
+    }
+
+    @Test
+    void createParticipant_withInvalidStudyId_throwsException() {
+        CreateParticipantRequest request = new CreateParticipantRequest();
+        request.setFirstName("Bob");
+        request.setLastName("Ross");
+        request.setStudyId("not-a-valid-uuid");
+
+        UUID generatedId = UUID.randomUUID();
+        when(participantRepository.save(any(Participant.class))).thenAnswer(invocation -> {
+            Participant p = invocation.getArgument(0);
+            p.setId(generatedId);
+            return p;
+        });
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                service.createParticipant(tenantId, siteId, userId, request));
+    }
+
+    @Test
+    void findDuplicatesByName_excludesDeletedParticipants() {
+        UUID activeId = UUID.randomUUID();
+        Participant activePart = createMockParticipant(activeId, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
+
+        when(participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
+                tenantId, "John", "Doe", "DELETED"))
+                .thenReturn(List.of(activePart));
+        when(participantRepository.findByTenantIdAndId(tenantId, activeId)).thenReturn(Optional.of(activePart));
+
+        List<RegistryParticipantDto> duplicates = service.findDuplicatesByName(tenantId, "John", "Doe");
+
+        assertThat(duplicates).hasSize(1);
+        assertThat(duplicates.get(0).getName()).isEqualTo("John Doe");
+        verify(participantRepository).findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
+                tenantId, "John", "Doe", "DELETED");
+    }
+
+    @Test
     void updateParticipantStatus_savesHistory() {
         UUID partId = UUID.randomUUID();
         Participant p = createMockParticipant(partId, "Dave", "Miller", LocalDate.of(1992, 4, 1), "ACTIVE");
@@ -479,14 +621,17 @@ class ParticipantRegistryServiceTest {
         UUID id1 = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
         UUID id3 = UUID.randomUUID();
+        UUID id4 = UUID.randomUUID();
 
-        // id1 and id2 have the same name "John Doe" (potential duplicates)
+        // id1 and id2 share the same name and date of birth (legacy Ripple duplicate rule: lastName, firstName, birthday)
         Participant p1 = createMockParticipant(id1, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
-        Participant p2 = createMockParticipant(id2, "John", "Doe", LocalDate.of(1992, 5, 10), "ACTIVE");
-        // id3 is unique "Alice Unique"
-        Participant p3 = createMockParticipant(id3, "Alice", "Unique", LocalDate.of(1985, 3, 15), "ACTIVE");
+        Participant p2 = createMockParticipant(id2, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
+        // id3 has the same name but different date of birth (e.g. grandfather born 1950 - not a duplicate of p1/p2)
+        Participant p3 = createMockParticipant(id3, "John", "Doe", LocalDate.of(1950, 5, 10), "ACTIVE");
+        // id4 is unique "Alice Unique"
+        Participant p4 = createMockParticipant(id4, "Alice", "Unique", LocalDate.of(1985, 3, 15), "ACTIVE");
 
-        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2, p3));
+        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2, p3, p4));
         when(studyRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
 
         RegistryPagedResponse<RegistryParticipantDto> response = service.searchParticipants(
@@ -502,7 +647,7 @@ class ParticipantRegistryServiceTest {
     @Test
     void findDuplicatesByName_returnsMatchingParticipants() {
         Participant p = createMockParticipant(UUID.randomUUID(), "Alice", "Walker", LocalDate.of(1990, 1, 1), "ACTIVE");
-        when(participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(tenantId, "Alice", "Walker"))
+        when(participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(tenantId, "Alice", "Walker", "DELETED"))
                 .thenReturn(List.of(p));
         when(participantRepository.findByTenantIdAndId(tenantId, p.getId()))
                 .thenReturn(Optional.of(p));
@@ -755,6 +900,77 @@ class ParticipantRegistryServiceTest {
         );
 
         assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, missingBound));
+    }
+
+    @Test
+    void getParticipantTags_delegatesToRepository_whenRepositorySucceeds() {
+        when(participantRepository.findDistinctTagsByTenantAndSearch(eq(tenantId), eq(siteId), eq("AD"), eq(20)))
+                .thenReturn(List.of("ADRC", "Adult"));
+
+        List<String> result = service.getParticipantTags(tenantId, siteId, "AD", 20);
+
+        assertThat(result).containsExactly("ADRC", "Adult");
+        verify(participantRepository).findDistinctTagsByTenantAndSearch(tenantId, siteId, "AD", 20);
+    }
+
+    @Test
+    void getParticipantTags_fallsBackToInMemoryAggregation_whenNativeQueryFails() {
+        when(participantRepository.findDistinctTagsByTenantAndSearch(any(), any(), any(), anyInt()))
+                .thenThrow(new RuntimeException("Native query unsupported in test context"));
+
+        Participant p1 = createMockParticipant(UUID.randomUUID(), "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        p1.setCustomAttributes("{\"tags\":[\"ADRC\",\"Echo\",\"Pediatric\"]}");
+
+        Participant p2 = createMockParticipant(UUID.randomUUID(), "Bob", "Jones", LocalDate.of(1991, 2, 2), "ACTIVE");
+        p2.setCustomAttributes("{\"tags\":[\"ADRC\",\"Echo\"]}");
+
+        Participant p3 = createMockParticipant(UUID.randomUUID(), "Charlie", "Brown", LocalDate.of(1992, 3, 3), "ACTIVE");
+        p3.setCustomAttributes("{\"tags\":[\"ADRC\"]}");
+
+        Participant pDeleted = createMockParticipant(UUID.randomUUID(), "Deleted", "User", LocalDate.of(1993, 4, 4), "DELETED");
+        pDeleted.setCustomAttributes("{\"tags\":[\"Echo\",\"EchoDeleted\"]}");
+
+        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2, p3, pDeleted));
+
+        // Search for substring "e" (case-insensitive) -> "Echo" (count 2), "Pediatric" (count 1)
+        List<String> result = service.getParticipantTags(tenantId, null, "e", 20);
+
+        assertThat(result).containsExactly("Echo", "Pediatric");
+        assertThat(result).doesNotContain("EchoDeleted"); // deleted participant excluded
+    }
+
+    @Test
+    void getParticipantTags_normalizesLimits() {
+        when(participantRepository.findDistinctTagsByTenantAndSearch(eq(tenantId), isNull(), isNull(), eq(20)))
+                .thenReturn(List.of("ADRC"));
+
+        service.getParticipantTags(tenantId, null, null, -5);
+        verify(participantRepository).findDistinctTagsByTenantAndSearch(tenantId, null, null, 20);
+
+        service.getParticipantTags(tenantId, null, null, 500);
+        verify(participantRepository).findDistinctTagsByTenantAndSearch(tenantId, null, null, 100);
+    }
+
+    @Test
+    void updateParticipant_normalizesAndDeduplicatesTags_withoutInjectingFakeDefaults() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Dave", "Miller", LocalDate.of(1992, 4, 1), "ACTIVE");
+        p.setCustomAttributes("{\"existingKey\":\"existingValue\"}");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setTags(List.of("  Healthy ", "healthy", "", "   ", "ADRC"));
+
+        service.updateParticipant(tenantId, partId, userId, req);
+
+        assertThat(p.getCustomAttributes()).contains("\"tags\":[\"Healthy\",\"ADRC\"]");
+        assertThat(p.getCustomAttributes()).contains("\"existingKey\":\"existingValue\"");
+
+        // When tags is empty list, verify it does not inject "New Participant"
+        req.setTags(Collections.emptyList());
+        service.updateParticipant(tenantId, partId, userId, req);
+        assertThat(p.getCustomAttributes()).contains("\"tags\":[]");
+        assertThat(p.getCustomAttributes()).doesNotContain("New Participant");
     }
 
     private Participant createMockParticipant(UUID id, String firstName, String lastName, LocalDate dob, String status) {

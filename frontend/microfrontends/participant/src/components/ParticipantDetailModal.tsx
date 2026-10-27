@@ -25,6 +25,8 @@ import { ParticipantEmailSection } from './ParticipantEmailSection';
 import { ParticipantSmsSection } from './ParticipantSmsSection';
 import { ParticipantConsentSection } from './ParticipantConsentSection';
 import { ParticipantFormsSection } from './ParticipantFormsSection';
+import { ParticipantTagSelect } from './ParticipantTagSelect';
+import { ParticipantDateTimePicker } from './ParticipantDateTimePicker';
 
 export interface ParticipantDetailModalProps {
   isOpen: boolean;
@@ -54,7 +56,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [familyId, setFamilyId] = useState(participant?.familyId || '');
   const [globalId, setGlobalId] = useState(participant?.globalId || '');
   const [timezone, setTimezone] = useState(participant?.timezone || 'America/New_York (EDT)');
-  const [tagsInput, setTagsInput] = useState(Array.isArray(participant?.tags) ? participant.tags.join(', ') : '');
+  const [selectedTags, setSelectedTags] = useState<string[]>(Array.isArray(participant?.tags) ? participant.tags : []);
   const [contactForFuture, setContactForFuture] = useState(participant?.contactForFutureStudies !== false);
   const [dateLastContact, setDateLastContact] = useState(participant?.globalDateOfLastContact || participant?.lastContact || '');
 
@@ -89,7 +91,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setFamilyId(participant.familyId || '');
       setGlobalId(participant.globalId || '');
       setTimezone(participant.timezone || 'America/New_York (EDT)');
-      setTagsInput(Array.isArray(participant.tags) ? participant.tags.join(', ') : '');
+      setSelectedTags(Array.isArray(participant.tags) ? participant.tags : []);
       setContactForFuture(participant.contactForFutureStudies !== false);
       setDateLastContact(participant.globalDateOfLastContact || participant.lastContact || '');
       
@@ -134,17 +136,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   };
 
   const handleSaveParticipant = () => {
-    const updatedTags = tagsInput
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
-
     const updatedParticipant: ParticipantRecord = {
       ...participant,
       familyId,
       globalId,
       timezone,
-      tags: updatedTags.length > 0 ? updatedTags : ['New Participant'],
+      tags: selectedTags,
       contactForFutureStudies: contactForFuture,
       globalDateOfLastContact: dateLastContact,
       gender,
@@ -266,13 +263,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
                 <div className="record-detail__field record-detail__field--wide">
                   <label className="form-label" htmlFor="participant-tags">Tags</label>
-                  <input
+                  <ParticipantTagSelect
                     id="participant-tags"
-                    type="text"
-                    value={tagsInput}
-                    onChange={(e) => setTagsInput(e.target.value)}
-                    placeholder="Enter tags separated by commas..."
-                    className="form-input"
+                    selectedTags={selectedTags}
+                    onChange={setSelectedTags}
+                    tenantId={tenantId}
+                    siteId={siteId}
                   />
                 </div>
 
@@ -290,19 +286,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
                 <div className="record-detail__field record-detail__field--wide">
                   <label className="form-label" htmlFor="participant-last-contact">Global Date of Last Contact</label>
-                  <div className="record-detail__date-field">
-                    <input
-                      id="participant-last-contact"
-                      type="text"
-                      value={dateLastContact}
-                      onChange={(e) => setDateLastContact(e.target.value)}
-                      className="form-input"
-                    />
-                    <div className="record-detail__date-icons" aria-hidden="true">
-                      <Calendar size={16} />
-                      <Clock size={16} />
-                    </div>
-                  </div>
+                  <ParticipantDateTimePicker
+                    id="participant-last-contact"
+                    value={dateLastContact}
+                    onChange={setDateLastContact}
+                  />
                 </div>
               </div>
             </div>

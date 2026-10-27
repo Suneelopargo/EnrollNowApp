@@ -313,9 +313,26 @@ export const participantApi = {
 
   async checkDuplicates(firstName: string, lastName: string, config?: any): Promise<Participant[]> {
     const res = await apiClient.get('/api/v1/participants/check-duplicate', {
-      params: { firstName, lastName },
       skipToast: true,
       ...config,
+      params: {
+        firstName,
+        lastName,
+        ...config?.params,
+      },
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getParticipantTags(search?: string, limit: number = 20, config?: any): Promise<string[]> {
+    const res = await apiClient.get('/api/v1/registry/participant-tags', {
+      skipToast: true,
+      ...config,
+      params: {
+        search: search?.trim() || undefined,
+        limit,
+        ...config?.params,
+      },
     } as any);
     return res.data?.data ?? res.data ?? [];
   },

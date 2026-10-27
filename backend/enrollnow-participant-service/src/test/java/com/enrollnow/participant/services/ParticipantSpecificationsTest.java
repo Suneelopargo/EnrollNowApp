@@ -375,4 +375,24 @@ class ParticipantSpecificationsTest {
         spec.toPredicate(root, query, cb);
         verify(cb).disjunction();
     }
+
+    @Test
+    void buildSpecification_withDuplicatesOnly_constructsSubqueryPredicate() {
+        Subquery<UUID> mockDupSub = mock(Subquery.class);
+        Root<Participant> mockDupRoot = mock(Root.class);
+        doReturn(mockDupSub).when(query).subquery(UUID.class);
+        doReturn(mockDupRoot).when(mockDupSub).from(Participant.class);
+        lenient().when(mockDupSub.select(any())).thenReturn(mockDupSub);
+        lenient().when(mockDupSub.where(any(Predicate[].class))).thenReturn(mockDupSub);
+        lenient().when(cb.exists(mockDupSub)).thenReturn(mockPredicate);
+
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, null, true
+        );
+        Predicate pred = spec.toPredicate(root, query, cb);
+
+        assertThat(pred).isNotNull();
+        verify(query).subquery(UUID.class);
+        verify(cb).exists(mockDupSub);
+    }
 }

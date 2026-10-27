@@ -267,6 +267,20 @@ public class ParticipantRegistryController {
         return ResponseEntity.ok(list);
     }
 
+    @GetMapping("/registry/participant-tags")
+    public ResponseEntity<List<String>> getParticipantTags(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false, defaultValue = "20") int limit,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId) {
+
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        List<String> tags = registryService.getParticipantTags(resolvedTenantId, siteId, search, limit);
+        return ResponseEntity.ok(tags);
+    }
+
     @PostMapping("/registry/saved-searches")
     public ResponseEntity<SavedSearchDto> createSavedSearch(
             @RequestParam(required = false) UUID tenantId,

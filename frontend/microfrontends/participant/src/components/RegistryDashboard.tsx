@@ -34,6 +34,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
+  const [serverTotalCount, setServerTotalCount] = useState<number>(0);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -54,6 +55,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     availableFilter,
     selectedStudies,
     customFilters,
+    duplicatesOnly,
   });
 
   useEffect(() => {
@@ -63,8 +65,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       availableFilter,
       selectedStudies,
       customFilters,
+      duplicatesOnly,
     };
-  }, [searchTerm, contactFilter, availableFilter, selectedStudies, customFilters]);
+  }, [searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, duplicatesOnly]);
 
   // Fetch Saved Searches from backend API
   const fetchSavedSearches = useCallback(async () => {
@@ -94,6 +97,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     searchTerm?: string;
     selectedStudies?: string[];
     customFilters?: CustomFilterRule[];
+    duplicatesOnly?: boolean;
   }) => {
     if (!quiet) setIsLoading(true);
     try {
@@ -102,6 +106,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       const activeSearch = overrideFilters?.searchTerm ?? filterStateRef.current.searchTerm;
       const activeStudies = overrideFilters?.selectedStudies ?? filterStateRef.current.selectedStudies;
       const activeCustom = overrideFilters?.customFilters ?? filterStateRef.current.customFilters;
+      const activeDuplicatesOnly = overrideFilters?.duplicatesOnly !== undefined
+        ? overrideFilters.duplicatesOnly
+        : filterStateRef.current.duplicatesOnly;
 
       const params: RegistrySearchParams = {
         tenantId,
@@ -111,6 +118,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         availableFilter: activeAvailable,
         studies: activeStudies.length > 0 ? activeStudies : undefined,
         customFiltersJson: activeCustom.length > 0 ? JSON.stringify(activeCustom) : undefined,
+        duplicatesOnly: activeDuplicatesOnly ? true : undefined,
         page: 0,
         pageSize: 500,
       };
@@ -168,6 +176,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       }));
 
       setParticipants(mapped);
+      const rawCount = typeof res?.totalCount === 'number'
+        ? res.totalCount
+        : typeof res?.totalElements === 'number'
+        ? res.totalElements
+        : mapped.length;
+      setServerTotalCount(rawCount);
       setError(null);
 
       // Keep baseline for study list dropdown when unfiltered
@@ -252,33 +266,10 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     fetchParticipants(false, { duplicatesOnly: next });
   };
 
-  const handleAddParticipant = async (newParticipant: ParticipantRecord) => {
-    try {
-      const payload: CreateParticipantPayload = {
-        firstName: newParticipant.firstName || newParticipant.name.split(' ')[0] || 'Unknown',
-        lastName: newParticipant.lastName || newParticipant.name.split(' ').slice(1).join(' ') || 'Participant',
-        status: newParticipant.status || 'ACTIVE',
-        sexAtBirth: newParticipant.demographics?.gender || newParticipant.gender,
-        primaryEmail: newParticipant.contactMethods?.primaryEmail,
-        phone: newParticipant.phone || newParticipant.contactMethods?.phone,
-        city: newParticipant.city,
-        state: newParticipant.state,
-        postalCode: newParticipant.zipcode,
-        dateOfBirth: newParticipant.demographics?.dob,
-        contactForFutureStudies: newParticipant.contactForFutureStudies,
-        tags: newParticipant.tags,
-      };
-
-      const created: any = await participantApi.createParticipant(payload, {
-        params: { tenantId, siteId },
-      });
-      showNotification(`Participant "${created?.name || newParticipant.name}" added successfully.`, 'success');
-      await fetchParticipants(true);
-      if (created?.id) setSelectedParticipantId(String(created.id));
-    } catch (err: any) {
-      const errorMsg = getApiErrorMessage(err, 'Failed to create participant on server.');
-      showNotification(errorMsg, 'error');
-    }
+  const handleParticipantCreated = async (created: any) => {
+    showNotification('Success! Participant added to registry.', 'success');
+    await fetchParticipants(true);
+    if (created?.id) setSelectedParticipantId(String(created.id));
   };
 
   const handleAddFilter = () => {
@@ -503,6 +494,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         availableFilter,
         studies: selectedStudies.length > 0 ? selectedStudies : undefined,
         customFiltersJson: customFilters.length > 0 ? JSON.stringify(customFilters) : undefined,
+        duplicatesOnly: duplicatesOnly ? true : undefined,
       };
       const blob = await participantApi.exportRegistry(params);
       const url = window.URL.createObjectURL(blob);
@@ -590,7 +582,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           onAssignStudyToSelected={handleAssignStudyToSelected}
           onExportServerCsv={handleExportServerCsv}
           isLoading={isLoading}
-          totalCount={participants.length}
+          totalCount={serverTotalCount}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           selectedStudies={selectedStudies}
@@ -603,7 +595,10 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       <AddParticipantModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onAdd={handleAddParticipant}
+        onSuccess={handleParticipantCreated}
+        onAdd={handleParticipantCreated}
+        tenantId={tenantId}
+        siteId={siteId}
       />
 
       <SaveFilterModal

@@ -31,6 +31,7 @@ public class CreateParticipantRequest {
     private String familyRole;
     private String guardianName;
     private List<String> tags;
+    private String timezone;
     private String studyId; // optional initial study assignment
 
     public CreateParticipantRequest() {
@@ -234,6 +235,14 @@ public class CreateParticipantRequest {
 
     public void setTags(List<String> tags) {
         this.tags = tags;
+    }
+
+    public String getTimezone() {
+        return timezone;
+    }
+
+    public void setTimezone(String timezone) {
+        this.timezone = timezone;
     }
 
     public String getStudyId() {

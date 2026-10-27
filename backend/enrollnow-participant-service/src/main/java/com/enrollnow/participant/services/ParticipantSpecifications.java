@@ -202,20 +202,28 @@ public class ParticipantSpecifications {
                 }
             }
 
-            // 8. Potential Duplicates Filter (Matches participants with same name in tenant)
+            // 8. Potential Duplicates Filter (Matches participants with same name and birth date in tenant, matching legacy Ripple)
             if (duplicatesOnly) {
                 Subquery<UUID> dupSub = query.subquery(UUID.class);
                 Root<Participant> p2 = dupSub.from(Participant.class);
+                Predicate sameName = cb.and(
+                        cb.isNotNull(root.get("firstName")),
+                        cb.isNotNull(root.get("lastName")),
+                        cb.isNotNull(p2.get("firstName")),
+                        cb.isNotNull(p2.get("lastName")),
+                        cb.equal(cb.lower(cb.trim(p2.get("firstName"))), cb.lower(cb.trim(root.get("firstName")))),
+                        cb.equal(cb.lower(cb.trim(p2.get("lastName"))), cb.lower(cb.trim(root.get("lastName"))))
+                );
+                Predicate sameDob = cb.or(
+                        cb.and(cb.isNull(root.get("dateOfBirth")), cb.isNull(p2.get("dateOfBirth"))),
+                        cb.and(cb.isNotNull(root.get("dateOfBirth")), cb.isNotNull(p2.get("dateOfBirth")), cb.equal(p2.get("dateOfBirth"), root.get("dateOfBirth")))
+                );
                 dupSub.select(p2.get("id"))
                         .where(
                                 cb.equal(p2.get("tenantId"), tenantId),
                                 cb.notEqual(p2.get("id"), root.get("id")),
-                                cb.isNotNull(root.get("firstName")),
-                                cb.isNotNull(root.get("lastName")),
-                                cb.isNotNull(p2.get("firstName")),
-                                cb.isNotNull(p2.get("lastName")),
-                                cb.equal(cb.lower(cb.trim(p2.get("firstName"))), cb.lower(cb.trim(root.get("firstName")))),
-                                cb.equal(cb.lower(cb.trim(p2.get("lastName"))), cb.lower(cb.trim(root.get("lastName")))),
+                                sameName,
+                                sameDob,
                                 cb.or(
                                         cb.isNull(p2.get("status")),
                                         cb.notEqual(cb.upper(p2.get("status")), "DELETED")

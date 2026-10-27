@@ -6,6 +6,7 @@ public class RegistryParticipantDto {
     private String id;
     private String name;
     private String firstName;
+    private String middleName;
     private String lastName;
     private List<StudyItemDto> studies;
     private String gender;
@@ -56,6 +57,14 @@ public class RegistryParticipantDto {
 
     public void setFirstName(String firstName) {
         this.firstName = firstName;
+    }
+
+    public String getMiddleName() {
+        return middleName;
+    }
+
+    public void setMiddleName(String middleName) {
+        this.middleName = middleName;
     }
 
     public String getLastName() {

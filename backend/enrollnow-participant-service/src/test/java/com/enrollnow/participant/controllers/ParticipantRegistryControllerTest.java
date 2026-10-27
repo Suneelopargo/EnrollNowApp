@@ -287,4 +287,33 @@ class ParticipantRegistryControllerTest {
 
         verify(savedSearchService, never()).getSavedSearches(any(), any());
     }
+
+    @Test
+    void getParticipantTags_returnsTagsList_whenAuthorized() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(registryService.getParticipantTags(tenantId, null, "AD", 20))
+                .thenReturn(List.of("ADRC", "Adult"));
+
+        ResponseEntity<List<String>> response = controller.getParticipantTags("AD", 20, tenantId, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).containsExactly("ADRC", "Adult");
+        verify(siteAuthorizationService).requireRegistryAccess(tenantId, null);
+        verify(registryService).getParticipantTags(tenantId, null, "AD", 20);
+    }
+
+    @Test
+    void getParticipantTags_rejectsUnauthorizedAccess() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        doThrow(new AccessDeniedException("Access denied"))
+                .when(siteAuthorizationService).requireRegistryAccess(tenantId, null);
+
+        assertThrows(AccessDeniedException.class, () ->
+                controller.getParticipantTags("AD", 20, tenantId, null)
+        );
+
+        verify(registryService, never()).getParticipantTags(any(), any(), any(), anyInt());
+    }
 }

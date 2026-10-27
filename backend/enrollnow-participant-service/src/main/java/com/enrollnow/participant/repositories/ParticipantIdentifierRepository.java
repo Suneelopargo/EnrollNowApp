@@ -20,5 +20,9 @@ public interface ParticipantIdentifierRepository extends JpaRepository<Participa
             UUID tenantId, UUID participantId, String identifierType
     );
 
+    Optional<ParticipantIdentifier> findByTenantIdAndIdentifierTypeAndIdentifierValue(
+            UUID tenantId, String identifierType, String identifierValue
+    );
+
     void deleteByTenantIdAndParticipantId(UUID tenantId, UUID participantId);
 }

@@ -28,6 +28,9 @@ import { ParticipantFormsSection } from '../components/ParticipantFormsSection';
 import { AssignFormModal } from '../components/AssignFormModal';
 import { ParticipantDetailModal } from '../components/ParticipantDetailModal';
 import { ParticipantGrid } from '../components/ParticipantGrid';
+import { AddParticipantModal } from '../components/AddParticipantModal';
+import { ParticipantTagSelect } from '../components/ParticipantTagSelect';
+import { ParticipantDateTimePicker } from '../components/ParticipantDateTimePicker';
 import { ParticipantRecord } from '../types/participant';
 
 describe('Full Registry Workflow - API Client Integration', () => {
@@ -556,6 +559,14 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
       })
     );
 
+    await participantApi.getParticipants({ duplicatesOnly: false });
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/participants',
+      expect.objectContaining({
+        params: expect.objectContaining({ duplicatesOnly: false }),
+      })
+    );
+
     await participantApi.exportRegistry({ duplicatesOnly: true });
     expect(getSpy).toHaveBeenCalledWith(
       '/api/v1/registry/export',
@@ -564,5 +575,166 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         responseType: 'blob',
       })
     );
+
+    // 8. Participant Creation & Duplicate Check APIs
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: {
+        id: 'new-part-uuid-123',
+        firstName: 'Jane',
+        middleName: 'Eyre',
+        lastName: 'Bronte',
+        globalId: 'PART-NEW123',
+        status: 'Active',
+        studies: [],
+      },
+    });
+
+    const res = await participantApi.createParticipant({
+      firstName: 'Jane',
+      middleName: 'Eyre',
+      lastName: 'Bronte',
+    }, { params: { tenantId: 't-1' } });
+
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/v1/participants',
+      { firstName: 'Jane', middleName: 'Eyre', lastName: 'Bronte' },
+      { params: { tenantId: 't-1' } }
+    );
+    expect(res.id).toBe('new-part-uuid-123');
+    postSpy.mockRestore();
+
+    getSpy.mockResolvedValueOnce({
+      data: [
+        { id: 'existing-1', firstName: 'John', lastName: 'Doe' },
+      ],
+    });
+
+    const dupes = await participantApi.checkDuplicates('John', 'Doe', { params: { tenantId: 't-1' } });
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/participants/check-duplicate',
+      expect.objectContaining({
+        params: expect.objectContaining({ firstName: 'John', lastName: 'Doe', tenantId: 't-1' }),
+      })
+    );
+    expect(dupes).toHaveLength(1);
+    getSpy.mockRestore();
+  });
+
+  it('renders bulk action toggle and preserves separate server totalCount regardless of page slice length', () => {
+    // Current page has 2 items, but server total count is 254
+    const html = renderToStaticMarkup(
+      <ParticipantGrid
+        participants={[dummyParticipant, { ...dummyParticipant, id: 'p2' }]}
+        totalCount={254}
+        duplicatesOnly={true}
+      />
+    );
+    expect(html).toContain('Potential Duplicate Participants');
+    expect(html).toContain('(254)');
+    expect(html).toContain('id="bulk-actions-toggle"');
+    expect(html).toContain('aria-label="Bulk actions"');
+  });
+
+  it('renders AddParticipantModal with clean fields and no fabricated values', () => {
+    const html = renderToStaticMarkup(
+      <AddParticipantModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />
+    );
+    expect(html).toContain('Add Participant');
+    expect(html).toContain('First Name');
+    expect(html).toContain('Middle Name');
+    expect(html).toContain('Last Name');
+    expect(html).toContain('id="add-participant-submit-btn"');
+    // Ensure no demographic / family fields rendered in the form
+    expect(html).not.toContain('Family ID');
+    expect(html).not.toContain('Pedigree');
+    expect(html).not.toContain('Date of Birth');
+  });
+
+  it('calls getParticipantTags API with search and limit params', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: ['ADRC', 'Pediatric', 'Cardio'],
+    });
+
+    const tags = await participantApi.getParticipantTags('AD', 20, {
+      params: { tenantId: 't-1', siteId: 's-1' },
+    });
+
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/registry/participant-tags',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          search: 'AD',
+          limit: 20,
+          tenantId: 't-1',
+          siteId: 's-1',
+        }),
+      })
+    );
+    expect(tags).toEqual(['ADRC', 'Pediatric', 'Cardio']);
+    getSpy.mockRestore();
+  });
+
+  it('renders ParticipantTagSelect with pills, remove buttons, and input', () => {
+    const htmlWithPills = renderToStaticMarkup(
+      <ParticipantTagSelect
+        id="test-tags"
+        selectedTags={['ADRC', 'Healthy']}
+        onChange={vi.fn()}
+      />
+    );
+    expect(htmlWithPills).toContain('participant-tag-select');
+    expect(htmlWithPills).toContain('ADRC');
+    expect(htmlWithPills).toContain('Healthy');
+    expect(htmlWithPills).toContain('aria-label="Remove tag ADRC"');
+    expect(htmlWithPills).toContain('aria-label="Remove tag Healthy"');
+    expect(htmlWithPills).toContain('aria-label="Clear all tags"');
+
+    const htmlEmpty = renderToStaticMarkup(
+      <ParticipantTagSelect
+        id="test-tags-empty"
+        selectedTags={[]}
+        onChange={vi.fn()}
+      />
+    );
+    expect(htmlEmpty).toContain('placeholder="Select tags or type to create..."');
+  });
+
+  it('renders ParticipantDetailModal with ParticipantTagSelect integrated', () => {
+    const html = renderToStaticMarkup(
+      <ParticipantDetailModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        participant={{
+          ...dummyParticipant,
+          tags: ['Echo-Cohort', 'Priority'],
+        }}
+      />
+    );
+    expect(html).toContain('participant-tag-select');
+    expect(html).toContain('Echo-Cohort');
+    expect(html).toContain('Priority');
+    expect(html).not.toContain('Enter tags separated by commas...');
+    expect(html).toContain('participant-date-time-picker');
+  });
+
+  it('renders ParticipantDateTimePicker with formatted date and action buttons', () => {
+    const html = renderToStaticMarkup(
+      <ParticipantDateTimePicker
+        id="test-date-time"
+        value="09/24/2026 08:26 AM"
+        onChange={vi.fn()}
+      />
+    );
+    expect(html).toContain('participant-date-time-picker');
+    expect(html).toContain('09/24/2026');
+    expect(html).toContain('08:26 AM');
+    expect(html).toContain('aria-label="Open calendar"');
+    expect(html).toContain('aria-label="Set time"');
+    expect(html).toContain('aria-label="Clear date"');
   });
 });
