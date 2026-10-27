@@ -44,6 +44,21 @@ public class ParticipantContact {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "contact_name", length = 255)
+    private String contactName;
+
+    @Column(name = "relationship", length = 100)
+    private String relationship;
+
+    @Column(name = "can_leave_message", nullable = false)
+    private boolean canLeaveMessage = true;
+
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
+
+    @Column(name = "is_preferred", nullable = false)
+    private boolean isPreferred = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -129,6 +144,46 @@ public class ParticipantContact {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public String getContactName() {
+        return contactName;
+    }
+
+    public void setContactName(String contactName) {
+        this.contactName = contactName;
+    }
+
+    public String getRelationship() {
+        return relationship;
+    }
+
+    public void setRelationship(String relationship) {
+        this.relationship = relationship;
+    }
+
+    public boolean isCanLeaveMessage() {
+        return canLeaveMessage;
+    }
+
+    public void setCanLeaveMessage(boolean canLeaveMessage) {
+        this.canLeaveMessage = canLeaveMessage;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public boolean isPreferred() {
+        return isPreferred;
+    }
+
+    public void setPreferred(boolean preferred) {
+        isPreferred = preferred;
     }
 
     public OffsetDateTime getCreatedAt() {

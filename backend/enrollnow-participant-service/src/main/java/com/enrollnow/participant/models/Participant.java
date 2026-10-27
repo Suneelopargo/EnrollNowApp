@@ -56,6 +56,9 @@ public class Participant {
     @Column(name = "custom_attributes", columnDefinition = "jsonb")
     private String customAttributes = "{}";
 
+    @Column(name = "global_last_contact_date")
+    private OffsetDateTime globalLastContactDate;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
 
@@ -165,6 +168,14 @@ public class Participant {
 
     public void setCustomAttributes(String customAttributes) {
         this.customAttributes = customAttributes != null ? customAttributes : "{}";
+    }
+
+    public OffsetDateTime getGlobalLastContactDate() {
+        return globalLastContactDate;
+    }
+
+    public void setGlobalLastContactDate(OffsetDateTime globalLastContactDate) {
+        this.globalLastContactDate = globalLastContactDate;
     }
 
     public OffsetDateTime getCreatedAt() {

@@ -794,7 +794,7 @@ public class ParticipantRegistryService {
         for (UUID sId : participantStudyIds) {
             Study study = studiesMap.get(sId);
             if (study != null) {
-                studyItems.add(new StudyItemDto(study.getName(), true));
+                studyItems.add(new StudyItemDto(study.getName(), true, study.getId(), study.getStudyCode()));
                 if (!study.isArchived() && !study.isAllowParticipationInOtherStudies()) {
                     canParticipateInOtherStudies = false;
                 }
@@ -815,15 +815,24 @@ public class ParticipantRegistryService {
             dto.setTimezone("America/New_York (EDT)");
         }
 
-        // Last Contact date from candidate
-        OffsetDateTime lastContact = candidates.stream()
-                .map(StudyCandidate::getLastContactAt)
-                .filter(Objects::nonNull)
-                .max(OffsetDateTime::compareTo)
-                .orElse(p.getUpdatedAt() != null ? p.getUpdatedAt() : OffsetDateTime.now());
+        // Last Contact date resolution (priority: participant global_last_contact_date, then candidate last_contact_at)
+        OffsetDateTime lastContactDate = p.getGlobalLastContactDate();
+        if (lastContactDate == null) {
+            lastContactDate = candidates.stream()
+                    .map(StudyCandidate::getLastContactAt)
+                    .filter(Objects::nonNull)
+                    .max(OffsetDateTime::compareTo)
+                    .orElse(null);
+        }
 
-        dto.setLastContact("Recent");
-        dto.setGlobalDateOfLastContact(lastContact.format(LAST_CONTACT_FMT));
+        if (lastContactDate != null) {
+            String formattedContact = lastContactDate.format(LAST_CONTACT_FMT);
+            dto.setLastContact(formattedContact);
+            dto.setGlobalDateOfLastContact(formattedContact);
+        } else {
+            dto.setLastContact("");
+            dto.setGlobalDateOfLastContact("");
+        }
 
         // Parse Custom Attributes
         Map<String, Object> customAttrs = parseCustomAttributes(p.getCustomAttributes());
@@ -833,7 +842,7 @@ public class ParticipantRegistryService {
             tags = list.stream().map(Object::toString).collect(Collectors.toList());
         }
         dto.setTags(tags);
-        String famId = customAttrs.getOrDefault("familyId", "FAM-10001").toString();
+        String famId = customAttrs.getOrDefault("familyId", "").toString();
         dto.setFamilyId(famId);
 
         // ContactMethods DTO

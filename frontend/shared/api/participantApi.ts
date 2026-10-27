@@ -91,6 +91,203 @@ export interface AssignStudyPayload {
   notes?: string;
 }
 
+export interface ContactLogItem {
+  id: string;
+  tenantId?: string;
+  participantId: string;
+  studyId?: string;
+  studyName?: string;
+  dateTimeOfContact: string;
+  formattedDateTime?: string;
+  contactType: string;
+  contactMethod?: string;
+  contactedBy: string;
+  contactedByName?: string;
+  spokeTo?: string;
+  regarding?: string;
+  outcome: string;
+  comments?: string;
+  sticky: boolean;
+  notify: boolean;
+  global: boolean;
+  lastContact: boolean;
+  createdAt?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdByInitials?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedByInitials?: string;
+  editable?: boolean;
+  pinnable?: boolean;
+}
+
+export interface CreateContactLogPayload {
+  dateTimeOfContact: string;
+  contactType: string;
+  contactMethod?: string;
+  contactedBy: string;
+  spokeTo?: string;
+  regarding?: string;
+  outcome: string;
+  comments?: string;
+  sticky?: boolean;
+  notify?: boolean;
+  global?: boolean;
+  lastContact?: boolean;
+  studyId?: string;
+}
+
+export interface UpdateContactLogPayload {
+  dateTimeOfContact?: string;
+  contactType?: string;
+  contactMethod?: string;
+  contactedBy?: string;
+  spokeTo?: string;
+  regarding?: string;
+  outcome?: string;
+  comments?: string;
+  sticky?: boolean;
+  notify?: boolean;
+  global?: boolean;
+  lastContact?: boolean;
+}
+
+export interface ContactOutcomeOption {
+  id: string;
+  outcome: string;
+  active?: boolean;
+}
+
+export interface ContactTypeOption {
+  label: string;
+  value: string;
+}
+
+export interface ContactMethodOption {
+  label: string;
+  value: string;
+  isPreferred?: boolean;
+}
+
+export interface ContactTeamMember {
+  id: string;
+  name: string;
+  email?: string;
+}
+
+export interface ParticipantCommentItem {
+  id: string;
+  participantId: string;
+  studyId?: string;
+  text: string;
+  pinned: boolean;
+  global: boolean;
+  authorId?: string;
+  authorName?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CommunicationRecipientItem {
+  id?: string;
+  recipientType: 'TO' | 'CC' | 'BCC';
+  recipientName?: string;
+  recipientValue: string;
+}
+
+export interface CommunicationItem {
+  id: string;
+  participantId: string;
+  studyId?: string;
+  channel: 'EMAIL' | 'SMS' | 'PHONE' | 'OTHER';
+  direction: 'OUTBOUND' | 'INBOUND';
+  subject?: string;
+  body: string;
+  status: string;
+  sentAt?: string;
+  pinned: boolean;
+  senderName?: string;
+  recipients: CommunicationRecipientItem[];
+}
+
+export interface ParticipantContactDetail {
+  id: string;
+  participantId: string;
+  contactType: string;
+  contactValue: string;
+  label?: string;
+  contactName?: string;
+  relationship?: string;
+  canLeaveMessage: boolean;
+  notes?: string;
+  primaryContact: boolean;
+  isPreferred: boolean;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface ParticipantAddressDetail {
+  id: string;
+  participantId: string;
+  addressType: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateRegion?: string;
+  postalCode?: string;
+  countryCode?: string;
+  primaryAddress: boolean;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface ConsentItem {
+  id: string;
+  participantId: string;
+  studyId: string;
+  studyName?: string;
+  consentVersionId: string;
+  consentVersionTitle?: string;
+  versionNumber?: string;
+  status: string; // CONSENTED, PENDING, DECLINED, WITHDRAWN
+  consentedAt?: string;
+  consentedByUserName?: string;
+  consentMethod?: string;
+  withdrawalReason?: string;
+  createdAt: string;
+}
+
+export interface ConsentOptionItem {
+  studyId: string;
+  studyName: string;
+  consentVersionId: string;
+  consentVersionTitle: string;
+  versionNumber: string;
+}
+
+export interface SurveyAssignmentItem {
+  id: string;
+  participantId: string;
+  studyId?: string;
+  studyName?: string;
+  surveyVersionId: string;
+  surveyCode?: string;
+  surveyName?: string;
+  status: string;
+  assignedAt: string;
+  dueAt?: string;
+  completedAt?: string;
+}
+
+export interface SurveyOptionItem {
+  surveyDefinitionId: string;
+  code: string;
+  name: string;
+  description?: string;
+}
+
 export const participantApi = {
   async getParticipants(configOrParams?: any): Promise<any> {
     let params: any;
@@ -178,6 +375,210 @@ export const participantApi = {
       responseType: 'blob',
     });
     return res.data;
+  },
+
+  async getContactLogs(participantId: string, options?: { studyId?: string; tenantId?: string; siteId?: string }): Promise<ContactLogItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/contact-logs`, {
+      params: options,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getContactLog(participantId: string, logId: string, options?: { tenantId?: string; siteId?: string }): Promise<ContactLogItem> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/contact-logs/${logId}`, {
+      params: options,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data;
+  },
+
+  async getContactTypeOptions(options?: { studyId?: string; tenantId?: string }): Promise<ContactTypeOption[]> {
+    const res = await apiClient.get('/api/v1/participants/contact-types', {
+      params: options,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getContactOutcomes(options?: { tenantId?: string }): Promise<ContactOutcomeOption[]> {
+    const res = await apiClient.get('/api/v1/participants/contact-outcomes', {
+      params: options,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getParticipantContactMethods(participantId: string, options?: { studyId?: string; tenantId?: string }): Promise<ContactMethodOption[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/contact-methods`, {
+      params: options,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getContactTeamMembers(options?: { studyId?: string; tenantId?: string }): Promise<ContactTeamMember[]> {
+    const res = await apiClient.get('/api/v1/participants/contact-team-members', {
+      params: options,
+      skipToast: true,
+    } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async createContactLog(participantId: string, payload: CreateContactLogPayload, options?: { tenantId?: string; siteId?: string }): Promise<ContactLogItem> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/contact-logs`, payload, {
+      params: options,
+    });
+    return res.data?.data ?? res.data;
+  },
+
+  async updateContactLog(participantId: string, logId: string, payload: UpdateContactLogPayload, options?: { tenantId?: string; siteId?: string }): Promise<ContactLogItem> {
+    const res = await apiClient.put(`/api/v1/participants/${participantId}/contact-logs/${logId}`, payload, {
+      params: options,
+    });
+    return res.data?.data ?? res.data;
+  },
+
+  async pinContactLog(participantId: string, logId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<ContactLogItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/contact-logs/${logId}/pin`, { sticky }, {
+      params: options,
+    });
+    return res.data?.data ?? res.data;
+  },
+
+  async deleteContactLog(participantId: string, logId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
+    await apiClient.delete(`/api/v1/participants/${participantId}/contact-logs/${logId}`, {
+      params: options,
+    });
+  },
+
+  // 1. Comments
+  async getComments(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantCommentItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/comments`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async createComment(participantId: string, payload: { text: string; pinned?: boolean; global?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantCommentItem> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/comments`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async updateComment(participantId: string, commentId: string, payload: { text: string; pinned?: boolean }, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantCommentItem> {
+    const res = await apiClient.put(`/api/v1/participants/${participantId}/comments/${commentId}`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async pinComment(participantId: string, commentId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantCommentItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/comments/${commentId}/pin`, { sticky }, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async deleteComment(participantId: string, commentId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
+    await apiClient.delete(`/api/v1/participants/${participantId}/comments/${commentId}`, { params: options });
+  },
+
+  // 2. Communications (Email & SMS)
+  async getEmails(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/emails`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async sendEmail(participantId: string, payload: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; body: string; replyTo?: string; senderName?: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/emails`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async pinEmail(participantId: string, emailId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/emails/${emailId}/pin`, { sticky }, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async getEmailRecipients(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/email-recipients`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getSms(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/sms`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async sendSms(participantId: string, payload: { toPhone: string; body: string; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async getSmsRecipients(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/sms-recipients`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  // 3. Contact Management
+  async getContacts(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantContactDetail[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/contacts`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async createContact(participantId: string, payload: Partial<ParticipantContactDetail>, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantContactDetail> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/contacts`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async deleteContact(participantId: string, contactId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
+    await apiClient.delete(`/api/v1/participants/${participantId}/contacts/${contactId}`, { params: options });
+  },
+
+  async getAddresses(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantAddressDetail[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/addresses`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async createAddress(participantId: string, payload: Partial<ParticipantAddressDetail>, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantAddressDetail> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/addresses`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async deleteAddress(participantId: string, addressId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
+    await apiClient.delete(`/api/v1/participants/${participantId}/addresses/${addressId}`, { params: options });
+  },
+
+  // 4. Consent
+  async getConsents(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<ConsentItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/consents`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async recordConsent(participantId: string, payload: { studyId: string; consentVersionId: string; status?: string; consentDate?: string; consentMethod?: string; withdrawalReason?: string }, options?: { tenantId?: string; siteId?: string }): Promise<ConsentItem> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/consents`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async getConsentOptions(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<ConsentOptionItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/consent-options`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  // 5. Forms
+  async getForms(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<SurveyAssignmentItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/forms`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async assignForm(participantId: string, payload: { surveyDefinitionId: string; studyId?: string; dueAt?: string }, options?: { tenantId?: string; siteId?: string }): Promise<SurveyAssignmentItem> {
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/forms/assign`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async updateFormStatus(participantId: string, assignmentId: string, status: string, options?: { tenantId?: string; siteId?: string }): Promise<SurveyAssignmentItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/forms/${assignmentId}/status`, null, {
+      params: { ...options, status },
+    });
+    return res.data?.data ?? res.data;
+  },
+
+  async getAvailableForms(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<SurveyOptionItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/available-forms`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
   },
 };
 

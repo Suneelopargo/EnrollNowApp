@@ -136,10 +136,10 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         gender: p.gender || 'Unspecified',
         age: p.age || 'N/A',
         ageNumeric: p.ageNumeric ?? (typeof p.age === 'number' ? p.age : undefined),
-        lastContact: p.lastContact || 'Recent',
-        familyId: p.familyId || 'FAM-10001',
-        dateCreated: p.dateCreated || new Date().toLocaleDateString('en-GB'),
-        globalId: p.globalId || String(p.id ?? '').substring(0, 8).toUpperCase(),
+        lastContact: p.lastContact || p.globalDateOfLastContact || '',
+        familyId: p.familyId || '',
+        dateCreated: p.dateCreated || '',
+        globalId: p.globalId || '',
         timezone: p.timezone || 'America/New_York (EDT)',
         tags: Array.isArray(p.tags) ? p.tags : [],
         contactForFutureStudies: p.contactForFutureStudies ?? true,
@@ -173,6 +173,11 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       const isUnfiltered = !activeSearch && activeContact === 'all' && activeAvailable === 'all' && activeStudies.length === 0 && activeCustom.length === 0;
       setAllParticipants((prev) => (isUnfiltered || prev.length === 0 ? mapped : prev));
       setSelectedParticipantId((prev) => prev || (mapped.length > 0 ? mapped[0].id : ''));
+      setDetailModalState((prev) => {
+        if (!prev.isOpen || !prev.participant) return prev;
+        const refreshed = mapped.find((m) => m.id === prev.participant?.id);
+        return refreshed ? { isOpen: true, participant: refreshed } : prev;
+      });
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to retrieve participants from the server');
       setError(errorMsg);
@@ -605,6 +610,11 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           if (found) {
             setDetailModalState({ isOpen: true, participant: found });
           }
+        }}
+        tenantId={tenantId}
+        siteId={siteId}
+        onParticipantUpdated={async () => {
+          await fetchParticipants(true);
         }}
       />
     </div>

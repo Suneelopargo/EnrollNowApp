@@ -1,6 +1,9 @@
 // frontend/microfrontends/participant/src/types/participant.ts - TypeScript Contracts for Participant & Registry
 
 export interface StudyItem {
+  id?: string;
+  studyId?: string;
+  studyCode?: string;
   name: string;
   isLink?: boolean;
 }
@@ -112,3 +115,23 @@ export interface SavedSearch {
   selectedStudies?: string[];
   customFilters?: CustomFilterRule[];
 }
+
+export type {
+  ContactLogItem,
+  CreateContactLogPayload,
+  UpdateContactLogPayload,
+  ContactOutcomeOption,
+  ContactTypeOption,
+  ContactMethodOption,
+  ContactTeamMember,
+  ParticipantCommentItem,
+  CommunicationItem,
+  CommunicationRecipientItem,
+  ParticipantContactDetail,
+  ParticipantAddressDetail,
+  ConsentItem,
+  ConsentOptionItem,
+  SurveyAssignmentItem,
+  SurveyOptionItem,
+} from '../../../../shared/api/participantApi';
+

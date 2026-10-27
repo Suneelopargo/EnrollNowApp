@@ -18,6 +18,13 @@ import {
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
 import { ParticipantRecord, ParticipantVariable } from '../types/participant';
+import { ParticipantContactLogs } from './ParticipantContactLogs';
+import { ParticipantContactManagement } from './ParticipantContactManagement';
+import { ParticipantComments } from './ParticipantComments';
+import { ParticipantEmailSection } from './ParticipantEmailSection';
+import { ParticipantSmsSection } from './ParticipantSmsSection';
+import { ParticipantConsentSection } from './ParticipantConsentSection';
+import { ParticipantFormsSection } from './ParticipantFormsSection';
 
 export interface ParticipantDetailModalProps {
   isOpen: boolean;
@@ -25,14 +32,9 @@ export interface ParticipantDetailModalProps {
   participant: ParticipantRecord | null;
   onSave: (updatedParticipant: ParticipantRecord) => void;
   onSelectParticipantById?: (participantId: string) => void;
-}
-
-interface CommentRecord {
-  id: string;
-  author: string;
-  date: string;
-  text: string;
-  pinned: boolean;
+  onParticipantUpdated?: () => void;
+  tenantId?: string;
+  siteId?: string;
 }
 
 export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
@@ -41,6 +43,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   participant,
   onSave,
   onSelectParticipantById,
+  onParticipantUpdated,
+  tenantId,
+  siteId,
 }) => {
   const [activeTopNav, setActiveTopNav] = useState<'details' | 'contact' | 'demographics' | 'family' | 'variables'>('details');
   const [activeTab, setActiveTab] = useState<'comments' | 'email' | 'text' | 'contact' | 'consent' | 'forms'>('comments');
@@ -79,14 +84,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [newVarType, setNewVarType] = useState('Text');
   const [isAddingVariable, setIsAddingVariable] = useState(false);
 
-  // Comments
-  const [commentText, setCommentText] = useState('');
-  const [isPinned, setIsPinned] = useState(false);
-  const [comments, setComments] = useState<CommentRecord[]>([
-    { id: '1', author: 'Dr. Sarah Connor', date: '21/03/2025, 02:15 PM', text: 'Initial screening completed. Eligible for Autism Study.', pinned: true },
-    { id: '2', author: 'Coordinator Mark', date: '20/03/2025, 11:45 AM', text: 'Updated contact preferences to Primary Email.', pinned: false }
-  ]);
-
   useEffect(() => {
     if (participant) {
       setFamilyId(participant.familyId || '');
@@ -115,21 +112,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   }, [participant]);
 
   if (!isOpen || !participant) return null;
-
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
-    const newC: CommentRecord = {
-      id: String(Date.now()),
-      author: 'Current User (Coordinator)',
-      date: new Date().toLocaleDateString('en-GB') + ', ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      text: commentText.trim(),
-      pinned: isPinned
-    };
-    setComments([newC, ...comments]);
-    setCommentText('');
-    setIsPinned(false);
-  };
 
   const handleAddVariable = () => {
     if (!newVarName.trim()) return;
@@ -251,7 +233,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 <div className="record-detail__field">
                   <span className="form-label">Date Created</span>
                   <span className="record-detail__readonly">
-                    {participant.dateCreated || 'Recent'}
+                    {participant.dateCreated || '—'}
                   </span>
                 </div>
 
@@ -326,70 +308,14 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: CONTACT METHODS */}
+          {/* TAB 2: CONTACT METHODS & PERSONS */}
           {activeTopNav === 'contact' && (
-            <div className="card record-detail__panel">
-              <div className="card-header">
-                <h3>Contact methods</h3>
-                <p>How this participant prefers to be reached.</p>
-              </div>
-              <div className="record-detail__panel-content record-detail__overview-grid">
-                <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-primary-email">Primary email</label>
-                  <input
-                    id="participant-primary-email"
-                    type="email"
-                    value={primaryEmail}
-                    onChange={(e) => setPrimaryEmail(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-secondary-email">Secondary email</label>
-                  <input
-                    id="participant-secondary-email"
-                    type="email"
-                    value={secondaryEmail}
-                    onChange={(e) => setSecondaryEmail(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-phone-number">Phone number</label>
-                  <input
-                    id="participant-phone-number"
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-                <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-preferred-method">Preferred method</label>
-                  <select
-                    id="participant-preferred-method"
-                    value={preferredMethod}
-                    onChange={(e) => setPreferredMethod(e.target.value)}
-                    className="form-select"
-                  >
-                    <option value="Email">Email</option>
-                    <option value="Phone">Phone</option>
-                    <option value="Mail">Mail</option>
-                    <option value="SMS">SMS / Text</option>
-                  </select>
-                </div>
-                <div className="record-detail__field record-detail__field--wide">
-                  <label className="form-label" htmlFor="participant-address">Address</label>
-                  <input
-                    id="participant-address"
-                    type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-            </div>
+            <ParticipantContactManagement
+              participantId={participant.id}
+              participantName={participant.name}
+              tenantId={tenantId}
+              siteId={siteId}
+            />
           )}
 
           {/* TAB 3: DEMOGRAPHICS */}
@@ -668,97 +594,63 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 ]}
               />
 
-              <div className="record-detail__panel-content">
+              <div className="record-detail__panel-content p-0">
                 {activeTab === 'comments' && (
-                  <form onSubmit={handleAddComment} className="record-detail__comment-form">
-                    <textarea
-                      rows={3}
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Add comment..."
-                      aria-label="Add comment"
-                      className="form-textarea"
-                    />
-                    
-                    <div className="record-detail__comment-options">
-                      <div className="record-detail__checkbox-field">
-                        <span className="form-label">Mark comment as</span>
-                        <label className="record-detail__checkbox-field">
-                          <input
-                            type="checkbox"
-                            checked={isPinned}
-                            onChange={(e) => setIsPinned(e.target.checked)}
-                          />
-                          <span>Pin Comment</span>
-                        </label>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="btn btn-primary"
-                        disabled={!commentText.trim()}
-                      >
-                        <Plus size={16} /> Add Comment
-                      </button>
-                    </div>
-
-                    <div className="record-detail__comments-list">
-                      {comments.map((comment) => (
-                        <div key={comment.id} className={`record-detail__comment-item ${comment.pinned ? 'record-detail__comment-item--pinned' : ''}`}>
-                          <div className="record-detail__comment-header">
-                            <div>
-                              <strong className="record-detail__comment-author">{comment.author}</strong>
-                              <span className="record-detail__comment-date">{comment.date}</span>
-                            </div>
-                            {comment.pinned && (
-                              <span className="badge badge-warning">Pinned</span>
-                            )}
-                          </div>
-                          <p className="record-detail__comment-body">{comment.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </form>
+                  <ParticipantComments
+                    participantId={participant.id}
+                    participantName={participant.name}
+                    studyId={participant.studies?.[0]?.studyId || (participant.studies?.[0] as any)?.id || participant.studies?.[0]?.name}
+                    tenantId={tenantId}
+                    siteId={siteId}
+                  />
                 )}
 
                 {activeTab === 'email' && (
-                  <div className="record-detail__tab-placeholder">
-                    <Mail size={32} />
-                    <h4>Direct Email Channel</h4>
-                    <p>Send secure updates directly to {primaryEmail || participant.name}.</p>
-                  </div>
+                  <ParticipantEmailSection
+                    participantId={participant.id}
+                    participantName={participant.name}
+                    tenantId={tenantId}
+                    siteId={siteId}
+                  />
                 )}
 
                 {activeTab === 'text' && (
-                  <div className="record-detail__tab-placeholder">
-                    <Phone size={32} />
-                    <h4>SMS Gateway</h4>
-                    <p>Twilio SMS gateway integration for participant mobile {phone || 'N/A'}.</p>
-                  </div>
+                  <ParticipantSmsSection
+                    participantId={participant.id}
+                    participantName={participant.name}
+                    tenantId={tenantId}
+                    siteId={siteId}
+                  />
                 )}
 
                 {activeTab === 'contact' && (
-                  <div className="record-detail__tab-placeholder">
-                    <User size={32} />
-                    <h4>Contact Logs</h4>
-                    <p>Outreach logs and phone screen history.</p>
-                  </div>
+                  <ParticipantContactLogs
+                    participantId={participant.id}
+                    participantName={participant.name}
+                    tenantId={tenantId}
+                    siteId={siteId}
+                    onParticipantUpdated={onParticipantUpdated}
+                  />
                 )}
 
                 {activeTab === 'consent' && (
-                  <div className="record-detail__tab-placeholder">
-                    <ShieldCheck size={32} />
-                    <h4>Consent Records</h4>
-                    <p>E-Consent status: Verified by IRB.</p>
-                  </div>
+                  <ParticipantConsentSection
+                    participantId={participant.id}
+                    participantName={participant.name}
+                    studyId={participant.studies?.[0]?.studyId || (participant.studies?.[0] as any)?.id || participant.studies?.[0]?.name}
+                    tenantId={tenantId}
+                    siteId={siteId}
+                  />
                 )}
 
                 {activeTab === 'forms' && (
-                  <div className="record-detail__tab-placeholder">
-                    <FileText size={32} />
-                    <h4>Case Report Forms</h4>
-                    <p>Standard intake CRF forms attached to participant.</p>
-                  </div>
+                  <ParticipantFormsSection
+                    participantId={participant.id}
+                    participantName={participant.name}
+                    studyId={participant.studies?.[0]?.studyId || (participant.studies?.[0] as any)?.id || participant.studies?.[0]?.name}
+                    tenantId={tenantId}
+                    siteId={siteId}
+                  />
                 )}
               </div>
             </div>
