@@ -5,7 +5,7 @@ import { Modal } from './Modal';
 import { AccessibleField } from '../../accessibility/AccessibleField';
 import { toast } from '../../toaster';
 import { confirmation } from '../../confirmation';
-import { studyApi } from '../../api/studyApi';
+import { studyApi, type Study } from '../../api/studyApi';
 import { getApiErrorMessage } from '../../api-client';
 import { validateField, validators, validateStudyName, STUDY_NAME_RULES } from '../validation';
 
@@ -13,8 +13,8 @@ export interface AddStudyModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStudyCreated?: (studyId: string, studyName: string) => void;
-  studies?: any[];
-  studyToEdit?: any | null;
+  studies?: Study[];
+  studyToEdit?: Study | null;
 }
 
 export const AddStudyModal: React.FC<AddStudyModalProps> = ({
@@ -28,7 +28,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
   const [studyForm, setStudyForm] = useState({ shortName: '', templateId: '' });
   const [shortNameError, setShortNameError] = useState<string | null>(null);
   const [isSavingStudy, setIsSavingStudy] = useState(false);
-  const [availableStudies, setAvailableStudies] = useState<any[]>(studies);
+  const [availableStudies, setAvailableStudies] = useState<Study[]>(studies);
 
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,8 +36,9 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (studyToEdit) {
+        const initialName = String(studyToEdit.shortName || studyToEdit.name || studyToEdit.title || '');
         setStudyForm({
-          shortName: (studyToEdit.shortName || studyToEdit.name || studyToEdit.title || '').slice(0, 15),
+          shortName: initialName.slice(0, 15),
           templateId: '',
         });
       } else {
@@ -150,7 +151,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
       return;
     }
 
-    let parsedJson: Record<string, any> | null = null;
+    let parsedJson: Record<string, unknown> | null = null;
     try {
       const fileText = await file.text();
       parsedJson = JSON.parse(fileText);
@@ -162,12 +163,13 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
 
     let trimmedName = studyForm.shortName.trim();
     if (!trimmedName && parsedJson) {
-      const extracted = (
-        parsedJson.study?.name ||
+      const studyObj = parsedJson.study as Record<string, unknown> | undefined;
+      const rawExtracted =
+        studyObj?.name ||
         parsedJson.studyName ||
         parsedJson.name ||
-        file.name.replace(/\.json$/i, '')
-      ).trim();
+        file.name.replace(/\.json$/i, '');
+      const extracted = typeof rawExtracted === 'string' ? rawExtracted.trim() : '';
       if (extracted) {
         trimmedName = extracted.slice(0, 15);
         setStudyForm((current) => ({ ...current, shortName: trimmedName }));

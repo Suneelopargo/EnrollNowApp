@@ -19,9 +19,10 @@ import {
   FileSpreadsheet,
   FileText,
 } from 'lucide-react';
+import type { Study } from '@enrollnow/shared';
 
 export interface StudyDirectoryProps {
-  studies: any[];
+  studies: Study[];
   loading?: boolean;
   onSelectStudy: (studyId: string, tab?: string) => void;
   onAddStudy: () => void;

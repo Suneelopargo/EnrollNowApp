@@ -1174,7 +1174,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                         <select
                           className="study-settings-select"
                           value={emailScheduleTriggerType}
-                          onChange={(e) => setEmailScheduleTriggerType(e.target.value as any)}
+                          onChange={(e) => setEmailScheduleTriggerType(e.target.value as 'event' | 'variable')}
                         >
                           <option value="event">Study Event</option>
                           <option value="variable">Variable</option>
@@ -1407,7 +1407,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                         <select
                           className="study-settings-select"
                           value={textScheduleTriggerType}
-                          onChange={(e) => setTextScheduleTriggerType(e.target.value as any)}
+                          onChange={(e) => setTextScheduleTriggerType(e.target.value as 'event' | 'variable')}
                         >
                           <option value="event">Study Event</option>
                           <option value="variable">Variable</option>

@@ -56,6 +56,7 @@ export interface Study {
   id?: string | number;
   studyId?: string;
   studyCode?: string;
+  shortName?: string;
   protocolId?: string;
   protocolNumber?: string;
   name?: string;
