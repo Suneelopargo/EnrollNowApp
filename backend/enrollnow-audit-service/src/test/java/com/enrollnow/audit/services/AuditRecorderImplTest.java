@@ -26,6 +26,7 @@ import java.util.Optional;
 import com.enrollnow.common.audit.CurrentActorProvider;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class AuditRecorderImplTest {
 
@@ -39,15 +40,19 @@ class AuditRecorderImplTest {
     private CurrentActorProvider currentActorProvider;
 
     private AuditRecorderImpl auditRecorder;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
 
+        objectMapper = new ObjectMapper();
+
         auditRecorder = new AuditRecorderImpl(
                 auditEventRepository,
                 entityChangeHistoryRepository,
-                currentActorProvider
+                currentActorProvider,
+                objectMapper
         );
     }
 
@@ -130,8 +135,15 @@ class AuditRecorderImplTest {
         assertEquals("USER", history.getEntityType());
         assertEquals(entityId, history.getEntityId());
         assertEquals("studyPermission", history.getFieldName());
-        assertEquals("STUDY_RA", history.getPreviousValue());
-        assertEquals("STUDY_ADMIN", history.getNewValue());
+        assertEquals(
+                "STUDY_RA",
+                history.getPreviousValue().asText()
+        );
+
+        assertEquals(
+                "STUDY_ADMIN",
+                history.getNewValue().asText()
+        );
         assertNotNull(history.getChangedAt());
     }
     

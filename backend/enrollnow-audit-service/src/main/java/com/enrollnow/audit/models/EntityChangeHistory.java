@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.Immutable;
 
 /**
  * Field-level change history linked to one audit event.
@@ -28,7 +30,9 @@ import jakarta.persistence.Table;
  *
  * The table is append-only at database level.
  */
+
 @Entity
+@Immutable
 @Table(name = "entity_change_history")
 public class EntityChangeHistory {
 
@@ -53,11 +57,11 @@ public class EntityChangeHistory {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "previous_value", columnDefinition = "jsonb")
-    private Object previousValue;
+    private JsonNode previousValue;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "new_value", columnDefinition = "jsonb")
-    private Object newValue;
+    private JsonNode newValue;
 
     @Column(name = "changed_at", nullable = false)
     private OffsetDateTime changedAt;
@@ -113,19 +117,19 @@ public class EntityChangeHistory {
         this.fieldName = fieldName;
     }
 
-    public Object getPreviousValue() {
+    public JsonNode getPreviousValue() {
         return previousValue;
     }
 
-    public void setPreviousValue(Object previousValue) {
+    public void setPreviousValue(JsonNode previousValue) {
         this.previousValue = previousValue;
     }
 
-    public Object getNewValue() {
+    public JsonNode getNewValue() {
         return newValue;
     }
 
-    public void setNewValue(Object newValue) {
+    public void setNewValue(JsonNode newValue) {
         this.newValue = newValue;
     }
 

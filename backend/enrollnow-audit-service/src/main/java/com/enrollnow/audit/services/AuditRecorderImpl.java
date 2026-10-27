@@ -15,6 +15,7 @@ import com.enrollnow.common.audit.AuditChange;
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
 import java.util.UUID;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Default persistence implementation of the cross-module AuditRecorder.
@@ -36,15 +37,18 @@ public class AuditRecorderImpl implements AuditRecorder {
     private final AuditEventRepository auditEventRepository;
     private final EntityChangeHistoryRepository entityChangeHistoryRepository;
     private final CurrentActorProvider currentActorProvider;
+    private final ObjectMapper objectMapper;
 
     public AuditRecorderImpl(
             AuditEventRepository auditEventRepository,
             EntityChangeHistoryRepository entityChangeHistoryRepository,
-            CurrentActorProvider currentActorProvider) {
+            CurrentActorProvider currentActorProvider,
+            ObjectMapper objectMapper) {
 
         this.auditEventRepository = auditEventRepository;
         this.entityChangeHistoryRepository = entityChangeHistoryRepository;
         this.currentActorProvider = currentActorProvider;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -110,8 +114,13 @@ public class AuditRecorderImpl implements AuditRecorder {
             history.setEntityType(command.entityType());
             history.setEntityId(command.entityId());
             history.setFieldName(change.fieldName());
-            history.setPreviousValue(change.previousValue());
-            history.setNewValue(change.newValue());
+            history.setPreviousValue(
+                    objectMapper.valueToTree(change.previousValue())
+            );
+
+            history.setNewValue(
+                    objectMapper.valueToTree(change.newValue())
+            );
             history.setChangedAt(now);
 
             entityChangeHistoryRepository.save(history);

@@ -13,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.Immutable;
 
 /**
  * Persistent audit event.
@@ -32,9 +33,9 @@ import jakarta.persistence.Table;
  * tokens, credentials, API keys or secrets in beforeData/afterData.
  */
 @Entity
+@Immutable
 @Table(name = "audit_events")
 public class AuditEvent {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
