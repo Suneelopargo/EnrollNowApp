@@ -1,13 +1,14 @@
 package com.enrollnow.study.services;
 
-import com.enrollnow.identity.exceptions.InvalidRoleAssignmentException;
-import com.enrollnow.identity.exceptions.RoleNotFoundException;
+import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.exceptions.UserNotFoundException;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
+import com.enrollnow.identity.services.SiteAuthorizationService;
+import com.enrollnow.identity.services.SitePermissionService;
 import com.enrollnow.study.dtos.GrantStudyAccessRequest;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.models.Study;
@@ -19,9 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,6 +51,12 @@ class StudyAccessServiceTest {
     @Mock
     private StudyRepository studyRepository;
 
+    @Mock
+    private SitePermissionService sitePermissionService;
+
+    @Mock
+    private SiteAuthorizationService siteAuthorizationService;
+
     private StudyAccessService studyAccessService;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -59,7 +70,46 @@ class StudyAccessServiceTest {
                 roleRepository,
                 userRoleAssignmentRepository,
                 studyMemberRepository,
-                studyRepository
+                studyRepository,
+                sitePermissionService,
+                siteAuthorizationService
+        );
+
+        SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, tenantId);
+        lenient().when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
+
+        UserEffectivePermissionsResponse effective = new UserEffectivePermissionsResponse();
+        effective.setCanManageSiteAdmins(true);
+        effective.setPermissions(List.of(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE));
+        lenient().when(sitePermissionService.resolveEffectivePermissions(any(), any(), any())).thenReturn(effective);
+    }
+
+    @Test
+    void grantStudyAccess_unauthenticated_throwsInsufficientAuthenticationException() {
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.empty());
+
+        GrantStudyAccessRequest request = new GrantStudyAccessRequest();
+        request.setStudyRole("Study Member");
+        request.setStudyPermission("STUDY_ADMIN");
+
+        assertThrows(
+                InsufficientAuthenticationException.class,
+                () -> studyAccessService.grantStudyAccess(tenantId, studyId, userId, request)
+        );
+    }
+
+    @Test
+    void grantStudyAccess_crossTenant_throwsAccessDeniedException() {
+        doThrow(new AccessDeniedException("Access denied: cross-tenant operation is not permitted"))
+                .when(siteAuthorizationService).requireTenantMatch(tenantId);
+
+        GrantStudyAccessRequest request = new GrantStudyAccessRequest();
+        request.setStudyRole("Study Member");
+        request.setStudyPermission("STUDY_ADMIN");
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyAccessService.grantStudyAccess(tenantId, studyId, userId, request)
         );
     }
 

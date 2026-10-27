@@ -59,6 +59,13 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
     }
   }, [isOpen, studyToEdit, studies]);
 
+  const handleClose = () => {
+    setStudyForm({ shortName: '', templateId: '' });
+    setShortNameError(null);
+    setIsSavingStudy(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   const eligibleTemplates = availableStudies.filter(
@@ -120,7 +127,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
         onClose();
         onStudyCreated?.(newId, trimmedName);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const msg = getApiErrorMessage(err) || 'Unable to save the study. Please try again.';
       toast.error(msg);
     } finally {
@@ -143,7 +150,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
       return;
     }
 
-    let parsedJson: any = null;
+    let parsedJson: Record<string, any> | null = null;
     try {
       const fileText = await file.text();
       parsedJson = JSON.parse(fileText);
@@ -199,7 +206,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
       const newId = String(result.studyId ?? result.studyCode);
       onClose();
       onStudyCreated?.(newId, trimmedName);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errMsg =
         getApiErrorMessage(err) ||
         `Something went wrong while importing file ${file.name}, please contact the site admin.`;
@@ -233,7 +240,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
       <button
         type="button"
         className="btn btn-secondary"
-        onClick={onClose}
+        onClick={handleClose}
         disabled={isSavingStudy}
       >
         Cancel
@@ -244,7 +251,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       title={isEditMode ? 'Edit Study' : 'Add Study'}
       footer={modalFooter}
       className="study-form-modal"
@@ -312,7 +319,7 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
 
         <input
           ref={importInputRef}
-          style={{ display: 'none' }}
+          className="study-file-input--hidden"
           type="file"
           accept="application/json,.json"
           aria-label="Import study JSON file"

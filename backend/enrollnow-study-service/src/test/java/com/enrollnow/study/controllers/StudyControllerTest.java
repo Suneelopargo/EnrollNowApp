@@ -18,6 +18,7 @@ import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.services.MyStudiesService;
+import com.enrollnow.study.services.StudyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +30,7 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -56,7 +58,15 @@ class StudyControllerTest {
 
     @BeforeEach
     void setUp() {
-        studyController = new StudyController(studyRepository, siteAuthorizationService, myStudiesService);
+        studyController = new StudyController(new StudyService(studyRepository, myStudiesService), siteAuthorizationService, new com.fasterxml.jackson.databind.ObjectMapper());
+        SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, tenantId);
+        lenient().when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
+        UserEffectivePermissionsResponse adminEffective = new UserEffectivePermissionsResponse();
+        adminEffective.setUserId(userId);
+        adminEffective.setCanManageSiteAdmins(true);
+        adminEffective.setCanAccessSiteAdmin(true);
+        adminEffective.setPermissions(List.of(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE));
+        lenient().when(siteAuthorizationService.getCallerEffectivePermissions(any(), any())).thenReturn(Optional.of(adminEffective));
     }
 
     @Test
@@ -321,6 +331,13 @@ class StudyControllerTest {
         study.setId(studyId);
         study.setName("Private Study");
 
+        UserEffectivePermissionsResponse nonAdmin = new UserEffectivePermissionsResponse();
+        nonAdmin.setUserId(userId);
+        nonAdmin.setCanManageSiteAdmins(false);
+        nonAdmin.setCanAccessSiteAdmin(false);
+        nonAdmin.setPermissions(List.of());
+        when(siteAuthorizationService.getCallerEffectivePermissions(any(), any())).thenReturn(Optional.of(nonAdmin));
+
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
@@ -335,13 +352,13 @@ class StudyControllerTest {
     }
 
     @Test
-    void getStudyNavigationPermissions_unauthenticated_returns403() {
+    void getStudyNavigationPermissions_unauthenticated_returns401() {
         when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.empty());
 
         ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
                 studyController.getStudyNavigationPermissions(tenantId, studyId.toString());
 
-        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
         assertNotNull(response.getBody());
         assertFalse(response.getBody().isSuccess());
     }

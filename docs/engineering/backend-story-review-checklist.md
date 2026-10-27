@@ -83,6 +83,8 @@ This checklist must be completed by the story author before opening a Pull Reque
   - Creation vs mutation permissions are distinguished (`requireStudyCreateAccess` vs `requireStudyManageAccess`).
   - Caller identity resolution fails closed when authentication context is missing.
   - Zero synthetic metrics fabricated (e.g. no placeholder enrollment percentages).
+  - No hardcoded tenant fallback UUIDs (`11111111-1111-1111-1111-111111111111`) in controllers or service implementations.
+  - Study import configuration aliases (`studyData`, `data`, `payload`, `configuration`) supported via Jackson `@JsonAlias`.
 - [ ] **Data Sanitization & Injection Prevention:**
   - All queries use parameterized JPQL or Spring Data method names (no concatenated SQL).
 

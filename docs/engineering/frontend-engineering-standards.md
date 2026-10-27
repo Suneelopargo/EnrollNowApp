@@ -85,3 +85,17 @@ The EnrollNow frontend monorepo (`frontend/`) is organized into:
    - Shared utilities, API clients, and data adapters must have deterministic unit tests.
    - New form validation rules and error mappers must test both valid and invalid edge cases.
    - Interactive components and modals must verify accessibility attributes (`role`, `aria-*`, keyboard handlers).
+
+---
+
+## 6. SCSS Styling & Strict Typing Standards
+
+1. **SCSS-Only Styling Policy:**
+   - All styling must be written in modular SCSS (`.scss`) files.
+   - Inline styles (`style={{ ... }}`) are prohibited in production React components. Extract layouts, spacing, table column widths, and color overrides into shared SCSS classes in `frontend/shared/design-system/styles/` or component SCSS modules.
+2. **Zero-Any Strict Typing:**
+   - Production code must maintain strong typing. Bypassing TypeScript compiler checks using `any` or unchecked type assertions is strictly disallowed.
+   - Use strongly typed response wrappers (such as `ApiResponseEnvelope<T>` and `unwrapResponse<T>`) for API clients.
+3. **Centralized Error Helpers:**
+   - Error extraction must route through `frontend/shared/api/errors.ts` or `getApiErrorMessage` from `frontend/shared/api-client`.
+

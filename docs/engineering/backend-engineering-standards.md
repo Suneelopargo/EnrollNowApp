@@ -174,3 +174,22 @@ The repository does **not** currently configure Checkstyle, SpotBugs, PMD, ArchU
 - Absence of N+1 query loops.
 - Usage of `SecurityTokenHelper` and `ApiResponse`.
 - Meaningful unit and controller test coverage for new code.
+
+---
+
+## 7. Study Module Engineering Standards
+
+### 7.1 Fail-Closed Authorization & Tenant Isolation
+1. **Granular Study Permissions:** Distinguish study creation permission (`SITE_STUDIES_CREATE` via `siteAuthorizationService.requireStudyCreateAccess(tenantId)`) from study modification permission (`requireStudyManageAccess(tenantId, studyId)`). Non-admin users are strictly filtered to their assigned studies via `MyStudiesService`.
+2. **Fail-Closed Authenticated Context:** Any endpoint invocation lacking authenticated caller credentials or valid tenant context must immediately throw `InsufficientAuthenticationException` (translating to HTTP 401 UNAUTHORIZED). Production services and controllers must never fall back to hardcoded tenant UUIDs (e.g. `11111111-1111-1111-1111-111111111111`).
+3. **Mandatory Security Dependencies:** Service constructors must require non-null security dependencies (`SiteAuthorizationService`, `SitePermissionService`). Tests must configure appropriate caller identity mocks rather than instantiating services with null security collaborators.
+
+### 7.2 Strongly-Typed DTOs & Validation
+1. **Explicit Request Bodies:** Replaces untyped `Map<String, Object>` inputs with typed DTOs decorated with `@Valid` and Bean Validation constraints (`@NotBlank`, `@NotNull`, `@Size(max = 15)`).
+2. **Import Payload Compatibility:** Aliases for study configuration payloads (`studyData`, `data`, `payload`, `configuration`) are preserved via `@JsonAlias` to guarantee backwards compatibility with legacy export formats.
+3. **Canonical Study Name Rules:** Enforce required short name, maximum 15 characters, and case-insensitive tenant-scoped uniqueness across create, update, copy, and import flows.
+
+### 7.3 Data Truthfulness & Performance
+1. **Authoritative Enrollment Metrics:** No arbitrary calculations or synthetic percentages (e.g. `Math.round(sample * 0.65)`) may be used to fabricate enrollment. Missing values are explicitly nullable.
+2. **Batch Query Optimization:** Study member and user profile resolution utilizes repository batch lookups (`findByTenantIdAndStudyIdIn`, `findAllById`) to prevent N+1 query overhead.
+

@@ -755,12 +755,11 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                     name="prefix"
                     type="text"
                     placeholder="e.g. STU01"
-                    className={`study-form-input ${fieldErrors.prefix ? 'study-form-input--error' : ''}`}
                     value={form.prefix}
                     onChange={handleInputChange}
                     maxLength={5}
                     disabled={isReadOnly}
-                    style={{ textTransform: 'uppercase' }}
+                    className={`study-form-input study-input--uppercase ${fieldErrors.prefix ? 'study-form-input--error' : ''}`}
                     aria-required="true"
                     aria-invalid={Boolean(fieldErrors.prefix)}
                     aria-describedby={fieldErrors.prefix ? 'study-prefix-error' : undefined}
@@ -785,7 +784,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
             <h3 className="study-settings-card__title">Regulatory &amp; Funding</h3>
           </div>
           <div className="study-settings-card__body">
-            <div className="study-form-group" style={{ maxWidth: 360 }}>
+            <div className="study-form-group study-form-group--max-360">
               <label htmlFor="study-details-irb-id" className="study-form-label">
                 IRB Approved # / ID
               </label>
@@ -820,9 +819,9 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                   <table className="study-grants-table" aria-label="Study Grants Table">
                     <thead>
                       <tr>
-                        <th scope="col" style={{ width: '45%' }}>Grant #</th>
-                        <th scope="col" style={{ width: '45%' }}>Granting Agency</th>
-                        <th scope="col" style={{ width: '10%', textAlign: 'center' }}>Action</th>
+                        <th scope="col" className="study-table__col-45">Grant #</th>
+                        <th scope="col" className="study-table__col-45">Granting Agency</th>
+                        <th scope="col" className="study-table__col-10 study-table__col--center">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -850,7 +849,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                               disabled={isReadOnly}
                             />
                           </td>
-                          <td style={{ textAlign: 'center' }}>
+                          <td className="study-table__col--center">
                             {!isReadOnly && (
                               <button
                                 type="button"
@@ -949,7 +948,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
                 </div>
 
                 {importFile && importCategories.length === 0 && (
-                  <p className="study-field-hint" style={{ marginTop: 8 }}>
+                  <p className="study-field-hint study-field-hint--mt-8">
                     No importable components found in this file.
                   </p>
                 )}

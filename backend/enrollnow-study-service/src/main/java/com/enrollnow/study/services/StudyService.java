@@ -166,25 +166,18 @@ public class StudyService {
             UUID callerUserId,
             boolean canManageSiteAdmins
     ) {
+        if (tenantId == null) {
+            throw new InvalidStudyException("Tenant ID is required to retrieve studies.");
+        }
         List<Study> studies;
-        if (tenantId != null) {
-            if ("archived".equalsIgnoreCase(status)) {
-                studies = studyRepository.findByTenantIdAndArchivedTrue(tenantId);
-            } else if ("all".equalsIgnoreCase(status)) {
-                studies = studyRepository.findByTenantId(tenantId);
-            } else {
-                studies = includeArchived
-                        ? studyRepository.findByTenantId(tenantId)
-                        : studyRepository.findByTenantIdAndArchivedFalse(tenantId);
-            }
+        if ("archived".equalsIgnoreCase(status)) {
+            studies = studyRepository.findByTenantIdAndArchivedTrue(tenantId);
+        } else if ("all".equalsIgnoreCase(status)) {
+            studies = studyRepository.findByTenantId(tenantId);
         } else {
-            if ("archived".equalsIgnoreCase(status)) {
-                studies = studyRepository.findAll().stream().filter(Study::isArchived).collect(Collectors.toList());
-            } else if ("all".equalsIgnoreCase(status) || includeArchived) {
-                studies = studyRepository.findAll();
-            } else {
-                studies = studyRepository.findAll().stream().filter(s -> !s.isArchived()).collect(Collectors.toList());
-            }
+            studies = includeArchived
+                    ? studyRepository.findByTenantId(tenantId)
+                    : studyRepository.findByTenantIdAndArchivedFalse(tenantId);
         }
 
         // If caller is non-admin and restricted to assigned studies
@@ -448,9 +441,10 @@ public class StudyService {
 
     @Transactional
     public StudySummaryResponse createStudy(UUID tenantId, CreateStudyRequest request, UUID callerUserId) {
-        UUID effectiveTenantId = tenantId != null
-                ? tenantId
-                : UUID.fromString("11111111-1111-1111-1111-111111111111");
+        if (tenantId == null) {
+            throw new InvalidStudyException("Tenant ID is required to create a study.");
+        }
+        UUID effectiveTenantId = tenantId;
 
         String name = (request != null && request.getName() != null) ? request.getName() : "";
         validateStudyName(effectiveTenantId, name);
@@ -494,9 +488,10 @@ public class StudyService {
 
     @Transactional
     public StudySummaryResponse copyStudy(UUID tenantId, CopyStudyRequest request, UUID callerUserId) {
-        UUID effectiveTenantId = tenantId != null
-                ? tenantId
-                : UUID.fromString("11111111-1111-1111-1111-111111111111");
+        if (tenantId == null) {
+            throw new InvalidStudyException("Tenant ID is required to copy a study.");
+        }
+        UUID effectiveTenantId = tenantId;
 
         if (request == null || request.getStudyName() == null || request.getStudyName().isBlank()) {
             throw new InvalidStudyException("Short study name is required");
@@ -556,9 +551,10 @@ public class StudyService {
             Map<String, Object> dataJSON,
             UUID callerUserId
     ) {
-        UUID effectiveTenantId = tenantId != null
-                ? tenantId
-                : UUID.fromString("11111111-1111-1111-1111-111111111111");
+        if (tenantId == null) {
+            throw new InvalidStudyException("Tenant ID is required to import a study.");
+        }
+        UUID effectiveTenantId = tenantId;
 
         validateStudyName(effectiveTenantId, studyName);
         checkStudyLimit(effectiveTenantId);

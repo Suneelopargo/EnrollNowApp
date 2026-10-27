@@ -1,7 +1,12 @@
 package com.enrollnow.study.dtos;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class SaveTextTemplateRequest {
 
+    @NotBlank(message = "Template name is required")
+    @Size(max = 100, message = "Template name must not exceed 100 characters")
     private String name;
     private String description;
     private String message;

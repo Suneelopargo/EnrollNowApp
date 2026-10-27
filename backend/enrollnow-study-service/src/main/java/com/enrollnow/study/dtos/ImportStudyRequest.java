@@ -13,7 +13,7 @@ public class ImportStudyRequest {
     @JsonAlias({"shortName", "name", "title"})
     private String studyName;
 
-    @JsonAlias({"studyData", "data"})
+    @JsonAlias({"studyData", "data", "payload", "configuration"})
     private Map<String, Object> studyData;
 
     public ImportStudyRequest() {

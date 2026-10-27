@@ -1,13 +1,18 @@
 package com.enrollnow.study.dtos;
 
-import java.time.LocalDate;
-import java.util.UUID;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public class StudyMilestoneDto {
 
     private String id;
+
+    @NotBlank(message = "Milestone date is required")
     private String milestoneDate;
+
+    @NotNull(message = "Participant target is required")
     private Integer participantTarget;
+
     private String description;
 
     public StudyMilestoneDto() {

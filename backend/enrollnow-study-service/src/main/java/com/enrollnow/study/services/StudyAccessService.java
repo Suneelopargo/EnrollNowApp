@@ -21,11 +21,13 @@ import com.enrollnow.study.models.StudyMemberId;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,24 +44,6 @@ public class StudyAccessService {
     private final SitePermissionService sitePermissionService;
     private final SiteAuthorizationService siteAuthorizationService;
 
-    public StudyAccessService(
-            UserRepository userRepository,
-            RoleRepository roleRepository,
-            UserRoleAssignmentRepository userRoleAssignmentRepository,
-            StudyMemberRepository studyMemberRepository,
-            StudyRepository studyRepository
-    ) {
-        this(
-                userRepository,
-                roleRepository,
-                userRoleAssignmentRepository,
-                studyMemberRepository,
-                studyRepository,
-                null,
-                null
-        );
-    }
-
     @Autowired
     public StudyAccessService(
             UserRepository userRepository,
@@ -70,13 +54,13 @@ public class StudyAccessService {
             SitePermissionService sitePermissionService,
             SiteAuthorizationService siteAuthorizationService
     ) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
-        this.studyMemberRepository = studyMemberRepository;
-        this.studyRepository = studyRepository;
-        this.sitePermissionService = sitePermissionService;
-        this.siteAuthorizationService = siteAuthorizationService;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository must not be null");
+        this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository must not be null");
+        this.userRoleAssignmentRepository = Objects.requireNonNull(userRoleAssignmentRepository, "userRoleAssignmentRepository must not be null");
+        this.studyMemberRepository = Objects.requireNonNull(studyMemberRepository, "studyMemberRepository must not be null");
+        this.studyRepository = Objects.requireNonNull(studyRepository, "studyRepository must not be null");
+        this.sitePermissionService = Objects.requireNonNull(sitePermissionService, "sitePermissionService must not be null");
+        this.siteAuthorizationService = Objects.requireNonNull(siteAuthorizationService, "siteAuthorizationService must not be null");
     }
 
     @Transactional(readOnly = true)
@@ -86,14 +70,10 @@ public class StudyAccessService {
             UUID targetUserId
     ) {
         if (siteAuthorizationService == null || sitePermissionService == null) {
-            return;
+            throw new AccessDeniedException("Access denied: authorization service is not configured");
         }
-        Optional<SiteAuthorizationService.CallerIdentity> callerOpt =
-                siteAuthorizationService.getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        SiteAuthorizationService.CallerIdentity caller = callerOpt.get();
+        SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
+                .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to modify study access"));
         siteAuthorizationService.requireTenantMatch(tenantId);
 
         UserEffectivePermissionsResponse callerEffective =
@@ -146,6 +126,7 @@ public class StudyAccessService {
             UUID userId,
             GrantStudyAccessRequest request
     ) {
+        requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // 1. Validate study belongs to tenant
         studyRepository.findByTenantIdAndId(tenantId, studyId)
@@ -155,7 +136,7 @@ public class StudyAccessService {
         userRepository.findByTenantIdAndId(tenantId, userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // 2. Resolve requested study permission role
+        // 3. Resolve requested study permission role
         String permissionCode =
                 request.getStudyPermission()
                         .trim()
@@ -166,7 +147,7 @@ public class StudyAccessService {
                         new RoleNotFoundException(permissionCode)
                 );
 
-        // 3. Grant Study Access only accepts STUDY-scoped roles
+        // 4. Grant Study Access only accepts STUDY-scoped roles
         if (!"STUDY".equalsIgnoreCase(role.getScopeType())) {
             throw new InvalidRoleAssignmentException(
                     "Role " + role.getCode()
@@ -174,7 +155,7 @@ public class StudyAccessService {
             );
         }
 
-        // 4. Create or reactivate study membership
+        // 5. Create or reactivate study membership
         StudyMember studyMember =
                 studyMemberRepository
                         .findByTenantIdAndIdStudyIdAndIdUserId(
@@ -244,6 +225,7 @@ public class StudyAccessService {
             UUID tenantId,
             UUID studyId,
             UUID userId) {
+        requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // Validate study belongs to tenant
         studyRepository.findByTenantIdAndId(tenantId, studyId)

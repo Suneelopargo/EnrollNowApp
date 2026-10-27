@@ -242,3 +242,21 @@ mvn test -f backend/pom.xml
 - `docs/engineering/backend-engineering-standards.md`
 - `docs/engineering/backend-story-review-checklist.md`
 - `docs/engineering/backend-sprint1-remediation-report.md`
+
+---
+
+### 4.8 Study Module Final Comprehensive Remediation Summary
+
+1. **Authentication & Fail-Closed Authorization:**
+   - Hardened `SiteAuthorizationService.requireCaller()` to fail closed throwing `InsufficientAuthenticationException` when caller context is missing.
+   - Removed 5-argument constructor accepting null security dependencies in `StudyAccessService`; added explicit authorization checks inside `grantStudyAccess` and `removeStudyAccess`.
+   - Removed fallback tenant resolution defaulting to `11111111-1111-1111-1111-111111111111` across `StudyService` and `StudyController`.
+   - Enforced non-null caller tenant isolation on all study mutations and reads.
+2. **Typed DTOs & Bean Validation:**
+   - Created `ImportStudyComponentsRequest` supporting legacy aliases (`components`, `studyData`, `data`, `payload`, `configuration`) with dynamic property retention via `@JsonAnySetter`.
+   - Enhanced `ImportStudyRequest` with Jackson `@JsonAlias({"studyData", "data", "payload", "configuration"})`.
+   - Replaced all untyped `@RequestBody Map<String, Object>` controller inputs with typed `@Valid` DTOs.
+3. **Study Name Canonical Validation:**
+   - Canonical validation aligned across frontend and backend: required short name, maximum 15 characters, case-insensitive unique per tenant.
+4. **Backend Build & Verification Results:**
+   - `mvn test -f backend/pom.xml`: All 15 modules built successfully with 0 failures, 0 errors, and total time 33.4s (`BUILD SUCCESS`).

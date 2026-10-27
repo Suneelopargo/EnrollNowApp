@@ -50,6 +50,8 @@ class StudyCopyAndImportControllerTest {
     @BeforeEach
     void setUp() {
         studyController = new StudyController(studyService, siteAuthorizationService, objectMapper);
+        SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, tenantId);
+        lenient().when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
     }
 
     @Test
@@ -198,5 +200,61 @@ class StudyCopyAndImportControllerTest {
         ResponseEntity<ApiResponse<Void>> forbidden = handler.handleAccessDenied(new AccessDeniedException("Access denied"));
         assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
         assertEquals("FORBIDDEN", forbidden.getBody().getError().getCode());
+    }
+
+    @Test
+    @DisplayName("ImportStudyRequest deserialization supports aliases: studyData, data, payload, configuration")
+    void importStudyRequest_supportsAllAliases() throws Exception {
+        for (String alias : List.of("studyData", "data", "payload", "configuration")) {
+            String json = String.format("{\"studyName\":\"TestStudy\",\"%s\":{\"key\":\"val\"}}", alias);
+            ImportStudyRequest req = objectMapper.readValue(json, ImportStudyRequest.class);
+            assertNotNull(req.getStudyData(), "Alias " + alias + " should populate studyData");
+            assertEquals("val", req.getStudyData().get("key"));
+        }
+    }
+
+    @Test
+    @DisplayName("importStudyComponents accepts typed ImportStudyComponentsRequest")
+    void importStudyComponents_succeeds() {
+        SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, tenantId);
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
+
+        Map<String, Object> componentsMap = Map.of("emailTemplates", List.of());
+        when(studyService.importStudyComponents(eq(tenantId), eq(studyId.toString()), any(), eq(userId), anyBoolean()))
+                .thenReturn(Map.of("importedCount", 1));
+
+        com.enrollnow.study.dtos.ImportStudyComponentsRequest request =
+                new com.enrollnow.study.dtos.ImportStudyComponentsRequest(componentsMap);
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response =
+                studyController.importStudyComponents(tenantId, studyId.toString(), request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isSuccess());
+    }
+
+    @Test
+    @DisplayName("copyStudy when unauthenticated throws InsufficientAuthenticationException")
+    void copyStudy_unauthenticated_throwsInsufficientAuthenticationException() {
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.empty());
+
+        CopyStudyRequest body = new CopyStudyRequest("ClonedStudy", "source-study-id");
+
+        assertThrows(org.springframework.security.authentication.InsufficientAuthenticationException.class, () ->
+                studyController.copyStudy(tenantId, body));
+    }
+
+    @Test
+    @DisplayName("copyStudy with cross-tenant context throws AccessDeniedException")
+    void copyStudy_crossTenant_throwsAccessDeniedException() {
+        UUID otherTenant = UUID.randomUUID();
+        SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, otherTenant);
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
+
+        CopyStudyRequest body = new CopyStudyRequest("ClonedStudy", "source-study-id");
+
+        assertThrows(AccessDeniedException.class, () ->
+                studyController.copyStudy(tenantId, body));
     }
 }

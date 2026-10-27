@@ -2,6 +2,48 @@
 import { apiClient } from '../api-client';
 import type { AxiosRequestConfig } from 'axios';
 
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    skipToast?: boolean;
+    skipLoader?: boolean;
+    silent?: boolean;
+  }
+}
+
+export interface ApiResponseEnvelope<T> {
+  success?: boolean;
+  message?: string;
+  data?: T;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: string[];
+  };
+}
+
+function unwrapResponse<T>(responseData: ApiResponseEnvelope<T> | T): T {
+  if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+    const envelope = responseData as ApiResponseEnvelope<T>;
+    if (envelope.data !== undefined) {
+      return envelope.data;
+    }
+  }
+  return responseData as T;
+}
+
+function unwrapArrayResponse<T>(responseData: ApiResponseEnvelope<T[]> | T[]): T[] {
+  if (Array.isArray(responseData)) {
+    return responseData;
+  }
+  if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+    const envelope = responseData as ApiResponseEnvelope<T[]>;
+    if (Array.isArray(envelope.data)) {
+      return envelope.data;
+    }
+  }
+  return [];
+}
+
 export interface StudyAdmin {
   userId: string;
   name: string;
@@ -32,7 +74,7 @@ export interface Study {
   endDate?: string;
   recruitmentEndDate?: string;
   admins?: StudyAdmin[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CopyStudyPayload {
@@ -394,91 +436,91 @@ export const studyApi = {
   async getStudies(paramsOrConfig?: GetStudiesParams | StudyApiRequestConfig): Promise<Study[]> {
     const isConfig = paramsOrConfig && ('params' in paramsOrConfig || 'headers' in paramsOrConfig || 'skipToast' in (paramsOrConfig as Record<string, unknown>));
     const config = isConfig ? (paramsOrConfig as StudyApiRequestConfig) : { params: paramsOrConfig };
-    const res = await apiClient.get('/api/v1/studies', { skipToast: true, ...config } as any);
-    return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
+    const res = await apiClient.get<ApiResponseEnvelope<Study[]> | Study[]>('/api/v1/studies', { skipToast: true, ...config });
+    return unwrapArrayResponse(res.data);
   },
 
   async getStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
-    const res = await apiClient.get(`/api/v1/studies/${id}`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<Study> | Study>(`/api/v1/studies/${id}`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async getStudyPermissions(id: string | number, tenantId?: string, config?: StudyApiRequestConfig): Promise<StudyNavigationPermissions> {
     const url = tenantId ? `/api/v1/tenants/${tenantId}/studies/${id}/permissions` : `/api/v1/studies/${id}/permissions`;
-    const res = await apiClient.get(url, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyNavigationPermissions> | StudyNavigationPermissions>(url, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async createStudy(study: Partial<Study>, config?: StudyApiRequestConfig): Promise<Study> {
-    const res = await apiClient.post('/api/v1/studies', study, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<Study> | Study>('/api/v1/studies', study, config);
+    return unwrapResponse(res.data);
   },
 
   async copyStudy(payload: CopyStudyPayload, config?: StudyApiRequestConfig): Promise<Study> {
-    const res = await apiClient.post('/api/v1/studies/copy', payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<Study> | Study>('/api/v1/studies/copy', payload, config);
+    return unwrapResponse(res.data);
   },
 
   async importStudy(studyName: string, file: File, config?: StudyApiRequestConfig): Promise<ImportStudyResult> {
     const formData = new FormData();
     formData.append('studyName', studyName);
     formData.append('file', file);
-    const res = await apiClient.post('/api/v1/studies/import', formData, {
+    const res = await apiClient.post<ApiResponseEnvelope<ImportStudyResult> | ImportStudyResult>('/api/v1/studies/import', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
       ...config,
     });
-    return (res.data as any)?.data ?? res.data;
+    return unwrapResponse(res.data);
   },
 
-  async importStudyJson(studyName: string, studyData: any, config?: StudyApiRequestConfig): Promise<ImportStudyResult> {
-    const res = await apiClient.post(
+  async importStudyJson(studyName: string, studyData: unknown, config?: StudyApiRequestConfig): Promise<ImportStudyResult> {
+    const res = await apiClient.post<ApiResponseEnvelope<ImportStudyResult> | ImportStudyResult>(
       '/api/v1/studies/import',
       { studyName, studyData },
       config
     );
-    return (res.data as any)?.data ?? res.data;
+    return unwrapResponse(res.data);
   },
 
   async updateStudy(id: string | number, study: Partial<Study>, config?: StudyApiRequestConfig): Promise<Study> {
-    const res = await apiClient.put(`/api/v1/studies/${id}`, study, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<Study> | Study>(`/api/v1/studies/${id}`, study, config);
+    return unwrapResponse(res.data);
   },
 
   async archiveStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
-    const res = await apiClient.post(`/api/v1/studies/${id}/archive`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<Study> | Study>(`/api/v1/studies/${id}/archive`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async restoreStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Study> {
-    const res = await apiClient.post(`/api/v1/studies/${id}/restore`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<Study> | Study>(`/api/v1/studies/${id}/restore`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async getStudyDetails(id: string | number, config?: StudyApiRequestConfig): Promise<StudyDetails> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/details`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyDetails> | StudyDetails>(`/api/v1/studies/${id}/details`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async updateStudyDetails(id: string | number, payload: UpdateStudyDetailsPayload, config?: StudyApiRequestConfig): Promise<StudyDetails> {
-    const res = await apiClient.put(`/api/v1/studies/${id}/details`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyDetails> | StudyDetails>(`/api/v1/studies/${id}/details`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async exportStudy(id: string | number, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/export`, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<Record<string, unknown>> | Record<string, unknown>>(`/api/v1/studies/${id}/export`, config);
+    return unwrapResponse(res.data);
   },
 
-  async importStudyComponents(id: string | number, components: any, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
-    const res = await apiClient.post(`/api/v1/studies/${id}/import-components`, components, config);
-    return (res.data as any)?.data ?? res.data;
+  async importStudyComponents(id: string | number, components: Record<string, unknown>, config?: StudyApiRequestConfig): Promise<Record<string, unknown>> {
+    const res = await apiClient.post<ApiResponseEnvelope<Record<string, unknown>> | Record<string, unknown>>(`/api/v1/studies/${id}/import-components`, components, config);
+    return unwrapResponse(res.data);
   },
 
   async getStudyDisplaySettings(id: string | number, config?: StudyApiRequestConfig): Promise<StudyDisplaySettings> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/display-settings`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyDisplaySettings> | StudyDisplaySettings>(`/api/v1/studies/${id}/display-settings`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async updateStudyDisplaySettings(
@@ -486,13 +528,13 @@ export const studyApi = {
     payload: UpdateStudyDisplaySettingsPayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyDisplaySettings> {
-    const res = await apiClient.put(`/api/v1/studies/${id}/display-settings`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyDisplaySettings> | StudyDisplaySettings>(`/api/v1/studies/${id}/display-settings`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async getStudyBulkTasks(id: string | number, config?: StudyApiRequestConfig): Promise<StudyBulkTasksData> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/bulk-tasks`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${id}/bulk-tasks`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async createBulkTaskGroup(
@@ -500,8 +542,8 @@ export const studyApi = {
     payload: SaveBulkTaskGroupPayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.post(`/api/v1/studies/${studyId}/bulk-task-groups`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${studyId}/bulk-task-groups`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async updateBulkTaskGroup(
@@ -510,8 +552,8 @@ export const studyApi = {
     payload: SaveBulkTaskGroupPayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async deleteBulkTaskGroup(
@@ -519,8 +561,8 @@ export const studyApi = {
     groupId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.delete(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}`, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.delete<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}`, config);
+    return unwrapResponse(res.data);
   },
 
   async createBulkTask(
@@ -529,8 +571,8 @@ export const studyApi = {
     payload: SaveBulkTaskPayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.post(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}/tasks`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${studyId}/bulk-task-groups/${groupId}/tasks`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async updateBulkTask(
@@ -539,8 +581,8 @@ export const studyApi = {
     payload: SaveBulkTaskPayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/bulk-tasks/${taskId}`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${studyId}/bulk-tasks/${taskId}`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async deleteBulkTask(
@@ -548,8 +590,8 @@ export const studyApi = {
     taskId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.delete(`/api/v1/studies/${studyId}/bulk-tasks/${taskId}`, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.delete<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(`/api/v1/studies/${studyId}/bulk-tasks/${taskId}`, config);
+    return unwrapResponse(res.data);
   },
 
   async reorderBulkTasks(
@@ -558,17 +600,17 @@ export const studyApi = {
     taskIds: string[],
     config?: StudyApiRequestConfig
   ): Promise<StudyBulkTasksData> {
-    const res = await apiClient.put(
+    const res = await apiClient.put<ApiResponseEnvelope<StudyBulkTasksData> | StudyBulkTasksData>(
       `/api/v1/studies/${studyId}/bulk-task-groups/${groupId}/tasks/order`,
       { taskIds },
       config
     );
-    return (res.data as any)?.data ?? res.data;
+    return unwrapResponse(res.data);
   },
 
   async getStudyEmailTextSettings(id: string | number, config?: StudyApiRequestConfig): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/email-text-settings`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${id}/email-text-settings`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async createEmailTemplate(
@@ -576,8 +618,8 @@ export const studyApi = {
     payload: SaveEmailTemplatePayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.post(`/api/v1/studies/${studyId}/email-templates`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/email-templates`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async updateEmailTemplate(
@@ -586,8 +628,8 @@ export const studyApi = {
     payload: SaveEmailTemplatePayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/email-templates/${templateId}`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/email-templates/${templateId}`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async copyEmailTemplate(
@@ -595,8 +637,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.post(`/api/v1/studies/${studyId}/email-templates/${templateId}/copy`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/email-templates/${templateId}/copy`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async archiveEmailTemplate(
@@ -604,8 +646,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/email-templates/${templateId}/archive`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/email-templates/${templateId}/archive`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async restoreEmailTemplate(
@@ -613,8 +655,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/email-templates/${templateId}/restore`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/email-templates/${templateId}/restore`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async deleteEmailTemplate(
@@ -622,8 +664,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.delete(`/api/v1/studies/${studyId}/email-templates/${templateId}`, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.delete<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/email-templates/${templateId}`, config);
+    return unwrapResponse(res.data);
   },
 
   async reorderEmailTemplates(
@@ -631,12 +673,12 @@ export const studyApi = {
     templateIds: string[],
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(
       `/api/v1/studies/${studyId}/email-templates/order`,
       { templateIds },
       config
     );
-    return (res.data as any)?.data ?? res.data;
+    return unwrapResponse(res.data);
   },
 
   async createTextTemplate(
@@ -644,8 +686,8 @@ export const studyApi = {
     payload: SaveTextTemplatePayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.post(`/api/v1/studies/${studyId}/text-templates`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/text-templates`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async updateTextTemplate(
@@ -654,8 +696,8 @@ export const studyApi = {
     payload: SaveTextTemplatePayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/text-templates/${templateId}`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/text-templates/${templateId}`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async copyTextTemplate(
@@ -663,8 +705,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.post(`/api/v1/studies/${studyId}/text-templates/${templateId}/copy`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/text-templates/${templateId}/copy`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async archiveTextTemplate(
@@ -672,8 +714,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/text-templates/${templateId}/archive`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/text-templates/${templateId}/archive`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async restoreTextTemplate(
@@ -681,8 +723,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(`/api/v1/studies/${studyId}/text-templates/${templateId}/restore`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/text-templates/${templateId}/restore`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async deleteTextTemplate(
@@ -690,8 +732,8 @@ export const studyApi = {
     templateId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.delete(`/api/v1/studies/${studyId}/text-templates/${templateId}`, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.delete<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(`/api/v1/studies/${studyId}/text-templates/${templateId}`, config);
+    return unwrapResponse(res.data);
   },
 
   async reorderTextTemplates(
@@ -699,17 +741,17 @@ export const studyApi = {
     templateIds: string[],
     config?: StudyApiRequestConfig
   ): Promise<StudyEmailTextSettingsData> {
-    const res = await apiClient.put(
+    const res = await apiClient.put<ApiResponseEnvelope<StudyEmailTextSettingsData> | StudyEmailTextSettingsData>(
       `/api/v1/studies/${studyId}/text-templates/order`,
       { templateIds },
       config
     );
-    return (res.data as any)?.data ?? res.data;
+    return unwrapResponse(res.data);
   },
 
   async getStudyRequirements(id: string | number, config?: StudyApiRequestConfig): Promise<StudyRequirementsData> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/requirements`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyRequirementsData> | StudyRequirementsData>(`/api/v1/studies/${id}/requirements`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async updateStudyRequirements(
@@ -717,8 +759,8 @@ export const studyApi = {
     payload: UpdateStudyRequirementsPayload,
     config?: StudyApiRequestConfig
   ): Promise<StudyRequirementsData> {
-    const res = await apiClient.put(`/api/v1/studies/${id}/requirements`, payload, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyRequirementsData> | StudyRequirementsData>(`/api/v1/studies/${id}/requirements`, payload, config);
+    return unwrapResponse(res.data);
   },
 
   async addStudyMilestone(
@@ -726,8 +768,8 @@ export const studyApi = {
     milestone: StudyMilestone,
     config?: StudyApiRequestConfig
   ): Promise<StudyMilestone> {
-    const res = await apiClient.post(`/api/v1/studies/${id}/milestones`, milestone, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyMilestone> | StudyMilestone>(`/api/v1/studies/${id}/milestones`, milestone, config);
+    return unwrapResponse(res.data);
   },
 
   async updateStudyMilestone(
@@ -736,8 +778,8 @@ export const studyApi = {
     milestone: StudyMilestone,
     config?: StudyApiRequestConfig
   ): Promise<StudyMilestone> {
-    const res = await apiClient.put(`/api/v1/studies/${id}/milestones/${milestoneId}`, milestone, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.put<ApiResponseEnvelope<StudyMilestone> | StudyMilestone>(`/api/v1/studies/${id}/milestones/${milestoneId}`, milestone, config);
+    return unwrapResponse(res.data);
   },
 
   async deleteStudyMilestone(
@@ -752,8 +794,8 @@ export const studyApi = {
     id: string | number,
     config?: StudyApiRequestConfig
   ): Promise<StudyCustomVariable[]> {
-    const res = await apiClient.get(`/api/v1/studies/${id}/global-variables`, { skipToast: true, ...config } as any);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.get<ApiResponseEnvelope<StudyCustomVariable[]> | StudyCustomVariable[]>(`/api/v1/studies/${id}/global-variables`, { skipToast: true, ...config });
+    return unwrapResponse(res.data);
   },
 
   async addGlobalVariableToStudy(
@@ -761,8 +803,8 @@ export const studyApi = {
     variableId: string,
     config?: StudyApiRequestConfig
   ): Promise<StudyCustomVariable> {
-    const res = await apiClient.post(`/api/v1/studies/${id}/global-variables/${variableId}`, {}, config);
-    return (res.data as any)?.data ?? res.data;
+    const res = await apiClient.post<ApiResponseEnvelope<StudyCustomVariable> | StudyCustomVariable>(`/api/v1/studies/${id}/global-variables/${variableId}`, {}, config);
+    return unwrapResponse(res.data);
   },
 
   async deleteStudy(id: string | number, config?: StudyApiRequestConfig): Promise<void> {

@@ -346,8 +346,7 @@ export const StudyDirectory: React.FC<StudyDirectoryProps> = ({
         </p>
         <button
           type="button"
-          className="study-directory__add-btn"
-          style={{ marginTop: '20px' }}
+          className="study-directory__add-btn study-directory__add-btn--empty"
           onClick={onAddStudy}
         >
           <Plus size={16} />
@@ -361,8 +360,8 @@ export const StudyDirectory: React.FC<StudyDirectoryProps> = ({
     <div className="study-directory" data-testid="study-directory">
       <div className="card site-admin-users-card">
         {/* Top Toolbar: All controls aligned to the right (status filter, search, add study, export) */}
-        <div className="card-header data-grid-toolbar site-admin-users-toolbar" style={{ justifyContent: 'flex-end' }}>
-          <div className="data-grid-toolbar__actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="card-header data-grid-toolbar site-admin-users-toolbar study-directory-toolbar--right">
+          <div className="data-grid-toolbar__actions study-directory-toolbar__actions--right">
             {/* Status Filter Dropdown */}
             <div className="site-admin-filter-select-wrap">
               <select

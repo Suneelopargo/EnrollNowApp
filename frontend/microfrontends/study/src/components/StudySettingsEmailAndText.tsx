@@ -665,27 +665,23 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
 
       {/* ================= 1. EMAIL TEMPLATES SECTION ================= */}
       <section className="study-settings-card" aria-labelledby="email-templates-heading">
-        <div
-          className="study-settings-card__header"
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="study-settings-card__header study-template-card-header">
+          <div className="study-template-card-header__left">
             <Mail size={16} />
             <h3 id="email-templates-heading" className="study-settings-card__title">
               Email Templates
             </h3>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="study-template-card-header__right">
             <label htmlFor="email-filter-select" className="sr-only">
               Filter by Email Template Status
             </label>
             <select
               id="email-filter-select"
-              className="study-settings-select"
+              className="study-settings-select study-template-select-sm"
               value={emailFilter}
               onChange={(e) => setEmailFilter(e.target.value as EmailFilterOption)}
               data-testid="email-filter-select"
-              style={{ padding: '4px 8px', fontSize: '13px' }}
             >
               <option value="Active Emails">Active Emails</option>
               <option value="Archived Emails">Archived Emails</option>
@@ -704,11 +700,11 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
               <table className="study-settings-table" aria-label="Email templates table">
                 <thead>
                   <tr>
-                    <th scope="col" style={{ width: '30%' }}>Name</th>
-                    <th scope="col" style={{ width: '40%' }}>Description</th>
-                    <th scope="col" style={{ width: '20%' }}>Actions</th>
+                    <th scope="col" className="study-table__col-30">Name</th>
+                    <th scope="col" className="study-table__col-40">Description</th>
+                    <th scope="col" className="study-table__col-20">Actions</th>
                     {effectiveCanManage && emailFilter === 'Active Emails' && (
-                      <th scope="col" style={{ width: '10%', textAlign: 'center' }}>Reorder</th>
+                      <th scope="col" className="study-table__col-10 study-table__col--center">Reorder</th>
                     )}
                   </tr>
                 </thead>
@@ -719,43 +715,35 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       <tr
                         key={template._id}
                         data-testid={`email-template-row-${template._id}`}
-                        style={{ cursor: effectiveCanManage ? 'pointer' : 'default' }}
+                        className={effectiveCanManage ? 'study-template-row--interactive' : 'study-template-row--default'}
                         onClick={() => effectiveCanManage && openEditEmailModal(template)}
                       >
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 600, color: '#1b68b8' }}>{template.name}</span>
+                          <div className="study-template-card-header__left">
+                            <span className="study-template-name">{template.name}</span>
                             {brokenTag && (
                               <span
                                 title={`This message contains broken merge tags: ${brokenTag}`}
-                                style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center' }}
+                                className="study-template-badge-danger"
                                 aria-label={`Broken merge tags: ${brokenTag}`}
                               >
                                 <AlertTriangle size={15} />
                               </span>
                             )}
                             {template.archived && (
-                              <span
-                                style={{
-                                  fontSize: '11px',
-                                  background: '#e2e8f0',
-                                  color: '#475569',
-                                  padding: '1px 6px',
-                                  borderRadius: '4px',
-                                }}
-                              >
+                              <span className="study-template-badge-archived">
                                 Archived
                               </span>
                             )}
                           </div>
                         </td>
                         <td>
-                          <span style={{ color: '#475569', fontSize: '13px' }}>
+                          <span className="study-template-desc">
                             {template.description || '—'}
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div className="study-template-actions-wrap">
                             {!template.archived ? (
                               <>
                                 <button
@@ -808,8 +796,8 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                           </div>
                         </td>
                         {effectiveCanManage && emailFilter === 'Active Emails' && (
-                          <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                            <div style={{ display: 'inline-flex', gap: '4px' }}>
+                          <td className="study-table__col--center" onClick={(e) => e.stopPropagation()}>
+                            <div className="study-template-reorder-wrap">
                               <button
                                 type="button"
                                 className="study-settings-icon-btn"
@@ -844,7 +832,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
           )}
 
           {effectiveCanManage && (
-            <div style={{ marginTop: '16px' }}>
+            <div className="study-section--mt-16">
               <button
                 type="button"
                 className="study-settings-btn study-settings-btn--primary"
@@ -863,31 +851,26 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       {/* ================= 2. TEXT TEMPLATES SECTION ================= */}
       {textMessagingEnabled && (
         <section
-          className="study-settings-card"
+          className="study-settings-card study-section--mt-24"
           aria-labelledby="text-templates-heading"
-          style={{ marginTop: '24px' }}
         >
-          <div
-            className="study-settings-card__header"
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="study-settings-card__header study-template-card-header">
+            <div className="study-template-card-header__left">
               <MessageSquare size={16} />
               <h3 id="text-templates-heading" className="study-settings-card__title">
                 Text Templates
               </h3>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="study-template-card-header__right">
               <label htmlFor="text-filter-select" className="sr-only">
                 Filter by Text Template Status
               </label>
               <select
                 id="text-filter-select"
-                className="study-settings-select"
+                className="study-settings-select study-template-select-sm"
                 value={textFilter}
                 onChange={(e) => setTextFilter(e.target.value as TextFilterOption)}
                 data-testid="text-filter-select"
-                style={{ padding: '4px 8px', fontSize: '13px' }}
               >
                 <option value="Active Texts">Active Texts</option>
                 <option value="Archived Texts">Archived Texts</option>
@@ -906,11 +889,11 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 <table className="study-settings-table" aria-label="Text templates table">
                   <thead>
                     <tr>
-                      <th scope="col" style={{ width: '30%' }}>Name</th>
-                      <th scope="col" style={{ width: '40%' }}>Description</th>
-                      <th scope="col" style={{ width: '20%' }}>Actions</th>
+                      <th scope="col" className="study-table__col-30">Name</th>
+                      <th scope="col" className="study-table__col-40">Description</th>
+                      <th scope="col" className="study-table__col-20">Actions</th>
                       {effectiveCanManage && textFilter === 'Active Texts' && (
-                        <th scope="col" style={{ width: '10%', textAlign: 'center' }}>Reorder</th>
+                        <th scope="col" className="study-table__col-10 study-table__col--center">Reorder</th>
                       )}
                     </tr>
                   </thead>
@@ -921,43 +904,35 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                         <tr
                           key={template._id}
                           data-testid={`text-template-row-${template._id}`}
-                          style={{ cursor: effectiveCanManage ? 'pointer' : 'default' }}
+                          className={effectiveCanManage ? 'study-template-row--interactive' : 'study-template-row--default'}
                           onClick={() => effectiveCanManage && openEditTextModal(template)}
                         >
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontWeight: 600, color: '#1b68b8' }}>{template.name}</span>
+                            <div className="study-template-card-header__left">
+                              <span className="study-template-name">{template.name}</span>
                               {brokenTag && (
                                 <span
                                   title={`This message contains broken merge tags: ${brokenTag}`}
-                                  style={{ color: '#dc2626', display: 'inline-flex', alignItems: 'center' }}
+                                  className="study-template-badge-danger"
                                   aria-label={`Broken merge tags: ${brokenTag}`}
                                 >
                                   <AlertTriangle size={15} />
                                 </span>
                               )}
                               {template.archived && (
-                                <span
-                                  style={{
-                                    fontSize: '11px',
-                                    background: '#e2e8f0',
-                                    color: '#475569',
-                                    padding: '1px 6px',
-                                    borderRadius: '4px',
-                                  }}
-                                >
+                                <span className="study-template-badge-archived">
                                   Archived
                                 </span>
                               )}
                             </div>
                           </td>
                           <td>
-                            <span style={{ color: '#475569', fontSize: '13px' }}>
+                            <span className="study-template-desc">
                               {template.description || '—'}
                             </span>
                           </td>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="study-template-actions-wrap">
                               {!template.archived ? (
                                 <>
                                   <button
@@ -1010,8 +985,8 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                             </div>
                           </td>
                           {effectiveCanManage && textFilter === 'Active Texts' && (
-                            <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                              <div style={{ display: 'inline-flex', gap: '4px' }}>
+                            <td className="study-table__col--center" onClick={(e) => e.stopPropagation()}>
+                              <div className="study-template-reorder-wrap">
                                 <button
                                   type="button"
                                   className="study-settings-icon-btn"
@@ -1046,7 +1021,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
             )}
 
             {effectiveCanManage && (
-              <div style={{ marginTop: '16px' }}>
+              <div className="study-section--mt-16">
                 <button
                   type="button"
                   className="study-settings-btn study-settings-btn--primary"
@@ -1072,7 +1047,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
           aria-labelledby="email-template-modal-title"
           data-testid="email-template-modal"
         >
-          <div className="study-settings-modal" style={{ maxWidth: '780px' }}>
+          <div className="study-settings-modal study-settings-modal--email">
             <header className="study-settings-modal__header">
               <h3 id="email-template-modal-title" className="study-settings-modal__title">
                 {editingEmail ? 'Edit Email Template' : 'Add Email Template'}
@@ -1089,7 +1064,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
             </header>
 
             <form onSubmit={handleSaveEmail} noValidate>
-              <div className="study-settings-modal__body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="study-settings-modal__body study-settings-modal__body--scroll-70">
                 {emailModalError && (
                   <div className="study-settings-banner study-settings-banner--error" role="alert">
                     <AlertCircle size={16} />
@@ -1144,7 +1119,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="study-settings-grid-2col">
                   <div className="study-settings-field">
                     <label htmlFor="email-sender-name-input" className="study-settings-label">
                       Sender Name
@@ -1176,16 +1151,8 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 </div>
 
                 {/* Scheduled Action Section */}
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    padding: '14px',
-                    margin: '16px 0',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div className="study-schedule-box">
+                  <div className="study-schedule-box__header">
                     <input
                       id="email-schedule-toggle"
                       type="checkbox"
@@ -1194,16 +1161,16 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       onChange={(e) => setEmailScheduleEnabled(e.target.checked)}
                       data-testid="email-schedule-toggle"
                     />
-                    <label htmlFor="email-schedule-toggle" style={{ fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
-                      <Clock size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                    <label htmlFor="email-schedule-toggle" className="study-schedule-box__label">
+                      <Clock size={14} className="study-schedule-box__icon" />
                       Automate with Scheduled Action
                     </label>
                   </div>
 
                   {emailScheduleEnabled && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginTop: '10px' }}>
+                    <div className="study-schedule-box__grid">
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Trigger Type</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Trigger Type</label>
                         <select
                           className="study-settings-select"
                           value={emailScheduleTriggerType}
@@ -1216,7 +1183,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
 
                       {emailScheduleTriggerType === 'event' && (
                         <div className="study-settings-field">
-                          <label className="study-settings-label" style={{ fontSize: '12px' }}>Event</label>
+                          <label className="study-settings-label study-field-hint--label-sm">Event</label>
                           <select
                             className="study-settings-select"
                             value={emailScheduleTriggerId}
@@ -1233,7 +1200,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       )}
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Interval</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Interval</label>
                         <input
                           type="number"
                           min="1"
@@ -1244,7 +1211,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       </div>
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Unit</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Unit</label>
                         <select
                           className="study-settings-select"
                           value={emailScheduleUnit}
@@ -1258,7 +1225,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       </div>
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Timing</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Timing</label>
                         <select
                           className="study-settings-select"
                           value={emailScheduleBeforeAfter}
@@ -1270,7 +1237,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       </div>
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Date Type</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Date Type</label>
                         <select
                           className="study-settings-select"
                           value={emailScheduleDateType}
@@ -1285,17 +1252,16 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 </div>
 
                 {/* Merge Tag Helpers */}
-                <div style={{ marginBottom: '8px' }}>
-                  <label className="study-settings-label" style={{ marginBottom: '4px' }}>
+                <div className="study-field-hint--mb-8">
+                  <label className="study-settings-label study-field-hint--mb-4">
                     Quick Insert Merge Tags
                   </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  <div className="study-variable-tags">
                     {STANDARD_MERGE_TAGS.map((tag) => (
                       <button
                         key={tag.tag}
                         type="button"
-                        className="study-settings-btn study-settings-btn--secondary"
-                        style={{ padding: '2px 8px', fontSize: '11px' }}
+                        className="study-settings-btn study-settings-btn--secondary study-tag-btn"
                         onClick={() => insertEmailMergeTag(tag.tag)}
                       >
                         {tag.label}
@@ -1361,7 +1327,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
           aria-labelledby="text-template-modal-title"
           data-testid="text-template-modal"
         >
-          <div className="study-settings-modal" style={{ maxWidth: '680px' }}>
+          <div className="study-settings-modal study-settings-modal--wide">
             <header className="study-settings-modal__header">
               <h3 id="text-template-modal-title" className="study-settings-modal__title">
                 {editingText ? 'Edit Text Template' : 'Add Text Template'}
@@ -1378,7 +1344,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
             </header>
 
             <form onSubmit={handleSaveText} noValidate>
-              <div className="study-settings-modal__body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="study-settings-modal__body study-settings-modal__body--scroll-70">
                 {textModalError && (
                   <div className="study-settings-banner study-settings-banner--error" role="alert">
                     <AlertCircle size={16} />
@@ -1418,16 +1384,8 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 </div>
 
                 {/* Scheduled Action Section */}
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    padding: '14px',
-                    margin: '16px 0',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div className="study-schedule-box">
+                  <div className="study-schedule-box__header">
                     <input
                       id="text-schedule-toggle"
                       type="checkbox"
@@ -1436,16 +1394,16 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       onChange={(e) => setTextScheduleEnabled(e.target.checked)}
                       data-testid="text-schedule-toggle"
                     />
-                    <label htmlFor="text-schedule-toggle" style={{ fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
-                      <Clock size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+                    <label htmlFor="text-schedule-toggle" className="study-schedule-box__label">
+                      <Clock size={14} className="study-schedule-box__icon" />
                       Automate with Scheduled Action
                     </label>
                   </div>
 
                   {textScheduleEnabled && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginTop: '10px' }}>
+                    <div className="study-schedule-box__grid">
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Trigger Type</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Trigger Type</label>
                         <select
                           className="study-settings-select"
                           value={textScheduleTriggerType}
@@ -1458,7 +1416,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
 
                       {textScheduleTriggerType === 'event' && (
                         <div className="study-settings-field">
-                          <label className="study-settings-label" style={{ fontSize: '12px' }}>Event</label>
+                          <label className="study-settings-label study-field-hint--label-sm">Event</label>
                           <select
                             className="study-settings-select"
                             value={textScheduleTriggerId}
@@ -1475,7 +1433,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       )}
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Interval</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Interval</label>
                         <input
                           type="number"
                           min="1"
@@ -1486,7 +1444,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       </div>
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Unit</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Unit</label>
                         <select
                           className="study-settings-select"
                           value={textScheduleUnit}
@@ -1500,7 +1458,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       </div>
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Timing</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Timing</label>
                         <select
                           className="study-settings-select"
                           value={textScheduleBeforeAfter}
@@ -1512,7 +1470,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                       </div>
 
                       <div className="study-settings-field">
-                        <label className="study-settings-label" style={{ fontSize: '12px' }}>Date Type</label>
+                        <label className="study-settings-label study-field-hint--label-sm">Date Type</label>
                         <select
                           className="study-settings-select"
                           value={textScheduleDateType}
@@ -1527,17 +1485,16 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 </div>
 
                 {/* Merge Tag Helpers */}
-                <div style={{ marginBottom: '8px' }}>
-                  <label className="study-settings-label" style={{ marginBottom: '4px' }}>
+                <div className="study-field-hint--mb-8">
+                  <label className="study-settings-label study-field-hint--mb-4">
                     Quick Insert Merge Tags
                   </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  <div className="study-variable-tags">
                     {STANDARD_MERGE_TAGS.map((tag) => (
                       <button
                         key={tag.tag}
                         type="button"
-                        className="study-settings-btn study-settings-btn--secondary"
-                        style={{ padding: '2px 8px', fontSize: '11px' }}
+                        className="study-settings-btn study-settings-btn--secondary study-tag-btn"
                         onClick={() => insertTextMergeTag(tag.tag)}
                       >
                         {tag.label}
@@ -1547,16 +1504,12 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 </div>
 
                 <div className="study-settings-field">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div className="study-char-count-box">
                     <label htmlFor="text-message-input" className="study-settings-label">
                       Message Content <span className="study-settings-required">*</span>
                     </label>
                     <span
-                      style={{
-                        fontSize: '12px',
-                        color: textMessage.length > MAX_SMS_LENGTH ? '#dc2626' : '#64748b',
-                        fontWeight: textMessage.length > MAX_SMS_LENGTH ? 700 : 400,
-                      }}
+                      className={`study-char-count-text ${textMessage.length > MAX_SMS_LENGTH ? 'study-char-count-text--over' : ''}`}
                       data-testid="text-char-count"
                     >
                       {textMessage.length} / {MAX_SMS_LENGTH} characters
@@ -1616,7 +1569,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
           aria-labelledby="confirm-action-modal-title"
           data-testid="confirm-template-action-modal"
         >
-          <div className="study-settings-modal" style={{ maxWidth: '440px' }}>
+          <div className="study-settings-modal study-settings-modal--sm">
             <header className="study-settings-modal__header">
               <h3 id="confirm-action-modal-title" className="study-settings-modal__title">
                 {confirmAction === 'archive' && `Archive ${confirmKind === 'email' ? 'Email' : 'Text'} Template`}
@@ -1645,7 +1598,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
                 </p>
               )}
               {confirmAction === 'delete' && (
-                <p style={{ color: '#dc2626' }}>
+                <p className="study-text-danger">
                   Are you sure you want to permanently delete <strong>"{targetTemplate.name}"</strong>? This will also remove any associated scheduled actions. This action cannot be undone.
                 </p>
               )}

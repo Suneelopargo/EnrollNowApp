@@ -51,41 +51,22 @@ public class StudyController {
     private final SiteAuthorizationService siteAuthorizationService;
     private final ObjectMapper objectMapper;
 
-    public StudyController(StudyRepository studyRepository) {
-        this(new StudyService(studyRepository), null, null);
-    }
-
-    public StudyController(
-            StudyRepository studyRepository,
-            SiteAuthorizationService siteAuthorizationService
-    ) {
-        this(new StudyService(studyRepository), siteAuthorizationService, null);
-    }
-
-    public StudyController(
-            StudyRepository studyRepository,
-            SiteAuthorizationService siteAuthorizationService,
-            MyStudiesService myStudiesService
-    ) {
-        this(new StudyService(studyRepository, myStudiesService), siteAuthorizationService, null);
-    }
-
-    public StudyController(
-            StudyService studyService,
-            SiteAuthorizationService siteAuthorizationService
-    ) {
-        this(studyService, siteAuthorizationService, null);
-    }
-
     @Autowired
     public StudyController(
             StudyService studyService,
             SiteAuthorizationService siteAuthorizationService,
             ObjectMapper objectMapper
     ) {
-        this.studyService = studyService;
-        this.siteAuthorizationService = siteAuthorizationService;
+        this.studyService = Objects.requireNonNull(studyService, "studyService must not be null");
+        this.siteAuthorizationService = Objects.requireNonNull(siteAuthorizationService, "siteAuthorizationService must not be null");
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
+
+    public StudyController(
+            StudyService studyService,
+            SiteAuthorizationService siteAuthorizationService
+    ) {
+        this(studyService, siteAuthorizationService, new ObjectMapper());
     }
 
     public ResponseEntity<ApiResponse<List<StudySummaryResponse>>> getStudies(
@@ -102,18 +83,8 @@ public class StudyController {
             @RequestParam(required = false) String status
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-
-        UUID callerUserId = null;
-        boolean canManageSiteAdmins = true;
-
-        if (siteAuthorizationService != null) {
-            Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
-                    siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
-            if (effectiveOpt.isPresent()) {
-                callerUserId = effectiveOpt.get().getUserId();
-                canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins();
-            }
-        }
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
 
         List<StudySummaryResponse> response = studyService.getStudies(
                 effectiveTenantId,
@@ -132,19 +103,8 @@ public class StudyController {
             @PathVariable String studyId
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        UUID callerUserId = null;
-        boolean canManageSiteAdmins = true;
-
-        if (siteAuthorizationService != null) {
-            Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
-                    siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
-            if (effectiveOpt.isPresent()) {
-                callerUserId = effectiveOpt.get().getUserId();
-                canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins()
-                        || effectiveOpt.get().isCanAccessSiteAdmin()
-                        || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
-            }
-        }
+        UUID callerUserId = resolveCallerUserId();
+        boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
 
         try {
             StudySummaryResponse summary = studyService.getStudyByIdOrCode(
@@ -165,27 +125,27 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId
     ) {
-        UUID effectiveTenantId = resolveTenantId(tenantId);
-        UUID callerUserId = null;
-        boolean canManageSiteAdmins = false;
-
-        if (siteAuthorizationService != null) {
-            Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
-            if (callerOpt.isPresent()) {
-                callerUserId = callerOpt.get().userId();
-            }
-            Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
-                    siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
-            if (effectiveOpt.isPresent()) {
-                if (callerUserId == null) {
-                    callerUserId = effectiveOpt.get().getUserId();
-                }
-                canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins()
-                        || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
-            }
-        }
-
         try {
+            UUID effectiveTenantId = resolveTenantId(tenantId);
+            UUID callerUserId = null;
+            boolean canManageSiteAdmins = false;
+
+            if (siteAuthorizationService != null) {
+                Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
+                if (callerOpt.isPresent()) {
+                    callerUserId = callerOpt.get().userId();
+                }
+                Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
+                        siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
+                if (effectiveOpt.isPresent()) {
+                    if (callerUserId == null) {
+                        callerUserId = effectiveOpt.get().getUserId();
+                    }
+                    canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins()
+                            || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
+                }
+            }
+
             StudyNavigationPermissionsResponse permissions = studyService.getStudyNavigationPermissions(
                     effectiveTenantId,
                     studyId,
@@ -211,9 +171,7 @@ public class StudyController {
             @Valid @RequestBody CreateStudyRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
 
         UUID callerUserId = resolveCallerUserId();
         StudySummaryResponse saved = studyService.createStudy(effectiveTenantId, request, callerUserId);
@@ -227,9 +185,7 @@ public class StudyController {
             @Valid @RequestBody CopyStudyRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
 
         UUID callerUserId = resolveCallerUserId();
         StudySummaryResponse cloned = studyService.copyStudy(effectiveTenantId, request, callerUserId);
@@ -246,9 +202,7 @@ public class StudyController {
             @Valid @RequestBody ImportStudyRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
 
         UUID callerUserId = resolveCallerUserId();
 
@@ -273,9 +227,7 @@ public class StudyController {
             @RequestParam(value = "shortName", required = false) String shortNameParam
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyCreateAccess(effectiveTenantId);
 
         UUID callerUserId = resolveCallerUserId();
 
@@ -322,9 +274,7 @@ public class StudyController {
             @Valid @RequestBody UpdateStudyRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
 
         try {
             StudySummaryResponse updated = studyService.updateStudy(effectiveTenantId, studyId, request);
@@ -341,9 +291,7 @@ public class StudyController {
             @PathVariable String studyId
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
 
         try {
             StudySummaryResponse archived = studyService.archiveStudy(effectiveTenantId, studyId);
@@ -360,9 +308,7 @@ public class StudyController {
             @PathVariable String studyId
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
 
         try {
             StudySummaryResponse restored = studyService.restoreStudy(effectiveTenantId, studyId);
@@ -379,9 +325,7 @@ public class StudyController {
             @PathVariable String studyId
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
-        if (siteAuthorizationService != null) {
-            siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
-        }
+        siteAuthorizationService.requireStudyManageAccess(effectiveTenantId);
 
         try {
             studyService.deleteStudy(effectiveTenantId, studyId);
@@ -470,13 +414,14 @@ public class StudyController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> importStudyComponents(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody Map<String, Object> components
+            @Valid @RequestBody com.enrollnow.study.dtos.ImportStudyComponentsRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
         boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
 
         try {
+            Map<String, Object> components = request != null ? request.getComponents() : Collections.emptyMap();
             Map<String, Object> result = studyService.importStudyComponents(
                     effectiveTenantId,
                     studyId,
@@ -524,7 +469,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyDisplaySettingsResponse>> updateStudyDisplaySettings(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody UpdateStudyDisplaySettingsRequest request
+            @Valid @RequestBody UpdateStudyDisplaySettingsRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -578,7 +523,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyBulkTasksResponse>> createBulkTaskGroup(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody SaveBulkTaskGroupRequest request
+            @Valid @RequestBody SaveBulkTaskGroupRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -608,7 +553,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String groupId,
-            @RequestBody SaveBulkTaskGroupRequest request
+            @Valid @RequestBody SaveBulkTaskGroupRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -666,7 +611,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String groupId,
-            @RequestBody SaveBulkTaskRequest request
+            @Valid @RequestBody SaveBulkTaskRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -697,7 +642,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String taskId,
-            @RequestBody SaveBulkTaskRequest request
+            @Valid @RequestBody SaveBulkTaskRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -755,7 +700,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String groupId,
-            @RequestBody ReorderBulkTasksRequest request
+            @Valid @RequestBody ReorderBulkTasksRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -825,7 +770,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> createEmailTemplate(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody SaveEmailTemplateRequest request
+            @Valid @RequestBody SaveEmailTemplateRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -855,7 +800,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String templateId,
-            @RequestBody SaveEmailTemplateRequest request
+            @Valid @RequestBody SaveEmailTemplateRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -996,7 +941,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> reorderEmailTemplates(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody ReorderTemplatesRequest request
+            @Valid @RequestBody ReorderTemplatesRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1024,7 +969,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> createTextTemplate(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody SaveTextTemplateRequest request
+            @Valid @RequestBody SaveTextTemplateRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1054,7 +999,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String templateId,
-            @RequestBody SaveTextTemplateRequest request
+            @Valid @RequestBody SaveTextTemplateRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1195,7 +1140,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyEmailTextSettingsResponse>> reorderTextTemplates(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody ReorderTemplatesRequest request
+            @Valid @RequestBody ReorderTemplatesRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1249,7 +1194,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyRequirementsResponse>> updateStudyRequirements(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody UpdateStudyRequirementsRequest request
+            @Valid @RequestBody UpdateStudyRequirementsRequest request
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1280,7 +1225,7 @@ public class StudyController {
     public ResponseEntity<ApiResponse<StudyMilestoneDto>> addStudyMilestone(
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
-            @RequestBody StudyMilestoneDto dto
+            @Valid @RequestBody StudyMilestoneDto dto
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1313,7 +1258,7 @@ public class StudyController {
             @PathVariable(name = "tenantId", required = false) UUID tenantId,
             @PathVariable String studyId,
             @PathVariable String milestoneId,
-            @RequestBody StudyMilestoneDto dto
+            @Valid @RequestBody StudyMilestoneDto dto
     ) {
         UUID effectiveTenantId = resolveTenantId(tenantId);
         UUID callerUserId = resolveCallerUserId();
@@ -1428,26 +1373,27 @@ public class StudyController {
     }
 
     private UUID resolveCallerUserId() {
-        if (siteAuthorizationService != null) {
-            Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
-            if (callerOpt.isPresent()) {
-                return callerOpt.get().userId();
-            }
+        SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
+                .orElseThrow(() -> new org.springframework.security.authentication.InsufficientAuthenticationException("Authentication is required to access Study resources"));
+        if (caller.userId() != null) {
+            return caller.userId();
         }
-        return null;
+        throw new org.springframework.security.access.AccessDeniedException("Authenticated caller has no user ID");
     }
 
-    private UUID resolveTenantId(UUID targetTenantId) {
-        if (siteAuthorizationService != null) {
-            if (targetTenantId != null) {
-                siteAuthorizationService.requireTenantMatch(targetTenantId);
-                return targetTenantId;
+    private UUID resolveTenantId(UUID queryTenantId) {
+        siteAuthorizationService.requireTenantMatch(queryTenantId);
+        SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
+                .orElseThrow(() -> new org.springframework.security.authentication.InsufficientAuthenticationException("Authentication is required to access Study resources"));
+        if (caller.tenantId() != null) {
+            if (queryTenantId != null && !caller.tenantId().equals(queryTenantId)) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied: cross-tenant operation is not permitted");
             }
-            Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
-            if (callerOpt.isPresent()) {
-                return callerOpt.get().tenantId();
-            }
+            return caller.tenantId();
         }
-        return targetTenantId != null ? targetTenantId : UUID.fromString("11111111-1111-1111-1111-111111111111");
+        if (queryTenantId != null) {
+            return queryTenantId;
+        }
+        throw new org.springframework.security.access.AccessDeniedException("Authenticated caller is not associated with any tenant");
     }
 }

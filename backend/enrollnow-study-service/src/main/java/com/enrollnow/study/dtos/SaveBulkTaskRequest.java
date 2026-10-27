@@ -1,9 +1,14 @@
 package com.enrollnow.study.dtos;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import java.util.List;
 
 public class SaveBulkTaskRequest {
 
+    @NotBlank(message = "Task name is required")
+    @Size(max = 100, message = "Task name must not exceed 100 characters")
     private String name;
     private String description;
     private List<String> assignedTo;

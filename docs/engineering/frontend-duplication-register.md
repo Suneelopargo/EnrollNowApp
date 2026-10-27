@@ -140,3 +140,27 @@
   - `frontend/microfrontends/participant/src/components/ParticipantGrid.tsx`
 - **What Was Duplicated:** Similar ExcelJS header/row styling (`#123A5A` header fill, `#F1F7FB` alternating row fill) and `jsPDF` + `jspdf-autotable` configuration.
 - **Disposition (`VERIFIED`):** Kept in the respective microfrontends and documented. Moving `exceljs` and `jspdf` into `@enrollnow/shared` would force all lightweight microfrontends and shared unit tests to depend on heavy binary document generation libraries. If Sprint 2 introduces additional export grids, a dedicated `@enrollnow/export-utils` workspace package should be extracted.
+
+---
+
+### DUP-FE-011 — Study API Client Typing and Error Helper Consolidation
+- **Locations Inspected:**
+  - `frontend/shared/api/studyApi.ts`
+  - `frontend/shared/api/errors.ts`
+  - `frontend/shared/api-client/index.ts`
+- **What Was Duplicated/Inconsistent:** `studyApi.ts` had repeated `{ skipToast: true, ...config } as any` and `(res.data as any)?.data ?? res.data` across 40+ methods; error extraction was ad-hoc.
+- **Canonical Owner:** `frontend/shared/api/errors.ts` re-exporting `getApiErrorMessage` from `frontend/shared/api-client/index.ts`, and typed `ApiResponseEnvelope<T>` with helper `unwrapResponse<T>` in `frontend/shared/api/studyApi.ts`.
+- **Resolution & Verification (`VERIFIED`):** Eliminated all `any` casts from `studyApi.ts`, augmented `AxiosRequestConfig` with `skipToast`, typed responses cleanly with `ApiResponseEnvelope<T>`, and re-exported `getApiErrorMessage` in `frontend/shared/api/errors.ts`.
+
+---
+
+### DUP-FE-012 — Elimination of Inline Styles into Shared SCSS
+- **Locations Inspected:**
+  - `frontend/shared/design-system/components/AddStudyModal.tsx`
+  - `frontend/microfrontends/study/src/components/StudyDirectory.tsx`
+  - `frontend/microfrontends/study/src/components/StudySettingsDetails.tsx`
+  - `frontend/microfrontends/study/src/components/StudySettingsEmailAndText.tsx`
+  - `frontend/shared/design-system/styles/_study.scss`
+- **What Was Duplicated:** Ad-hoc inline styles (`style={{ ... }}`) for modal layouts, toolbar alignment, table column widths, and form fields violating the SCSS-only styling standard.
+- **Canonical Owner:** `frontend/shared/design-system/styles/_study.scss`
+- **Resolution & Verification (`VERIFIED`):** Replaced all inline styles with semantic SCSS utility and layout classes (`.study-file-input--hidden`, `.study-directory-toolbar--right`, `.study-table__col-45`, `.study-template-card-header`, `.study-schedule-box`, etc.). Verified 0 inline styles remain in the target components.

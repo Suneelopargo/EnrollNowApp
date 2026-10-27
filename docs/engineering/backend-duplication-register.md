@@ -198,6 +198,62 @@ This register documents code duplication, overlapping implementations, and inten
   - `StudyServiceTest` verifying that no synthetic formula is applied.
 - **Status:** **VERIFIED**
 
+---
+
+### Finding DUP-006: Untyped Import Payloads and Aliases Across Study Controllers
+- **Severity:** High
+- **Source Files & Classes:**
+  - `com.enrollnow.study.controllers.StudyCopyAndImportController`
+  - `com.enrollnow.study.controllers.StudyController`
+  - `com.enrollnow.study.dtos.ImportStudyRequest`
+  - `com.enrollnow.study.dtos.ImportStudyComponentsRequest`
+- **Method Signatures (Prior to Remediation):**
+  - `@PostMapping("/studies/{studyId}/import-components") public ResponseEntity<?> importStudyComponents(..., @RequestBody Map<String, Object> components)`
+  - Untyped `@RequestBody Map<String, Object>` in component import.
+  - Inconsistent alias support between legacy payloads (`studyData`, `data`, `payload`, `configuration`).
+- **Changes Implemented:**
+  1. Created strongly typed `ImportStudyComponentsRequest` with `@JsonAlias({"components", "studyData", "data", "payload", "configuration"})` and dynamic property capture via `@JsonAnySetter`.
+  2. Enhanced `ImportStudyRequest` with Jackson `@JsonAlias({"studyData", "data", "payload", "configuration"})`.
+  3. Replaced all untyped `Map<String, Object>` controller inputs with `@Valid @RequestBody ImportStudyComponentsRequest` and explicit DTOs.
+- **Tests Performed:**
+  - `StudyCopyAndImportControllerTest.importStudyRequest_supportsAllAliases` verifying Jackson deserialization across all aliases.
+  - `StudyCopyAndImportControllerTest.importStudyComponents_succeeds` verifying typed DTO handling.
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-007: Implicit Authorization and Null-Dependency Fallbacks in Study Access
+- **Severity:** Critical
+- **Source Files & Classes:**
+  - `com.enrollnow.identity.services.SiteAuthorizationService`
+  - `com.enrollnow.study.services.StudyAccessService`
+  - `com.enrollnow.study.controllers.StudyController`
+  - `com.enrollnow.study.services.StudyService`
+- **Prior Flaws:**
+  - `SiteAuthorizationService` returned silently when `getAuthenticatedCaller()` was empty (fail-open).
+  - `StudyAccessService` had a 5-argument constructor accepting `null` security dependencies, skipping authorization checks in `grantStudyAccess` and `removeStudyAccess`.
+  - `StudyService` defaulted to hardcoded tenant UUID `11111111-1111-1111-1111-111111111111` when caller tenant was unresolved.
+- **Changes Implemented:**
+  1. Hardened `SiteAuthorizationService.requireCaller()` to fail closed with `InsufficientAuthenticationException` whenever unauthenticated.
+  2. Enforced mandatory non-null security services in `StudyAccessService` and verified study access permissions fail closed.
+  3. Removed all hardcoded tenant fallback UUIDs from `StudyService` and `StudyController`, enforcing authenticated caller tenant isolation.
+- **Tests Performed:**
+  - `StudyAccessServiceTest.grantStudyAccess_unauthenticated_throwsInsufficientAuthenticationException`
+  - `StudyAccessServiceTest.grantStudyAccess_crossTenant_throwsAccessDeniedException`
+  - `StudyControllerTest` verifying 401 unauthenticated and 403 forbidden responses.
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-008: Canonical Study Name Validation Alignment Across Backend & Frontend
+- **Severity:** Medium
+- **Source Files:**
+  - Backend: `CreateStudyRequest`, `UpdateStudyRequest`, `UpdateStudyDetailsRequest`, `ImportStudyRequest`
+  - Frontend: `STUDY_NAME_RULES`, `validateStudyName`, `AddStudyModal.tsx`
+- **Canonical Rule Enforced:**
+  - Required (`@NotBlank` / required), max length 15 characters (`@Size(max = 15)`), case-insensitive unique per tenant.
+- **Status:** **VERIFIED**
+
 ## 3. Deprecated Legacy Implementations
 
 ### Finding DEP-001: Legacy JJWT Provider vs Active Nimbus OAuth2 Resource Server
