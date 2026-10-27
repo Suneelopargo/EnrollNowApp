@@ -29,6 +29,7 @@ import com.enrollnow.identity.models.UserRoleAssignment;
 import java.util.Map;
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditChange;
 
 import java.util.Locale;
 import com.enrollnow.identity.models.Site;
@@ -451,9 +452,50 @@ public class UserService {
 	            if (targetAssignment.getRoleId().equals(role.getId())) {
 	                return targetAssignment;
 	            }
+
+	            String previousRoleCode = roleRepository
+	                    .findById(targetAssignment.getRoleId())
+	                    .map(Role::getCode)
+	                    .orElse("UNKNOWN");
+
 	            targetAssignment.setRoleId(role.getId());
 	            targetAssignment.setActive(true);
-	            return userRoleAssignmentRepository.saveAndFlush(targetAssignment);
+
+	            UserRoleAssignment savedAssignment =
+	                    userRoleAssignmentRepository.saveAndFlush(targetAssignment);
+
+	            if (auditRecorder != null) {
+	                auditRecorder.record(
+	                        new AuditEventCommand(
+	                                tenantId,
+	                                null,
+	                                "USER",
+	                                userId,
+	                                "SITE_PERMISSION_CHANGED",
+	                                "User site permission changed",
+	                                "API",
+	                                null,
+	                                null,
+	                                Map.of(
+	                                        "siteId", scopeId,
+	                                        "sitePermission", previousRoleCode
+	                                ),
+	                                Map.of(
+	                                        "siteId", scopeId,
+	                                        "sitePermission", role.getCode()
+	                                ),
+	                                List.of(
+	                                        new AuditChange(
+	                                                "sitePermission",
+	                                                previousRoleCode,
+	                                                role.getCode()
+	                                        )
+	                                )
+	                        )
+	                );
+	            }
+
+	            return savedAssignment;
 	        }
 
 	    } else {
@@ -525,8 +567,45 @@ public class UserService {
 	        if (assignment.getTeamId() != null || assignment.getStudyId() != null) {
 	            continue;
 	        }
+
+	        String previousRoleCode = roleRepository
+	                .findById(assignment.getRoleId())
+	                .map(Role::getCode)
+	                .orElse("UNKNOWN");
+
 	        assignment.setActive(false);
 	        userRoleAssignmentRepository.save(assignment);
+
+	        if (auditRecorder != null) {
+	            auditRecorder.record(
+	                    new AuditEventCommand(
+	                            tenantId,
+	                            null,
+	                            "USER",
+	                            userId,
+	                            "SITE_PERMISSION_REMOVED",
+	                            "User site permission removed",
+	                            "API",
+	                            null,
+	                            null,
+	                            Map.of(
+	                                    "siteId", assignment.getSiteId(),
+	                                    "sitePermission", previousRoleCode
+	                            ),
+	                            Map.of(
+	                                    "siteId", assignment.getSiteId(),
+	                                    "sitePermission", "NONE"
+	                            ),
+	                            List.of(
+	                                    new AuditChange(
+	                                            "sitePermission",
+	                                            previousRoleCode,
+	                                            "NONE"
+	                                    )
+	                            )
+	                    )
+	            );
+	        }
 	    }
 	}
 }
