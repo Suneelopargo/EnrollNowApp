@@ -24,6 +24,7 @@ export interface RegistrySearchParams {
   availableFilter?: 'all' | 'yes' | 'no';
   studies?: string[];
   customFiltersJson?: string;
+  duplicatesOnly?: boolean;
   page?: number;
   pageSize?: number;
   sortBy?: string;

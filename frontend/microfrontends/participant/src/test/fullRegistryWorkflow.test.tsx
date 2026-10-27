@@ -27,6 +27,7 @@ import { RecordConsentModal } from '../components/RecordConsentModal';
 import { ParticipantFormsSection } from '../components/ParticipantFormsSection';
 import { AssignFormModal } from '../components/AssignFormModal';
 import { ParticipantDetailModal } from '../components/ParticipantDetailModal';
+import { ParticipantGrid } from '../components/ParticipantGrid';
 import { ParticipantRecord } from '../types/participant';
 
 describe('Full Registry Workflow - API Client Integration', () => {
@@ -513,5 +514,55 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(modalHtml).toContain('Contact');
     expect(modalHtml).toContain('Consent');
     expect(modalHtml).toContain('Forms');
+  });
+
+  // 7. Potential Duplicate Participants Workflow
+  it('renders ParticipantGrid toolbar with Potential Duplicate Participants toggle and count', () => {
+    // Normal mode (All Participants)
+    const allHtml = renderToStaticMarkup(
+      <ParticipantGrid
+        participants={[dummyParticipant]}
+        totalCount={964}
+        duplicatesOnly={false}
+      />
+    );
+    expect(allHtml).toContain('All Participants');
+    expect(allHtml).toContain('(964)');
+    expect(allHtml).toContain('potential-duplicates-toggle');
+    expect(allHtml).toContain('Display only potential participant duplicates');
+
+    // Duplicates mode
+    const dupHtml = renderToStaticMarkup(
+      <ParticipantGrid
+        participants={[dummyParticipant]}
+        totalCount={254}
+        duplicatesOnly={true}
+      />
+    );
+    expect(dupHtml).toContain('Potential Duplicate Participants');
+    expect(dupHtml).toContain('(254)');
+    expect(dupHtml).toContain('participant-dupes');
+    expect(dupHtml).toContain('btn-info');
+  });
+
+  it('forwards duplicatesOnly parameter in participantApi.getParticipants and exportRegistry', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValue({ data: [] } as any);
+
+    await participantApi.getParticipants({ duplicatesOnly: true });
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/participants',
+      expect.objectContaining({
+        params: expect.objectContaining({ duplicatesOnly: true }),
+      })
+    );
+
+    await participantApi.exportRegistry({ duplicatesOnly: true });
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/registry/export',
+      expect.objectContaining({
+        params: expect.objectContaining({ duplicatesOnly: true }),
+        responseType: 'blob',
+      })
+    );
   });
 });

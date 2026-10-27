@@ -92,14 +92,33 @@ public class ParticipantRegistryService {
             int pageSize,
             String sortBy,
             String sortDirection) {
+        return searchParticipants(tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, false, page, pageSize, sortBy, sortDirection);
+    }
+
+    @Transactional(readOnly = true)
+    public RegistryPagedResponse<RegistryParticipantDto> searchParticipants(
+            UUID tenantId,
+            UUID siteId,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> selectedStudies,
+            List<CustomFilterRuleDto> customFilters,
+            boolean duplicatesOnly,
+            int page,
+            int pageSize,
+            String sortBy,
+            String sortDirection) {
 
         int safePage = Math.max(0, page);
         int safePageSize = pageSize > 0 ? pageSize : 25;
-        Sort sort = resolveSort(sortBy, sortDirection);
+        Sort sort = duplicatesOnly
+                ? Sort.by(Sort.Direction.ASC, "lastName", "firstName", "createdAt")
+                : resolveSort(sortBy, sortDirection);
         Pageable pageable = PageRequest.of(safePage, safePageSize, sort);
 
         Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
-                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters
+                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, duplicatesOnly
         );
 
         Page<Participant> participantPage = participantRepository.findAll(spec, pageable);
@@ -153,7 +172,7 @@ public class ParticipantRegistryService {
 
         // Fallback for mock unit test setups that only mocked findByTenantId
         return searchParticipantsInMemoryFallback(
-                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, safePage, safePageSize, sortBy, sortDirection
+                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, duplicatesOnly, safePage, safePageSize, sortBy, sortDirection
         );
     }
 
@@ -165,6 +184,7 @@ public class ParticipantRegistryService {
             String availableFilter,
             List<String> selectedStudies,
             List<CustomFilterRuleDto> customFilters,
+            boolean duplicatesOnly,
             int page,
             int pageSize,
             String sortBy,
@@ -175,6 +195,14 @@ public class ParticipantRegistryService {
         if (siteId != null) {
             participants = participants.stream()
                     .filter(p -> siteId.equals(p.getSiteId()))
+                    .collect(Collectors.toList());
+        }
+
+        boolean hasExplicitStatusFilter = customFilters != null && customFilters.stream()
+                .anyMatch(f -> "status".equalsIgnoreCase(f.getField()));
+        if (!hasExplicitStatusFilter) {
+            participants = participants.stream()
+                    .filter(p -> p.getStatus() == null || !"DELETED".equalsIgnoreCase(p.getStatus()))
                     .collect(Collectors.toList());
         }
 
@@ -255,8 +283,30 @@ public class ParticipantRegistryService {
             }
         }
 
+        // 8b. Filter: potential duplicates only
+        if (duplicatesOnly) {
+            Map<String, List<RegistryParticipantDto>> grouped = dtos.stream()
+                    .filter(p -> p.getFirstName() != null && !p.getFirstName().isBlank() && p.getLastName() != null && !p.getLastName().isBlank())
+                    .collect(Collectors.groupingBy(p -> (p.getFirstName().trim().toLowerCase() + "|||" + p.getLastName().trim().toLowerCase())));
+
+            Set<String> duplicateKeys = grouped.entrySet().stream()
+                    .filter(e -> e.getValue().size() > 1)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
+            dtos = dtos.stream().filter(p -> {
+                if (p.getFirstName() == null || p.getLastName() == null) return false;
+                String key = p.getFirstName().trim().toLowerCase() + "|||" + p.getLastName().trim().toLowerCase();
+                return duplicateKeys.contains(key);
+            }).collect(Collectors.toList());
+        }
+
         // 9. Sorting
-        Comparator<RegistryParticipantDto> comparator = getComparator(sortBy, sortDirection);
+        Comparator<RegistryParticipantDto> comparator = duplicatesOnly
+                ? Comparator.comparing((RegistryParticipantDto p) -> p.getLastName() != null ? p.getLastName().toLowerCase() : "")
+                        .thenComparing(p -> p.getFirstName() != null ? p.getFirstName().toLowerCase() : "")
+                        .thenComparing(p -> p.getDateCreated() != null ? p.getDateCreated() : "")
+                : getComparator(sortBy, sortDirection);
         dtos.sort(comparator);
 
         // 10. Pagination
@@ -280,14 +330,29 @@ public class ParticipantRegistryService {
             String availableFilter,
             List<String> selectedStudies,
             List<CustomFilterRuleDto> customFilters) {
+        return getAllMatchingParticipants(tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RegistryParticipantDto> getAllMatchingParticipants(
+            UUID tenantId,
+            UUID siteId,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> selectedStudies,
+            List<CustomFilterRuleDto> customFilters,
+            boolean duplicatesOnly) {
         RegistryPagedResponse<RegistryParticipantDto> response = searchParticipants(
-                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, 0, Integer.MAX_VALUE, "name", "asc");
+                tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, duplicatesOnly, 0, Integer.MAX_VALUE, "name", "asc");
         return response.getItems();
     }
 
     @Transactional(readOnly = true)
     public Optional<RegistryParticipantDto> getParticipantById(UUID tenantId, UUID participantId) {
-        return participantRepository.findByTenantIdAndId(tenantId, participantId).map(p -> {
+        return participantRepository.findByTenantIdAndId(tenantId, participantId)
+                .filter(p -> p.getStatus() == null || !"DELETED".equalsIgnoreCase(p.getStatus()))
+                .map(p -> {
             List<ParticipantIdentifier> identifiers = identifierRepository.findByTenantIdAndParticipantId(tenantId, participantId);
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
             List<ParticipantAddress> addresses = addressRepository.findByTenantIdAndParticipantId(tenantId, participantId);
@@ -594,6 +659,7 @@ public class ParticipantRegistryService {
     public void deleteParticipant(UUID tenantId, UUID participantId, UUID userId) {
         Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
                 .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+        String oldStatus = participant.getStatus();
         participant.setStatus("DELETED");
         participant.setUpdatedBy(userId);
         participant.setUpdatedAt(OffsetDateTime.now());
@@ -602,7 +668,7 @@ public class ParticipantRegistryService {
         ParticipantStatusHistory history = new ParticipantStatusHistory();
         history.setTenantId(tenantId);
         history.setParticipantId(participantId);
-        history.setPreviousStatus(participant.getStatus());
+        history.setPreviousStatus(oldStatus);
         history.setNewStatus("DELETED");
         history.setReason("Participant deleted by user");
         history.setChangedBy(userId);

@@ -44,12 +44,34 @@ public class ParticipantSpecifications {
             String availableFilter,
             List<String> selectedStudies,
             List<CustomFilterRuleDto> customFilters) {
+        return buildSpecification(tenantId, siteId, searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, false);
+    }
+
+    public static Specification<Participant> buildSpecification(
+            UUID tenantId,
+            UUID siteId,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> selectedStudies,
+            List<CustomFilterRuleDto> customFilters,
+            boolean duplicatesOnly) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             // 1. Mandatory Tenant Isolation
             predicates.add(cb.equal(root.get("tenantId"), tenantId));
+
+            // Exclude DELETED participants by default (unless specifically requested in customFilters)
+            boolean hasExplicitStatusFilter = customFilters != null && customFilters.stream()
+                    .anyMatch(f -> "status".equalsIgnoreCase(f.getField()));
+            if (!hasExplicitStatusFilter) {
+                predicates.add(cb.or(
+                        cb.isNull(root.get("status")),
+                        cb.notEqual(cb.upper(root.get("status")), "DELETED")
+                ));
+            }
 
             // 2. Site Scoping
             if (siteId != null) {
@@ -178,6 +200,28 @@ public class ParticipantSpecifications {
                         predicates.add(rulePred);
                     }
                 }
+            }
+
+            // 8. Potential Duplicates Filter (Matches participants with same name in tenant)
+            if (duplicatesOnly) {
+                Subquery<UUID> dupSub = query.subquery(UUID.class);
+                Root<Participant> p2 = dupSub.from(Participant.class);
+                dupSub.select(p2.get("id"))
+                        .where(
+                                cb.equal(p2.get("tenantId"), tenantId),
+                                cb.notEqual(p2.get("id"), root.get("id")),
+                                cb.isNotNull(root.get("firstName")),
+                                cb.isNotNull(root.get("lastName")),
+                                cb.isNotNull(p2.get("firstName")),
+                                cb.isNotNull(p2.get("lastName")),
+                                cb.equal(cb.lower(cb.trim(p2.get("firstName"))), cb.lower(cb.trim(root.get("firstName")))),
+                                cb.equal(cb.lower(cb.trim(p2.get("lastName"))), cb.lower(cb.trim(root.get("lastName")))),
+                                cb.or(
+                                        cb.isNull(p2.get("status")),
+                                        cb.notEqual(cb.upper(p2.get("status")), "DELETED")
+                                )
+                        );
+                predicates.add(cb.exists(dupSub));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

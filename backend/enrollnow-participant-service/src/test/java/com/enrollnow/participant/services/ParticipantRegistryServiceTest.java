@@ -361,6 +361,22 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void deleteParticipant_softDeletesAndRecordsHistory() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Dave", "Miller", LocalDate.of(1992, 4, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        service.deleteParticipant(tenantId, partId, userId);
+
+        assertThat(p.getStatus()).isEqualTo("DELETED");
+        verify(statusHistoryRepository).save(argThat(h ->
+                "DELETED".equals(h.getNewStatus()) &&
+                "ACTIVE".equals(h.getPreviousStatus()) &&
+                partId.equals(h.getParticipantId())
+        ));
+    }
+
+    @Test
     void updateParticipant_updatesPrimaryEmailAndPhone() {
         UUID partId = UUID.randomUUID();
         Participant p = createMockParticipant(partId, "Dave", "Miller", LocalDate.of(1992, 4, 1), "ACTIVE");
@@ -456,6 +472,31 @@ class ParticipantRegistryServiceTest {
         verify(identifierRepository).findByTenantIdAndParticipantIdIn(tenantId, List.of(id1));
         verify(contactRepository).findByTenantIdAndParticipantIdIn(tenantId, List.of(id1));
         verify(addressRepository).findByTenantIdAndParticipantIdIn(tenantId, List.of(id1));
+    }
+
+    @Test
+    void searchParticipants_withDuplicatesOnly_inFallback_returnsOnlyDuplicateGroups() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        UUID id3 = UUID.randomUUID();
+
+        // id1 and id2 have the same name "John Doe" (potential duplicates)
+        Participant p1 = createMockParticipant(id1, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
+        Participant p2 = createMockParticipant(id2, "John", "Doe", LocalDate.of(1992, 5, 10), "ACTIVE");
+        // id3 is unique "Alice Unique"
+        Participant p3 = createMockParticipant(id3, "Alice", "Unique", LocalDate.of(1985, 3, 15), "ACTIVE");
+
+        when(participantRepository.findByTenantId(tenantId)).thenReturn(List.of(p1, p2, p3));
+        when(studyRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        RegistryPagedResponse<RegistryParticipantDto> response = service.searchParticipants(
+                tenantId, null, null, "all", "all", null, null, true, 0, 25, "name", "asc"
+        );
+
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalCount()).isEqualTo(2);
+        assertThat(response.getItems()).extracting(RegistryParticipantDto::getName)
+                .containsExactly("John Doe", "John Doe");
     }
 
     @Test

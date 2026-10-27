@@ -13,7 +13,7 @@ import {
   Trash2,
   Eye,
 } from 'lucide-react';
-import { ChevronDown, FileSpreadsheet, FileText, UserPlus } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, FileText, UserPlus, List } from 'lucide-react';
 import { ParticipantRecord, StudyItem } from '../types/participant';
 
 const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
@@ -123,6 +123,8 @@ interface ParticipantGridProps {
   setSearchTerm?: (term: string) => void;
   selectedStudies?: string[];
   setSelectedStudies?: React.Dispatch<React.SetStateAction<string[]>>;
+  duplicatesOnly?: boolean;
+  onToggleDuplicates?: () => void;
 }
 
 export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
@@ -136,10 +138,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   onAssignStudyToSelected,
   isLoading = false,
   onExportServerCsv,
+  totalCount,
   searchTerm = '',
   setSearchTerm,
   selectedStudies = [],
   setSelectedStudies,
+  duplicatesOnly = false,
+  onToggleDuplicates,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
   const [gridSearchTerm, setGridSearchTerm] = useState(searchTerm || '');
@@ -481,7 +486,22 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   return (
     <section className="card">
       <div className="card-header data-grid-toolbar">
-        <div className="data-grid-toolbar__heading">
+        <div className="data-grid-toolbar__heading flex items-center gap-3">
+          <div className="flex items-center gap-2 mr-2">
+            <h3 className="sub-heading text-lg font-semibold text-gray-800 flex items-center gap-1.5 mb-0 whitespace-nowrap" id="registry-table-heading">
+              <span>{duplicatesOnly ? 'Potential Duplicate Participants' : 'All Participants'}</span>
+              <span className="text-gray-500 font-normal">({totalCount ?? participants.length})</span>
+            </h3>
+            <button
+              id="bulk-actions-toggle"
+              type="button"
+              className="bulk-action-icon p-1 text-gray-500 hover:text-gray-800 rounded transition-colors"
+              title="Bulk actions"
+              aria-label="Bulk actions"
+            >
+              <List size={16} aria-hidden="true" />
+            </button>
+          </div>
           <div className="data-grid-toolbar__search">
             <input
               type="text"
@@ -551,10 +571,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 
           <button
             type="button"
-            onClick={onRefresh}
-            title="All Users"
-            aria-label="Show all participants"
-            className="btn btn-secondary"
+            onClick={onToggleDuplicates}
+            id="potential-duplicates-toggle"
+            title="Display only potential participant duplicates"
+            aria-label="Display only potential participant duplicates"
+            aria-pressed={duplicatesOnly}
+            style={duplicatesOnly ? { backgroundColor: '#0d3b66', color: '#ffffff', borderColor: '#0d3b66' } : {}}
+            className={`btn participant-dupes ${duplicatesOnly ? 'btn-info bg-[#0d3b66] text-white hover:bg-[#0a2f52] border-[#0d3b66]' : 'btn-secondary text-gray-700 hover:bg-gray-100'}`}
           >
             <Users size={16} aria-hidden="true" />
           </button>

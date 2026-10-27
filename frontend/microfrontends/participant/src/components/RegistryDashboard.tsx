@@ -33,6 +33,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [selectedStudies, setSelectedStudies] = useState<string[]>([]);
   const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -243,6 +244,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     fetchSavedSearches();
     fetchFilterMetadata();
     showNotification('Participant queue refreshed');
+  };
+
+  const handleToggleDuplicates = () => {
+    const next = !duplicatesOnly;
+    setDuplicatesOnly(next);
+    fetchParticipants(false, { duplicatesOnly: next });
   };
 
   const handleAddParticipant = async (newParticipant: ParticipantRecord) => {
@@ -467,9 +474,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       intent: 'danger',
       confirmText: 'Delete participant',
       loadingText: 'Deleting participant...',
-      title: 'Delete participant',
-      message: `Delete participant "${participant.name}"? This action cannot be undone.`,
+      title: `Are you sure you want to delete ${participant.name}?`,
+      message: 'You will NOT be able to recover this participant.',
       confirmWord: 'DELETE',
+      confirmInputLabel: '',
+      confirmInputPlaceholder: '',
+      confirmInputSubtext: 'Type DELETE in all caps and press enter',
       onConfirm: async () => {
         try {
           await participantApi.deleteParticipant(participant.id);
@@ -585,6 +595,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           setSearchTerm={setSearchTerm}
           selectedStudies={selectedStudies}
           setSelectedStudies={setSelectedStudies}
+          duplicatesOnly={duplicatesOnly}
+          onToggleDuplicates={handleToggleDuplicates}
         />
       </div>
 

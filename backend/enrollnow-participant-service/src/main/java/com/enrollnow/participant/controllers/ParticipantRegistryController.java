@@ -82,6 +82,7 @@ public class ParticipantRegistryController {
             @RequestParam(required = false, defaultValue = "all") String availableFilter,
             @RequestParam(required = false) List<String> studies,
             @RequestParam(required = false) String customFiltersJson,
+            @RequestParam(required = false, defaultValue = "false") boolean duplicatesOnly,
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "25") int pageSize,
             @RequestParam(required = false, defaultValue = "name") String sortBy,
@@ -111,6 +112,7 @@ public class ParticipantRegistryController {
                 availableFilter,
                 studies,
                 rules,
+                duplicatesOnly,
                 page,
                 pageSize,
                 sortBy,
@@ -118,6 +120,22 @@ public class ParticipantRegistryController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    public ResponseEntity<RegistryPagedResponse<RegistryParticipantDto>> getParticipants(
+            UUID tenantId,
+            UUID siteId,
+            String search,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> studies,
+            String customFiltersJson,
+            int page,
+            int pageSize,
+            String sortBy,
+            String sortDirection) {
+        return getParticipants(tenantId, siteId, search, searchTerm, contactFilter, availableFilter, studies, customFiltersJson, false, page, pageSize, sortBy, sortDirection);
     }
 
     @GetMapping("/participants/check-duplicate")
@@ -284,7 +302,8 @@ public class ParticipantRegistryController {
             @RequestParam(required = false, defaultValue = "all") String contactFilter,
             @RequestParam(required = false, defaultValue = "all") String availableFilter,
             @RequestParam(required = false) List<String> studies,
-            @RequestParam(required = false) String customFiltersJson) {
+            @RequestParam(required = false) String customFiltersJson,
+            @RequestParam(required = false, defaultValue = "false") boolean duplicatesOnly) {
 
         UUID resolvedTenantId = resolveTenantId(tenantId);
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
@@ -303,7 +322,7 @@ public class ParticipantRegistryController {
         }
 
         List<RegistryParticipantDto> matching = registryService.getAllMatchingParticipants(
-                resolvedTenantId, siteId, effectiveSearch, contactFilter, availableFilter, studies, rules);
+                resolvedTenantId, siteId, effectiveSearch, contactFilter, availableFilter, studies, rules, duplicatesOnly);
 
         byte[] csvData = exportService.exportToCsv(matching);
 
@@ -313,5 +332,17 @@ public class ParticipantRegistryController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(csvData);
+    }
+
+    public ResponseEntity<byte[]> exportRegistry(
+            UUID tenantId,
+            UUID siteId,
+            String search,
+            String searchTerm,
+            String contactFilter,
+            String availableFilter,
+            List<String> studies,
+            String customFiltersJson) {
+        return exportRegistry(tenantId, siteId, search, searchTerm, contactFilter, availableFilter, studies, customFiltersJson, false);
     }
 }

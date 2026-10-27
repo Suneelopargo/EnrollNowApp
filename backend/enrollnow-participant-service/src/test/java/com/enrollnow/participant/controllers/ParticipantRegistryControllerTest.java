@@ -58,7 +58,7 @@ class ParticipantRegistryControllerTest {
 
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
-        when(registryService.searchParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), eq(0), eq(25), any(), any()))
+        when(registryService.searchParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), anyBoolean(), eq(0), eq(25), any(), any()))
                 .thenReturn(pagedResponse);
 
         ResponseEntity<RegistryPagedResponse<RegistryParticipantDto>> response =
@@ -77,7 +77,7 @@ class ParticipantRegistryControllerTest {
 
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
-        when(registryService.searchParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), eq(0), eq(25), any(), any()))
+        when(registryService.searchParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), anyBoolean(), eq(0), eq(25), any(), any()))
                 .thenReturn(pagedResponse);
 
         String json = "[{\"id\":\"1\",\"field\":\"age\",\"operator\":\"between\",\"minValue\":\"20\",\"maxValue\":\"40\"}," +
@@ -93,6 +93,7 @@ class ParticipantRegistryControllerTest {
                         "age".equals(rules.get(0).getField()) &&
                         "20".equals(rules.get(0).getMinValue()) &&
                         rules.get(1).getValues().contains("Male")),
+                eq(false),
                 eq(0), eq(25), eq("name"), eq("asc")
         );
     }
@@ -141,7 +142,7 @@ class ParticipantRegistryControllerTest {
         byte[] csv = "Participant ID,Name\n1,Jane".getBytes();
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
-        when(registryService.getAllMatchingParticipants(eq(tenantId), any(), any(), any(), any(), any(), any()))
+        when(registryService.getAllMatchingParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), anyBoolean()))
                 .thenReturn(Collections.emptyList());
         when(exportService.exportToCsv(any())).thenReturn(csv);
 
@@ -150,6 +151,23 @@ class ParticipantRegistryControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getFirst("Content-Disposition")).contains("registry_export_");
         assertThat(response.getBody()).isEqualTo(csv);
+    }
+
+    @Test
+    void getParticipants_withDuplicatesOnly_delegatesToService() {
+        RegistryPagedResponse<RegistryParticipantDto> pagedResponse =
+                new RegistryPagedResponse<>(Collections.emptyList(), 0, 0, 25);
+
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(registryService.searchParticipants(eq(tenantId), any(), any(), any(), any(), any(), any(), eq(true), eq(0), eq(25), any(), any()))
+                .thenReturn(pagedResponse);
+
+        ResponseEntity<RegistryPagedResponse<RegistryParticipantDto>> response =
+                controller.getParticipants(null, null, null, null, "all", "all", null, null, true, 0, 25, "name", "asc");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(registryService).searchParticipants(eq(tenantId), isNull(), isNull(), eq("all"), eq("all"), isNull(), any(), eq(true), eq(0), eq(25), eq("name"), eq("asc"));
     }
 
     @Test
@@ -162,7 +180,7 @@ class ParticipantRegistryControllerTest {
                 controller.getParticipants(otherTenantId, null, null, null, "all", "all", null, null, 0, 25, "name", "asc")
         );
 
-        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt(), any(), any());
     }
 
     @Test
@@ -174,7 +192,7 @@ class ParticipantRegistryControllerTest {
                 controller.getParticipants(null, null, null, null, "all", "all", null, null, 0, 25, "name", "asc")
         );
 
-        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt(), any(), any());
     }
 
     @Test
@@ -199,7 +217,7 @@ class ParticipantRegistryControllerTest {
                 controller.getParticipants(tenantId, unauthorizedSiteId, null, null, "all", "all", null, null, 0, 25, "name", "asc")
         );
 
-        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(registryService, never()).searchParticipants(any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt(), anyInt(), any(), any());
     }
 
     @Test
