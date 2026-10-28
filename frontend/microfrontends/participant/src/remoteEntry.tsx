@@ -7,10 +7,10 @@ export interface ParticipantModuleProps {
   context: MfeContext;
 }
 
-export const ParticipantModule: React.FC<ParticipantModuleProps> = () => {
+export const ParticipantModule: React.FC<ParticipantModuleProps> = ({ context }) => {
   return (
     <div className="page-container">
-      <RegistryDashboard />
+      <RegistryDashboard context={context} />
     </div>
   );
 };

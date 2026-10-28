@@ -129,9 +129,130 @@ This register documents code duplication, overlapping implementations, and inten
 - **Tests Performed:**
   - `StudyServiceTest` (6 unit tests including cross-tenant isolation regression tests).
   - `StudyControllerTest` (7 unit tests covering path-tenant and token-tenant resolution, non-admin study filtering, and CRUD responses).
-- **Remaining Risks:** `StudyController` still accepts `@RequestBody(required = false) Map<String, Object> payload` and maps it to `CreateStudyRequest`/`UpdateStudyRequest` to preserve legacy callers that send empty bodies or alias fields (`title`, `protocolNumber`, `targetEnrollment`).
+- **Remaining Risks:** None. In the targeted remediation, untyped `Map<String, Object>` payloads were completely replaced with strongly-typed `@Valid` request DTOs (`CreateStudyRequest`, `CopyStudyRequest`, `UpdateStudyRequest`, `ImportStudyRequest`), alias fields are supported via `@JsonAlias`, and missing names fail with HTTP 400 instead of silently creating "New Study".
 
 ---
+
+
+---
+
+### Finding DUP-005: Untyped Map<String, Object> Payloads and Missing Name Fallback in StudyController
+
+- **Severity:** High (Data Integrity & Validation Bypass)
+- **Source Files & Classes:**
+  - `com.enrollnow.study.controllers.StudyController`
+  - `com.enrollnow.study.controllers.StudyCopyAndImportController`
+- **Evidence of Violation:**
+  - `StudyController` and `StudyCopyAndImportController` accepted untyped `@RequestBody Map<String, Object>` payloads.
+  - Creation logic silently substituted `"New Study"` when name was null or blank, allowing malformed requests to succeed.
+  - Mutation endpoints (`updateStudy`, `archiveStudy`, `restoreStudy`, `deleteStudy`) reused `requireStudyCreateAccess()` instead of dedicated management authorization.
+- **Authoritative Owner:**
+  - Typed request DTOs (`CreateStudyRequest`, `CopyStudyRequest`, `UpdateStudyRequest`, `ImportStudyRequest`) with Jakarta Bean Validation (`@NotBlank`, `@Size`).
+  - `SiteAuthorizationService.requireStudyManageAccess()` (`PERM_SITE_ALL_STUDIES_MANAGE`) and fail-closed caller verification.
+- **Changes Implemented:**
+  1. Replaced all `Map<String, Object>` parameters in `StudyController` with typed `@Valid` DTOs.
+  2. Created `ImportStudyRequest` with validated study name and flexible `studyData` configuration.
+  3. Added supported aliases (`title`, `protocolNumber`, `targetEnrollment`) using Jackson `@JsonAlias`.
+  4. Enforced `siteAuthorizationService.requireStudyManageAccess(tenantId)` across update, archive, restore, and delete operations.
+  5. Implemented study-level access validation for non-admin callers on detail endpoints.
+- **Tests Performed:**
+  - `StudyControllerTest` (10 unit tests covering typed DTOs, 400 validation rejection, manage authorization enforcement, and tenant isolation).
+  - `StudyCopyAndImportControllerTest` (7 unit tests covering copy and import).
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-006: N+1 Query Loop in StudyService.toSummaryResponseList
+
+- **Severity:** High (Performance & Database Scalability)
+- **Source File & Class:**
+  - `com.enrollnow.study.services.StudyService`
+- **Evidence of Violation:**
+  - `StudyService.toSummaryResponseList` iterated over studies, executing `studyMemberRepository.findByStudyId(studyId)` and `userRepository.findById(adminId)` inside the loop for every study, resulting in $O(N)$ database queries.
+- **Authoritative Owner:**
+  - `StudyService.toSummaryResponseList` batch loading.
+- **Changes Implemented:**
+  1. Added batch query `studyMemberRepository.findByIdStudyIdIn(studyIds)` in `StudyMemberRepository`.
+  2. Refactored `toSummaryResponseList` to pre-fetch all study members for the given study IDs in a single query, collect user IDs, pre-fetch all user profiles via `userRepository.findAllById(userIds)` in a second query, and assemble summaries in memory using hash maps.
+  3. Query count reduced from $1 + 2N$ to exactly **2 batch queries** regardless of study count.
+- **Tests Performed:**
+  - `StudyServiceTest` (8 unit tests covering batch summary assembly and empty study lists).
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-007: Synthetic Enrollment Metric Fabrication in StudyService
+
+- **Severity:** Medium (Data Truthfulness & Regulatory Integrity)
+- **Source File & Class:**
+  - `com.enrollnow.study.services.StudyService` (`toSummaryResponse`)
+- **Evidence of Violation:**
+  - When `study.getEnrolled()` was not populated, the service calculated enrollment as `Math.round(sample * 0.65)`. This fabricated enrollment figures rather than reflecting real participant records.
+- **Authoritative Owner:**
+  - Truthful null representation in `StudySummaryResponse` + actual participant count calculation in `StudyModule` via `participantApi`.
+- **Changes Implemented:**
+  1. Removed `Math.round(sample * 0.65)` calculation from `StudyService.toSummaryResponse`.
+  2. `StudySummaryResponse.getEnrolled()` returns actual enrolled count or `null` when unavailable.
+  3. Frontend `StudyModule` computes recruited counts dynamically from actual participant records loaded via `participantApi.getParticipants()`.
+- **Tests Performed:**
+  - `StudyServiceTest` verifying that no synthetic formula is applied.
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-006: Untyped Import Payloads and Aliases Across Study Controllers
+- **Severity:** High
+- **Source Files & Classes:**
+  - `com.enrollnow.study.controllers.StudyCopyAndImportController`
+  - `com.enrollnow.study.controllers.StudyController`
+  - `com.enrollnow.study.dtos.ImportStudyRequest`
+  - `com.enrollnow.study.dtos.ImportStudyComponentsRequest`
+- **Method Signatures (Prior to Remediation):**
+  - `@PostMapping("/studies/{studyId}/import-components") public ResponseEntity<?> importStudyComponents(..., @RequestBody Map<String, Object> components)`
+  - Untyped `@RequestBody Map<String, Object>` in component import.
+  - Inconsistent alias support between legacy payloads (`studyData`, `data`, `payload`, `configuration`).
+- **Changes Implemented:**
+  1. Created strongly typed `ImportStudyComponentsRequest` with `@JsonAlias({"components", "studyData", "data", "payload", "configuration"})` and dynamic property capture via `@JsonAnySetter`.
+  2. Enhanced `ImportStudyRequest` with Jackson `@JsonAlias({"studyData", "data", "payload", "configuration"})`.
+  3. Replaced all untyped `Map<String, Object>` controller inputs with `@Valid @RequestBody ImportStudyComponentsRequest` and explicit DTOs.
+- **Tests Performed:**
+  - `StudyCopyAndImportControllerTest.importStudyRequest_supportsAllAliases` verifying Jackson deserialization across all aliases.
+  - `StudyCopyAndImportControllerTest.importStudyComponents_succeeds` verifying typed DTO handling.
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-007: Implicit Authorization and Null-Dependency Fallbacks in Study Access
+- **Severity:** Critical
+- **Source Files & Classes:**
+  - `com.enrollnow.identity.services.SiteAuthorizationService`
+  - `com.enrollnow.study.services.StudyAccessService`
+  - `com.enrollnow.study.controllers.StudyController`
+  - `com.enrollnow.study.services.StudyService`
+- **Prior Flaws:**
+  - `SiteAuthorizationService` returned silently when `getAuthenticatedCaller()` was empty (fail-open).
+  - `StudyAccessService` had a 5-argument constructor accepting `null` security dependencies, skipping authorization checks in `grantStudyAccess` and `removeStudyAccess`.
+  - `StudyService` defaulted to hardcoded tenant UUID `11111111-1111-1111-1111-111111111111` when caller tenant was unresolved.
+- **Changes Implemented:**
+  1. Hardened `SiteAuthorizationService.requireCaller()` to fail closed with `InsufficientAuthenticationException` whenever unauthenticated.
+  2. Enforced mandatory non-null security services in `StudyAccessService` and verified study access permissions fail closed.
+  3. Removed all hardcoded tenant fallback UUIDs from `StudyService` and `StudyController`, enforcing authenticated caller tenant isolation.
+- **Tests Performed:**
+  - `StudyAccessServiceTest.grantStudyAccess_unauthenticated_throwsInsufficientAuthenticationException`
+  - `StudyAccessServiceTest.grantStudyAccess_crossTenant_throwsAccessDeniedException`
+  - `StudyControllerTest` verifying 401 unauthenticated and 403 forbidden responses.
+- **Status:** **VERIFIED**
+
+---
+
+### Finding DUP-008: Canonical Study Name Validation Alignment Across Backend & Frontend
+- **Severity:** Medium
+- **Source Files:**
+  - Backend: `CreateStudyRequest`, `UpdateStudyRequest`, `UpdateStudyDetailsRequest`, `ImportStudyRequest`
+  - Frontend: `STUDY_NAME_RULES`, `validateStudyName`, `AddStudyModal.tsx`
+- **Canonical Rule Enforced:**
+  - Required (`@NotBlank` / required), max length 15 characters (`@Size(max = 15)`), case-insensitive unique per tenant.
+- **Status:** **VERIFIED**
 
 ## 3. Deprecated Legacy Implementations
 

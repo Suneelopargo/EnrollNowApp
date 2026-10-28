@@ -74,6 +74,12 @@ export const validators = {
 
   maxLength: (max: number, label = 'This field'): FieldValidator => (value) =>
     toText(value).length > max ? `${label} must be ${max} characters or fewer` : undefined,
+
+  pattern: (regex: RegExp, message: string): FieldValidator => (value) => {
+    const text = toText(value).trim();
+    if (!text) return undefined;
+    return regex.test(text) ? undefined : message;
+  },
 };
 
 /** Returns the first message for a field, preserving the rule order. */
@@ -99,4 +105,32 @@ export function validateForm<T extends Record<string, unknown>>(
     if (error) errors[field] = error;
   });
   return errors;
+}
+
+export const STUDY_NAME_RULES = [
+  validators.required('Short study name'),
+  validators.maxLength(15, 'Short study name'),
+  validators.pattern(/^[a-zA-Z0-9 _-]+$/, 'Short study name may only contain letters, numbers, spaces, hyphens, and underscores'),
+];
+
+export function validateStudyName(
+  rawName: string,
+  existingStudies: Array<{ id?: string | number; studyId?: string | number; name?: string; title?: string }> = [],
+  currentStudyId?: string | number | null
+): string | null {
+  const trimmed = toText(rawName).trim();
+  const error = validateField(trimmed, STUDY_NAME_RULES);
+  if (error) {
+    return error;
+  }
+  const currentIdStr = currentStudyId != null ? String(currentStudyId) : null;
+  const isDuplicate = existingStudies.some((s) => {
+    const sId = s.id != null ? String(s.id) : (s.studyId != null ? String(s.studyId) : null);
+    if (currentIdStr && sId === currentIdStr) return false;
+    return toText(s.name || s.title).trim().toLowerCase() === trimmed.toLowerCase();
+  });
+  if (isDuplicate) {
+    return 'Study name already exists. Please choose another';
+  }
+  return null;
 }

@@ -64,26 +64,26 @@ public class SiteAuthorizationService {
             return Optional.of(new CallerIdentity(nameUuid, detailsTenantId));
         }
 
-        return Optional.empty();
+        throw new InsufficientAuthenticationException("Unable to resolve authenticated caller identity");
+    }
+
+    private CallerIdentity requireCaller() {
+        return getAuthenticatedCaller()
+                .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to access this resource"));
     }
 
     public void requireTenantMatch(UUID targetTenantId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
+        CallerIdentity caller = requireCaller();
+        if (caller.tenantId() == null) {
+            throw new AccessDeniedException("Access denied: authenticated caller has no tenant context");
         }
-        CallerIdentity caller = callerOpt.get();
-        if (caller.tenantId() != null && targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
+        if (targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
             throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
         }
     }
 
     public void requireRegistryAccess(UUID targetTenantId, UUID siteId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse effective =
@@ -94,12 +94,37 @@ public class SiteAuthorizationService {
         }
     }
 
-    public void requireSiteAdminAccess(UUID targetTenantId, UUID siteId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
+    public void requireStudyCreateAccess(UUID targetTenantId) {
+        CallerIdentity caller = requireCaller();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanManageSiteAdmins()
+                && !callerEffective.isCanAccessSiteAdmin()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_STUDIES_CREATE)
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
+            throw new AccessDeniedException("Access denied: creating or copying a study requires SITE_STUDIES_CREATE permission or Site Admin/Manager role");
         }
-        CallerIdentity caller = callerOpt.get();
+    }
+
+    public void requireStudyManageAccess(UUID targetTenantId) {
+        CallerIdentity caller = requireCaller();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+
+        UserEffectivePermissionsResponse callerEffective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!callerEffective.isCanManageSiteAdmins()
+                && !callerEffective.isCanAccessSiteAdmin()
+                && !callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
+            throw new AccessDeniedException("Access denied: modifying, archiving, or deleting a study requires SITE_ALL_STUDIES_MANAGE permission or Site Admin/Manager role");
+        }
+    }
+
+    public void requireSiteAdminAccess(UUID targetTenantId, UUID siteId) {
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse effective =
@@ -111,11 +136,7 @@ public class SiteAuthorizationService {
     }
 
     public void requireSelfOrUserViewAccess(UUID targetTenantId, UUID targetUserId, UUID siteId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         if (caller.userId().equals(targetUserId)) {
@@ -132,11 +153,7 @@ public class SiteAuthorizationService {
     }
 
     public void requireUserManageAccess(UUID targetTenantId, UUID siteId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse effective =
@@ -155,11 +172,7 @@ public class SiteAuthorizationService {
             String requestedScopeType,
             UUID requestedScopeId
     ) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
         UUID siteId = "SITE".equalsIgnoreCase(requestedScopeType) ? requestedScopeId : null;
 
@@ -197,11 +210,7 @@ public class SiteAuthorizationService {
             UUID targetUserId,
             UUID siteId
     ) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         if (targetUserId != null && caller.userId().equals(targetUserId)) {
@@ -227,11 +236,7 @@ public class SiteAuthorizationService {
     }
 
     public void requireFullSiteAdmin(UUID targetTenantId, UUID siteId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse callerEffective =
@@ -242,12 +247,21 @@ public class SiteAuthorizationService {
         }
     }
 
-    public void requireSecuritySettingsManage(UUID targetTenantId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
+    public UUID requireAuditLogView(UUID targetTenantId) {
+        CallerIdentity caller = requireCaller();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+        UserEffectivePermissionsResponse effective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!effective.isCanManageSiteAdmins()
+                && !effective.getPermissions().contains(SitePermissionService.PERM_SITE_AUDIT_LOG_VIEW)) {
+            throw new AccessDeniedException("Access denied: viewing audit logs requires SITE_AUDIT_LOG_VIEW permission");
         }
-        CallerIdentity caller = callerOpt.get();
+        return effectiveTenantId;
+    }
+
+    public void requireSecuritySettingsManage(UUID targetTenantId) {
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse callerEffective =
@@ -260,11 +274,7 @@ public class SiteAuthorizationService {
     }
 
     public void requireGeneralSettingsView(UUID targetTenantId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse callerEffective =
@@ -277,11 +287,7 @@ public class SiteAuthorizationService {
     }
 
     public void requireGeneralSettingsManage(UUID targetTenantId) {
-        Optional<CallerIdentity> callerOpt = getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
-        }
-        CallerIdentity caller = callerOpt.get();
+        CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
 
         UserEffectivePermissionsResponse callerEffective =
@@ -304,14 +310,13 @@ public class SiteAuthorizationService {
     }
 
     private UUID resolveTenantId(CallerIdentity caller, UUID targetTenantId) {
-        if (caller.tenantId() != null && targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
-            throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
-        }
-        UUID resolved = targetTenantId != null ? targetTenantId : caller.tenantId();
-        if (resolved == null) {
+        if (caller == null || caller.tenantId() == null) {
             throw new AccessDeniedException("Access denied: tenant context is required");
         }
-        return resolved;
+        if (targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
+            throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
+        }
+        return caller.tenantId();
     }
 
     private static UUID parseUuid(String raw) {

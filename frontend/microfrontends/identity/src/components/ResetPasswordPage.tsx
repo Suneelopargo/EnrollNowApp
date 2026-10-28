@@ -5,6 +5,7 @@ import { EnrollNowBrand } from './EnrollNowBrand';
 import { Footer } from '../../../../shared/design-system/components/Footer';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { usePasswordValidation } from './usePasswordValidation';
 import { PasswordValidationPanel } from './PasswordValidationPanel';
 
@@ -109,11 +110,11 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
         navigate('/login');
       }, 2000);
     } catch (err: any) {
+      const msg = getApiErrorMessage(
+        err,
+        'Unable to reset password. The link may have expired or already been used.'
+      );
       const errData = err?.response?.data;
-      const msg =
-        errData?.message ||
-        err?.message ||
-        'Unable to reset password. The link may have expired or already been used.';
 
       const isWarning =
         errData?.error === 'TOKEN_EXPIRED' ||

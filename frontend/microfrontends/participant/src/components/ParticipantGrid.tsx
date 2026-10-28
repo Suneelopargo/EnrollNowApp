@@ -13,7 +13,7 @@ import {
   Trash2,
   Eye,
 } from 'lucide-react';
-import { ChevronDown, FileSpreadsheet, FileText, UserPlus } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, FileText, UserPlus, List } from 'lucide-react';
 import { ParticipantRecord, StudyItem } from '../types/participant';
 
 const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
@@ -115,12 +115,17 @@ interface ParticipantGridProps {
   onAddParticipant?: () => void;
   onOpenDetail?: (participant: ParticipantRecord) => void;
   onDeleteParticipant?: (participant: ParticipantRecord) => void;
+  onDeleteSelected?: (participantIds: string[]) => void;
   onAssignStudyToSelected?: (participantIds: string[], studyName: string) => void;
+  isLoading?: boolean;
+  onExportServerCsv?: () => void;
   totalCount?: number;
   searchTerm?: string;
   setSearchTerm?: (term: string) => void;
   selectedStudies?: string[];
   setSelectedStudies?: React.Dispatch<React.SetStateAction<string[]>>;
+  duplicatesOnly?: boolean;
+  onToggleDuplicates?: () => void;
 }
 
 export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
@@ -131,13 +136,20 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   onAddParticipant,
   onOpenDetail,
   onDeleteParticipant,
+  onDeleteSelected,
   onAssignStudyToSelected,
+  isLoading = false,
+  onExportServerCsv,
+  totalCount,
   searchTerm = '',
   setSearchTerm,
   selectedStudies = [],
   setSelectedStudies,
+  duplicatesOnly = false,
+  onToggleDuplicates,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
+  const [gridSearchTerm, setGridSearchTerm] = useState(searchTerm || '');
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
   const [studyToAssign, setStudyToAssign] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -147,6 +159,32 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const studyFilterButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize internal quick-filter text if external searchTerm changes (e.g. clear filters)
+  useEffect(() => {
+    if (searchTerm !== undefined && searchTerm !== gridSearchTerm) {
+      setGridSearchTerm(searchTerm);
+      gridApi?.setGridOption('quickFilterText', searchTerm);
+    }
+  }, [searchTerm, gridApi]);
+
+  const handleSearchChange = (value: string) => {
+    setGridSearchTerm(value);
+    gridApi?.setGridOption('quickFilterText', value);
+  };
+
+  const handleClearSearch = () => {
+    setGridSearchTerm('');
+    gridApi?.setGridOption('quickFilterText', '');
+    setSearchTerm?.('');
+  };
+
+  const onGridReady = useCallback((params: { api: GridApi<ParticipantRecord> }) => {
+    setGridApi(params.api);
+    if (gridSearchTerm) {
+      params.api.setGridOption('quickFilterText', gridSearchTerm);
+    }
+  }, [gridSearchTerm]);
 
   const availableStudyList = useMemo(() => {
     const list = new Set<string>();
@@ -265,6 +303,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       resizable: false,
       cellRenderer: CheckboxCellRenderer,
       cellClass: 'p-0 flex items-center justify-center',
+      getQuickFilterText: () => '',
     },
     {
       headerName: 'Name',
@@ -285,6 +324,10 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       autoHeight: true,
       cellRenderer: StudiesCellRenderer,
       cellClass: 'flex items-center',
+      getQuickFilterText: (params) => {
+        if (!params.value || !Array.isArray(params.value)) return '';
+        return params.value.map((s: StudyItem) => s?.name || '').join(' ');
+      },
     },
     {
       headerName: 'Sex/Gender',
@@ -327,6 +370,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       resizable: false,
       cellRenderer: ParticipantActionsRenderer,
       cellClass: 'p-0 flex items-center justify-center',
+      getQuickFilterText: () => '',
     }
   ], [selectedStudies]);
 
@@ -351,6 +395,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     setStudyToAssign('');
   };
 
+  const handleBulkDelete = () => {
+    if (selectedParticipants.length === 0) return;
+    onDeleteSelected?.(selectedParticipants.map((participant) => participant.id));
+  };
+
   const getExportRows = useCallback(() => {
     const rows: ParticipantRecord[] = [];
     if (gridApi) {
@@ -364,6 +413,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 
   const exportFileName = `participants-${new Date().toISOString().slice(0, 10)}`;
   const exportCsv = () => {
+    if (onExportServerCsv) {
+      onExportServerCsv();
+      setIsExportMenuOpen(false);
+      return;
+    }
     gridApi?.exportDataAsCsv({
       fileName: `${exportFileName}.csv`,
       columnKeys: ['name', 'studies', 'gender', 'age', 'lastContact'],
@@ -439,21 +493,38 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   return (
     <section className="card">
       <div className="card-header data-grid-toolbar">
-        <div className="data-grid-toolbar__heading">
+        <div className="data-grid-toolbar__heading flex items-center gap-3">
+          <div className="flex items-center gap-2 mr-2">
+            <h3 className="sub-heading text-lg font-semibold text-gray-800 flex items-center gap-1.5 mb-0 whitespace-nowrap" id="registry-table-heading">
+              <span>{duplicatesOnly ? 'Potential Duplicate Participants' : 'All Participants'}</span>
+              <span className="text-gray-500 font-normal">({totalCount ?? participants.length})</span>
+            </h3>
+            <button
+              id="bulk-actions-toggle"
+              type="button"
+              className="bulk-action-icon p-1 text-gray-500 hover:text-gray-800 rounded transition-colors"
+              title="Bulk actions"
+              aria-label="Bulk actions"
+            >
+              <List size={16} aria-hidden="true" />
+            </button>
+          </div>
           <div className="data-grid-toolbar__search">
             <input
               type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm?.(e.target.value)}
+              value={gridSearchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search participants..."
+              aria-label="Search participants"
               className="form-input"
             />
-            {searchTerm && (
+            {gridSearchTerm && (
               <button
                 type="button"
-                onClick={() => setSearchTerm?.('')}
+                onClick={handleClearSearch}
                 className="btn btn-ghost btn-sm"
                 title="Clear"
+                aria-label="Clear search"
               >
                 <X size={14} />
               </button>
@@ -507,10 +578,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 
           <button
             type="button"
-            onClick={onRefresh}
-            title="All Users"
-            aria-label="Show all participants"
-            className="btn btn-secondary"
+            onClick={onToggleDuplicates}
+            id="potential-duplicates-toggle"
+            title="Display only potential participant duplicates"
+            aria-label="Display only potential participant duplicates"
+            aria-pressed={duplicatesOnly}
+            style={duplicatesOnly ? { backgroundColor: '#0d3b66', color: '#ffffff', borderColor: '#0d3b66' } : {}}
+            className={`btn participant-dupes ${duplicatesOnly ? 'btn-info bg-[#0d3b66] text-white hover:bg-[#0a2f52] border-[#0d3b66]' : 'btn-secondary text-gray-700 hover:bg-gray-100'}`}
           >
             <Users size={16} aria-hidden="true" />
           </button>
@@ -563,6 +637,14 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <span className="participant-grid__selected-count">
             {selectedParticipants.length} selected
           </span>
+          <button
+            type="button"
+            className="participant-grid__apply-action participant-grid__apply-action--danger"
+            onClick={handleBulkDelete}
+            aria-label={`Delete ${selectedParticipants.length} selected participants`}
+          >
+            Delete selected
+          </button>
           <select
             value={studyToAssign}
             onChange={(event) => setStudyToAssign(event.target.value)}
@@ -677,9 +759,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       )}
 
       <DataGrid
+          loading={isLoading}
           rowData={participants}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
+          quickFilterText={gridSearchTerm}
           context={{ onOpenDetail, onDeleteParticipant }}
           onCellClicked={(params) => {
             if (params.column?.getColId() === 'expand' && params.data) {
@@ -702,7 +786,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           }}
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
           onSelectionChanged={onSelectionChanged}
-          onGridReady={(event) => setGridApi(event.api)}
+          onGridReady={onGridReady}
           rowHeight={64}
           headerHeight={44}
           pagination={true}

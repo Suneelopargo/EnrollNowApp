@@ -48,4 +48,40 @@ describe('Study MFE Remote Entry & Study API', () => {
     expect(getSpy).toHaveBeenCalledWith('/api/v1/studies', expect.objectContaining({ skipToast: true }));
     getSpy.mockRestore();
   });
+
+  it('calls GET /api/v1/studies/:id/permissions via studyApi.getStudyPermissions', async () => {
+    const mockPerms = {
+      studyId: 's-100',
+      studyCode: 'CODE-100',
+      studyName: 'Study 100',
+      studyRole: 'Study Admin',
+      studyPermission: 'STUDY_ADMIN',
+      permissions: ['STUDY_DASHBOARD_READ', 'TASK_READ'],
+      archived: false,
+      status: 'ACTIVE',
+    };
+
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: { data: mockPerms },
+    } as any);
+
+    const perms = await studyApi.getStudyPermissions('s-100');
+    expect(getSpy).toHaveBeenCalledWith('/api/v1/studies/s-100/permissions', expect.objectContaining({ skipToast: true }));
+    expect(perms.studyPermission).toBe('STUDY_ADMIN');
+    expect(perms.permissions).toContain('STUDY_DASHBOARD_READ');
+    getSpy.mockRestore();
+  });
+
+  it('supports tenantId scoping when calling studyApi.getStudyPermissions', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: { studyId: 's-200', permissions: [] },
+    } as any);
+
+    await studyApi.getStudyPermissions('s-200', 'tenant-abc');
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/tenants/tenant-abc/studies/s-200/permissions',
+      expect.objectContaining({ skipToast: true })
+    );
+    getSpy.mockRestore();
+  });
 });

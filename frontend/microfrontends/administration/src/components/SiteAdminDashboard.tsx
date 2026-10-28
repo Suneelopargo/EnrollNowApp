@@ -23,14 +23,74 @@ import {
   SecurityView,
   GeneralSettingsView,
 } from './SiteAdminViews';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { SiteAdminUser, AdminTabId, ExportSubOption } from '../types/admin';
 
 export interface SiteAdminDashboardProps {
   context?: MfeContext;
+  initialTab?: AdminTabId;
 }
 
-export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context }) => {
-  const [activeTab, setActiveTab] = useState<AdminTabId>('users');
+export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context, initialTab }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const resolveTabFromSearch = useCallback((): AdminTabId | null => {
+    try {
+      const search = location?.search || (typeof window !== 'undefined' ? window.location.search : '');
+      const params = new URLSearchParams(search);
+      const tabParam = params.get('tab');
+      if (
+        tabParam &&
+        ['users', 'studies', 'import', 'export', 'audit', 'security', 'settings'].includes(tabParam)
+      ) {
+        return tabParam as AdminTabId;
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  }, [location?.search]);
+
+  const [activeTab, setActiveTab] = useState<AdminTabId>(() => {
+    return resolveTabFromSearch() || initialTab || 'users';
+  });
+
+  const lastSearchRef = useRef(location?.search || '');
+
+  useEffect(() => {
+    const currentSearch = location?.search || '';
+    if (currentSearch !== lastSearchRef.current) {
+      lastSearchRef.current = currentSearch;
+      const matched = resolveTabFromSearch();
+      if (matched) {
+        setActiveTab(matched);
+      } else if (!currentSearch.includes('tab=')) {
+        setActiveTab(initialTab || 'users');
+      }
+    }
+  }, [location?.search, resolveTabFromSearch, initialTab]);
+
+  const handleTabChange = useCallback(
+    (tabId: AdminTabId) => {
+      setActiveTab(tabId);
+      try {
+        const params = new URLSearchParams(location?.search || '');
+        params.delete('action');
+        if (tabId === 'users') {
+          params.delete('tab');
+        } else {
+          params.set('tab', tabId);
+        }
+        const searchStr = params.toString() ? '?' + params.toString() : '';
+        lastSearchRef.current = searchStr;
+        navigate(location.pathname + searchStr, { replace: true });
+      } catch {
+        // Ignore
+      }
+    },
+    [location?.pathname, location?.search, navigate]
+  );
   const [selectedExportOption, setSelectedExportOption] = useState<ExportSubOption>('new_config');
   const [users, setUsers] = useState<SiteAdminUser[]>([]);
   const [availableStudies, setAvailableStudies] = useState<AvailableStudy[]>([]);
@@ -532,7 +592,15 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
           />
         );
       case 'studies':
-        return <StudiesView />;
+        return (
+          <StudiesView
+            initialAddModalOpen={
+              new URLSearchParams(
+                location?.search || (typeof window !== 'undefined' ? window.location.search : '')
+              ).get('action') === 'add'
+            }
+          />
+        );
       case 'import':
         return <ImportView />;
       case 'export':
@@ -591,7 +659,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context 
       {/* Horizontal Nav Bar (Replaces vertical side nav) */}
       <SiteAdminHorizontalNav
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         usersCount={users.length}
         onSelectExportOption={setSelectedExportOption}
         isFullSiteAdmin={isFullSiteAdmin}

@@ -49,7 +49,7 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
 
   // Users
   async getUsers(query?: UserQuery): Promise<AdminUser[] | AdminUserPage> {
-    const params: Record<string, any> = {};
+    const params: Record<string, string | boolean | number | undefined> = {};
     if (query?.search) params.search = query.search;
     if (query?.active !== undefined) params.active = query.active;
 
@@ -100,33 +100,8 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
 
   // Locations / Research Sites
   async getLocations(): Promise<AdminLocationOption[]> {
-    let list: AdminLocationOption[] = [];
-    try {
-      const res = await this.client.get(`${ADMIN_PREFIX}/locations`);
-      list = res.data?.data || [];
-    } catch {
-      list = [];
-    }
-    const defaultLocations: AdminLocationOption[] = [
-      { id: 1, code: 'LOC-001', name: 'Colonial Health Center', city: 'Boston', state: 'MA', active: true },
-      { id: 2, code: 'LOC-002', name: 'Main Campus Clinical Facility', city: 'Cambridge', state: 'MA', active: true },
-      { id: 3, code: 'LOC-003', name: 'Metro Research Center', city: 'New York', state: 'NY', active: true },
-      { id: 4, code: 'LOC-004', name: 'Northwest Trial Site', city: 'Seattle', state: 'WA', active: true },
-      { id: 5, code: 'LOC-005', name: 'Boston Memorial Hospital', city: 'Boston', state: 'MA', active: true },
-      { id: 6, code: 'LOC-006', name: 'Pacific Health Institute', city: 'San Francisco', state: 'CA', active: true },
-      { id: 7, code: 'LOC-007', name: 'Midwest Medical Complex', city: 'Chicago', state: 'IL', active: true },
-      { id: 8, code: 'LOC-008', name: 'Southern Regional Clinic', city: 'Atlanta', state: 'GA', active: true },
-      { id: 9, code: 'LOC-009', name: 'Capitol Health Pavilion', city: 'Washington', state: 'DC', active: true },
-      { id: 10, code: 'LOC-010', name: 'Lakeside Ambulatory Care', city: 'Cleveland', state: 'OH', active: true },
-      { id: 11, code: 'LOC-011', name: 'East Coast Oncology Center', city: 'Philadelphia', state: 'PA', active: true },
-    ];
-    const merged = [...list];
-    for (const dl of defaultLocations) {
-      if (!merged.some((m) => m.code === dl.code || m.id === dl.id)) {
-        merged.push(dl);
-      }
-    }
-    return merged;
+    const res = await this.client.get(`${ADMIN_PREFIX}/locations`);
+    return res.data?.data || [];
   }
 
   async getUserLocations(userId: EntityId): Promise<AdminLocationAccess[]> {
@@ -167,29 +142,15 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   }
 
   async getPermissionCatalog(): Promise<PermissionCatalog> {
-    try {
-      const res = await this.client.get(`${ADMIN_PREFIX}/roles/1/permissions`);
-      if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
-        return res.data.data.map((m: any) => ({
-          code: m.moduleCode || m.code,
-          name: m.title || m.name,
-          actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'],
-        }));
-      }
-    } catch {
-      // Fallback standard catalog
+    const res = await this.client.get(`${ADMIN_PREFIX}/roles/1/permissions`);
+    if (res.data?.data && Array.isArray(res.data.data)) {
+      return res.data.data.map((m: { moduleCode?: string; code?: string; title?: string; name?: string; actions?: string[] }) => ({
+        code: m.moduleCode || m.code || '',
+        name: m.title || m.name || '',
+        actions: Array.isArray(m.actions) ? m.actions : ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'],
+      }));
     }
-    return [
-      { code: 'DASHBOARD', name: 'Clinical Operations Dashboard', actions: ['VIEW', 'EXPORT'] },
-      { code: 'STUDY', name: 'Clinical Study Management', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
-      { code: 'PARTICIPANT', name: 'Participant Registry & Intake', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
-      { code: 'RECRUITMENT', name: 'Recruitment Campaigns', actions: ['VIEW', 'CREATE', 'EDIT', 'EXPORT'] },
-      { code: 'SURVEY', name: 'Survey Studio & eConsent', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
-      { code: 'TASK', name: 'Tasks & Milestone Operations', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE'] },
-      { code: 'COMMUNICATION', name: 'Participant Outreach & Notifications', actions: ['VIEW', 'CREATE', 'SEND'] },
-      { code: 'DOCUMENT', name: 'Document Repository & Binder', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'DOWNLOAD'] },
-      { code: 'ADMIN', name: 'Platform Administration & Security', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE'] },
-    ];
+    return [];
   }
 
   async getRolePermissions(roleId: EntityId): Promise<PermissionModule[]> {
@@ -204,7 +165,7 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
 
   // Audit Logs
   async getAuditLogs(query?: AuditQuery): Promise<AdminAuditPage> {
-    const params: Record<string, any> = {};
+    const params: Record<string, string | number | undefined> = {};
     if (query?.action) params.action = query.action;
     if (query?.performedBy) params.performedBy = query.performedBy;
     if (query?.targetUserId) params.targetUserId = query.targetUserId;
@@ -222,41 +183,25 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
   }
 
   // Provider Mapping
-  private providerMappings: AdminProviderMapping[] = [
-    { userId: 2, providerId: 101, providerName: 'Dr. Sarah Jenkins, MD' },
-  ];
-
   async getProviderMappings(): Promise<AdminProviderMapping[]> {
-    return [...this.providerMappings];
+    const res = await this.client.get(`${ADMIN_PREFIX}/provider-mappings`);
+    return res.data?.data || [];
   }
 
   async mapUserProvider(userId: EntityId, doctorId: EntityId): Promise<AdminProviderMapping> {
-    const providers = await this.getAvailableProviders();
-    const provider = providers.find((p) => String(p.id) === String(doctorId));
-    const newMapping: AdminProviderMapping = {
+    const res = await this.client.post(`${ADMIN_PREFIX}/provider-mappings`, {
       userId,
       providerId: doctorId,
-      providerName: provider ? provider.name : `Doctor #${doctorId}`,
-    };
-    this.providerMappings = [
-      ...this.providerMappings.filter((m) => String(m.userId) !== String(userId)),
-      newMapping,
-    ];
-    return newMapping;
+    });
+    return res.data?.data;
   }
 
   async unmapUserProvider(userId: EntityId): Promise<void> {
-    this.providerMappings = this.providerMappings.filter(
-      (m) => String(m.userId) !== String(userId)
-    );
+    await this.client.delete(`${ADMIN_PREFIX}/provider-mappings/${userId}`);
   }
 
   async getAvailableProviders(): Promise<AdminProviderOption[]> {
-    return [
-      { id: 101, name: 'Dr. Sarah Jenkins, MD', code: 'DOC-101' },
-      { id: 102, name: 'Dr. Robert Chen, MD', code: 'DOC-102' },
-      { id: 103, name: 'Dr. Maria Rodriguez, MD', code: 'DOC-103' },
-      { id: 104, name: 'Dr. James Wilson, MD', code: 'DOC-104' },
-    ];
+    const res = await this.client.get(`${ADMIN_PREFIX}/providers`);
+    return res.data?.data || [];
   }
 }

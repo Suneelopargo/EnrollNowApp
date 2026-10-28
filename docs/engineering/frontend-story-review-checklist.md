@@ -8,7 +8,8 @@ Use this checklist before opening or approving any frontend pull request. Every 
 - [ ] **No Duplicate API Clients or Services:** Checked `frontend/shared/api/` before adding any endpoint method. New endpoints are added to the canonical domain API module in `frontend/shared/api/`.
 - [ ] **No Direct HTTP Bypasses:** No component or microfrontend calls `fetch(`, `axios.create(`, or hardcodes `http://localhost:8080` (verified by `frontend/shared/api-architecture.test.ts`).
 - [ ] **No Duplicate Components or Modals:** Checked `frontend/shared/design-system/components/` (`Modal`, `Card`, `DataGrid`, `DataTable`, `Tabs`, `Footer`, `StatusBadge`, `LoadingSpinner`) and `frontend/shared/accessibility/` (`AccessibleField`, `useFocusTrap`) before creating custom UI primitives.
-- [ ] **No Duplicate Validation or Formatting Logic:** Reused `validators` / `validateForm` from `frontend/shared/design-system/validation` and `normalizePasswordPolicy` from `frontend/shared/api/authApi`.
+- [ ] **No Duplicate Validation or Formatting Logic:** Reused `validators` / `validateForm` from `frontend/shared/design-system/validation`, `validateStudyName` from `frontend/shared/design-system/validation.ts`, and `normalizePasswordPolicy` from `frontend/shared/api/authApi`.
+- [ ] **Canonical Domain Modals & State:** Shared domain creation/import modals (`AddStudyModal`, `AddUserModal`) are canonical; host microfrontends do not maintain obsolete dialog refs, dead state, or duplicated event handlers.
 - [ ] **No Native Browser Dialogs:** Used `requestConfirmation` / `confirmation` instead of `window.confirm` and `toast` instead of `window.alert`.
 
 ---
@@ -40,3 +41,10 @@ Use this checklist before opening or approving any frontend pull request. Every 
 - [ ] `cd frontend && npm run typecheck` passes with zero errors across all workspaces.
 - [ ] `cd frontend && npm run test` passes with zero failures across all workspaces, and new unit/regression tests cover the story's changes.
 - [ ] `cd frontend && npm run build --workspaces --if-present` completes cleanly.
+
+---
+
+## 6. SCSS Styling & Strict Typing Gate
+- [ ] **No Inline Styles:** Zero `style={{ ... }}` in production component code; all layout, spacing, and styling rules are defined in SCSS classes.
+- [ ] **Zero-Any Strict Typing:** No `any` types or unchecked casts in production code; all response envelopes strongly typed with `ApiResponseEnvelope<T>` and unwrapped safely.
+- [ ] **Form Cancellation Reset:** Modal Cancel buttons and close actions cleanly reset form fields, validation errors, and submission flags.

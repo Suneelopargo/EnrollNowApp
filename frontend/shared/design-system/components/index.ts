@@ -12,3 +12,4 @@ export * from './Footer';
 export * from './Skeleton';
 export * from './EnrollNowBrand';
 export * from './ComingSoon';
+export * from './AddStudyModal';

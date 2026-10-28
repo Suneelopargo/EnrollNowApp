@@ -1,35 +1,38 @@
 package com.enrollnow.study.services;
 
+import com.enrollnow.common.audit.AuditChange;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
-import com.enrollnow.identity.repositories.RoleRepository;
-import com.enrollnow.identity.repositories.UserRepository;
-import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
-import com.enrollnow.identity.services.SiteAuthorizationService;
-import com.enrollnow.identity.services.SitePermissionService;
-import com.enrollnow.study.repositories.StudyMemberRepository;
-import com.enrollnow.study.repositories.StudyRepository;
-import com.enrollnow.study.exceptions.StudyNotFoundException;
-
-import com.enrollnow.study.dtos.GrantStudyAccessRequest;
 import com.enrollnow.identity.exceptions.InvalidRoleAssignmentException;
 import com.enrollnow.identity.exceptions.RoleNotFoundException;
 import com.enrollnow.identity.exceptions.UserNotFoundException;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
+import com.enrollnow.identity.repositories.RoleRepository;
+import com.enrollnow.identity.repositories.UserRepository;
+import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
+import com.enrollnow.identity.services.SiteAuthorizationService;
+import com.enrollnow.identity.services.SitePermissionService;
+import com.enrollnow.study.dtos.GrantStudyAccessRequest;
+import com.enrollnow.study.exceptions.StudyNotFoundException;
+import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.models.StudyMemberId;
-
+import com.enrollnow.study.repositories.StudyMemberRepository;
+import com.enrollnow.study.repositories.StudyRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
-
-import org.springframework.stereotype.Service;
 
 @Service
 public class StudyAccessService {
@@ -41,24 +44,7 @@ public class StudyAccessService {
     private final StudyRepository studyRepository;
     private final SitePermissionService sitePermissionService;
     private final SiteAuthorizationService siteAuthorizationService;
-
-    public StudyAccessService(
-            UserRepository userRepository,
-            RoleRepository roleRepository,
-            UserRoleAssignmentRepository userRoleAssignmentRepository,
-            StudyMemberRepository studyMemberRepository,
-            StudyRepository studyRepository
-    ) {
-        this(
-                userRepository,
-                roleRepository,
-                userRoleAssignmentRepository,
-                studyMemberRepository,
-                studyRepository,
-                null,
-                null
-        );
-    }
+    private final AuditRecorder auditRecorder;
 
     @Autowired
     public StudyAccessService(
@@ -68,15 +54,17 @@ public class StudyAccessService {
             StudyMemberRepository studyMemberRepository,
             StudyRepository studyRepository,
             SitePermissionService sitePermissionService,
-            SiteAuthorizationService siteAuthorizationService
+            SiteAuthorizationService siteAuthorizationService,
+            AuditRecorder auditRecorder
     ) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.userRoleAssignmentRepository = userRoleAssignmentRepository;
-        this.studyMemberRepository = studyMemberRepository;
-        this.studyRepository = studyRepository;
-        this.sitePermissionService = sitePermissionService;
-        this.siteAuthorizationService = siteAuthorizationService;
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository must not be null");
+        this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository must not be null");
+        this.userRoleAssignmentRepository = Objects.requireNonNull(userRoleAssignmentRepository, "userRoleAssignmentRepository must not be null");
+        this.studyMemberRepository = Objects.requireNonNull(studyMemberRepository, "studyMemberRepository must not be null");
+        this.studyRepository = Objects.requireNonNull(studyRepository, "studyRepository must not be null");
+        this.sitePermissionService = Objects.requireNonNull(sitePermissionService, "sitePermissionService must not be null");
+        this.siteAuthorizationService = Objects.requireNonNull(siteAuthorizationService, "siteAuthorizationService must not be null");
+        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
     }
 
     @Transactional(readOnly = true)
@@ -85,27 +73,38 @@ public class StudyAccessService {
             UUID studyId,
             UUID targetUserId
     ) {
+        if (tenantId == null || studyId == null || targetUserId == null) {
+            throw new AccessDeniedException("Access denied: tenant, study, and target user context are required");
+        }
         if (siteAuthorizationService == null || sitePermissionService == null) {
-            return;
+            throw new AccessDeniedException("Access denied: authorization service is not configured");
         }
-        Optional<SiteAuthorizationService.CallerIdentity> callerOpt =
-                siteAuthorizationService.getAuthenticatedCaller();
-        if (callerOpt.isEmpty()) {
-            return;
+        SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
+                .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to modify study access"));
+        if (caller.userId() == null || caller.tenantId() == null) {
+            throw new AccessDeniedException("Access denied: incomplete caller security context");
         }
-        SiteAuthorizationService.CallerIdentity caller = callerOpt.get();
         siteAuthorizationService.requireTenantMatch(tenantId);
 
         UserEffectivePermissionsResponse callerEffective =
                 sitePermissionService.resolveEffectivePermissions(tenantId, caller.userId(), null);
+        if (callerEffective == null) {
+            throw new AccessDeniedException("Access denied: unable to resolve caller permissions");
+        }
 
         // 1. SITE_ADMIN has full study access management across the site
         if (callerEffective.isCanManageSiteAdmins()
-                || callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
+                || (callerEffective.getPermissions() != null
+                && callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE))) {
             return;
         }
 
-        // 2. STUDY_ADMIN on this specific study can manage study access
+        // Non-Site-Admin callers can never grant or modify their own study access
+        if (caller.userId().equals(targetUserId)) {
+            throw new AccessDeniedException("Access denied: users cannot modify their own study access");
+        }
+
+        // 2. STUDY_ADMIN on this specific study can manage study access for other users
         OffsetDateTime now = OffsetDateTime.now();
         List<UserRoleAssignment> callerStudyAssignments =
                 userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
@@ -123,9 +122,6 @@ public class StudyAccessService {
 
         // 3. SITE_MANAGER can manage study access on studies where they are an active member (and not modifying themselves)
         if (SitePermissionService.ROLE_SITE_MANAGER.equalsIgnoreCase(callerEffective.getSiteRole())) {
-            if (caller.userId().equals(targetUserId)) {
-                throw new AccessDeniedException("Access denied: Site Managers cannot modify their own study access");
-            }
             boolean isMemberOfStudy = studyMemberRepository
                     .findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, caller.userId())
                     .map(StudyMember::isActive)
@@ -138,7 +134,7 @@ public class StudyAccessService {
 
         throw new AccessDeniedException("Access denied: insufficient permissions to modify study access");
     }
-    
+
     @Transactional
     public void grantStudyAccess(
             UUID tenantId,
@@ -146,16 +142,17 @@ public class StudyAccessService {
             UUID userId,
             GrantStudyAccessRequest request
     ) {
+        requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // 1. Validate study belongs to tenant
-        studyRepository.findByTenantIdAndId(tenantId, studyId)
+        Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException(studyId));
 
         // 2. Validate user belongs to tenant
         userRepository.findByTenantIdAndId(tenantId, userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // 2. Resolve requested study permission role
+        // 3. Resolve requested study permission role
         String permissionCode =
                 request.getStudyPermission()
                         .trim()
@@ -166,7 +163,7 @@ public class StudyAccessService {
                         new RoleNotFoundException(permissionCode)
                 );
 
-        // 3. Grant Study Access only accepts STUDY-scoped roles
+        // 4. Grant Study Access only accepts STUDY-scoped roles
         if (!"STUDY".equalsIgnoreCase(role.getScopeType())) {
             throw new InvalidRoleAssignmentException(
                     "Role " + role.getCode()
@@ -174,7 +171,7 @@ public class StudyAccessService {
             );
         }
 
-        // 4. Create or reactivate study membership
+        // 5. Create or reactivate study membership
         StudyMember studyMember =
                 studyMemberRepository
                         .findByTenantIdAndIdStudyIdAndIdUserId(
@@ -203,7 +200,7 @@ public class StudyAccessService {
         );
 
         studyMemberRepository.save(studyMember);
-        
+
         List<UserRoleAssignment> activeStudyAssignments =
                 userRoleAssignmentRepository
                         .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
@@ -223,30 +220,108 @@ public class StudyAccessService {
         }
 
         if (targetAssignment != null) {
+
             if (!targetAssignment.getRoleId().equals(role.getId())) {
+
+                String previousRoleCode = roleRepository
+                        .findById(targetAssignment.getRoleId())
+                        .map(Role::getCode)
+                        .orElse("UNKNOWN");
+
                 targetAssignment.setRoleId(role.getId());
                 targetAssignment.setActive(true);
+
                 userRoleAssignmentRepository.saveAndFlush(targetAssignment);
+
+                if (auditRecorder != null) {
+                    auditRecorder.record(
+                            new AuditEventCommand(
+                                    tenantId,
+                                    null,
+                                    "USER",
+                                    userId,
+                                    "STUDY_PERMISSION_CHANGED",
+                                    "User study permission changed",
+                                    "API",
+                                    null,
+                                    null,
+                                    Map.of(
+                                            "studyId", studyId,
+                                            "studyName", study.getName() != null ? study.getName() : "",
+                                            "studyPermission", previousRoleCode
+                                    ),
+                                    Map.of(
+                                            "studyId", studyId,
+                                            "studyName", study.getName() != null ? study.getName() : "",
+                                            "studyPermission", role.getCode()
+                                    ),
+                                    List.of(
+                                            new AuditChange(
+                                                    "studyPermission",
+                                                    previousRoleCode,
+                                                    role.getCode()
+                                            )
+                                    )
+                            )
+                    );
+                }
             }
+
         } else {
+
             UserRoleAssignment assignment = new UserRoleAssignment();
             assignment.setTenantId(tenantId);
             assignment.setUserId(userId);
             assignment.setRoleId(role.getId());
             assignment.setStudyId(studyId);
             assignment.setActive(true);
+
             userRoleAssignmentRepository.save(assignment);
+
+            if (auditRecorder != null) {
+                auditRecorder.record(
+                        new AuditEventCommand(
+                                tenantId,
+                                null,
+                                "USER",
+                                userId,
+                                "STUDY_ACCESS_GRANTED",
+                                "User granted access to study",
+                                "API",
+                                null,
+                                null,
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyName", study.getName() != null ? study.getName() : "",
+                                        "studyPermission", "NONE"
+                                ),
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyName", study.getName() != null ? study.getName() : "",
+                                        "studyPermission", role.getCode()
+                                ),
+                                List.of(
+                                        new AuditChange(
+                                                "studyPermission",
+                                                "NONE",
+                                                role.getCode()
+                                        )
+                                )
+                        )
+                );
+            }
         }
     }
-    
+
     @Transactional
     public void removeStudyAccess(
             UUID tenantId,
             UUID studyId,
             UUID userId) {
+        requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // Validate study belongs to tenant
-        studyRepository.findByTenantIdAndId(tenantId, studyId)
+        Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException(studyId));
 
         userRepository
@@ -273,8 +348,47 @@ public class StudyAccessService {
                         );
 
         for (UserRoleAssignment assignment : activeAssignments) {
+
+            String previousRoleCode = roleRepository
+                    .findById(assignment.getRoleId())
+                    .map(Role::getCode)
+                    .orElse("UNKNOWN");
+
             assignment.setActive(false);
             userRoleAssignmentRepository.save(assignment);
+
+            if (auditRecorder != null) {
+                auditRecorder.record(
+                        new AuditEventCommand(
+                                tenantId,
+                                null,
+                                "USER",
+                                userId,
+                                "STUDY_ACCESS_REMOVED",
+                                "User study access removed",
+                                "API",
+                                null,
+                                null,
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyName", study.getName() != null ? study.getName() : "",
+                                        "studyPermission", previousRoleCode
+                                ),
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyName", study.getName() != null ? study.getName() : "",
+                                        "studyPermission", "NONE"
+                                ),
+                                List.of(
+                                        new AuditChange(
+                                                "studyPermission",
+                                                previousRoleCode,
+                                                "NONE"
+                                        )
+                                )
+                        )
+                );
+            }
         }
     }
 }

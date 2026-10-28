@@ -26,6 +26,11 @@ import com.enrollnow.identity.dtos.AssignRoleRequest;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
 
+import java.util.Map;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditChange;
+
 import java.util.Locale;
 import com.enrollnow.identity.models.Site;
 import com.enrollnow.identity.repositories.SiteRepository;
@@ -43,6 +48,7 @@ public class UserService {
 	private final UserRoleAssignmentRepository userRoleAssignmentRepository;
 	private final SiteRepository siteRepository;
 	private final SitePermissionService sitePermissionService;
+	private final AuditRecorder auditRecorder;
 
 	public UserService(
 	        UserRepository userRepository,
@@ -59,6 +65,7 @@ public class UserService {
 	            roleRepository,
 	            userRoleAssignmentRepository,
 	            siteRepository,
+	            null,
 	            null
 	    );
 	}
@@ -71,7 +78,8 @@ public class UserService {
 	        RoleRepository roleRepository,
 	        UserRoleAssignmentRepository userRoleAssignmentRepository,
 	        SiteRepository siteRepository,
-	        SitePermissionService sitePermissionService
+	        SitePermissionService sitePermissionService,
+	        AuditRecorder auditRecorder
 	) {
 	    this.userRepository = userRepository;
 	    this.userEmailRepository = userEmailRepository;
@@ -80,6 +88,7 @@ public class UserService {
 	    this.userRoleAssignmentRepository = userRoleAssignmentRepository;
 	    this.siteRepository = siteRepository;
 	    this.sitePermissionService = sitePermissionService;
+	    this.auditRecorder = auditRecorder;
 	}
 
 	public UserSummaryResponse getUser(UUID tenantId, UUID userId) {
@@ -178,6 +187,33 @@ public class UserService {
 		securityState.setFailedLoginAttempts(0);
 
 		userSecurityStateRepository.save(securityState);
+		
+		// Audit transaction
+		
+		if (auditRecorder != null) {
+		    auditRecorder.record(
+		            new AuditEventCommand(
+		                    tenantId,
+		                    null,
+		                    "USER",
+		                    user.getId(),
+		                    "USER_CREATED",
+		                    "User account created",
+		                    "API",
+		                    null,
+		                    null,
+		                    null,
+		                    Map.of(
+		                            "firstName", user.getFirstName(),
+		                            "lastName", user.getLastName(),
+		                            "title", user.getTitle(),
+		                            "status", user.getStatus(),
+		                            "email", normalizedEmail
+		                    ),
+		                    null
+		            )
+		    );
+		}
 
 		UserSummaryResponse summary = new UserSummaryResponse(
 		        user.getId(),
@@ -416,9 +452,50 @@ public class UserService {
 	            if (targetAssignment.getRoleId().equals(role.getId())) {
 	                return targetAssignment;
 	            }
+
+	            String previousRoleCode = roleRepository
+	                    .findById(targetAssignment.getRoleId())
+	                    .map(Role::getCode)
+	                    .orElse("UNKNOWN");
+
 	            targetAssignment.setRoleId(role.getId());
 	            targetAssignment.setActive(true);
-	            return userRoleAssignmentRepository.saveAndFlush(targetAssignment);
+
+	            UserRoleAssignment savedAssignment =
+	                    userRoleAssignmentRepository.saveAndFlush(targetAssignment);
+
+	            if (auditRecorder != null) {
+	                auditRecorder.record(
+	                        new AuditEventCommand(
+	                                tenantId,
+	                                null,
+	                                "USER",
+	                                userId,
+	                                "SITE_PERMISSION_CHANGED",
+	                                "User site permission changed",
+	                                "API",
+	                                null,
+	                                null,
+	                                Map.of(
+	                                        "siteId", scopeId,
+	                                        "sitePermission", previousRoleCode
+	                                ),
+	                                Map.of(
+	                                        "siteId", scopeId,
+	                                        "sitePermission", role.getCode()
+	                                ),
+	                                List.of(
+	                                        new AuditChange(
+	                                                "sitePermission",
+	                                                previousRoleCode,
+	                                                role.getCode()
+	                                        )
+	                                )
+	                        )
+	                );
+	            }
+
+	            return savedAssignment;
 	        }
 
 	    } else {
@@ -490,8 +567,45 @@ public class UserService {
 	        if (assignment.getTeamId() != null || assignment.getStudyId() != null) {
 	            continue;
 	        }
+
+	        String previousRoleCode = roleRepository
+	                .findById(assignment.getRoleId())
+	                .map(Role::getCode)
+	                .orElse("UNKNOWN");
+
 	        assignment.setActive(false);
 	        userRoleAssignmentRepository.save(assignment);
+
+	        if (auditRecorder != null) {
+	            auditRecorder.record(
+	                    new AuditEventCommand(
+	                            tenantId,
+	                            null,
+	                            "USER",
+	                            userId,
+	                            "SITE_PERMISSION_REMOVED",
+	                            "User site permission removed",
+	                            "API",
+	                            null,
+	                            null,
+	                            Map.of(
+	                                    "siteId", assignment.getSiteId(),
+	                                    "sitePermission", previousRoleCode
+	                            ),
+	                            Map.of(
+	                                    "siteId", assignment.getSiteId(),
+	                                    "sitePermission", "NONE"
+	                            ),
+	                            List.of(
+	                                    new AuditChange(
+	                                            "sitePermission",
+	                                            previousRoleCode,
+	                                            "NONE"
+	                                    )
+	                            )
+	                    )
+	            );
+	        }
 	    }
 	}
 }

@@ -5,6 +5,7 @@ import { EnrollNowBrand } from './EnrollNowBrand';
 import { Footer } from '../../../../shared/design-system/components/Footer';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { usePasswordValidation } from './usePasswordValidation';
 import { PasswordValidationPanel } from './PasswordValidationPanel';
 
@@ -150,12 +151,11 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
         navigate('/login', { replace: true });
       }, 2000);
     } catch (err: any) {
-      const errData = err.response?.data;
-      const serverMessage =
-        errData?.message ||
-        errData?.error ||
-        err.message ||
-        'Unable to activate account. The link may have expired or already been used.';
+      const serverMessage = getApiErrorMessage(
+        err,
+        'Unable to activate account. The link may have expired or already been used.'
+      );
+      const errData = err?.response?.data;
 
       const isAlreadyEnrolled =
         errData?.error === 'ALREADY_ENROLLED' ||

@@ -76,6 +76,9 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
     cancelText,
     loadingText,
     confirmWord,
+    confirmInputLabel,
+    confirmInputPlaceholder,
+    confirmInputSubtext,
     errorMessage,
   } = state;
 
@@ -181,15 +184,23 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
           {/* Optional Phrase Confirmation Input */}
           {confirmWord && (
             <div className="enl-confirm-input-section">
-              <label htmlFor="enl-confirm-input" className="enl-confirm-input-label">
-                To confirm, please type{' '}
-                <strong className="enl-confirm-input-code">{confirmWord}</strong> below:
-              </label>
+              {confirmInputLabel !== '' && (
+                <label htmlFor="enl-confirm-input" className="enl-confirm-input-label">
+                  {confirmInputLabel ? (
+                    confirmInputLabel
+                  ) : (
+                    <>
+                      To confirm, please type{' '}
+                      <strong className="enl-confirm-input-code">{confirmWord}</strong> below:
+                    </>
+                  )}
+                </label>
+              )}
               <input
                 id="enl-confirm-input"
                 type="text"
                 className="enl-confirm-input"
-                placeholder={confirmWord}
+                placeholder={confirmInputPlaceholder !== undefined ? confirmInputPlaceholder : confirmWord}
                 value={confirmInput}
                 disabled={isLoading}
                 autoFocus
@@ -200,6 +211,11 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
                   }
                 }}
               />
+              {confirmInputSubtext && (
+                <div className="text-xs text-gray-500 mt-2 text-center font-normal tracking-wide">
+                  {confirmInputSubtext}
+                </div>
+              )}
             </div>
           )}
 

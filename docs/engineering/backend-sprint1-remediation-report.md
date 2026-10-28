@@ -166,12 +166,12 @@ mvn test -f backend/pom.xml
 | Module | Test Classes | Tests Run | Failures | Errors | Skipped | Surefire Report Directory |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | `enrollnow-common` | 4 | **12** | 0 | 0 | 0 | `backend/enrollnow-common/target/surefire-reports/` |
-| `enrollnow-identity-service` | 14 | **79** | 0 | 0 | 0 | `backend/enrollnow-identity-service/target/surefire-reports/` |
-| `enrollnow-study-service` | 3 | **17** | 0 | 0 | 0 | `backend/enrollnow-study-service/target/surefire-reports/` |
+| `enrollnow-identity-service` | 14 | **80** | 0 | 0 | 0 | `backend/enrollnow-identity-service/target/surefire-reports/` |
+| `enrollnow-study-service` | 5 | **39** | 0 | 0 | 0 | `backend/enrollnow-study-service/target/surefire-reports/` |
 | `enrollnow-dashboard-service` | 2 | **3** | 0 | 0 | 0 | `backend/enrollnow-dashboard-service/target/surefire-reports/` |
 | `enrollnow-app` | 3 | **10** | 0 | 0 | 0 | `backend/enrollnow-app/target/surefire-reports/` |
 | *9 Skeleton Modules* (`administration`, `organization`, `participant`, `recruitment`, `survey`, `task`, `communication`, `document`, `audit`) | 0 | **0** | 0 | 0 | 0 | *(No `src/main` or `src/test` sources)* |
-| **Total Across Reactor (15 Modules)** | **26** | **121** | **0** | **0** | **0** | — |
+| **Total Across Reactor (15 Modules)** | **28** | **143** | **0** | **0** | **0** | — |
 
 #### Detailed Test Class Breakdown
 - **`enrollnow-common` (12 tests):**
@@ -212,7 +212,7 @@ mvn test -f backend/pom.xml
 
 1. **No Database / Spring Context Integration Tests (`NOT VERIFIED`):** All 121 tests are Mockito-based unit tests. There are no `@SpringBootTest`, `@DataJpaTest`, or Testcontainers tests exercising Flyway migrations (`V1`–`V20`), Hibernate entity mappings, or SQL queries against PostgreSQL.
 2. **Unpaginated Batch Queries in `UserManagementQueryService`:** While the $1 + 4N$ N+1 loop was eliminated (reducing queries to 6–8 per call), `getUsers` loads all users, active role assignments, and active study memberships for the tenant into memory as an unpaginated `List<UserListItemResponse>`, and calls `roleRepository.findAll()`. Server-side pagination (`Pageable`) should be introduced when tenant user counts scale.
-3. **`StudyController` Request Map Parsing & Enrollment Placeholder:** `StudyController.createStudy` and `updateStudy` still accept `@RequestBody(required = false) Map<String, Object>` and manually construct `CreateStudyRequest`/`UpdateStudyRequest` without triggering Jakarta `@Valid` annotations or checking protocol uniqueness. Additionally, `StudyService.toSummaryResponse` calculates `enrolled` using a placeholder formula (`Math.round(sample * 0.65)`).
+3. **`StudyController` Request Map Parsing & Enrollment Placeholder [REMEDIATED & VERIFIED]:** Remediated in the targeted remediation pass. All endpoints now accept strongly-typed `@Valid` request DTOs (`CreateStudyRequest`, `CopyStudyRequest`, `UpdateStudyRequest`, `ImportStudyRequest`), reject blank study names with HTTP 400, batch-query study members and user profiles in `toSummaryResponseList` in 2 queries total, and returned enrollment is truthful `null` instead of a synthetic 65% formula.
 4. **Development Fallback Secrets & Permissive Local CORS:** `application.yml` contains a default development fallback for `security.jwt.secret`, and `SecurityConfig` configures `allowedOriginPatterns("*")` with `allowCredentials(true)`. Production deployments must override `JWT_SECRET` and restrict CORS origins.
 
 ---
@@ -242,3 +242,21 @@ mvn test -f backend/pom.xml
 - `docs/engineering/backend-engineering-standards.md`
 - `docs/engineering/backend-story-review-checklist.md`
 - `docs/engineering/backend-sprint1-remediation-report.md`
+
+---
+
+### 4.8 Study Module Final Comprehensive Remediation Summary
+
+1. **Authentication & Fail-Closed Authorization:**
+   - Hardened `SiteAuthorizationService.requireCaller()` to fail closed throwing `InsufficientAuthenticationException` when caller context is missing.
+   - Removed 5-argument constructor accepting null security dependencies in `StudyAccessService`; added explicit authorization checks inside `grantStudyAccess` and `removeStudyAccess`.
+   - Removed fallback tenant resolution defaulting to `11111111-1111-1111-1111-111111111111` across `StudyService` and `StudyController`.
+   - Enforced non-null caller tenant isolation on all study mutations and reads.
+2. **Typed DTOs & Bean Validation:**
+   - Created `ImportStudyComponentsRequest` supporting legacy aliases (`components`, `studyData`, `data`, `payload`, `configuration`) with dynamic property retention via `@JsonAnySetter`.
+   - Enhanced `ImportStudyRequest` with Jackson `@JsonAlias({"studyData", "data", "payload", "configuration"})`.
+   - Replaced all untyped `@RequestBody Map<String, Object>` controller inputs with typed `@Valid` DTOs.
+3. **Study Name Canonical Validation:**
+   - Canonical validation aligned across frontend and backend: required short name, maximum 15 characters, case-insensitive unique per tenant.
+4. **Backend Build & Verification Results:**
+   - `mvn test -f backend/pom.xml`: All 15 modules built successfully with 0 failures, 0 errors, and total time 33.4s (`BUILD SUCCESS`).

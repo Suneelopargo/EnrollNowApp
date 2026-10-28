@@ -3,13 +3,14 @@ package com.enrollnow.identity.services;
 import com.enrollnow.identity.dtos.ForceResetResultDto;
 import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
-import com.enrollnow.identity.models.AuditEvent;
+
 import com.enrollnow.identity.models.SecuritySettings;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.models.UserActionToken;
 import com.enrollnow.identity.models.UserEmail;
 import com.enrollnow.identity.models.UserSecurityState;
-import com.enrollnow.identity.repositories.AuditEventRepository;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
 import com.enrollnow.identity.repositories.UserActionTokenRepository;
 import com.enrollnow.identity.repositories.UserEmailRepository;
@@ -63,7 +64,7 @@ class SecuritySettingsServiceTest {
     private InvitationEmailService invitationEmailService;
 
     @Mock
-    private AuditEventRepository auditEventRepository;
+    private AuditRecorder auditRecorder;
 
     @InjectMocks
     private SecuritySettingsService securitySettingsService;
@@ -312,7 +313,7 @@ class SecuritySettingsServiceTest {
         verify(invitationEmailService).sendPasswordReset(eq("john.doe@example.com"), eq("John Doe"), eq(tenantId.toString()), anyString());
 
         // Verify audit event recorded
-        verify(auditEventRepository).save(any(AuditEvent.class));
+        verify(auditRecorder).record(any(AuditEventCommand.class));
     }
 
     @Test

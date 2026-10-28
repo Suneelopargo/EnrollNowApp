@@ -99,17 +99,18 @@ describe('Dashboard Demo Data Provider & Adapter', () => {
     getSpy.mockRestore();
   });
 
-  it('gracefully falls back to demo data without error message on API failure', async () => {
+  it('returns error state without fabricating demo data on API failure', async () => {
     getGlobalScope().__ENROLLNOW_DASHBOARD_DEMO_MODE__ = false;
 
     const getSpy = vi.spyOn(apiClient, 'get').mockRejectedValue(new Error('Connection refused'));
 
     const result = await loadDashboardData();
-    expect(result.mode).toBe('live');
+    expect(result.mode).toBe('error');
     expect(result.isDemoMode).toBe(false);
-    expect(result.errorMessage).toBeUndefined();
-    expect(result.stats).toEqual(demoData.overview);
-    expect(result.studies.length).toBe(demoData.studies.length);
+    expect(result.errorMessage).toContain('Connection refused');
+    expect(result.stats).toBeNull();
+    expect(result.studies).toEqual([]);
+    expect(result.participants).toEqual([]);
     getSpy.mockRestore();
   });
 

@@ -7,7 +7,6 @@ import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
 import { KeyboardShortcutsModal } from '../../../shared/accessibility/KeyboardShortcutsModal';
 import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
-import { administrationApi } from '../../../shared/api/administrationApi';
 import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
   LayoutDashboard,
@@ -24,7 +23,6 @@ import {
   Menu,
   X,
   ChevronDown,
-  Plus,
   RotateCw,
   LogOut,
   Sparkles,
@@ -76,79 +74,12 @@ export const TopNavigation: React.FC = () => {
   const [isShortcutsHelpOpen, setIsShortcutsHelpOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isCampusOpen, setIsCampusOpen] = useState(false);
-  const [isStudyActionsOpen, setIsStudyActionsOpen] = useState(false);
-  const [isStudySelectOpen, setIsStudySelectOpen] = useState(false);
-  const [studies, setStudies] = useState<any[]>([]);
-  const [loadingStudies, setLoadingStudies] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const campusRef = useRef<HTMLDivElement>(null);
-  const studyActionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
-
-  // Load user's actual assigned studies from backend API
-  useEffect(() => {
-    if (!user?.id) {
-      setStudies([]);
-      return;
-    }
-    let isCancelled = false;
-    setLoadingStudies(true);
-
-    const loadStudies = async () => {
-      try {
-        let userStudies: any[] = [];
-        // 1. Always prioritize loading the user's specific assigned studies
-        try {
-          userStudies = await administrationApi.getUserStudies(user.id, user.tenantId);
-        } catch {
-          userStudies = [];
-        }
-
-        // 2. Only if the user has NO specific study assignments AND is a full Site Admin,
-        // fallback to loading all tenant studies
-        if ((!Array.isArray(userStudies) || userStudies.length === 0) && isFullSiteAdmin) {
-          try {
-            userStudies = await administrationApi.getStudies(user.tenantId);
-          } catch {
-            userStudies = [];
-          }
-        }
-
-        if (!isCancelled) {
-          if (Array.isArray(userStudies) && userStudies.length > 0) {
-            setStudies(userStudies);
-          } else {
-            setStudies([]);
-          }
-        }
-      } catch {
-        if (!isCancelled) {
-          setStudies([]);
-        }
-      } finally {
-        if (!isCancelled) {
-          setLoadingStudies(false);
-        }
-      }
-    };
-
-    void loadStudies();
-
-    const handlePermissionsUpdated = () => {
-      void loadStudies();
-    };
-    window.addEventListener('enrollnow_permissions_updated', handlePermissionsUpdated);
-    window.addEventListener('enrollnow:permissions-updated', handlePermissionsUpdated);
-
-    return () => {
-      isCancelled = true;
-      window.removeEventListener('enrollnow_permissions_updated', handlePermissionsUpdated);
-      window.removeEventListener('enrollnow:permissions-updated', handlePermissionsUpdated);
-    };
-  }, [user?.id, user?.tenantId, isFullSiteAdmin, canAccessSiteAdmin]);
 
   // Click outside listener for dropdowns
   useEffect(() => {
@@ -159,17 +90,11 @@ export const TopNavigation: React.FC = () => {
       if (campusRef.current && !campusRef.current.contains(e.target as Node)) {
         setIsCampusOpen(false);
       }
-      if (studyActionsRef.current && !studyActionsRef.current.contains(e.target as Node)) {
-        setIsStudySelectOpen(false);
-        setIsStudyActionsOpen(false);
-      }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsActionsOpen(false);
         setIsCampusOpen(false);
-        setIsStudySelectOpen(false);
-        setIsStudyActionsOpen(false);
         setIsMobileOpen(false);
       }
     };
@@ -181,17 +106,7 @@ export const TopNavigation: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    if (activeTabId !== 'studies') {
-      setIsStudyActionsOpen(false);
-      setIsStudySelectOpen(false);
-    }
-  }, [activeTabId]);
-
   if (loading || !user) return null;
-
-  const canCreateStudy = canAccessSiteAdmin || hasPermission('SITE_STUDIES_CREATE');
-  const studyOptions = studies;
 
   const renderIcon = (iconName?: string, size = 15) => {
     const IconComponent =
@@ -223,11 +138,17 @@ export const TopNavigation: React.FC = () => {
   const handleModuleNavigation = (moduleId: string) => {
     if (moduleId === 'communications') {
       window.open(SUPPORT_KNOWLEDGE_BASE_URL, '_blank', 'noopener,noreferrer');
-      setIsStudyActionsOpen(false);
+      setIsMobileOpen(false);
+      return;
+    }
+    if (moduleId === 'studies') {
+      activateTab('studies');
+      navigate('/studies');
       setIsMobileOpen(false);
       return;
     }
     activateTab(moduleId);
+    setIsMobileOpen(false);
   };
 
   return (
@@ -322,103 +243,19 @@ export const TopNavigation: React.FC = () => {
           {/* Middle: Horizontal Module Navigation */}
           <nav className="enl-header-modules" aria-label="Main Navigation">
             {navItems.map((item) => {
-                const isActive = activeTabId === item.id || (item.id === 'studies' && isStudyActionsOpen);
-                return (
-                  <React.Fragment key={item.id}>
-                  <div
-                    className={item.id === 'studies' ? 'enl-study-module-group' : 'enl-module-item-wrap'}
-                    ref={item.id === 'studies' ? studyActionsRef : undefined}
+              const isActive = activeTabId === item.id;
+              return (
+                <div key={item.id} className="enl-module-item-wrap">
+                  <button
+                    type="button"
+                    onClick={() => handleModuleNavigation(item.id)}
+                    className={`enl-module-btn ${isActive ? 'enl-module-btn--active' : ''}`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (item.id === 'studies') {
-                          setIsStudyActionsOpen((open) => !open);
-                          setIsStudySelectOpen(false);
-                        } else if (item.id === 'communications') {
-                          handleModuleNavigation(item.id);
-                        } else {
-                          activateTab(item.id);
-                          setIsStudyActionsOpen(false);
-                        }
-                      }}
-                      className={`enl-module-btn ${isActive ? 'enl-module-btn--active' : ''}`}
-                      aria-expanded={item.id === 'studies' ? isStudyActionsOpen : undefined}
-                    >
-                      <span className="enl-module-icon">{renderIcon(item.icon, 15)}</span>
-                      <span className="enl-module-label">{CLIENT_MODULE_LABELS[item.id] || item.label}</span>
-                    </button>
-                    {item.id === 'studies' && isStudyActionsOpen && (
-                      <div className="enl-study-module-menu">
-                        <div
-                          className="enl-study-module-menu-item-wrap"
-                          onMouseEnter={() => setIsStudySelectOpen(true)}
-                          onMouseLeave={() => setIsStudySelectOpen(false)}
-                        >
-                          <button
-                            type="button"
-                            className="enl-study-module-menu-item"
-                            onClick={() => setIsStudySelectOpen(true)}
-                            onFocus={() => setIsStudySelectOpen(true)}
-                            aria-expanded={isStudySelectOpen}
-                            aria-haspopup="menu"
-                          >
-                            <span>Select Study</span>
-                            <ChevronDown size={14} className="enl-study-menu-arrow" />
-                          </button>
-                          {isStudySelectOpen && (
-                            <div className="enl-study-select-menu" role="menu" aria-label="Select a study">
-                              <div className="enl-study-select-heading">Available Studies</div>
-                              {loadingStudies ? (
-                                <p style={{ padding: '8px 14px', margin: 0, fontSize: 13, color: '#888' }}>Loading studies...</p>
-                              ) : studyOptions.length > 0 ? (
-                                studyOptions.map((study) => {
-                                  const studyId = study.id ?? study.studyId ?? study.protocolNumber;
-                                  const studyTitle = (study as any).title || (study as any).name || 'Untitled study';
-                                  const studyCode = (study as any).studyCode || (study as any).protocolNumber || (study as any).studyRole || '';
-                                  return (
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      key={studyId ?? studyTitle}
-                                      onClick={() => {
-                                        activateTab('studies');
-                                        navigate(`/studies?studyId=${encodeURIComponent(String(studyId))}`);
-                                        setIsStudySelectOpen(false);
-                                        setIsStudyActionsOpen(false);
-                                      }}
-                                    >
-                                      <span className="enl-study-option-icon"><BookOpen size={16} /></span>
-                                      <strong>{studyTitle}</strong>
-                                      {studyCode && <small>{studyCode}</small>}
-                                    </button>
-                                  );
-                                })
-                              ) : (
-                                <p>No studies available</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        {canCreateStudy && (
-                          <button
-                            type="button"
-                            className="enl-study-module-menu-item"
-                            onClick={() => {
-                              activateTab('studies');
-                              navigate('/studies?action=add');
-                              setIsStudyActionsOpen(false);
-                            }}
-                          >
-                            <span>Add Study</span>
-                            <Plus size={16} strokeWidth={3} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  </React.Fragment>
-                );
+                    <span className="enl-module-icon">{renderIcon(item.icon, 15)}</span>
+                    <span className="enl-module-label">{CLIENT_MODULE_LABELS[item.id] || item.label}</span>
+                  </button>
+                </div>
+              );
             })}
 
             {/* Temporarily hidden; keep the shortcut for a future navigation restore.

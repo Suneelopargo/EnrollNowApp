@@ -43,7 +43,8 @@ Every backend feature must honor the 4-layer architecture:
 ### 2.2 Layering Rules
 1. **Controllers Must Be Thin:**
    - Controllers must contain **zero** direct repository calls or entity mutations.
-   - All new Sprint 2+ controllers must accept strongly-typed request DTOs annotated with `@Valid` (do not introduce new `@RequestBody Map<String, Object>` endpoints).
+   - Controllers must accept strongly-typed request DTOs annotated with `@Valid`. Untyped payloads such as `@RequestBody Map<String, Object>` are strictly prohibited across all endpoints (including study management, copy, and import).
+   - Inbound DTOs must enforce required field presence (`@NotBlank`, `@NotNull`) and valid string lengths (`@Size`). Missing values must be rejected with HTTP 400 rather than silently defaulted.
 2. **Services Own Business Logic and Transactions:**
    - All domain operations, validations, cryptographic operations, and mutations belong in `@Service` classes.
    - Mutating service methods must be annotated with `@Transactional`. Read-only methods should use `@Transactional(readOnly = true)`.
@@ -136,6 +137,16 @@ EnrollNow is a strict multi-tenant clinical application. Cross-tenant data acces
 
 ---
 
+
+### 4.4 Study Access & Mutation Authorization Matrix
+Every clinical study endpoint must enforce granular authorization aligned with the permission catalog:
+
+1. **Study Creation (`createStudy`, `copyStudy`, `importStudy`):** Requires `siteAuthorizationService.requireStudyCreateAccess(tenantId)` (`PERM_SITE_STUDY_CREATE`).
+2. **Study Mutation & Lifecycle (`updateStudy`, `archiveStudy`, `restoreStudy`, `deleteStudy`):** Requires `siteAuthorizationService.requireStudyManageAccess(tenantId)` (`PERM_SITE_ALL_STUDIES_MANAGE` or Site Admin / Site Manager roles). Creation permission must never be treated as mutation permission.
+3. **Detail Access Control (`getStudyById`):** Non-admin callers must belong to the study via active `StudyMember` or `TeamStudy` assignment; callers lacking access receive HTTP 404/403.
+4. **Fail-Closed Caller Identity:** Caller identity resolution via `getAuthenticatedCaller()` must fail closed by throwing `InsufficientAuthenticationException` if the principal or tenant ID cannot be established.
+5. **No Synthetic Metrics:** Services must never fabricate business or regulatory numbers (e.g. estimating enrollment as a percentage of sample size). If actual figures are unrecorded in the service's schema, `null` must be returned.
+
 ## 5. Database Access & Persistence Standards
 
 ### 5.1 Prevention of N+1 Queries
@@ -163,3 +174,22 @@ The repository does **not** currently configure Checkstyle, SpotBugs, PMD, ArchU
 - Absence of N+1 query loops.
 - Usage of `SecurityTokenHelper` and `ApiResponse`.
 - Meaningful unit and controller test coverage for new code.
+
+---
+
+## 7. Study Module Engineering Standards
+
+### 7.1 Fail-Closed Authorization & Tenant Isolation
+1. **Granular Study Permissions:** Distinguish study creation permission (`SITE_STUDIES_CREATE` via `siteAuthorizationService.requireStudyCreateAccess(tenantId)`) from study modification permission (`requireStudyManageAccess(tenantId, studyId)`). Non-admin users are strictly filtered to their assigned studies via `MyStudiesService`.
+2. **Fail-Closed Authenticated Context:** Any endpoint invocation lacking authenticated caller credentials or valid tenant context must immediately throw `InsufficientAuthenticationException` (translating to HTTP 401 UNAUTHORIZED). Production services and controllers must never fall back to hardcoded tenant UUIDs (e.g. `11111111-1111-1111-1111-111111111111`).
+3. **Mandatory Security Dependencies:** Service constructors must require non-null security dependencies (`SiteAuthorizationService`, `SitePermissionService`). Tests must configure appropriate caller identity mocks rather than instantiating services with null security collaborators.
+
+### 7.2 Strongly-Typed DTOs & Validation
+1. **Explicit Request Bodies:** Replaces untyped `Map<String, Object>` inputs with typed DTOs decorated with `@Valid` and Bean Validation constraints (`@NotBlank`, `@NotNull`, `@Size(max = 15)`).
+2. **Import Payload Compatibility:** Aliases for study configuration payloads (`studyData`, `data`, `payload`, `configuration`) are preserved via `@JsonAlias` to guarantee backwards compatibility with legacy export formats.
+3. **Canonical Study Name Rules:** Enforce required short name, maximum 15 characters, and case-insensitive tenant-scoped uniqueness across create, update, copy, and import flows.
+
+### 7.3 Data Truthfulness & Performance
+1. **Authoritative Enrollment Metrics:** No arbitrary calculations or synthetic percentages (e.g. `Math.round(sample * 0.65)`) may be used to fabricate enrollment. Missing values are explicitly nullable.
+2. **Batch Query Optimization:** Study member and user profile resolution utilizes repository batch lookups (`findByTenantIdAndStudyIdIn`, `findAllById`) to prevent N+1 query overhead.
+

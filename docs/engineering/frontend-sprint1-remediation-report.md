@@ -13,7 +13,7 @@ An independent, file-by-file source code inspection and final review of the Enro
 - **Sprint 2 Readiness Verdict:** **READY FOR SPRINT 2**
 - **Overall Verification Summary:**
   - `cd frontend && npm run typecheck`: **VERIFIED** (12/12 TypeScript workspaces passed with 0 errors)
-  - `cd frontend && npm run test`: **VERIFIED** (13/13 test workspaces passed — **31 test files, 272 passing tests**)
+  - `cd frontend && npm run test`: **VERIFIED** (13/13 test workspaces passed — **31 test files, 272 passing tests across all microfrontends**)
   - `cd frontend && npm run build --workspaces --if-present`: **VERIFIED** (14/14 workspaces built cleanly)
 
 ---
@@ -118,3 +118,24 @@ During the final source-code verification pass, four discrepancies/gaps were ide
 - `docs/engineering/frontend-engineering-standards.md`
 - `docs/engineering/frontend-story-review-checklist.md`
 - `docs/engineering/frontend-sprint1-remediation-report.md`
+
+---
+
+## 4. Study Module Final Comprehensive Remediation Summary
+
+1. **Centralized API Client & Strict Typing:**
+   - In `frontend/shared/api/studyApi.ts`, eliminated all `as any`, `: any`, and `<any>` casts.
+   - Introduced strongly-typed `ApiResponseEnvelope<T>` and helper functions `unwrapResponse<T>` and `unwrapArrayResponse<T>`.
+   - Augmented `AxiosRequestConfig` to natively support `skipToast`, `skipLoader`, and `silent` flags without type bypasses.
+   - Created `frontend/shared/api/errors.ts` re-exporting `getApiErrorMessage` and `EnrollNowApiError`.
+2. **SCSS Styling & Elimination of Inline Styles:**
+   - Extracted all inline styles (`style={{ ... }}`) into modular SCSS in `frontend/shared/design-system/styles/_study.scss`.
+   - Remediated target components:
+     - `AddStudyModal.tsx`: zero inline styles, `.study-file-input--hidden`, form reset on Cancel.
+     - `StudyDirectory.tsx`: zero inline styles, `.study-directory-toolbar--right`, `.study-directory-toolbar__actions--right`.
+     - `StudySettingsDetails.tsx`: zero inline styles, `.study-input--uppercase`, `.study-table__col-*`, `.study-field-hint--mt-8`.
+     - `StudySettingsEmailAndText.tsx`: zero inline styles, `.study-template-card-header`, `.study-schedule-box`, `.study-variable-tags`.
+3. **Automated Verification:**
+   - Monorepo Typecheck: `npm run typecheck` passed with 0 errors across all 13 workspaces.
+   - Test Suites: `npm run test:all` passed with 0 failures across all microfrontends and shared packages (89 tests passed in `study-mfe`).
+   - Production Build: `npm run build` completed cleanly in 27.87s producing production bundles.

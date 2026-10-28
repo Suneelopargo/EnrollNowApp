@@ -1,8 +1,8 @@
 {
   "name": "@aiventrahealth/administrator-ui",
-  "version": "1.0.2",
+  "version": "1.0.5",
+  "description": "Reusable Enterprise Administration UI Library for User, Role, Permission, Location, and Audit Management",
   "type": "module",
-  "description": "Reusable, production-grade Administrator UI components and API adapter contract for AiventraHealth HMIS",
   "main": "./dist/administrator-ui.umd.cjs",
   "module": "./dist/administrator-ui.js",
   "types": "./dist/index.d.ts",
@@ -15,47 +15,15 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "src"
   ],
   "scripts": {
-    "build": "node -e \"console.log('Precompiled @aiventrahealth/administrator-ui package ready')\"",
-    "type-check": "node -e \"console.log('Precompiled types in dist/index.d.ts')\""
+    "build": "node ./scripts/build.mjs",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@emotion/react": "^11.11.0",
-    "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.15.0",
-    "@mui/material": "^5.15.0",
-    "react": ">=19.3.0 <24",
-    "react-dom": ">=19.3.0 <24"
-  },
-  "devDependencies": {
-    "@emotion/react": "^11.11.4",
-    "@emotion/styled": "^11.11.5",
-    "@mui/icons-material": "^5.15.18",
-    "@mui/material": "^5.15.18",
-    "@types/node": "^20.12.0",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^4.3.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "typescript": "^5.2.2",
-    "vite": "^5.2.11",
-    "vite-plugin-dts": "^3.9.1"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "keywords": [
-    "aiventrahealth",
-    "hmis",
-    "administrator",
-    "rbac",
-    "user-management",
-    "audit-trail",
-    "provider-mapping"
-  ],
-  "author": "AiventraHealth Engineering",
-  "license": "UNLICENSED"
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0"
+  }
 }

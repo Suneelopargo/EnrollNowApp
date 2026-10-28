@@ -1,0 +1,65 @@
+package com.enrollnow.participant.dtos;
+
+import jakarta.validation.constraints.NotBlank;
+import java.util.List;
+
+public class CreateSavedSearchRequest {
+    @NotBlank
+    private String name;
+    private String contactFilter;
+    private String availableFilter;
+    private String searchTerm;
+    private List<String> selectedStudies;
+    private List<CustomFilterRuleDto> customFilters;
+
+    public CreateSavedSearchRequest() {
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getContactFilter() {
+        return contactFilter;
+    }
+
+    public void setContactFilter(String contactFilter) {
+        this.contactFilter = contactFilter;
+    }
+
+    public String getAvailableFilter() {
+        return availableFilter;
+    }
+
+    public void setAvailableFilter(String availableFilter) {
+        this.availableFilter = availableFilter;
+    }
+
+    public String getSearchTerm() {
+        return searchTerm;
+    }
+
+    public void setSearchTerm(String searchTerm) {
+        this.searchTerm = searchTerm;
+    }
+
+    public List<String> getSelectedStudies() {
+        return selectedStudies;
+    }
+
+    public void setSelectedStudies(List<String> selectedStudies) {
+        this.selectedStudies = selectedStudies;
+    }
+
+    public List<CustomFilterRuleDto> getCustomFilters() {
+        return customFilters;
+    }
+
+    public void setCustomFilters(List<CustomFilterRuleDto> customFilters) {
+        this.customFilters = customFilters;
+    }
+}

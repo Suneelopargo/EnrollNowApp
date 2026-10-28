@@ -1,227 +1,280 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+// frontend/microfrontends/participant/src/components/RegistryDashboard.tsx - Registry Dashboard with Real Backend Integration
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { MfeContext } from '../../../../shared/contracts';
 import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
-import { participantApi } from '../../../../shared/api/participantApi';
+import { participantApi, RegistrySearchParams, CreateParticipantPayload } from '../../../../shared/api/participantApi';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { initialParticipants } from '../mockData';
-import { ParticipantRecord, CustomFilterRule, SavedSearch } from '../types/participant';
+import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition } from '../types/participant';
+import { validateFilterRule, registerDynamicFilterFields, isRangeOperator, isNoValueOperator } from '../constants/filterMetadata';
 
-export const RegistryDashboard: React.FC = () => {
-  const [participants, setParticipants] = useState<ParticipantRecord[]>(initialParticipants);
-  const [selectedParticipantId, setSelectedParticipantId] = useState<string>(initialParticipants[0]?.id || '1');
+const hasFilterCriteria = (rule: CustomFilterRule): boolean => {
+  if (isNoValueOperator(rule.operator || '')) return true;
+  if (isRangeOperator(rule.operator || '')) {
+    return Boolean(rule.minValue?.trim() || rule.maxValue?.trim());
+  }
+  return Boolean(rule.values?.some((value) => value.trim()) || rule.value?.trim());
+};
+
+export interface RegistryDashboardProps {
+  context?: MfeContext;
+}
+
+export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context }) => {
+  const siteId = context?.user?.siteId ?? undefined;
+  const tenantId = (context?.user as any)?.tenantId ?? undefined;
+
+  const [participants, setParticipants] = useState<ParticipantRecord[]>([]);
+  const [allParticipants, setAllParticipants] = useState<ParticipantRecord[]>([]);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchParticipants = useCallback(async (quiet = false) => {
-    if (!quiet) setIsLoading(true);
-    try {
-      const data = await participantApi.getParticipants();
-      if (Array.isArray(data) && data.length > 0) {
-        // Merge backend participant records with any specialized registry fields
-        const mapped = data.map((p: any, idx: number) => {
-          const fallback = initialParticipants[idx % initialParticipants.length] || initialParticipants[0];
-          return {
-            ...fallback,
-            id: String(p.id ?? p.participantId ?? fallback.id),
-            name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || fallback.name,
-            firstName: p.firstName || fallback.firstName,
-            lastName: p.lastName || fallback.lastName,
-            status: p.status || fallback.status,
-            city: p.city || fallback.city,
-            state: p.state || fallback.state,
-            phone: p.phone || fallback.phone,
-            globalId: p.participantId || p.globalId || fallback.globalId,
-            studies: Array.isArray(p.studies) ? p.studies : (p.studyId ? [{ name: p.studyId, isLink: true }] : fallback.studies),
-          };
-        });
-        setParticipants(mapped);
-      }
-    } catch {
-      // Graceful fallback to initial mock participants
-    } finally {
-      if (!quiet) setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchParticipants();
-  }, [fetchParticipants]);
-  
   const [searchTerm, setSearchTerm] = useState('');
   const [contactFilter, setContactFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [availableFilter, setAvailableFilter] = useState<'all' | 'yes' | 'no'>('all');
   const [selectedStudies, setSelectedStudies] = useState<string[]>([]);
   const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
-  
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([
-    {
-      id: 'saved-asd',
-      name: 'asd',
-      contactFilter: 'all',
-      availableFilter: 'all',
-      searchTerm: '',
-      selectedStudies: ['Autism Study'],
-      customFilters: [],
-    },
-    {
-      id: 'saved-sireesha',
-      name: 'sireesha',
-      contactFilter: 'no',
-      availableFilter: 'all',
-      searchTerm: '',
-      selectedStudies: [],
-      customFilters: [{ id: '1', field: 'gender', operator: 'equal to', value: 'Female' }],
-    }
-  ]);
-  
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [globalVariables, setGlobalVariables] = useState<GlobalVariableDefinition[]>([]);
+  const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
+  const [serverTotalCount, setServerTotalCount] = useState<number>(0);
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [detailModalState, setDetailModalState] = useState<{ isOpen: boolean; participant: ParticipantRecord | null }>({
     isOpen: false,
     participant: null,
   });
+
   const showNotification = (msg: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     toast[type](msg);
   };
 
-  const matchCustomFilter = (p: ParticipantRecord, f: CustomFilterRule): boolean => {
-    if (!f.field || !f.value) return true;
-    const val = (f.value || '').toString().toLowerCase().trim();
-    if (!val) return true;
-    const op = f.operator || 'equal to';
-    
-    let targetVal: any = (p as any)[f.field];
+  // Keep latest filter values in a ref so fetchParticipants does not recreate
+  // on every filter input/addition, preventing unwanted background triggers.
+  const filterStateRef = useRef({
+    searchTerm,
+    contactFilter,
+    availableFilter,
+    selectedStudies,
+    customFilters,
+    duplicatesOnly,
+  });
 
-    let isGenderField = false;
-    if (f.field === 'age') {
-      targetVal = p.age || p.ageNumeric;
-    } else if (f.field === 'gender' || f.field === 'sex') {
-      isGenderField = true;
-      targetVal = (p.gender && p.gender !== '...') ? p.gender : (p.demographics?.gender || '...');
-    } else if (f.field === 'studies') {
-      targetVal = p.studies?.map((s) => s.name).join(', ');
-    } else if (f.field === 'tags') {
-      targetVal = p.tags?.join(', ');
-    } else if (f.field === 'ethnicity') {
-      targetVal = p.demographics?.ethnicity;
-    } else if (f.field === 'race') {
-      targetVal = p.demographics?.race;
-    } else if (f.field === 'firstName') {
-      targetVal = p.firstName;
-    } else if (f.field === 'lastName') {
-      targetVal = p.lastName;
-    } else if (f.field === 'birthMonth') {
-      targetVal = p.birthMonth;
+  useEffect(() => {
+    filterStateRef.current = {
+      searchTerm,
+      contactFilter,
+      availableFilter,
+      selectedStudies,
+      customFilters,
+      duplicatesOnly,
+    };
+  }, [searchTerm, contactFilter, availableFilter, selectedStudies, customFilters, duplicatesOnly]);
+
+  // Fetch Saved Searches from backend API
+  const fetchSavedSearches = useCallback(async () => {
+    try {
+      const searches = await participantApi.getSavedSearches();
+      if (Array.isArray(searches)) {
+        const mapped: SavedSearch[] = searches.map((s: any) => ({
+          id: String(s.id),
+          name: s.name,
+          contactFilter: s.contactFilter || 'all',
+          availableFilter: s.availableFilter || 'all',
+          searchTerm: s.searchTerm || '',
+          selectedStudies: s.selectedStudies || [],
+          customFilters: s.customFilters || [],
+        }));
+        setSavedSearches(mapped);
+      }
+    } catch {
+      // Keep existing or empty
     }
-    
-    if (targetVal == null) return false;
-    const targetStr = targetVal.toString().toLowerCase().trim();
-    const targetNum = parseFloat(targetStr.replace(/[^0-9.]/g, '')) || p.ageNumeric || 0;
-    const valNum = parseFloat(val.replace(/[^0-9.]/g, ''));
+  }, []);
 
-    if (isGenderField) {
-      if (op === 'equal to') return targetStr === val;
-      if (op === 'not equal to') return targetStr !== val;
-      if (op === 'contains') {
-        const regex = new RegExp('\\b' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-        return regex.test(targetStr);
-      }
-      if (op === 'does not contain') {
-        const regex = new RegExp('\\b' + val.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-        return !regex.test(targetStr);
-      }
-      if (op === 'starts with') return targetStr.startsWith(val);
-      if (op === 'ends with') return targetStr === val || targetStr.endsWith(' ' + val);
-    }
+  // Fetch Participants from backend API
+  const fetchParticipants = useCallback(async (quiet = false, overrideFilters?: {
+    contactFilter?: 'all' | 'yes' | 'no';
+    availableFilter?: 'all' | 'yes' | 'no';
+    searchTerm?: string;
+    selectedStudies?: string[];
+    customFilters?: CustomFilterRule[];
+    duplicatesOnly?: boolean;
+  }) => {
+    if (!quiet) setIsLoading(true);
+    try {
+      const activeContact = overrideFilters?.contactFilter ?? filterStateRef.current.contactFilter;
+      const activeAvailable = overrideFilters?.availableFilter ?? filterStateRef.current.availableFilter;
+      const activeSearch = overrideFilters?.searchTerm ?? filterStateRef.current.searchTerm;
+      const activeStudies = overrideFilters?.selectedStudies ?? filterStateRef.current.selectedStudies;
+      const activeCustom = (overrideFilters?.customFilters ?? filterStateRef.current.customFilters)
+        .filter(hasFilterCriteria);
+      const activeDuplicatesOnly = overrideFilters?.duplicatesOnly !== undefined
+        ? overrideFilters.duplicatesOnly
+        : filterStateRef.current.duplicatesOnly;
 
-    switch (op) {
-      case 'equal to':
-        if (!isNaN(valNum) && f.field === 'age') {
-          return Math.floor(targetNum) === Math.floor(valNum) || targetStr.includes(val);
-        }
-        return targetStr === val;
+      const params: RegistrySearchParams = {
+        tenantId,
+        siteId,
+        searchTerm: activeSearch.trim() || undefined,
+        contactFilter: activeContact,
+        availableFilter: activeAvailable,
+        studies: activeStudies.length > 0 ? activeStudies : undefined,
+        customFiltersJson: activeCustom.length > 0 ? JSON.stringify(activeCustom) : undefined,
+        duplicatesOnly: activeDuplicatesOnly ? true : undefined,
+        page: 0,
+        pageSize: 500,
+      };
 
-      case 'not equal to':
-        if (!isNaN(valNum) && f.field === 'age') {
-          return Math.floor(targetNum) !== Math.floor(valNum) && !targetStr.includes(val);
-        }
-        return targetStr !== val;
+      const res: any = await participantApi.getParticipants(params);
+      const rawList = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.data)
+        ? res.data
+        : [];
 
-      case 'contains':
-        return targetStr.includes(val);
+      const mapped: ParticipantRecord[] = rawList.map((p: any) => ({
+        id: String(p.id ?? p.participantId ?? ''),
+        name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Unnamed Participant',
+        firstName: p.firstName || '',
+        middleName: p.middleName || '',
+        lastName: p.lastName || '',
+        status: p.status || 'Active',
+        city: p.city || '',
+        state: p.state || '',
+        zipcode: p.zipcode || p.postalCode || '',
+        phone: p.phone || '',
+        gender: p.gender || 'Unspecified',
+        age: p.age || 'N/A',
+        ageNumeric: p.ageNumeric ?? (typeof p.age === 'number' ? p.age : undefined),
+        lastContact: p.lastContact || p.globalDateOfLastContact || '',
+        familyId: p.familyId || '',
+        dateCreated: p.dateCreated || '',
+        globalId: p.globalId || '',
+        timezone: p.timezone || 'America/New_York (EDT)',
+        tags: Array.isArray(p.tags) ? p.tags : [],
+        contactForFutureStudies: p.contactForFutureStudies ?? true,
+        availableToAddStudy: p.availableToAddStudy ?? true,
+        globalDateOfLastContact: p.globalDateOfLastContact || '',
+        birthMonth: p.birthMonth || '',
+        studies: Array.isArray(p.studies) ? p.studies : [],
+        contactMethods: p.contactMethods || {
+          primaryEmail: p.email || '',
+          phone: p.phone || '',
+          preferredMethod: 'Email',
+        },
+        demographics: p.demographics || {
+          gender: p.gender || 'Unspecified',
+          primaryLanguage: 'English',
+        },
+        family: {
+          familyRole: p.family?.familyRole || 'Proband',
+          membersCount: p.family?.membersCount ?? (p.family?.members?.length || 1),
+          pedigreeTreeId: p.family?.pedigreeTreeId,
+          guardianName: p.family?.guardianName,
+          members: Array.isArray(p.family?.members) ? p.family.members : [],
+        },
+        variables: Array.isArray(p.variables) ? p.variables : [],
+      }));
 
-      case 'does not contain':
-        return !targetStr.includes(val);
+      setParticipants(mapped);
+      const rawCount = typeof res?.totalCount === 'number'
+        ? res.totalCount
+        : typeof res?.totalElements === 'number'
+        ? res.totalElements
+        : mapped.length;
+      setServerTotalCount(rawCount);
+      setError(null);
 
-      case 'starts with':
-        return targetStr.startsWith(val);
-
-      case 'ends with':
-        return targetStr.endsWith(val);
-
-      case 'greater than':
-        return !isNaN(valNum) ? targetNum > valNum : targetStr > val;
-
-      case 'less than':
-        return !isNaN(valNum) ? targetNum < valNum : targetStr < val;
-
-      case 'is empty':
-        return !targetStr || targetStr === '...';
-
-      case 'is Not empty':
-      case 'is not empty':
-        return !!targetStr && targetStr !== '...';
-
-      default:
-        return targetStr.includes(val);
-    }
-  };
-
-  const filteredParticipants = useMemo(() => {
-    return participants.filter((p) => {
-      if (contactFilter === 'yes' && !p.contactForFutureStudies) return false;
-      if (contactFilter === 'no' && p.contactForFutureStudies) return false;
-
-      if (availableFilter === 'yes' && !p.availableToAddStudy) return false;
-      if (availableFilter === 'no' && p.availableToAddStudy) return false;
-
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
-        const matchesName = p.name?.toLowerCase().includes(query);
-        const matchesFamily = p.familyId?.toLowerCase().includes(query);
-        const matchesGlobal = p.globalId?.toLowerCase().includes(query);
-        const matchesCity = p.city?.toLowerCase().includes(query);
-        const matchesGender = p.gender?.toLowerCase().includes(query);
-        const matchesAge = p.age?.toLowerCase().includes(query);
-        const matchesStudies = p.studies?.some((s) => s.name?.toLowerCase().includes(query));
-        
-        if (!matchesName && !matchesFamily && !matchesGlobal && !matchesCity && !matchesGender && !matchesAge && !matchesStudies) {
-          return false;
-        }
-      }
-
-      if (selectedStudies.length > 0) {
-        const hasMatchingStudy = p.studies?.some((s) => selectedStudies.includes(s.name));
-        if (!hasMatchingStudy) {
-          return false;
-        }
-      }
-
-      if (customFilters.length > 0) {
-        const matchesAllCustom = customFilters.every((f) => matchCustomFilter(p, f));
-        if (!matchesAllCustom) return false;
-      }
-
+      // Keep baseline for study list dropdown when unfiltered
+      const isUnfiltered = !activeSearch && activeContact === 'all' && activeAvailable === 'all' && activeStudies.length === 0 && activeCustom.length === 0;
+      setAllParticipants((prev) => (isUnfiltered || prev.length === 0 ? mapped : prev));
+      setSelectedParticipantId((prev) => prev || (mapped.length > 0 ? mapped[0].id : ''));
+      setDetailModalState((prev) => {
+        if (!prev.isOpen || !prev.participant) return prev;
+        const refreshed = mapped.find((m) => m.id === prev.participant?.id);
+        return refreshed ? { isOpen: true, participant: refreshed } : prev;
+      });
       return true;
-    });
-  }, [participants, contactFilter, availableFilter, searchTerm, selectedStudies, customFilters]);
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to retrieve participants from the server');
+      setError(errorMsg);
+      setParticipants([]);
+      return false;
+    } finally {
+      if (!quiet) setIsLoading(false);
+    }
+  }, [tenantId, siteId]);
+
+  // Fetch dynamic custom variable filter metadata from backend
+  const fetchFilterMetadata = useCallback(async () => {
+    try {
+      const meta = await participantApi.getFilterMetadata();
+      if (Array.isArray(meta)) {
+        setGlobalVariables(meta
+          .filter((m: any) => m.global === true || m.isGlobal === true)
+          .map((m: any) => ({
+            id: String(m.id || ''),
+            name: String(m.label || m.name || m.id || 'Unnamed variable'),
+            type: String(m.type || 'short'),
+            isBlind: m.isBlind === true,
+            options: Array.isArray(m.options) ? m.options.map((option: any) => ({
+              value: String(option.value ?? option.optionId ?? option.label ?? ''),
+              label: String(option.label ?? option.name ?? option.value ?? ''),
+            })) : [],
+          }))
+          .filter((m: GlobalVariableDefinition) => m.id && m.name));
+        const dynamicFields: FilterFieldOption[] = meta.map((m: any) => {
+          const variableLabel = String(m.label || m.name || m.id || 'Unnamed variable').trim();
+          const customFieldLabel = /^custom\s*[-:]/i.test(variableLabel)
+            ? variableLabel
+            : `Custom - ${variableLabel}`;
+          let fieldType: FilterFieldOption['type'] = 'text';
+          if (m.type === 'number') fieldType = 'number';
+          else if (m.type === 'date' || m.type === 'dateTime') fieldType = 'date';
+          else if (m.type === 'single' || m.type === 'multi') fieldType = 'multiselect';
+
+          const options: FilterOptionItem[] = Array.isArray(m.options)
+            ? m.options.map((opt: any) => ({
+                label: opt.label || opt.value,
+                value: opt.value || opt.label,
+              }))
+            : [];
+
+          return {
+            id: m.id,
+            label: customFieldLabel,
+            placeholder: `Filter by ${variableLabel}...`,
+            type: fieldType,
+            options: options.length > 0 ? options : undefined,
+          };
+        });
+        registerDynamicFilterFields(dynamicFields);
+      }
+    } catch (err) {
+      console.warn('Failed to load dynamic custom filter metadata:', err);
+    }
+  }, []);
+
+  // Initial Load only on mount / tenant-site context change
+  useEffect(() => {
+    fetchParticipants();
+    fetchSavedSearches();
+    fetchFilterMetadata();
+  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata]);
 
   const selectedParticipant = useMemo(() => {
-    return participants.find((p) => p.id === selectedParticipantId) || filteredParticipants[0] || null;
-  }, [participants, selectedParticipantId, filteredParticipants]);
+    return participants.find((p) => p.id === selectedParticipantId) || participants[0] || null;
+  }, [participants, selectedParticipantId]);
 
   const handleSelectParticipant = (participant: ParticipantRecord) => {
     if (participant && participant.id) {
@@ -229,15 +282,23 @@ export const RegistryDashboard: React.FC = () => {
     }
   };
 
-  const handleRefresh = () => {
-    fetchParticipants(true);
-    showNotification('Participant queue refreshed');
+  const handleRefresh = async () => {
+    const refreshed = await fetchParticipants(false);
+    fetchSavedSearches();
+    fetchFilterMetadata();
+    if (refreshed) showNotification('Participant queue refreshed');
   };
 
-  const handleAddParticipant = (newParticipant: ParticipantRecord) => {
-    setParticipants((prev) => [newParticipant, ...prev]);
-    setSelectedParticipantId(newParticipant.id);
-    showNotification(`Participant "${newParticipant.name}" added successfully.`, 'success');
+  const handleToggleDuplicates = () => {
+    const next = !duplicatesOnly;
+    setDuplicatesOnly(next);
+    fetchParticipants(false, { duplicatesOnly: next });
+  };
+
+  const handleParticipantCreated = async (created: any) => {
+    showNotification('Success! Participant added to registry.', 'success');
+    await fetchParticipants(true);
+    if (created?.id) setSelectedParticipantId(String(created.id));
   };
 
   const handleAddFilter = () => {
@@ -246,19 +307,27 @@ export const RegistryDashboard: React.FC = () => {
       field: 'age',
       operator: 'equal to',
       value: '',
+      minValue: '',
+      maxValue: '',
+      values: [],
     };
     setCustomFilters((prev) => [...prev, newFilter]);
   };
 
-  const handleAssignStudyToSelected = (participantIds: string[], studyName: string) => {
-    const selectedIds = new Set(participantIds);
-    setParticipants((prev) => prev.map((participant) => {
-      if (!selectedIds.has(participant.id)) return participant;
-      const studies = participant.studies || [];
-      if (studies.some((study) => study.name === studyName)) return participant;
-      return { ...participant, studies: [...studies, { name: studyName, isLink: true }] };
-    }));
-    showNotification(`Added ${participantIds.length} participant(s) to ${studyName}.`, 'success');
+  const handleAssignStudyToSelected = async (participantIds: string[], studyName: string) => {
+    try {
+      await participantApi.assignStudy({
+        participantIds,
+        studyName,
+        status: 'REFERRED',
+        notes: 'Bulk assigned from Participant Registry',
+      });
+      showNotification(`Assigned ${participantIds.length} participant(s) to ${studyName}.`, 'success');
+      await fetchParticipants(true);
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to assign study to selected participants.');
+      showNotification(errorMsg, 'error');
+    }
   };
 
   const handleUpdateFilter = (index: number, updatedFilter: CustomFilterRule) => {
@@ -280,6 +349,13 @@ export const RegistryDashboard: React.FC = () => {
     setAvailableFilter('all');
     setSelectedStudies([]);
     setCustomFilters([]);
+    fetchParticipants(false, {
+      searchTerm: '',
+      contactFilter: 'all',
+      availableFilter: 'all',
+      selectedStudies: [],
+      customFilters: [],
+    });
     showNotification('All filters have been reset.');
   };
 
@@ -287,19 +363,33 @@ export const RegistryDashboard: React.FC = () => {
     setIsSaveModalOpen(true);
   };
 
-  const handleSaveFilterSubmit = (filterName: string) => {
-    const newSaved: SavedSearch = {
-      id: String(Date.now()),
-      name: filterName,
-      contactFilter,
-      availableFilter,
-      searchTerm,
-      selectedStudies,
-      customFilters: [...customFilters],
-    };
+  const handleSaveFilterSubmit = async (filterName: string) => {
+    try {
+      const created = await participantApi.createSavedSearch({
+        name: filterName,
+        contactFilter,
+        availableFilter,
+        searchTerm,
+        selectedStudies,
+        customFilters: customFilters.filter(hasFilterCriteria),
+      });
 
-    setSavedSearches((prev) => [...prev, newSaved]);
-    showNotification(`Saved filter "${filterName}" added to Saved Searches.`, 'success');
+      const newSaved: SavedSearch = {
+        id: String(created.id ?? Date.now()),
+        name: created.name,
+        contactFilter: created.contactFilter,
+        availableFilter: created.availableFilter,
+        searchTerm: created.searchTerm,
+        selectedStudies: created.selectedStudies,
+        customFilters: created.customFilters,
+      };
+
+      setSavedSearches((prev) => [...prev, newSaved]);
+      showNotification(`Saved filter "${filterName}" added to Saved Searches.`, 'success');
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to save filter on server.');
+      showNotification(errorMsg, 'error');
+    }
   };
 
   const handleOpenDeleteModal = (searchItem: SavedSearch) => {
@@ -309,38 +399,101 @@ export const RegistryDashboard: React.FC = () => {
       confirmText: `Delete ${searchItem.name}`,
       loadingText: 'Deleting saved search...',
       title: 'Delete saved search',
-      message: `Delete the saved search “${searchItem.name}”? This action cannot be undone.`,
-      onConfirm: () => {
-        setSavedSearches((prev) => prev.filter((item) => item.id !== searchItem.id));
-        showNotification(`Saved search "${searchItem.name}" deleted.`, 'success');
+      message: `Delete the saved search "${searchItem.name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await participantApi.deleteSavedSearch(searchItem.id);
+          setSavedSearches((prev) => prev.filter((item) => item.id !== searchItem.id));
+          showNotification(`Saved search "${searchItem.name}" deleted.`, 'success');
+        } catch (err: any) {
+          const errorMsg = getApiErrorMessage(err, 'Failed to delete saved search.');
+          showNotification(errorMsg, 'error');
+        }
       },
     });
   };
 
   const handleSelectSavedSearch = (saved: SavedSearch) => {
     if (!saved) return;
-    setContactFilter(saved.contactFilter || 'all');
-    setAvailableFilter(saved.availableFilter || 'all');
-    setSearchTerm(saved.searchTerm || '');
-    setSelectedStudies(saved.selectedStudies || []);
-    setCustomFilters(saved.customFilters || []);
+    const nextContact = saved.contactFilter || 'all';
+    const nextAvailable = saved.availableFilter || 'all';
+    const nextSearch = saved.searchTerm || '';
+    const nextStudies = saved.selectedStudies || [];
+    const nextCustom = saved.customFilters || [];
+
+    setContactFilter(nextContact);
+    setAvailableFilter(nextAvailable);
+    setSearchTerm(nextSearch);
+    setSelectedStudies(nextStudies);
+    setCustomFilters(nextCustom);
+
+    fetchParticipants(false, {
+      contactFilter: nextContact,
+      availableFilter: nextAvailable,
+      searchTerm: nextSearch,
+      selectedStudies: nextStudies,
+      customFilters: nextCustom.filter(hasFilterCriteria),
+    });
     showNotification(`Applied saved search "${saved.name}".`);
   };
 
   const handleSearch = () => {
-    showNotification(`Filtered registry: ${filteredParticipants.length} participant(s) found.`);
+    const applicableFilters = customFilters.filter(hasFilterCriteria);
+    for (const filter of applicableFilters) {
+      const valResult = validateFilterRule(filter);
+      if (!valResult.isValid) {
+        showNotification(valResult.error || 'Please provide valid filter criteria.', 'warning');
+        return;
+      }
+    }
+    fetchParticipants(false, { customFilters: applicableFilters });
   };
 
   const handleOpenDetail = (participant: ParticipantRecord) => {
     setDetailModalState({ isOpen: true, participant });
   };
 
-  const handleSaveDetail = (updatedParticipant: ParticipantRecord) => {
-    setParticipants((prev) =>
-      prev.map((p) => (p.id === updatedParticipant.id ? updatedParticipant : p))
-    );
-    showNotification(`Participant "${updatedParticipant.name}" details updated successfully.`, 'success');
-    setDetailModalState({ isOpen: false, participant: null });
+  const handleSaveDetail = async (updatedParticipant: ParticipantRecord) => {
+    try {
+      await participantApi.updateParticipant(
+        updatedParticipant.id,
+        {
+          firstName: updatedParticipant.firstName,
+          middleName: updatedParticipant.middleName,
+          lastName: updatedParticipant.lastName,
+          phone: updatedParticipant.contactMethods?.phone || updatedParticipant.phone,
+          primaryEmail: updatedParticipant.contactMethods?.primaryEmail,
+          city: updatedParticipant.city,
+          state: updatedParticipant.state,
+          postalCode: updatedParticipant.zipcode,
+          status: updatedParticipant.status,
+          sexAtBirth: updatedParticipant.gender,
+          dateOfBirth: updatedParticipant.demographics?.dob,
+          ethnicity: updatedParticipant.demographics?.ethnicity,
+          race: updatedParticipant.demographics?.race,
+          primaryLanguage: updatedParticipant.demographics?.primaryLanguage,
+          familyRole: updatedParticipant.family?.familyRole,
+          guardianName: updatedParticipant.family?.guardianName,
+          contactForFutureStudies: updatedParticipant.contactForFutureStudies,
+          tags: updatedParticipant.tags,
+          familyId: updatedParticipant.familyId,
+          globalId: updatedParticipant.globalId,
+          timezone: updatedParticipant.timezone,
+          globalDateOfLastContact: updatedParticipant.globalDateOfLastContact,
+          variables: updatedParticipant.variables,
+        },
+        {
+          params: { tenantId, siteId },
+        }
+      );
+
+      showNotification(`Participant "${updatedParticipant.name}" details updated successfully.`, 'success');
+      setDetailModalState({ isOpen: false, participant: null });
+      await fetchParticipants(true);
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to update participant on server.');
+      showNotification(errorMsg, 'error');
+    }
   };
 
   const handleOpenDeleteParticipant = (participant: ParticipantRecord) => {
@@ -349,78 +502,197 @@ export const RegistryDashboard: React.FC = () => {
       intent: 'danger',
       confirmText: 'Delete participant',
       loadingText: 'Deleting participant...',
-      title: 'Delete participant',
-      message: `Delete participant “${participant.name}”? This action cannot be undone.`,
+      title: `Are you sure you want to delete ${participant.name}?`,
+      message: 'You will NOT be able to recover this participant.',
       confirmWord: 'DELETE',
-      onConfirm: () => {
-        setParticipants((prev) => prev.filter((item) => item.id !== participant.id));
-        showNotification(`Participant "${participant.name}" deleted.`, 'success');
+      confirmInputLabel: '',
+      confirmInputPlaceholder: '',
+      confirmInputSubtext: 'Type DELETE in all caps and press enter',
+      onConfirm: async () => {
+        try {
+          await participantApi.deleteParticipant(participant.id);
+          showNotification(`Participant "${participant.name}" deleted.`, 'success');
+          await fetchParticipants(true);
+        } catch (err: any) {
+          const errorMsg = getApiErrorMessage(err, 'Failed to delete participant.');
+          showNotification(errorMsg, 'error');
+        }
       },
     });
   };
 
+  const handleDeleteSelected = (participantIds: string[]) => {
+    if (participantIds.length === 0) return;
+    void requestConfirmation({
+      title: `Delete ${participantIds.length} participants?`,
+      message: `You will not be able to recover these ${participantIds.length} participants.`,
+      intent: 'danger',
+      confirmText: `Delete ${participantIds.length} participants`,
+      loadingText: 'Deleting participants...',
+      confirmWord: 'DELETE',
+      confirmInputSubtext: 'Type DELETE in all caps and press enter',
+      onConfirm: async () => {
+        const results = await Promise.allSettled(
+          participantIds.map((id) => participantApi.deleteParticipant(id))
+        );
+        const deletedCount = results.filter((result) => result.status === 'fulfilled').length;
+        const failedCount = results.length - deletedCount;
+        await fetchParticipants(true);
+        if (failedCount > 0) {
+          showNotification(
+            `${deletedCount} participant(s) deleted; ${failedCount} could not be deleted.`,
+            'warning'
+          );
+          throw new Error(`${failedCount} participant deletion(s) failed. Refresh the registry and try again.`);
+        }
+        showNotification(`${deletedCount} participant(s) deleted.`, 'success');
+      },
+    });
+  };
+
+  const handleExportServerCsv = async () => {
+    try {
+      const applicableFilters = customFilters.filter(hasFilterCriteria);
+      const params: RegistrySearchParams = {
+        tenantId,
+        siteId,
+        searchTerm: searchTerm.trim() || undefined,
+        contactFilter,
+        availableFilter,
+        studies: selectedStudies.length > 0 ? selectedStudies : undefined,
+        customFiltersJson: applicableFilters.length > 0 ? JSON.stringify(applicableFilters) : undefined,
+        duplicatesOnly: duplicatesOnly ? true : undefined,
+      };
+      const blob = await participantApi.exportRegistry(params);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `registry_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      showNotification('Registry exported successfully.', 'success');
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to export registry.');
+      showNotification(errorMsg, 'error');
+    }
+  };
+
   return (
     <div className="workspace-split-layout">
-        <div className="workspace-split-layout__sidebar">
-          <LeftFilterPanel
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            contactFilter={contactFilter}
-            setContactFilter={setContactFilter}
-            availableFilter={availableFilter}
-            setAvailableFilter={setAvailableFilter}
-            customFilters={customFilters}
-            onAddFilter={handleAddFilter}
-            onUpdateFilter={handleUpdateFilter}
-            onRemoveFilter={handleRemoveFilter}
-            onAddParticipant={() => setIsAddModalOpen(true)}
-            onClearFilters={handleClearFilters}
-            onSaveFilter={handleOpenSaveModal}
-            onSearch={handleSearch}
-            savedSearches={savedSearches}
-            onSelectSavedSearch={handleSelectSavedSearch}
-            onDeleteRequest={handleOpenDeleteModal}
-          />
-        </div>
-
-        <div className="workspace-split-layout__main">
-          <ParticipantGrid
-            participants={filteredParticipants}
-            allParticipants={participants}
-            selectedParticipant={selectedParticipant}
-            onSelectParticipant={handleSelectParticipant}
-            onRefresh={handleRefresh}
-            onAddParticipant={() => setIsAddModalOpen(true)}
-            onOpenDetail={handleOpenDetail}
-            onDeleteParticipant={handleOpenDeleteParticipant}
-            onAssignStudyToSelected={handleAssignStudyToSelected}
-            totalCount={participants.length}
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            selectedStudies={selectedStudies}
-            setSelectedStudies={setSelectedStudies}
-          />
-        </div>
-
-        <AddParticipantModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
-          onAdd={handleAddParticipant}
+      <div className="workspace-split-layout__sidebar">
+        <LeftFilterPanel
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          contactFilter={contactFilter}
+          setContactFilter={setContactFilter}
+          availableFilter={availableFilter}
+          setAvailableFilter={setAvailableFilter}
+          customFilters={customFilters}
+          onAddFilter={handleAddFilter}
+          onUpdateFilter={handleUpdateFilter}
+          onRemoveFilter={handleRemoveFilter}
+          onAddParticipant={() => setIsAddModalOpen(true)}
+          onClearFilters={handleClearFilters}
+          onSaveFilter={handleOpenSaveModal}
+          onSearch={handleSearch}
+          savedSearches={savedSearches}
+          onSelectSavedSearch={handleSelectSavedSearch}
+          onDeleteRequest={handleOpenDeleteModal}
         />
+      </div>
 
-        <SaveFilterModal
-          isOpen={isSaveModalOpen}
-          onClose={() => setIsSaveModalOpen(false)}
-          onSave={handleSaveFilterSubmit}
+      <div className="workspace-split-layout__main">
+        {error && (
+          <div
+            className="alert alert-error"
+            role="alert"
+            style={{
+              margin: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0.75rem 1rem',
+              borderRadius: '6px',
+              backgroundColor: '#fee2e2',
+              color: '#b91c1c',
+              border: '1px solid #f87171',
+            }}
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => fetchParticipants(false)}
+              style={{
+                cursor: 'pointer',
+                padding: '0.25rem 0.75rem',
+                backgroundColor: '#ffffff',
+                border: '1px solid #b91c1c',
+                color: '#b91c1c',
+                borderRadius: '4px',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        <ParticipantGrid
+          participants={participants}
+          allParticipants={allParticipants}
+          selectedParticipant={selectedParticipant}
+          onSelectParticipant={handleSelectParticipant}
+          onRefresh={handleRefresh}
+          onAddParticipant={() => setIsAddModalOpen(true)}
+          onOpenDetail={handleOpenDetail}
+          onDeleteParticipant={handleOpenDeleteParticipant}
+          onDeleteSelected={handleDeleteSelected}
+          onAssignStudyToSelected={handleAssignStudyToSelected}
+          onExportServerCsv={handleExportServerCsv}
+          isLoading={isLoading}
+          totalCount={serverTotalCount}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          selectedStudies={selectedStudies}
+          setSelectedStudies={setSelectedStudies}
+          duplicatesOnly={duplicatesOnly}
+          onToggleDuplicates={handleToggleDuplicates}
         />
+      </div>
 
-        <ParticipantDetailModal
-          isOpen={detailModalState.isOpen}
-          onClose={() => setDetailModalState({ isOpen: false, participant: null })}
-          participant={detailModalState.participant}
-          onSave={handleSaveDetail}
-        />
+      <AddParticipantModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={handleParticipantCreated}
+        onAdd={handleParticipantCreated}
+        tenantId={tenantId}
+        siteId={siteId}
+      />
 
+      <SaveFilterModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={handleSaveFilterSubmit}
+      />
+
+      <ParticipantDetailModal
+        isOpen={detailModalState.isOpen}
+        onClose={() => setDetailModalState({ isOpen: false, participant: null })}
+        participant={detailModalState.participant}
+        onSave={handleSaveDetail}
+        onSelectParticipantById={(id) => {
+          const found = participants.find((p) => p.id === id);
+          if (found) {
+            setDetailModalState({ isOpen: true, participant: found });
+          }
+        }}
+        tenantId={tenantId}
+        siteId={siteId}
+        globalVariables={globalVariables}
+        onParticipantUpdated={async () => {
+          await fetchParticipants(true);
+        }}
+      />
     </div>
   );
 };

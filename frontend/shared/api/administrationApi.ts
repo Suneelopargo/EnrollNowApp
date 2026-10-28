@@ -415,14 +415,11 @@ export const administrationApi = {
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
-  async getAuditLogs(query?: Record<string, any>): Promise<any[]> {
-    try {
-      const res = await apiClient.get('/api/v1/administrator/audit-logs', { params: query });
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+  async getAuditLogs(query?: Record<string, any>): Promise<any> {
+    const res = await apiClient.get('/api/v1/administrator/audit-logs', { params: query });
+    return res.data?.data || res.data || [];
   },
+
 };
 
 export default administrationApi;

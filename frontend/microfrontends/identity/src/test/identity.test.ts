@@ -149,4 +149,24 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     warningSpy.mockRestore();
   });
 
+  it('renders login form with disabled submit button when fields are empty', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const React = await import('react');
+    const html = renderToStaticMarkup(
+      React.createElement(IdentityModule, {
+        context: {
+          user: null,
+          token: null,
+          apiBaseUrl: 'http://localhost:8080',
+          correlationId: 'test-correlation-id',
+          navigate: vi.fn(),
+        },
+      })
+    );
+
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('Log In');
+    expect(html).toContain('Enter your email address');
+    expect(html).toContain('Enter your password');
+  });
 });

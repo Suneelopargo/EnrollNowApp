@@ -1268,3 +1268,16 @@
     gap: 6px;
   }
 }
+
+
+// Inline Field Error for Identity Login Form
+.enl-field-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc2626;
+  margin-top: 4px;
+  line-height: 1.25;
+}

@@ -27,6 +27,9 @@ export interface ConfirmationOptions {
 
   /** Optional safety confirmation phrase the user must type before confirming (e.g., "DELETE" or entity code) */
   confirmWord?: string;
+  confirmInputLabel?: string;
+  confirmInputPlaceholder?: string;
+  confirmInputSubtext?: string;
 
   /** Optional entity name for standardized delete prompts */
   entityName?: string;

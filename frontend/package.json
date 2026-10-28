@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace=enrollnow-shell",
-    "build": "npm run build --workspace=enrollnow-shell",
+    "build": "npm run build --workspace=@aiventrahealth/administrator-ui && npm run build --workspace=enrollnow-shell",
     "preview": "npm run preview --workspace=enrollnow-shell",
     "start": "npm run preview --workspace=enrollnow-shell",
     "test": "npm run test --workspaces --if-present",
