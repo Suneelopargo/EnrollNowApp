@@ -1,6 +1,12 @@
 package com.enrollnow.study.services;
 
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
+
+import com.enrollnow.common.audit.AuditChange;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
+
+import java.util.Map;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
@@ -43,6 +49,7 @@ public class StudyAccessService {
     private final StudyRepository studyRepository;
     private final SitePermissionService sitePermissionService;
     private final SiteAuthorizationService siteAuthorizationService;
+    private final AuditRecorder auditRecorder;
 
     @Autowired
     public StudyAccessService(
@@ -52,7 +59,8 @@ public class StudyAccessService {
             StudyMemberRepository studyMemberRepository,
             StudyRepository studyRepository,
             SitePermissionService sitePermissionService,
-            SiteAuthorizationService siteAuthorizationService
+            SiteAuthorizationService siteAuthorizationService,
+            AuditRecorder auditRecorder
     ) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository must not be null");
         this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository must not be null");
@@ -61,6 +69,7 @@ public class StudyAccessService {
         this.studyRepository = Objects.requireNonNull(studyRepository, "studyRepository must not be null");
         this.sitePermissionService = Objects.requireNonNull(sitePermissionService, "sitePermissionService must not be null");
         this.siteAuthorizationService = Objects.requireNonNull(siteAuthorizationService, "siteAuthorizationService must not be null");
+        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
     }
 
     @Transactional(readOnly = true)
@@ -204,19 +213,92 @@ public class StudyAccessService {
         }
 
         if (targetAssignment != null) {
+
             if (!targetAssignment.getRoleId().equals(role.getId())) {
+
+                String previousRoleCode = roleRepository
+                        .findById(targetAssignment.getRoleId())
+                        .map(Role::getCode)
+                        .orElse("UNKNOWN");
+
                 targetAssignment.setRoleId(role.getId());
                 targetAssignment.setActive(true);
+
                 userRoleAssignmentRepository.saveAndFlush(targetAssignment);
+
+                if (auditRecorder != null) {
+                    auditRecorder.record(
+                            new AuditEventCommand(
+                                    tenantId,
+                                    null,
+                                    "USER",
+                                    userId,
+                                    "STUDY_PERMISSION_CHANGED",
+                                    "User study permission changed",
+                                    "API",
+                                    null,
+                                    null,
+                                    Map.of(
+                                            "studyId", studyId,
+                                            "studyPermission", previousRoleCode
+                                    ),
+                                    Map.of(
+                                            "studyId", studyId,
+                                            "studyPermission", role.getCode()
+                                    ),
+                                    List.of(
+                                            new AuditChange(
+                                                    "studyPermission",
+                                                    previousRoleCode,
+                                                    role.getCode()
+                                            )
+                                    )
+                            )
+                    );
+                }
             }
+
         } else {
+
             UserRoleAssignment assignment = new UserRoleAssignment();
             assignment.setTenantId(tenantId);
             assignment.setUserId(userId);
             assignment.setRoleId(role.getId());
             assignment.setStudyId(studyId);
             assignment.setActive(true);
+
             userRoleAssignmentRepository.save(assignment);
+
+            if (auditRecorder != null) {
+                auditRecorder.record(
+                        new AuditEventCommand(
+                                tenantId,
+                                null,
+                                "USER",
+                                userId,
+                                "STUDY_ACCESS_GRANTED",
+                                "User granted access to study",
+                                "API",
+                                null,
+                                null,
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyPermission", "NONE"
+                                ),
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyPermission", role.getCode()
+                                ),
+                                List.of(
+                                        new AuditChange(
+                                                "studyPermission",
+                                                "NONE",
+                                                role.getCode()
+                                        )
+                                )
+                        )
+                );
+            }
         }
     }
     
@@ -255,8 +337,45 @@ public class StudyAccessService {
                         );
 
         for (UserRoleAssignment assignment : activeAssignments) {
+
+            String previousRoleCode = roleRepository
+                    .findById(assignment.getRoleId())
+                    .map(Role::getCode)
+                    .orElse("UNKNOWN");
+
             assignment.setActive(false);
             userRoleAssignmentRepository.save(assignment);
+
+            if (auditRecorder != null) {
+                auditRecorder.record(
+                        new AuditEventCommand(
+                                tenantId,
+                                null,
+                                "USER",
+                                userId,
+                                "STUDY_ACCESS_REMOVED",
+                                "User study access removed",
+                                "API",
+                                null,
+                                null,
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyPermission", previousRoleCode
+                                ),
+                                Map.of(
+                                        "studyId", studyId,
+                                        "studyPermission", "NONE"
+                                ),
+                                List.of(
+                                        new AuditChange(
+                                                "studyPermission",
+                                                previousRoleCode,
+                                                "NONE"
+                                        )
+                                )
+                        )
+                );
+            }
         }
     }
 }
