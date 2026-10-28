@@ -1,8 +1,8 @@
 package com.enrollnow.participant.services;
 
-import com.enrollnow.identity.models.AuditEvent;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.models.User;
-import com.enrollnow.identity.repositories.AuditEventRepository;
 import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.services.SitePermissionService;
@@ -42,7 +42,7 @@ class ParticipantContactLogServiceTest {
     @Mock private StudyMemberRepository studyMemberRepository;
     @Mock private UserRepository userRepository;
     @Mock private UserEmailRepository userEmailRepository;
-    @Mock private AuditEventRepository auditEventRepository;
+    @Mock private AuditRecorder auditRecorder;
     @Mock private SitePermissionService sitePermissionService;
 
     private ParticipantContactLogService service;
@@ -68,7 +68,7 @@ class ParticipantContactLogServiceTest {
                 studyMemberRepository,
                 userRepository,
                 userEmailRepository,
-                auditEventRepository,
+                auditRecorder,
                 sitePermissionService
         );
 
@@ -131,12 +131,12 @@ class ParticipantContactLogServiceTest {
         verify(participantRepository).save(testParticipant);
 
         // Verify audit event logged
-        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
-        verify(auditEventRepository).save(auditCaptor.capture());
-        AuditEvent event = auditCaptor.getValue();
-        assertThat(event.getEntityType()).isEqualTo("PARTICIPANT_CONTACT_LOG");
-        assertThat(event.getAction()).isEqualTo("CREATE");
-        assertThat(event.getActorUserId()).isEqualTo(callerUserId);
+        ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(auditRecorder).record(auditCaptor.capture());
+        AuditEventCommand event = auditCaptor.getValue();
+        assertThat(event.entityType()).isEqualTo("PARTICIPANT_CONTACT_LOG");
+        assertThat(event.action()).isEqualTo("CREATE");
+        assertThat(event.actorUserId()).isEqualTo(callerUserId);
     }
 
     @Test
@@ -235,9 +235,9 @@ class ParticipantContactLogServiceTest {
         ParticipantContactLogDto pinned = service.pinContactLog(tenantId, participantId, log.getId(), callerUserId, true);
 
         assertThat(pinned.isSticky()).isTrue();
-        ArgumentCaptor<AuditEvent> auditCaptor = ArgumentCaptor.forClass(AuditEvent.class);
-        verify(auditEventRepository).save(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().getAction()).isEqualTo("PIN");
+        ArgumentCaptor<AuditEventCommand> auditCaptor = ArgumentCaptor.forClass(AuditEventCommand.class);
+        verify(auditRecorder).record(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().action()).isEqualTo("PIN");
     }
 
     @Test
@@ -260,7 +260,7 @@ class ParticipantContactLogServiceTest {
 
         verify(contactLogRepository).delete(log);
         verify(participantRepository).save(testParticipant);
-        verify(auditEventRepository).save(any(AuditEvent.class));
+        verify(auditRecorder).record(any(AuditEventCommand.class));
     }
 
     @Test

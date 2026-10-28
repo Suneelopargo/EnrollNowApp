@@ -1,9 +1,9 @@
 package com.enrollnow.participant.services;
 
-import com.enrollnow.identity.models.AuditEvent;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.models.UserEmail;
-import com.enrollnow.identity.repositories.AuditEventRepository;
 import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.services.SiteAuthorizationService;
@@ -55,7 +55,7 @@ public class ParticipantContactLogService {
     private final StudyMemberRepository studyMemberRepository;
     private final UserRepository userRepository;
     private final UserEmailRepository userEmailRepository;
-    private final AuditEventRepository auditEventRepository;
+    private final AuditRecorder auditRecorder;
     private final SitePermissionService sitePermissionService;
 
     public ParticipantContactLogService(
@@ -68,7 +68,7 @@ public class ParticipantContactLogService {
             StudyMemberRepository studyMemberRepository,
             UserRepository userRepository,
             UserEmailRepository userEmailRepository,
-            AuditEventRepository auditEventRepository,
+            @Autowired(required = false) AuditRecorder auditRecorder,
             @Autowired(required = false) SitePermissionService sitePermissionService) {
         this.contactLogRepository = contactLogRepository;
         this.outcomeRepository = outcomeRepository;
@@ -79,7 +79,7 @@ public class ParticipantContactLogService {
         this.studyMemberRepository = studyMemberRepository;
         this.userRepository = userRepository;
         this.userEmailRepository = userEmailRepository;
-        this.auditEventRepository = auditEventRepository;
+        this.auditRecorder = auditRecorder;
         this.sitePermissionService = sitePermissionService;
     }
 
@@ -514,18 +514,22 @@ public class ParticipantContactLogService {
     }
 
     private void recordAuditEvent(UUID tenantId, UUID actorUserId, UUID entityId, String action, String description) {
+        if (auditRecorder == null) return;
         try {
-            AuditEvent event = new AuditEvent();
-            event.setTenantId(tenantId);
-            event.setActorUserId(actorUserId);
-            event.setEntityType("PARTICIPANT_CONTACT_LOG");
-            event.setEntityId(entityId);
-            event.setAction(action);
-            event.setDescription(description);
-            event.setSource("APPLICATION");
-            event.setOccurredAt(OffsetDateTime.now());
-            event.setCreatedAt(OffsetDateTime.now());
-            auditEventRepository.save(event);
+            auditRecorder.record(new AuditEventCommand(
+                    tenantId,
+                    actorUserId,
+                    "PARTICIPANT_CONTACT_LOG",
+                    entityId,
+                    action,
+                    description,
+                    "APPLICATION",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            ));
         } catch (Exception e) {
             log.warn("Failed to record audit event: {}", e.getMessage());
         }

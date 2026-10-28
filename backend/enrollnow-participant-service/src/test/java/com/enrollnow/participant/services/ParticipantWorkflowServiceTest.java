@@ -1,6 +1,6 @@
 package com.enrollnow.participant.services;
 
-import com.enrollnow.identity.repositories.AuditEventRepository;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
@@ -46,7 +46,7 @@ class ParticipantWorkflowServiceTest {
     @Mock
     private StudyRepository studyRepository;
     @Mock
-    private com.enrollnow.identity.repositories.AuditEventRepository auditEventRepository;
+    private AuditRecorder auditRecorder;
 
     private ParticipantWorkflowService workflowService;
 
@@ -69,7 +69,7 @@ class ParticipantWorkflowServiceTest {
                 surveyAssignmentRepository,
                 surveyDefinitionRepository,
                 studyRepository,
-                auditEventRepository
+                auditRecorder
         );
     }
 

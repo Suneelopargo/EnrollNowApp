@@ -1,7 +1,7 @@
 package com.enrollnow.participant.services;
 
-import com.enrollnow.identity.models.AuditEvent;
-import com.enrollnow.identity.repositories.AuditEventRepository;
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
@@ -10,6 +10,7 @@ import com.enrollnow.study.repositories.StudyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,7 +35,7 @@ public class ParticipantWorkflowService {
     private final SurveyAssignmentRepository surveyAssignmentRepository;
     private final SurveyDefinitionRepository surveyDefinitionRepository;
     private final StudyRepository studyRepository;
-    private final AuditEventRepository auditEventRepository;
+    private final AuditRecorder auditRecorder;
 
     public ParticipantWorkflowService(
             ParticipantRepository participantRepository,
@@ -48,7 +49,7 @@ public class ParticipantWorkflowService {
             SurveyAssignmentRepository surveyAssignmentRepository,
             SurveyDefinitionRepository surveyDefinitionRepository,
             StudyRepository studyRepository,
-            AuditEventRepository auditEventRepository
+            @Autowired(required = false) AuditRecorder auditRecorder
     ) {
         this.participantRepository = participantRepository;
         this.commentRepository = commentRepository;
@@ -61,7 +62,7 @@ public class ParticipantWorkflowService {
         this.surveyAssignmentRepository = surveyAssignmentRepository;
         this.surveyDefinitionRepository = surveyDefinitionRepository;
         this.studyRepository = studyRepository;
-        this.auditEventRepository = auditEventRepository;
+        this.auditRecorder = auditRecorder;
     }
 
     // =========================================================================
@@ -704,18 +705,22 @@ public class ParticipantWorkflowService {
     }
 
     private void recordAudit(UUID tenantId, UUID userId, String action, String entityType, UUID entityId, String description) {
+        if (auditRecorder == null) return;
         try {
-            AuditEvent event = new AuditEvent();
-            event.setTenantId(tenantId);
-            event.setActorUserId(userId);
-            event.setAction(action);
-            event.setEntityType(entityType);
-            event.setEntityId(entityId);
-            event.setDescription(description);
-            event.setSource("APPLICATION");
-            event.setOccurredAt(OffsetDateTime.now());
-            event.setCreatedAt(OffsetDateTime.now());
-            auditEventRepository.save(event);
+            auditRecorder.record(new AuditEventCommand(
+                    tenantId,
+                    userId,
+                    entityType,
+                    entityId,
+                    action,
+                    description,
+                    "APPLICATION",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            ));
         } catch (Exception ex) {
             log.warn("Failed to record audit event for {}: {}", action, ex.getMessage());
         }
