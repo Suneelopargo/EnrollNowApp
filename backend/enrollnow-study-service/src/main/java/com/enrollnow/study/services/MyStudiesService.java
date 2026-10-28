@@ -56,6 +56,10 @@ public class MyStudiesService {
             UUID tenantId,
             UUID userId) {
 
+        if (tenantId == null || userId == null) {
+            return List.of();
+        }
+
         Map<UUID, StudyAssignmentMetadata> studyMap = new LinkedHashMap<>();
 
         // 1. Gather study assignments from study_members table
@@ -106,19 +110,14 @@ public class MyStudiesService {
             UUID studyId = entry.getKey();
             StudyAssignmentMetadata metadata = entry.getValue();
 
-            Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
-                    .or(() -> studyRepository.findById(studyId))
-                    .orElse(null);
-
-            String studyCode;
-            String studyName;
-            if (study != null) {
-                studyCode = study.getStudyCode();
-                studyName = study.getName();
-            } else {
-                studyCode = "STUDY-" + studyId.toString().substring(0, Math.min(8, studyId.toString().length())).toUpperCase();
-                studyName = "Assigned Study (" + studyCode + ")";
+            // Strict tenant-scoped study lookup: never fall back to unscoped findById or fabricate synthetic names
+            Study study = studyRepository.findByTenantIdAndId(tenantId, studyId).orElse(null);
+            if (study == null) {
+                continue;
             }
+
+            String studyCode = study.getStudyCode();
+            String studyName = study.getName();
 
             String studyPermission = metadata.studyPermission;
             if (studyPermission == null) {

@@ -96,7 +96,7 @@ public class StudySummaryResponse {
     }
 
     public Integer getTargetEnrollment() {
-        return sampleSize != null ? sampleSize : 100;
+        return sampleSize;
     }
 
     public Integer getEnrolled() {

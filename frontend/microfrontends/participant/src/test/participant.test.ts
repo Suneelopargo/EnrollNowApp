@@ -472,7 +472,7 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
 
     expect(html).toContain('Male');
     expect(html).toContain('Female');
-    expect(html).toContain('✓');
+    expect(html).toContain('searchable-multi-select__chip');
   });
 
   it('validates filter rules correctly via validateFilterRule', async () => {

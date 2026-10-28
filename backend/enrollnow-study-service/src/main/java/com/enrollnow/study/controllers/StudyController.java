@@ -127,24 +127,8 @@ public class StudyController {
     ) {
         try {
             UUID effectiveTenantId = resolveTenantId(tenantId);
-            UUID callerUserId = null;
-            boolean canManageSiteAdmins = false;
-
-            if (siteAuthorizationService != null) {
-                Optional<SiteAuthorizationService.CallerIdentity> callerOpt = siteAuthorizationService.getAuthenticatedCaller();
-                if (callerOpt.isPresent()) {
-                    callerUserId = callerOpt.get().userId();
-                }
-                Optional<com.enrollnow.identity.dtos.UserEffectivePermissionsResponse> effectiveOpt =
-                        siteAuthorizationService.getCallerEffectivePermissions(effectiveTenantId, null);
-                if (effectiveOpt.isPresent()) {
-                    if (callerUserId == null) {
-                        callerUserId = effectiveOpt.get().getUserId();
-                    }
-                    canManageSiteAdmins = effectiveOpt.get().isCanManageSiteAdmins()
-                            || effectiveOpt.get().getPermissions().contains(com.enrollnow.identity.services.SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE);
-                }
-            }
+            UUID callerUserId = resolveCallerUserId();
+            boolean canManageSiteAdmins = resolveCanManageSiteAdmins(effectiveTenantId);
 
             StudyNavigationPermissionsResponse permissions = studyService.getStudyNavigationPermissions(
                     effectiveTenantId,
@@ -1385,15 +1369,12 @@ public class StudyController {
         siteAuthorizationService.requireTenantMatch(queryTenantId);
         SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
                 .orElseThrow(() -> new org.springframework.security.authentication.InsufficientAuthenticationException("Authentication is required to access Study resources"));
-        if (caller.tenantId() != null) {
-            if (queryTenantId != null && !caller.tenantId().equals(queryTenantId)) {
-                throw new org.springframework.security.access.AccessDeniedException("Access denied: cross-tenant operation is not permitted");
-            }
-            return caller.tenantId();
+        if (caller.tenantId() == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Authenticated caller is not associated with any tenant");
         }
-        if (queryTenantId != null) {
-            return queryTenantId;
+        if (queryTenantId != null && !caller.tenantId().equals(queryTenantId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied: cross-tenant operation is not permitted");
         }
-        throw new org.springframework.security.access.AccessDeniedException("Authenticated caller is not associated with any tenant");
+        return caller.tenantId();
     }
 }

@@ -562,4 +562,32 @@ class StudyControllerTest {
         assertNotNull(response.getBody());
         assertFalse(response.getBody().isSuccess());
     }
+
+    @Test
+    void getStudies_authenticatedCallerWithoutTenantClaim_throwsAccessDeniedEvenWithRequestTenantId() {
+        SiteAuthorizationService.CallerIdentity callerWithoutTenant =
+                new SiteAuthorizationService.CallerIdentity(userId, null);
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(callerWithoutTenant));
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyController.getStudies(tenantId, false)
+        );
+        verify(studyRepository, never()).findByTenantIdAndArchivedFalse(any());
+        verify(studyRepository, never()).findByTenantId(any());
+    }
+
+    @Test
+    void getStudies_crossTenantRequest_throwsAccessDenied() {
+        UUID otherTenantId = UUID.randomUUID();
+        SiteAuthorizationService.CallerIdentity caller =
+                new SiteAuthorizationService.CallerIdentity(userId, tenantId);
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyController.getStudies(otherTenantId, false)
+        );
+        verify(studyRepository, never()).findByTenantIdAndArchivedFalse(any());
+    }
 }

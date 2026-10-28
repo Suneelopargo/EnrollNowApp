@@ -19,7 +19,7 @@ export const AdministratorProvider = ({ api, auth, config = {}, children }) => {
 };
 
 // ============================================================================
-// STYLESHEET (Embedded Scoped CSS for 100% Visual Fidelity matching Image 2)
+// STYLESHEET (Embedded Scoped CSS for 100% Visual Fidelity)
 // ============================================================================
 const ADMIN_CSS = `
 .adm-scope {
@@ -40,7 +40,7 @@ const ADMIN_CSS = `
   width: 100%;
 }
 
-/* Top Badge Icon (rounded blue square with shield 'e' icon) */
+/* Top Badge Icon */
 .adm-top-badge {
   display: inline-flex;
   align-items: center;
@@ -495,10 +495,16 @@ const ADMIN_CSS = `
   border: 1px solid #fecdd3;
   color: #9f1239;
 }
+.adm-empty-state {
+  padding: 28px 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
 `;
 
 // ============================================================================
-// SVG ICONS (Native SVG components matching Image 2 with zero external dependencies)
+// SVG ICONS
 // ============================================================================
 const h = React.createElement;
 
@@ -576,103 +582,7 @@ const SvgLink = () =>
     h('path', { d: 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' })
   );
 
-// ============================================================================
-// DEFAULT DATA PROVIDERS
-// ============================================================================
-const DEFAULT_USERS = [
-  {
-    id: 1,
-    username: 'admin',
-    fullName: 'System Administrator',
-    email: 'admin@enrollnow.local',
-    roles: ['ROLE_SUPER_ADMIN'],
-    active: true,
-    siteCodes: ['LOC-001', 'LOC-002'],
-    createdAt: '2026-01-15T08:00:00Z',
-  },
-  {
-    id: 2,
-    username: 'dr.jenkins',
-    fullName: 'Dr. Sarah Jenkins, MD',
-    email: 'sjenkins@enrollnow.local',
-    roles: ['ROLE_DOCTOR'],
-    active: true,
-    siteCodes: ['LOC-001'],
-    createdAt: '2026-02-10T09:15:00Z',
-  },
-  {
-    id: 3,
-    username: 'dr.rodriguez',
-    fullName: 'Dr. Maria Rodriguez, MD',
-    email: 'mrodriguez@enrollnow.local',
-    roles: ['ROLE_DOCTOR'],
-    active: true,
-    siteCodes: ['LOC-003'],
-    createdAt: '2026-03-01T11:00:00Z',
-  },
-  {
-    id: 4,
-    username: 'sec_admin',
-    fullName: 'Security Administrator',
-    email: 'security@enrollnow.local',
-    roles: ['ROLE_SUPER_ADMIN'],
-    active: true,
-    siteCodes: ['LOC-001'],
-    createdAt: '2026-01-20T10:00:00Z',
-  },
-  {
-    id: 5,
-    username: 'coord_smith',
-    fullName: 'Jane Smith',
-    email: 'coordinator@enrollnow.local',
-    roles: ['ROLE_COORDINATOR'],
-    active: true,
-    siteCodes: ['LOC-001', 'LOC-002'],
-    createdAt: '2026-02-01T08:30:00Z',
-  },
-  {
-    id: 6,
-    username: 'coord_patel',
-    fullName: 'Raj Patel',
-    email: 'rpatel@enrollnow.local',
-    roles: ['ROLE_COORDINATOR'],
-    active: true,
-    siteCodes: ['LOC-003'],
-    createdAt: '2026-02-15T09:00:00Z',
-  },
-  {
-    id: 7,
-    username: 'patient_lead',
-    fullName: 'Alex Johnson',
-    email: 'patient.lead@enrollnow.local',
-    roles: ['ROLE_PATIENT'],
-    active: true,
-    siteCodes: ['LOC-001'],
-    createdAt: '2026-04-10T14:00:00Z',
-  },
-];
-
-const DEFAULT_LOCATIONS = [
-  { id: 1, code: 'LOC-001', name: 'Colonial Health Center', city: 'Boston', state: 'MA', active: true, userCount: 4 },
-  { id: 2, code: 'LOC-002', name: 'Main Campus Clinical Facility', city: 'Cambridge', state: 'MA', active: true, userCount: 3 },
-  { id: 3, code: 'LOC-003', name: 'Metro Research Center', city: 'New York', state: 'NY', active: true, userCount: 2 },
-  { id: 4, code: 'LOC-004', name: 'Northwest Trial Site', city: 'Seattle', state: 'WA', active: true, userCount: 1 },
-  { id: 5, code: 'LOC-005', name: 'Boston Memorial Hospital', city: 'Boston', state: 'MA', active: true, userCount: 1 },
-  { id: 6, code: 'LOC-006', name: 'Pacific Health Institute', city: 'San Francisco', state: 'CA', active: true, userCount: 1 },
-  { id: 7, code: 'LOC-007', name: 'Midwest Medical Complex', city: 'Chicago', state: 'IL', active: true, userCount: 1 },
-  { id: 8, code: 'LOC-008', name: 'Southern Regional Clinic', city: 'Atlanta', state: 'GA', active: true, userCount: 1 },
-  { id: 9, code: 'LOC-009', name: 'Capitol Health Pavilion', city: 'Washington', state: 'DC', active: true, userCount: 1 },
-  { id: 10, code: 'LOC-010', name: 'Lakeside Ambulatory Care', city: 'Cleveland', state: 'OH', active: true, userCount: 1 },
-  { id: 11, code: 'LOC-011', name: 'East Coast Oncology Center', city: 'Philadelphia', state: 'PA', active: true, userCount: 1 },
-];
-
-const DEFAULT_DOCTOR_MASTERS = [
-  { id: 101, name: 'Dr. Sarah Jenkins, MD', code: 'DOC-101', specialty: 'Oncology', active: true },
-  { id: 102, name: 'Dr. Robert Chen, MD', code: 'DOC-102', specialty: 'Cardiology', active: true },
-  { id: 103, name: 'Dr. Maria Rodriguez, MD', code: 'DOC-103', specialty: 'Neurology', active: true },
-  { id: 104, name: 'Dr. James Wilson, MD', code: 'DOC-104', specialty: 'Immunology', active: true },
-];
-
+// UI-only application module definitions used for matrix layout when permission catalog is not loaded
 const DEFAULT_MODULES = [
   { code: 'DASHBOARD', name: 'Clinical Operations Dashboard', actions: ['VIEW', 'EXPORT'] },
   { code: 'STUDY', name: 'Clinical Study Protocol Management', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'EXPORT'] },
@@ -685,28 +595,28 @@ const DEFAULT_MODULES = [
   { code: 'ADMIN', name: 'Platform Administration & Security', actions: ['VIEW', 'CREATE', 'EDIT', 'DELETE'] },
 ];
 
+const ROLE_COLORS = ['#0284c7', '#7c3aed', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
+
 // ============================================================================
 // MAIN ADMINISTRATOR COMPONENT
 // ============================================================================
 export const Administrator = ({ initialTab = 0 }) => {
-  const { api, auth, config } = useAdministrator();
+  const { api, config } = useAdministrator();
   const [activeTab, setActiveTab] = useState(typeof initialTab === 'string' ? 0 : initialTab);
   const [dashboard, setDashboard] = useState(null);
-  const [users, setUsers] = useState(DEFAULT_USERS);
+  const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [locations, setLocations] = useState(DEFAULT_LOCATIONS);
-  const [doctorMasters, setDoctorMasters] = useState(DEFAULT_DOCTOR_MASTERS);
-  const [doctorMappings, setDoctorMappings] = useState([
-    { userId: 2, providerId: 101, providerName: 'Dr. Sarah Jenkins, MD' },
-  ]);
+  const [locations, setLocations] = useState([]);
+  const [doctorMasters, setDoctorMasters] = useState([]);
+  const [doctorMappings, setDoctorMappings] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [permissionCatalog, setPermissionCatalog] = useState(DEFAULT_MODULES);
   const [selectedRoleForPerms, setSelectedRoleForPerms] = useState(null);
   const [rolePermissionsState, setRolePermissionsState] = useState({});
-  const [selectedUserForRoles, setSelectedUserForRoles] = useState(null);
   const [selectedUserForLocations, setSelectedUserForLocations] = useState(null);
   const [userAssignedLocations, setUserAssignedLocations] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
   const [actionSuccess, setActionSuccess] = useState(null);
@@ -726,8 +636,8 @@ export const Administrator = ({ initialTab = 0 }) => {
   const [newRoleForm, setNewRoleForm] = useState({ code: '', name: '', description: '' });
   const [mappingSelects, setMappingSelects] = useState({});
 
-  const title = config.title || 'System Administration Overview';
-  const subtitle = config.subtitle || 'Authoritative management of user credentials, RBAC roles, and system security.';
+  const title = config?.title || 'System Administration Overview';
+  const subtitle = config?.subtitle || 'Authoritative management of user credentials, RBAC roles, and system security.';
 
   const notifySuccess = (msg) => {
     setActionSuccess(msg);
@@ -740,83 +650,51 @@ export const Administrator = ({ initialTab = 0 }) => {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      if (api.getDashboard) {
+      if (api?.getDashboard) {
         const d = await api.getDashboard();
-        setDashboard(d);
+        setDashboard(d || null);
       }
-      if (api.getUsers) {
+      if (api?.getUsers) {
         const u = await api.getUsers();
-        const uList = Array.isArray(u) ? u : (u?.content || []);
-        if (uList.length > 0) {
-          // Merge with defaults to ensure complete demo fidelity
-          const merged = [...uList];
-          for (const du of DEFAULT_USERS) {
-            if (!merged.some((m) => m.username === du.username || m.id === du.id)) {
-              merged.push(du);
-            }
-          }
-          setUsers(merged);
-        }
+        const uList = Array.isArray(u) ? u : (Array.isArray(u?.content) ? u.content : []);
+        setUsers(uList);
       }
-      if (api.getRoles) {
+      if (api?.getRoles) {
         const r = await api.getRoles();
         const rList = Array.isArray(r) ? r : [];
-        if (rList.length > 0) {
-          setRoles(rList);
-          if (!selectedRoleForPerms) setSelectedRoleForPerms(rList[0]);
-        } else {
-          const defaultRoles = [
-            { id: 1, code: 'ROLE_SUPER_ADMIN', name: 'Super Administrator', description: 'Full system authorization' },
-            { id: 2, code: 'ROLE_DOCTOR', name: 'Investigator / Doctor', description: 'Clinical investigator & study oversight' },
-            { id: 3, code: 'ROLE_COORDINATOR', name: 'Clinical Study Coordinator', description: 'Site operations and patient scheduling' },
-            { id: 4, code: 'ROLE_PATIENT', name: 'Participant / Patient', description: 'Enrolled clinical participant access' },
-            { id: 5, code: 'ROLE_SITE_ADMIN', name: 'Site Administrator', description: 'Site-level facility management' },
-          ];
-          setRoles(defaultRoles);
-          if (!selectedRoleForPerms) setSelectedRoleForPerms(defaultRoles[0]);
+        setRoles(rList);
+        if (rList.length > 0 && !selectedRoleForPerms) {
+          setSelectedRoleForPerms(rList[0]);
         }
       }
-      if (api.getLocations) {
+      if (api?.getLocations) {
         const l = await api.getLocations();
         const lList = Array.isArray(l) ? l : [];
-        if (lList.length > 0) {
-          const mergedL = [...lList];
-          for (const dl of DEFAULT_LOCATIONS) {
-            if (!mergedL.some((m) => m.code === dl.code || m.id === dl.id)) {
-              mergedL.push(dl);
-            }
-          }
-          setLocations(mergedL);
-        }
+        setLocations(lList);
       }
-      if (api.getAvailableProviders) {
+      if (api?.getAvailableProviders) {
         const p = await api.getAvailableProviders();
-        if (Array.isArray(p) && p.length > 0) setDoctorMasters(p);
+        setDoctorMasters(Array.isArray(p) ? p : []);
       }
-      if (api.getProviderMappings) {
+      if (api?.getProviderMappings) {
         const m = await api.getProviderMappings();
-        if (Array.isArray(m) && m.length > 0) setDoctorMappings(m);
+        setDoctorMappings(Array.isArray(m) ? m : []);
       }
-      if (api.getAuditLogs) {
+      if (api?.getAuditLogs) {
         const a = await api.getAuditLogs({ page: 0, size: 20 });
-        if (a?.content && Array.isArray(a.content) && a.content.length > 0) {
-          setAuditLogs(a.content);
-        } else {
-          setAuditLogs([
-            { id: 1, action: 'USER_LOGIN_SUCCESS', performedByUsername: 'admin', details: 'Authorized JWT issued', createdAt: '2026-10-02T06:30:12Z', ipAddress: '127.0.0.1' },
-            { id: 2, action: 'DOCTOR_MAPPING_VERIFIED', performedByUsername: 'admin', details: 'Bound user dr.jenkins to DOC-101', createdAt: '2026-10-02T06:15:40Z', ipAddress: '127.0.0.1' },
-            { id: 3, action: 'LOCATION_ACCESS_ASSIGNED', performedByUsername: 'admin', details: 'Configured site LOC-001 access', createdAt: '2026-10-02T05:50:22Z', ipAddress: '127.0.0.1' },
-            { id: 4, action: 'ROLE_ENTITLEMENT_SYNC', performedByUsername: 'sec_admin', details: 'Synchronized RBAC matrix for ROLE_DOCTOR', createdAt: '2026-10-01T18:20:00Z', ipAddress: '192.168.1.10' },
-          ]);
-        }
+        const aList = Array.isArray(a?.content) ? a.content : (Array.isArray(a) ? a : []);
+        setAuditLogs(aList);
       }
-      if (api.getPermissionCatalog) {
+      if (api?.getPermissionCatalog) {
         const cat = await api.getPermissionCatalog();
-        if (Array.isArray(cat) && cat.length > 0) setPermissionCatalog(cat);
+        if (Array.isArray(cat) && cat.length > 0) {
+          setPermissionCatalog(cat);
+        }
       }
     } catch (e) {
-      console.warn('[Administrator] loadData notice:', e);
+      setLoadError(e instanceof Error ? e.message : 'Failed to load administration data from backend.');
     } finally {
       setLoading(false);
     }
@@ -826,50 +704,51 @@ export const Administrator = ({ initialTab = 0 }) => {
     loadData();
   }, [api]);
 
-  // Calculations for Metrics matching Image 2
-  const totalUsersCount = dashboard?.totalUsers || users.length || 7;
-  const activeUsersCount = dashboard?.activeUsers || users.filter((u) => u.active !== false).length || 7;
-  const inactiveUsersCount = dashboard?.inactiveUsers || users.filter((u) => u.active === false).length || 0;
+  // Authoritative KPI calculations without fabricated fallback numbers
+  const totalUsersCount = dashboard?.totalUsers ?? users.length;
+  const activeUsersCount = dashboard?.activeUsers ?? users.filter((u) => u.active !== false).length;
+  const inactiveUsersCount = dashboard?.inactiveUsers ?? users.filter((u) => u.active === false).length;
 
   const doctorUsers = useMemo(() => {
     return users.filter((u) =>
-      (u.roles || []).some((r) => r.toUpperCase().includes('DOCTOR'))
+      (u.roles || []).some((r) => String(r).toUpperCase().includes('DOCTOR'))
     );
   }, [users]);
-  const doctorUsersCount = doctorUsers.length > 0 ? doctorUsers.length : 2;
+  const doctorUsersCount = doctorUsers.length;
 
   const mappedDoctorsCount = useMemo(() => {
     const mappedIds = new Set(doctorMappings.map((m) => String(m.userId)));
-    const c = doctorUsers.filter((u) => mappedIds.has(String(u.id))).length;
-    return c > 0 ? c : 1;
+    return doctorUsers.filter((u) => mappedIds.has(String(u.id))).length;
   }, [doctorUsers, doctorMappings]);
 
-  const unmappedDoctorsCount = Math.max(0, doctorUsersCount - mappedDoctorsCount) || 1;
+  const unmappedDoctorsCount = Math.max(0, doctorUsersCount - mappedDoctorsCount);
 
   const adminUsersCount = useMemo(() => {
-    const c = users.filter((u) =>
-      (u.roles || []).some((r) => r.toUpperCase().includes('ADMIN'))
+    return users.filter((u) =>
+      (u.roles || []).some((r) => String(r).toUpperCase().includes('ADMIN'))
     ).length;
-    return c > 0 ? c : 2;
   }, [users]);
 
-  const doctorMasterCount = doctorMasters.length > 0 ? doctorMasters.length : 4;
-  const activeLocationsCount = dashboard?.activeLocations || locations.length || 11;
+  const doctorMasterCount = doctorMasters.length;
+  const activeLocationsCount = dashboard?.activeLocations ?? locations.length;
 
-  // Role Distribution
+  // Authoritative Role Distribution derived from actual users
   const roleDistribution = useMemo(() => {
-    const counts = {
-      DOCTOR: 2,
-      SUPER_ADMIN: 2,
-      COORDINATOR: 2,
-      PATIENT: 1,
-    };
-    return [
-      { name: 'DOCTOR', count: counts.DOCTOR, percent: 29, color: '#0284c7' },
-      { name: 'SUPER_ADMIN', count: counts.SUPER_ADMIN, percent: 29, color: '#7c3aed' },
-      { name: 'COORDINATOR', count: counts.COORDINATOR, percent: 29, color: '#10b981' },
-      { name: 'PATIENT', count: counts.PATIENT, percent: 14, color: '#f59e0b' },
-    ];
+    const countsMap = new Map();
+    for (const user of users) {
+      const userRoles = Array.isArray(user.roles) ? user.roles : [];
+      for (const rawRole of userRoles) {
+        const normalized = String(rawRole).replace(/^ROLE_/, '');
+        countsMap.set(normalized, (countsMap.get(normalized) || 0) + 1);
+      }
+    }
+    const total = users.length;
+    return Array.from(countsMap.entries()).map(([name, count], idx) => ({
+      name,
+      count,
+      percent: total > 0 ? Math.round((count / total) * 100) : 0,
+      color: ROLE_COLORS[idx % ROLE_COLORS.length],
+    }));
   }, [users]);
 
   // Actions
@@ -884,40 +763,31 @@ export const Administrator = ({ initialTab = 0 }) => {
       notifyError('Username and Email are required.');
       return;
     }
+    if (!api?.createUser) {
+      notifyError('User creation endpoint is not configured.');
+      return;
+    }
     try {
-      let created = null;
-      if (api.createUser) {
-        created = await api.createUser({
-          username: newUserForm.username.trim(),
-          email: newUserForm.email.trim(),
-          password: newUserForm.password || 'EnrollNow2026!',
-          firstName: newUserForm.firstName.trim() || undefined,
-          lastName: newUserForm.lastName.trim() || undefined,
-          roles: [newUserForm.initialRole],
-        });
-      }
-      const userToAdd = created || {
-        id: Date.now(),
+      const created = await api.createUser({
         username: newUserForm.username.trim(),
-        fullName: `${newUserForm.firstName || ''} ${newUserForm.lastName || ''}`.trim() || newUserForm.username.trim(),
         email: newUserForm.email.trim(),
+        password: newUserForm.password || undefined,
+        firstName: newUserForm.firstName.trim() || undefined,
+        lastName: newUserForm.lastName.trim() || undefined,
         roles: [newUserForm.initialRole],
-        active: true,
-        siteCodes: ['LOC-001'],
-        createdAt: new Date().toISOString(),
-      };
-      setUsers((prev) => [userToAdd, ...prev]);
+      });
+      await loadData();
       setShowCreateUserModal(false);
       setNewUserForm({ username: '', email: '', password: '', firstName: '', lastName: '', initialRole: 'ROLE_COORDINATOR' });
-      notifySuccess(`User ${userToAdd.username} created successfully.`);
-    } catch (err) {
+      notifySuccess(`User ${created?.username || newUserForm.username.trim()} created successfully.`);
+    } catch {
       notifyError('Failed to create user account.');
     }
   };
 
   const handleDeactivateUser = async (userId) => {
     try {
-      if (api.deactivateUser) await api.deactivateUser(userId);
+      if (api?.deactivateUser) await api.deactivateUser(userId);
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, active: false } : u)));
       notifySuccess('User account deactivated.');
     } catch {
@@ -927,7 +797,7 @@ export const Administrator = ({ initialTab = 0 }) => {
 
   const handleActivateUser = async (userId) => {
     try {
-      if (api.activateUser) await api.activateUser(userId);
+      if (api?.activateUser) await api.activateUser(userId);
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, active: true } : u)));
       notifySuccess('User account activated.');
     } catch {
@@ -937,23 +807,27 @@ export const Administrator = ({ initialTab = 0 }) => {
 
   const handleResetPassword = async (userId, username) => {
     try {
-      if (api.resetPassword) await api.resetPassword(userId, { newPassword: 'Password123!' });
-      notifySuccess(`Temporary password Password123! set for ${username}.`);
+      if (api?.resetPassword) await api.resetPassword(userId, {});
+      notifySuccess(`Password reset initiated for ${username}.`);
     } catch {
       notifyError(`Failed to reset password for ${username}.`);
     }
   };
 
   const handleMapDoctor = async (userId, doctorMasterId) => {
+    if (!doctorMasterId) {
+      notifyError('Please select a Doctor Master record to map.');
+      return;
+    }
     try {
-      if (api.mapUserProvider) {
+      if (api?.mapUserProvider) {
         await api.mapUserProvider(userId, doctorMasterId);
       }
       const master = doctorMasters.find((d) => String(d.id) === String(doctorMasterId));
       const newMapping = {
         userId,
         providerId: doctorMasterId,
-        providerName: master ? master.name : `Doctor #${doctorMasterId}`,
+        providerName: master ? master.name : String(doctorMasterId),
       };
       setDoctorMappings((prev) => [
         ...prev.filter((m) => String(m.userId) !== String(userId)),
@@ -967,7 +841,7 @@ export const Administrator = ({ initialTab = 0 }) => {
 
   const handleUnmapDoctor = async (userId) => {
     try {
-      if (api.unmapUserProvider) await api.unmapUserProvider(userId);
+      if (api?.unmapUserProvider) await api.unmapUserProvider(userId);
       setDoctorMappings((prev) => prev.filter((m) => String(m.userId) !== String(userId)));
       notifySuccess('Doctor mapping removed.');
     } catch {
@@ -978,7 +852,7 @@ export const Administrator = ({ initialTab = 0 }) => {
   const handleSaveLocationAccess = async () => {
     if (!selectedUserForLocations) return;
     try {
-      if (api.saveUserLocations) {
+      if (api?.saveUserLocations) {
         await api.saveUserLocations(selectedUserForLocations.id, userAssignedLocations);
       }
       notifySuccess(`Location access saved for ${selectedUserForLocations.username}.`);
@@ -1005,14 +879,12 @@ export const Administrator = ({ initialTab = 0 }) => {
       'div',
       { className: 'adm-wrapper' },
 
-      // Top Icon Badge (Blue square with shield 'e' icon matching Image 2)
       h(
         'div',
         { className: 'adm-top-badge' },
         h(SvgShieldLogo, null)
       ),
 
-      // Main Card Container
       h(
         'div',
         { className: 'adm-card' },
@@ -1037,30 +909,36 @@ export const Administrator = ({ initialTab = 0 }) => {
         ),
 
         // Notifications
+        loadError &&
+          h(
+            'div',
+            { className: 'adm-alert adm-alert-error', role: 'alert' },
+            h('span', null, `⚠ ${loadError}`),
+            h('button', { type: 'button', onClick: handleRefresh, className: 'adm-action-btn' }, 'Retry')
+          ),
         actionSuccess &&
           h(
             'div',
-            { className: 'adm-alert adm-alert-success' },
+            { className: 'adm-alert adm-alert-success', role: 'status' },
             h('span', null, `✓ ${actionSuccess}`),
             h('button', { type: 'button', onClick: () => setActionSuccess(null), style: { background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' } }, '✕')
           ),
         actionError &&
           h(
             'div',
-            { className: 'adm-alert adm-alert-error' },
+            { className: 'adm-alert adm-alert-error', role: 'alert' },
             h('span', null, `⚠ ${actionError}`),
             h('button', { type: 'button', onClick: () => setActionError(null), style: { background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' } }, '✕')
           ),
 
         // ====================================================================
-        // TAB 0: DASHBOARD (MATCHING IMAGE 2 EXACTLY)
+        // TAB 0: DASHBOARD
         // ====================================================================
         activeTab === 0 &&
           h(
             React.Fragment,
             null,
 
-            // Header Row (Title, Subtitle, and Action Buttons)
             h(
               'div',
               { className: 'adm-header-row' },
@@ -1078,10 +956,11 @@ export const Administrator = ({ initialTab = 0 }) => {
                   {
                     type: 'button',
                     onClick: handleRefresh,
+                    disabled: loading,
                     className: 'adm-btn-refresh',
                   },
                   h(SvgRefresh, null),
-                  'Refresh'
+                  loading ? 'Loading...' : 'Refresh'
                 ),
                 h(
                   'button',
@@ -1096,12 +975,11 @@ export const Administrator = ({ initialTab = 0 }) => {
               )
             ),
 
-            // 6 KPI Metric Cards in 3x2 Grid
+            // 6 KPI Metric Cards
             h(
               'div',
               { className: 'adm-kpi-grid' },
 
-              // Card 1: Total Users
               h(
                 'div',
                 { className: 'adm-kpi-card' },
@@ -1119,7 +997,6 @@ export const Administrator = ({ initialTab = 0 }) => {
                 )
               ),
 
-              // Card 2: Doctor Users
               h(
                 'div',
                 { className: 'adm-kpi-card' },
@@ -1137,7 +1014,6 @@ export const Administrator = ({ initialTab = 0 }) => {
                 )
               ),
 
-              // Card 3: Administrators
               h(
                 'div',
                 { className: 'adm-kpi-card' },
@@ -1155,7 +1031,6 @@ export const Administrator = ({ initialTab = 0 }) => {
                 )
               ),
 
-              // Card 4: Unmapped Doctor Accounts
               h(
                 'div',
                 { className: 'adm-kpi-card' },
@@ -1173,7 +1048,6 @@ export const Administrator = ({ initialTab = 0 }) => {
                 )
               ),
 
-              // Card 5: Doctor Master Records
               h(
                 'div',
                 { className: 'adm-kpi-card' },
@@ -1191,7 +1065,6 @@ export const Administrator = ({ initialTab = 0 }) => {
                 )
               ),
 
-              // Card 6: Active Locations
               h(
                 'div',
                 { className: 'adm-kpi-card' },
@@ -1210,62 +1083,64 @@ export const Administrator = ({ initialTab = 0 }) => {
               )
             ),
 
-            // Bottom Dual Panels (Role Distribution & Location Access)
+            // Bottom Dual Panels
             h(
               'div',
               { className: 'adm-panels-grid' },
 
-              // Left Panel: Users by Role Distribution
               h(
                 'div',
                 { className: 'adm-panel-card' },
                 h('h3', { className: 'adm-panel-title' }, 'Users by Role Distribution'),
                 h('p', { className: 'adm-panel-subtitle' }, 'Active RBAC role assignments across all system user accounts.'),
-                roleDistribution.map((role) =>
-                  h(
-                    'div',
-                    { key: role.name, className: 'adm-role-row' },
-                    h(
-                      'div',
-                      { className: 'adm-role-meta' },
-                      h('span', { className: 'adm-role-label' }, role.name),
-                      h('span', { className: 'adm-role-count' }, `${role.count} users (${role.percent}%)`)
-                    ),
-                    h(
-                      'div',
-                      { className: 'adm-progress-track' },
-                      h('div', {
-                        className: 'adm-progress-fill',
-                        style: { width: `${role.percent}%`, backgroundColor: role.color },
-                      })
+                roleDistribution.length === 0
+                  ? h('div', { className: 'adm-empty-state' }, 'No user role assignments available.')
+                  : roleDistribution.map((role) =>
+                      h(
+                        'div',
+                        { key: role.name, className: 'adm-role-row' },
+                        h(
+                          'div',
+                          { className: 'adm-role-meta' },
+                          h('span', { className: 'adm-role-label' }, role.name),
+                          h('span', { className: 'adm-role-count' }, `${role.count} users (${role.percent}%)`)
+                        ),
+                        h(
+                          'div',
+                          { className: 'adm-progress-track' },
+                          h('div', {
+                            className: 'adm-progress-fill',
+                            style: { width: `${role.percent}%`, backgroundColor: role.color },
+                          })
+                        )
+                      )
                     )
-                  )
-                )
               ),
 
-              // Right Panel: Users by Location Access
               h(
                 'div',
                 { className: 'adm-panel-card' },
                 h('h3', { className: 'adm-panel-title' }, 'Users by Location Access'),
                 h('p', { className: 'adm-panel-subtitle' }, 'Authorized personnel assignments across locations.'),
-                locations.slice(0, 5).map((loc) =>
-                  h(
-                    'div',
-                    { key: loc.id, className: 'adm-loc-row' },
-                    h(
-                      'div',
-                      null,
-                      h('div', { className: 'adm-loc-name' }, loc.name),
-                      h('div', { className: 'adm-loc-code' }, `${loc.code || 'LOC'} · ${loc.city || 'Facility'}, ${loc.state || 'Active'}`)
-                    ),
-                    h(
-                      'div',
-                      { className: 'adm-loc-badge' },
-                      `${loc.userCount || 2} Personnel`
+                locations.length === 0
+                  ? h('div', { className: 'adm-empty-state' }, 'No configured clinical locations.')
+                  : locations.slice(0, 5).map((loc) =>
+                      h(
+                        'div',
+                        { key: loc.id || loc.code, className: 'adm-loc-row' },
+                        h(
+                          'div',
+                          null,
+                          h('div', { className: 'adm-loc-name' }, loc.name || '—'),
+                          h('div', { className: 'adm-loc-code' }, [loc.code, loc.city, loc.state].filter(Boolean).join(' · ') || '—')
+                        ),
+                        h(
+                          'div',
+                          { className: 'adm-loc-badge' },
+                          `${loc.userCount ?? 0} Personnel`
+                        )
+                      )
                     )
-                  )
-                )
               )
             )
           ),
@@ -1330,83 +1205,89 @@ export const Administrator = ({ initialTab = 0 }) => {
                 h(
                   'tbody',
                   null,
-                  users
-                    .filter((u) => {
-                      if (!searchTerm) return true;
-                      const s = searchTerm.toLowerCase();
-                      return (
-                        (u.username && u.username.toLowerCase().includes(s)) ||
-                        (u.email && u.email.toLowerCase().includes(s)) ||
-                        (u.fullName && u.fullName.toLowerCase().includes(s))
-                      );
-                    })
-                    .map((user) =>
-                      h(
-                        'tr',
-                        { key: user.id },
-                        h(
-                          'td',
-                          null,
-                          h('div', { style: { fontWeight: 600, color: '#0f172a' } }, user.fullName || user.username),
-                          h('div', { style: { fontSize: 12, color: '#64748b' } }, `${user.username} · ${user.email}`)
-                        ),
-                        h(
-                          'td',
-                          null,
-                          (user.roles || ['ROLE_COORDINATOR']).map((r) =>
-                            h('span', { key: r, className: 'adm-pill adm-pill-blue', style: { marginRight: 4 } }, r.replace('ROLE_', ''))
-                          )
-                        ),
-                        h(
-                          'td',
-                          null,
-                          user.active !== false
-                            ? h('span', { className: 'adm-pill adm-pill-green' }, 'Active')
-                            : h('span', { className: 'adm-pill adm-pill-amber' }, 'Inactive')
-                        ),
-                        h(
-                          'td',
-                          null,
-                          (user.siteCodes || ['LOC-001']).map((s) =>
-                            h('span', { key: s, className: 'adm-pill adm-pill-slate', style: { marginRight: 4 } }, s)
-                          )
-                        ),
-                        h(
-                          'td',
-                          { style: { textAlign: 'right' } },
+                  users.length === 0
+                    ? h('tr', null, h('td', { colSpan: 5, className: 'adm-empty-state' }, loading ? 'Loading users...' : 'No users found.'))
+                    : users
+                        .filter((u) => {
+                          if (!searchTerm) return true;
+                          const s = searchTerm.toLowerCase();
+                          return (
+                            (u.username && u.username.toLowerCase().includes(s)) ||
+                            (u.email && u.email.toLowerCase().includes(s)) ||
+                            (u.fullName && u.fullName.toLowerCase().includes(s))
+                          );
+                        })
+                        .map((user) =>
                           h(
-                            'button',
-                            {
-                              type: 'button',
-                              onClick: () => handleResetPassword(user.id, user.username),
-                              className: 'adm-action-btn',
-                              style: { marginRight: 6 },
-                            },
-                            'Reset Pass'
-                          ),
-                          user.active !== false
-                            ? h(
+                            'tr',
+                            { key: user.id },
+                            h(
+                              'td',
+                              null,
+                              h('div', { style: { fontWeight: 600, color: '#0f172a' } }, user.fullName || user.username || '—'),
+                              h('div', { style: { fontSize: 12, color: '#64748b' } }, [user.username, user.email].filter(Boolean).join(' · ') || '—')
+                            ),
+                            h(
+                              'td',
+                              null,
+                              Array.isArray(user.roles) && user.roles.length > 0
+                                ? user.roles.map((r) =>
+                                    h('span', { key: r, className: 'adm-pill adm-pill-blue', style: { marginRight: 4 } }, String(r).replace('ROLE_', ''))
+                                  )
+                                : h('span', { className: 'adm-pill adm-pill-slate' }, 'None')
+                            ),
+                            h(
+                              'td',
+                              null,
+                              user.active !== false
+                                ? h('span', { className: 'adm-pill adm-pill-green' }, 'Active')
+                                : h('span', { className: 'adm-pill adm-pill-amber' }, 'Inactive')
+                            ),
+                            h(
+                              'td',
+                              null,
+                              Array.isArray(user.siteCodes) && user.siteCodes.length > 0
+                                ? user.siteCodes.map((s) =>
+                                    h('span', { key: s, className: 'adm-pill adm-pill-slate', style: { marginRight: 4 } }, s)
+                                  )
+                                : h('span', { style: { color: '#64748b', fontSize: 12 } }, '—')
+                            ),
+                            h(
+                              'td',
+                              { style: { textAlign: 'right' } },
+                              h(
                                 'button',
                                 {
                                   type: 'button',
-                                  onClick: () => handleDeactivateUser(user.id),
-                                  className: 'adm-action-btn adm-action-btn-danger',
-                                },
-                                'Deactivate'
-                              )
-                            : h(
-                                'button',
-                                {
-                                  type: 'button',
-                                  onClick: () => handleActivateUser(user.id),
+                                  onClick: () => handleResetPassword(user.id, user.username),
                                   className: 'adm-action-btn',
-                                  style: { color: '#059669', borderColor: '#a7f3d0' },
+                                  style: { marginRight: 6 },
                                 },
-                                'Activate'
-                              )
+                                'Reset Pass'
+                              ),
+                              user.active !== false
+                                ? h(
+                                    'button',
+                                    {
+                                      type: 'button',
+                                      onClick: () => handleDeactivateUser(user.id),
+                                      className: 'adm-action-btn adm-action-btn-danger',
+                                    },
+                                    'Deactivate'
+                                  )
+                                : h(
+                                    'button',
+                                    {
+                                      type: 'button',
+                                      onClick: () => handleActivateUser(user.id),
+                                      className: 'adm-action-btn',
+                                      style: { color: '#059669', borderColor: '#a7f3d0' },
+                                    },
+                                    'Activate'
+                                  )
+                            )
+                          )
                         )
-                      )
-                    )
                 )
               )
             )
@@ -1443,34 +1324,34 @@ export const Administrator = ({ initialTab = 0 }) => {
               )
             ),
 
-            // Role selection pills
             h(
               'div',
               { style: { display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, marginBottom: 16 } },
-              roles.map((role) =>
-                h(
-                  'button',
-                  {
-                    key: role.id || role.code,
-                    type: 'button',
-                    onClick: () => setSelectedRoleForPerms(role),
-                    style: {
-                      padding: '8px 16px',
-                      borderRadius: 10,
-                      border: selectedRoleForPerms?.code === role.code ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                      backgroundColor: selectedRoleForPerms?.code === role.code ? '#eff6ff' : '#ffffff',
-                      color: selectedRoleForPerms?.code === role.code ? '#1d4ed8' : '#334155',
-                      fontWeight: 600,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                    },
-                  },
-                  role.name
-                )
-              )
+              roles.length === 0
+                ? h('div', { className: 'adm-empty-state' }, 'No roles loaded from backend.')
+                : roles.map((role) =>
+                    h(
+                      'button',
+                      {
+                        key: role.id || role.code,
+                        type: 'button',
+                        onClick: () => setSelectedRoleForPerms(role),
+                        style: {
+                          padding: '8px 16px',
+                          borderRadius: 10,
+                          border: selectedRoleForPerms?.code === role.code ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                          backgroundColor: selectedRoleForPerms?.code === role.code ? '#eff6ff' : '#ffffff',
+                          color: selectedRoleForPerms?.code === role.code ? '#1d4ed8' : '#334155',
+                          fontWeight: 600,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                        },
+                      },
+                      role.name
+                    )
+                  )
             ),
 
-            // Permission Matrix Table
             h(
               'div',
               { className: 'adm-table-wrapper' },
@@ -1509,7 +1390,7 @@ export const Administrator = ({ initialTab = 0 }) => {
                         const key = `${selectedRoleForPerms?.code || 'ROLE'}:${mod.code}:${action}`;
                         const isChecked = rolePermissionsState[key] !== undefined
                           ? rolePermissionsState[key]
-                          : (isSuper || action === 'VIEW');
+                          : Boolean(isSuper);
 
                         return h(
                           'td',
@@ -1517,7 +1398,7 @@ export const Administrator = ({ initialTab = 0 }) => {
                           h('input', {
                             type: 'checkbox',
                             checked: isChecked,
-                            disabled: isSuper,
+                            disabled: isSuper || !selectedRoleForPerms,
                             onChange: () => {
                               setRolePermissionsState((prev) => ({
                                 ...prev,
@@ -1586,70 +1467,75 @@ export const Administrator = ({ initialTab = 0 }) => {
                 h(
                   'tbody',
                   null,
-                  doctorUsers.map((docUser) => {
-                    const currentMapping = doctorMappings.find((m) => String(m.userId) === String(docUser.id));
-                    const selectedMasterId = mappingSelects[docUser.id] || doctorMasters[0]?.id;
+                  doctorUsers.length === 0
+                    ? h('tr', null, h('td', { colSpan: 4, className: 'adm-empty-state' }, 'No doctor user accounts found.'))
+                    : doctorUsers.map((docUser) => {
+                        const currentMapping = doctorMappings.find((m) => String(m.userId) === String(docUser.id));
+                        const selectedMasterId = mappingSelects[docUser.id] || doctorMasters[0]?.id || '';
 
-                    return h(
-                      'tr',
-                      { key: docUser.id },
-                      h(
-                        'td',
-                        null,
-                        h('div', { style: { fontWeight: 600, color: '#0f172a' } }, docUser.fullName || docUser.username),
-                        h('div', { style: { fontSize: 12, color: '#64748b' } }, docUser.email)
-                      ),
-                      h(
-                        'td',
-                        null,
-                        currentMapping
-                          ? h('span', { style: { fontWeight: 600, color: '#0369a1' } }, currentMapping.providerName)
-                          : h(
-                              'select',
-                              {
-                                value: selectedMasterId,
-                                onChange: (e) =>
-                                  setMappingSelects((prev) => ({ ...prev, [docUser.id]: e.target.value })),
-                                style: { padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 },
-                              },
-                              doctorMasters.map((dm) =>
-                                h('option', { key: dm.id, value: dm.id }, `${dm.name} (${dm.code})`)
-                              )
-                            )
-                      ),
-                      h(
-                        'td',
-                        null,
-                        currentMapping
-                          ? h('span', { className: 'adm-pill adm-pill-green' }, 'Mapped')
-                          : h('span', { className: 'adm-pill adm-pill-amber' }, 'Unmapped')
-                      ),
-                      h(
-                        'td',
-                        { style: { textAlign: 'right' } },
-                        currentMapping
-                          ? h(
-                              'button',
-                              {
-                                type: 'button',
-                                onClick: () => handleUnmapDoctor(docUser.id),
-                                className: 'adm-action-btn adm-action-btn-danger',
-                              },
-                              'Unmap'
-                            )
-                          : h(
-                              'button',
-                              {
-                                type: 'button',
-                                onClick: () => handleMapDoctor(docUser.id, selectedMasterId),
-                                className: 'adm-action-btn',
-                                style: { color: '#0284c7', borderColor: '#38bdf8', fontWeight: 600 },
-                              },
-                              'Map Doctor'
-                            )
-                      )
-                    );
-                  })
+                        return h(
+                          'tr',
+                          { key: docUser.id },
+                          h(
+                            'td',
+                            null,
+                            h('div', { style: { fontWeight: 600, color: '#0f172a' } }, docUser.fullName || docUser.username || '—'),
+                            h('div', { style: { fontSize: 12, color: '#64748b' } }, docUser.email || '—')
+                          ),
+                          h(
+                            'td',
+                            null,
+                            currentMapping
+                              ? h('span', { style: { fontWeight: 600, color: '#0369a1' } }, currentMapping.providerName || '—')
+                              : h(
+                                  'select',
+                                  {
+                                    value: selectedMasterId,
+                                    onChange: (e) =>
+                                      setMappingSelects((prev) => ({ ...prev, [docUser.id]: e.target.value })),
+                                    style: { padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 },
+                                  },
+                                  doctorMasters.length === 0
+                                    ? h('option', { value: '' }, 'No doctor master records available')
+                                    : doctorMasters.map((dm) =>
+                                        h('option', { key: dm.id, value: dm.id }, `${dm.name}${dm.code ? ` (${dm.code})` : ''}`)
+                                      )
+                                )
+                          ),
+                          h(
+                            'td',
+                            null,
+                            currentMapping
+                              ? h('span', { className: 'adm-pill adm-pill-green' }, 'Mapped')
+                              : h('span', { className: 'adm-pill adm-pill-amber' }, 'Unmapped')
+                          ),
+                          h(
+                            'td',
+                            { style: { textAlign: 'right' } },
+                            currentMapping
+                              ? h(
+                                  'button',
+                                  {
+                                    type: 'button',
+                                    onClick: () => handleUnmapDoctor(docUser.id),
+                                    className: 'adm-action-btn adm-action-btn-danger',
+                                  },
+                                  'Unmap'
+                                )
+                              : h(
+                                  'button',
+                                  {
+                                    type: 'button',
+                                    disabled: !selectedMasterId,
+                                    onClick: () => handleMapDoctor(docUser.id, selectedMasterId),
+                                    className: 'adm-action-btn',
+                                    style: { color: '#0284c7', borderColor: '#38bdf8', fontWeight: 600 },
+                                  },
+                                  'Map Doctor'
+                                )
+                          )
+                        );
+                      })
                 )
               )
             )
@@ -1677,65 +1563,69 @@ export const Administrator = ({ initialTab = 0 }) => {
                 h(
                   'select',
                   {
-                    value: selectedUserForLocations?.id || users[0]?.id,
+                    value: selectedUserForLocations?.id || users[0]?.id || '',
                     onChange: (e) => {
                       const u = users.find((usr) => String(usr.id) === String(e.target.value));
                       setSelectedUserForLocations(u || null);
-                      setUserAssignedLocations([1, 2]);
+                      setUserAssignedLocations([]);
                     },
                     style: { padding: '8px 14px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, fontWeight: 600 },
                   },
-                  users.map((u) =>
-                    h('option', { key: u.id, value: u.id }, `${u.fullName || u.username} (${u.username})`)
-                  )
+                  users.length === 0
+                    ? h('option', { value: '' }, 'No users available')
+                    : users.map((u) =>
+                        h('option', { key: u.id, value: u.id }, `${u.fullName || u.username} (${u.username})`)
+                      )
                 )
               )
             ),
-            h(
-              'div',
-              { className: 'adm-kpi-grid', style: { marginTop: 16 } },
-              locations.map((loc) => {
-                const isAssigned = userAssignedLocations.includes(Number(loc.id));
-                return h(
+            locations.length === 0
+              ? h('div', { className: 'adm-empty-state' }, 'No clinical locations available.')
+              : h(
                   'div',
-                  {
-                    key: loc.id,
-                    className: 'adm-kpi-card',
-                    style: {
-                      border: isAssigned ? '1.5px solid #3b82f6' : '1px solid #e2e8f0',
-                      backgroundColor: isAssigned ? '#f0f9ff' : '#ffffff',
-                      cursor: 'pointer',
-                    },
-                    onClick: () => {
-                      setUserAssignedLocations((prev) =>
-                        prev.includes(Number(loc.id))
-                          ? prev.filter((id) => id !== Number(loc.id))
-                          : [...prev, Number(loc.id)]
-                      );
-                    },
-                  },
-                  h(
-                    'div',
-                    null,
-                    h('div', { style: { fontWeight: 700, fontSize: 14, color: '#0f172a' } }, loc.name),
-                    h('div', { style: { fontSize: 12, color: '#64748b', marginTop: 2 } }, `${loc.code} · ${loc.city}, ${loc.state}`),
-                    h(
+                  { className: 'adm-kpi-grid', style: { marginTop: 16 } },
+                  locations.map((loc) => {
+                    const isAssigned = userAssignedLocations.includes(Number(loc.id));
+                    return h(
                       'div',
-                      { style: { marginTop: 8 } },
-                      isAssigned
-                        ? h('span', { className: 'adm-pill adm-pill-blue' }, 'Authorized')
-                        : h('span', { className: 'adm-pill adm-pill-slate' }, 'No Access')
-                    )
-                  ),
-                  h('input', {
-                    type: 'checkbox',
-                    checked: isAssigned,
-                    onChange: () => {},
-                    style: { width: 18, height: 18, accentColor: '#2563eb' },
+                      {
+                        key: loc.id || loc.code,
+                        className: 'adm-kpi-card',
+                        style: {
+                          border: isAssigned ? '1.5px solid #3b82f6' : '1px solid #e2e8f0',
+                          backgroundColor: isAssigned ? '#f0f9ff' : '#ffffff',
+                          cursor: 'pointer',
+                        },
+                        onClick: () => {
+                          setUserAssignedLocations((prev) =>
+                            prev.includes(Number(loc.id))
+                              ? prev.filter((id) => id !== Number(loc.id))
+                              : [...prev, Number(loc.id)]
+                          );
+                        },
+                      },
+                      h(
+                        'div',
+                        null,
+                        h('div', { style: { fontWeight: 700, fontSize: 14, color: '#0f172a' } }, loc.name || '—'),
+                        h('div', { style: { fontSize: 12, color: '#64748b', marginTop: 2 } }, [loc.code, loc.city, loc.state].filter(Boolean).join(' · ') || '—'),
+                        h(
+                          'div',
+                          { style: { marginTop: 8 } },
+                          isAssigned
+                            ? h('span', { className: 'adm-pill adm-pill-blue' }, 'Authorized')
+                            : h('span', { className: 'adm-pill adm-pill-slate' }, 'No Access')
+                        )
+                      ),
+                      h('input', {
+                        type: 'checkbox',
+                        checked: isAssigned,
+                        onChange: () => {},
+                        style: { width: 18, height: 18, accentColor: '#2563eb' },
+                      })
+                    );
                   })
-                );
-              })
-            ),
+                ),
             h(
               'div',
               { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 16 } },
@@ -1801,31 +1691,33 @@ export const Administrator = ({ initialTab = 0 }) => {
                 h(
                   'tbody',
                   null,
-                  auditLogs
-                    .filter((log) => {
-                      if (!auditSearch) return true;
-                      const s = auditSearch.toLowerCase();
-                      return (
-                        (log.action && log.action.toLowerCase().includes(s)) ||
-                        (log.performedByUsername && log.performedByUsername.toLowerCase().includes(s)) ||
-                        (log.details && log.details.toLowerCase().includes(s))
-                      );
-                    })
-                    .map((log) =>
-                      h(
-                        'tr',
-                        { key: log.id },
-                        h('td', { style: { fontSize: 12, color: '#64748b' } }, log.createdAt || '2026-10-02 06:30:12'),
-                        h(
-                          'td',
-                          null,
-                          h('span', { className: 'adm-pill adm-pill-purple' }, log.action)
-                        ),
-                        h('td', { style: { fontWeight: 600 } }, log.performedByUsername || 'admin'),
-                        h('td', null, log.details || 'Security action logged'),
-                        h('td', { style: { textAlign: 'right', fontSize: 12, color: '#64748b' } }, log.ipAddress || '127.0.0.1')
-                      )
-                    )
+                  auditLogs.length === 0
+                    ? h('tr', null, h('td', { colSpan: 5, className: 'adm-empty-state' }, loading ? 'Loading audit trail...' : 'No audit events recorded.'))
+                    : auditLogs
+                        .filter((log) => {
+                          if (!auditSearch) return true;
+                          const s = auditSearch.toLowerCase();
+                          return (
+                            (log.action && log.action.toLowerCase().includes(s)) ||
+                            (log.performedByUsername && log.performedByUsername.toLowerCase().includes(s)) ||
+                            (log.details && log.details.toLowerCase().includes(s))
+                          );
+                        })
+                        .map((log) =>
+                          h(
+                            'tr',
+                            { key: log.id },
+                            h('td', { style: { fontSize: 12, color: '#64748b' } }, log.createdAt || '—'),
+                            h(
+                              'td',
+                              null,
+                              h('span', { className: 'adm-pill adm-pill-purple' }, log.action || '—')
+                            ),
+                            h('td', { style: { fontWeight: 600 } }, log.performedByUsername || '—'),
+                            h('td', null, log.details || '—'),
+                            h('td', { style: { textAlign: 'right', fontSize: 12, color: '#64748b' } }, log.ipAddress || '—')
+                          )
+                        )
                 )
               )
             )
@@ -1862,7 +1754,7 @@ export const Administrator = ({ initialTab = 0 }) => {
                 h('input', {
                   type: 'text',
                   required: true,
-                  placeholder: 'e.g. dr.smith',
+                  placeholder: 'Enter username',
                   value: newUserForm.username,
                   onChange: (e) => setNewUserForm({ ...newUserForm, username: e.target.value }),
                   className: 'adm-search-input',
@@ -1876,7 +1768,7 @@ export const Administrator = ({ initialTab = 0 }) => {
                 h('input', {
                   type: 'email',
                   required: true,
-                  placeholder: 'e.g. dsmith@enrollnow.local',
+                  placeholder: 'Enter email address',
                   value: newUserForm.email,
                   onChange: (e) => setNewUserForm({ ...newUserForm, email: e.target.value }),
                   className: 'adm-search-input',
@@ -1968,19 +1860,29 @@ export const Administrator = ({ initialTab = 0 }) => {
           h(
             'form',
             {
-              onSubmit: (e) => {
+              onSubmit: async (e) => {
                 e.preventDefault();
                 if (!newRoleForm.code || !newRoleForm.name) return;
-                const created = {
-                  id: Date.now(),
-                  code: newRoleForm.code.toUpperCase().startsWith('ROLE_') ? newRoleForm.code.toUpperCase() : `ROLE_${newRoleForm.code.toUpperCase()}`,
-                  name: newRoleForm.name,
-                  description: newRoleForm.description,
-                };
-                setRoles((prev) => [...prev, created]);
-                setShowCreateRoleModal(false);
-                setNewRoleForm({ code: '', name: '', description: '' });
-                notifySuccess(`Custom role ${created.name} created.`);
+                if (!api?.createRole) {
+                  notifyError('Role creation endpoint is not configured.');
+                  return;
+                }
+                try {
+                  const normalizedCode = newRoleForm.code.toUpperCase().startsWith('ROLE_')
+                    ? newRoleForm.code.toUpperCase()
+                    : `ROLE_${newRoleForm.code.toUpperCase()}`;
+                  await api.createRole({
+                    code: normalizedCode,
+                    name: newRoleForm.name,
+                    description: newRoleForm.description,
+                  });
+                  await loadData();
+                  setShowCreateRoleModal(false);
+                  setNewRoleForm({ code: '', name: '', description: '' });
+                  notifySuccess(`Custom role ${newRoleForm.name} created.`);
+                } catch {
+                  notifyError('Failed to create custom role.');
+                }
               },
             },
             h(

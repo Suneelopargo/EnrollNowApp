@@ -120,16 +120,18 @@ describe('Study Settings → Details Functional Component Tests', () => {
   });
 
   describe('Short Study Name & Date Validation Logic', () => {
-    it('validates short study name length (<= 15 characters) and alphanumeric characters', () => {
+    it('validates short study name length (<= 15 characters) and allows letters, numbers, spaces, hyphens, and underscores', () => {
       const isValidShortName = (name: string) => {
         const trimmed = name.trim();
         if (!trimmed) return false;
         if (trimmed.length > 15) return false;
-        return /^[a-zA-Z0-9 ]+$/.test(trimmed);
+        return /^[a-zA-Z0-9 _-]+$/.test(trimmed);
       };
 
       expect(isValidShortName('CardioTrial')).toBe(true);
       expect(isValidShortName('Short 123')).toBe(true);
+      expect(isValidShortName('GEN-01')).toBe(true);
+      expect(isValidShortName('STUDY_2026')).toBe(true);
       expect(isValidShortName('')).toBe(false);
       expect(isValidShortName('ThisNameIsMuchTooLongForShortName')).toBe(false);
       expect(isValidShortName('Invalid@Name!')).toBe(false);

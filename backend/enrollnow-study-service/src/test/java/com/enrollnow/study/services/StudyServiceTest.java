@@ -231,19 +231,22 @@ class StudyServiceTest {
     void toSummaryResponseList_batchQueries_preventsNPlusOne() {
         Study study1 = new Study();
         study1.setId(studyId);
+        study1.setTenantId(tenantId);
         study1.setName("Study 1");
 
         UUID otherId = UUID.randomUUID();
         Study study2 = new Study();
         study2.setId(otherId);
+        study2.setTenantId(tenantId);
         study2.setName("Study 2");
 
-        when(studyMemberRepository.findByIdStudyIdIn(anyCollection())).thenReturn(List.of());
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdIn(eq(tenantId), anyCollection())).thenReturn(List.of());
 
         List<StudySummaryResponse> summaries = studyService.toSummaryResponseList(List.of(study1, study2));
 
         assertEquals(2, summaries.size());
-        verify(studyMemberRepository, times(1)).findByIdStudyIdIn(anyCollection());
+        verify(studyMemberRepository, times(1)).findByTenantIdAndIdStudyIdIn(eq(tenantId), anyCollection());
+        verify(studyMemberRepository, never()).findByIdStudyIdIn(anyCollection());
         verify(studyMemberRepository, never()).findByTenantIdAndIdStudyId(any(), any());
     }
 
@@ -1292,5 +1295,98 @@ class StudyServiceTest {
                 AccessDeniedException.class,
                 () -> studyService.createBulkTask(tenantId, studyId.toString(), "grp-1", req, userId, false)
         );
+    }
+
+    @Test
+    void toSummaryResponseList_doesNotFabricateEmailOrNameOrSampleSize_andEnforcesTenantIsolation() {
+        com.enrollnow.identity.repositories.UserEmailRepository userEmailRepository =
+                mock(com.enrollnow.identity.repositories.UserEmailRepository.class);
+        studyService.setUserEmailRepository(userEmailRepository);
+
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setName("GEN-01");
+        study.setStudyCode("GEN-01");
+        study.setSampleSize(null);
+
+        UUID memberWithEmailId = UUID.randomUUID();
+        UUID memberWithoutProfileId = UUID.randomUUID();
+
+        com.enrollnow.study.models.StudyMember m1 = new com.enrollnow.study.models.StudyMember();
+        m1.setId(new com.enrollnow.study.models.StudyMemberId(studyId, memberWithEmailId));
+        m1.setTenantId(tenantId);
+        m1.setStudyRole("Coordinator");
+
+        com.enrollnow.study.models.StudyMember m2 = new com.enrollnow.study.models.StudyMember();
+        m2.setId(new com.enrollnow.study.models.StudyMemberId(studyId, memberWithoutProfileId));
+        m2.setTenantId(tenantId);
+        m2.setStudyRole("Investigator");
+
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdIn(eq(tenantId), anyCollection()))
+                .thenReturn(List.of(m1, m2));
+
+        com.enrollnow.identity.models.User u1 = new com.enrollnow.identity.models.User();
+        u1.setId(memberWithEmailId);
+        u1.setTenantId(tenantId);
+        u1.setFirstName("Alice");
+        u1.setLastName("Smith");
+
+        when(userRepository.findByTenantIdAndIdIn(eq(tenantId), anyCollection()))
+                .thenReturn(List.of(u1));
+
+        com.enrollnow.identity.models.UserEmail ue1 = new com.enrollnow.identity.models.UserEmail();
+        ue1.setTenantId(tenantId);
+        ue1.setUserId(memberWithEmailId);
+        ue1.setEmail("alice.smith@hospital.org");
+        ue1.setPrimaryEmail(true);
+
+        when(userEmailRepository.findByTenantIdAndUserIdInAndPrimaryEmailTrue(eq(tenantId), anyCollection()))
+                .thenReturn(List.of(ue1));
+
+        List<StudySummaryResponse> summaries = studyService.toSummaryResponseList(List.of(study));
+        assertEquals(1, summaries.size());
+
+        StudySummaryResponse summary = summaries.get(0);
+        assertNull(summary.getSampleSize(), "Missing sampleSize must remain null and not default to 100");
+        assertNull(summary.getTargetEnrollment(), "Missing targetEnrollment must remain null and not default to 100");
+        assertNull(summary.getEnrolled(), "Missing enrolled count must remain null");
+
+        assertEquals(2, summary.getAdmins().size());
+        StudyAdminSummary admin1 = summary.getAdmins().get(0);
+        assertEquals("Alice Smith", admin1.getName());
+        assertEquals("alice.smith@hospital.org", admin1.getEmail());
+        assertEquals("AS", admin1.getInitials());
+
+        StudyAdminSummary admin2 = summary.getAdmins().get(1);
+        assertNull(admin2.getName(), "Missing user profile name must remain null");
+        assertNull(admin2.getEmail(), "Missing user email must remain null and never fabricate @enrollnow.local");
+        assertNull(admin2.getInitials());
+
+        verify(userRepository, never()).findAllById(any());
+        verify(studyMemberRepository, never()).findByIdStudyIdIn(any());
+    }
+
+    @Test
+    void validateStudyName_andUpdateStudyDetails_acceptsHyphenatedNameLikeGen01() {
+        when(studyRepository.existsByTenantIdAndNameIgnoreCase(tenantId, "GEN-01")).thenReturn(false);
+        assertDoesNotThrow(() -> studyService.validateStudyName(tenantId, "GEN-01"));
+        assertDoesNotThrow(() -> studyService.validateStudyName(tenantId, "STUDY_02"));
+
+        assertThrows(InvalidStudyException.class, () -> studyService.validateStudyName(tenantId, "INVALID@NAME"));
+
+        Study existing = new Study();
+        existing.setId(studyId);
+        existing.setTenantId(tenantId);
+        existing.setName("OldName");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(existing));
+        when(studyRepository.save(any(Study.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateStudyDetailsRequest req = new UpdateStudyDetailsRequest(
+                "GEN-01", "Genetics Study 01", "Desc", "IRB-01",
+                null, null, null, true, null, null, null
+        );
+        StudyDetailsResponse updated = studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, true);
+        assertEquals("GEN-01", updated.getName());
     }
 }

@@ -4,6 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StudyModule } from '../remoteEntry';
 import { StudyDirectory } from '../components/StudyDirectory';
+import { StudyDashboardTab } from '../components/StudyDashboardTab';
 import { studyApi } from '../../../../shared/api/studyApi';
 
 // Mock react-router-dom hooks
@@ -219,6 +220,23 @@ describe('Study Workspace & Dynamic Study Selection Navigation Workflow', () => 
       expect(html).toContain('Select a study to continue');
       expect(html).toContain('Use Select Study in the top navigation');
       expect(html).toContain('Add Study');
+    });
+
+    it('renders "Target not set" and "—" in StudyDashboardTab when targetCount and recruitmentProgress are null', () => {
+      const html = renderToStaticMarkup(
+        <StudyDashboardTab
+          selectedStudy={{ id: 'study-no-target', name: 'No Target Study', status: 'ACTIVE', sampleSize: null, targetEnrollment: null }}
+          recruitedCount={0}
+          targetCount={null}
+          recruitmentProgress={null}
+          weeklyRecruitment={[]}
+          weeklyMaximum={1}
+        />
+      );
+
+      expect(html).toContain('Target not set');
+      expect(html).toContain('—');
+      expect(html).not.toContain('of 100 target');
     });
   });
 });

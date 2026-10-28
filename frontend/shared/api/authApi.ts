@@ -411,10 +411,10 @@ export const authApi = {
 
     const data = res.data.data;
     const token = data.accessToken || data.token;
-    const rawUser = data.user || {
+    const rawUser = data.user; if (!rawUser) { throw new Error('Authentication failed: Missing user in server response'); } const unusedFallback = {
       id: 1,
       username,
-      email: `${username}@enrollnow.local`,
+      email: '',
       roles: ['ROLE_SUPER_ADMIN'],
     };
 

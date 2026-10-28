@@ -4,8 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { MfeContext } from '../../../shared/contracts';
 import { Plus, ShieldAlert, AlertTriangle, ArrowLeftRight, ChevronDown, Check } from 'lucide-react';
 import { dashboardApi } from '../../../shared/api/dashboardApi';
-import { participantApi } from '../../../shared/api/participantApi';
-import { studyApi, StudyNavigationPermissions } from '../../../shared/api/studyApi';
+import { participantApi, Participant } from '../../../shared/api/participantApi';
+import { studyApi, Study, StudyNavigationPermissions, StudyApiRequestConfig } from '../../../shared/api/studyApi';
 import { AddStudyModal } from '../../../shared/design-system/components/AddStudyModal';
 import {
   StudyNavigation,
@@ -24,8 +24,8 @@ export interface StudyModuleProps {
 }
 
 export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
-  const [studies, setStudies] = useState<any[]>([]);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [studies, setStudies] = useState<Study[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddStudy, setShowAddStudy] = useState(false);
   const [isStudySwitcherOpen, setIsStudySwitcherOpen] = useState(false);
@@ -95,45 +95,52 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       setLoading(true);
     }
     try {
-      const reqConfig = isSilent
-        ? ({ skipToast: true, skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any)
-        : ({ skipToast: true } as any);
+      const reqConfig: StudyApiRequestConfig = isSilent
+        ? { skipToast: true, skipLoader: true, headers: { 'x-skip-loader': 'true' } }
+        : { skipToast: true };
       const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
         studyApi.getStudies(reqConfig),
         dashboardApi.getOverview(reqConfig),
         participantApi.getParticipants(reqConfig),
       ]);
-      const registryStudies =
+      const registryStudies: Study[] =
         studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value) ? studiesRes.value : [];
-      const overviewStudies =
-        overviewRes.status === 'fulfilled' ? overviewRes.value?.recentStudies || [] : [];
-      const getStudyIdentifiers = (study: any) =>
+      const overviewStudies: Array<Record<string, unknown>> =
+        overviewRes.status === 'fulfilled' && Array.isArray(overviewRes.value?.recentStudies)
+          ? (overviewRes.value.recentStudies as Array<Record<string, unknown>>)
+          : [];
+      const getStudyIdentifiers = (study: Record<string, unknown>) =>
         [study.id, study.studyId, study.protocolId, study.protocolNumber, study.studyCode]
           .filter((value) => value !== undefined && value !== null)
           .map(String);
-      const sourceStudies = registryStudies.length > 0 ? registryStudies : overviewStudies;
-      const mergedStudies = sourceStudies.map((study: any) => {
+      // Authoritative study list comes strictly from studyApi.getStudies() (/api/v1/studies).
+      // Overview studies only enrich matching study records and never fabricate studies when registryStudies is empty.
+      const sourceStudies = registryStudies;
+      const mergedStudies: Study[] = sourceStudies.map((study) => {
         const ids = getStudyIdentifiers(study);
-        const overviewStudy = overviewStudies.find((item: any) =>
+        const overviewStudy = overviewStudies.find((item) =>
           getStudyIdentifiers(item).some((id: string) => ids.includes(id))
         );
+        const rawEnrolled =
+          study.enrolled ??
+          study.enrolledParticipants ??
+          (typeof overviewStudy?.enrolled === 'number' ? overviewStudy.enrolled : undefined) ??
+          (typeof overviewStudy?.enrolledParticipants === 'number' ? overviewStudy.enrolledParticipants : undefined) ??
+          null;
+        const rawTarget =
+          study.targetEnrollment ??
+          study.sampleSize ??
+          study.targetParticipants ??
+          (typeof overviewStudy?.targetEnrollment === 'number' ? overviewStudy.targetEnrollment : undefined) ??
+          (typeof overviewStudy?.sampleSize === 'number' ? overviewStudy.sampleSize : undefined) ??
+          null;
         return {
           ...overviewStudy,
           ...study,
-          title: study.title || study.name || overviewStudy?.title || overviewStudy?.name || 'Untitled Study',
-          name: study.name || study.title || overviewStudy?.name || overviewStudy?.title || 'Untitled Study',
-          enrolled:
-            study.enrolled ??
-            study.enrolledParticipants ??
-            overviewStudy?.enrolled ??
-            overviewStudy?.enrolledParticipants ??
-            0,
-          targetEnrollment:
-            study.targetEnrollment ??
-            study.sampleSize ??
-            study.targetParticipants ??
-            overviewStudy?.targetEnrollment ??
-            100,
+          title: String(study.title || study.name || overviewStudy?.title || overviewStudy?.name || 'Untitled Study'),
+          name: String(study.name || study.title || overviewStudy?.name || overviewStudy?.title || 'Untitled Study'),
+          enrolled: typeof rawEnrolled === 'number' ? rawEnrolled : null,
+          targetEnrollment: typeof rawTarget === 'number' ? rawTarget : null,
         };
       });
       setStudies(mergedStudies);
@@ -176,10 +183,11 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
           setIsAccessDenied(false);
           setPermissionsError(null);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!isCancelled) {
           setPermissions(null);
-          const status = err?.status || err?.response?.status;
+          const errObj = err as { status?: number; response?: { status?: number } };
+          const status = errObj?.status || errObj?.response?.status;
           if (status === 403) {
             setIsAccessDenied(true);
             setPermissionsError(
@@ -212,11 +220,11 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
     () =>
       data.map((study) => ({
         ...study,
-        protocolId: study.protocolId ?? study.protocolNumber ?? study.studyCode ?? study.id,
+        protocolId: String(study.protocolId ?? study.protocolNumber ?? study.studyCode ?? study.id ?? ''),
         targetParticipants:
-          study.targetParticipants ?? study.targetEnrollment ?? study.sampleSize ?? study.target ?? 100,
-        enrolledParticipants: study.enrolledParticipants ?? study.enrolled ?? 0,
-        siteCount: study.siteCount ?? 0,
+          study.targetParticipants ?? study.targetEnrollment ?? study.sampleSize ?? null,
+        enrolledParticipants: study.enrolledParticipants ?? study.enrolled ?? null,
+        siteCount: study.siteCount ?? null,
       })),
     [data]
   );
@@ -276,6 +284,7 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
           participant.enrolledAt
       )
       .forEach((participant) => {
+        if (!participant.enrolledAt) return;
         const date = new Date(participant.enrolledAt);
         if (Number.isNaN(date.getTime())) return;
         const weekStart = new Date(date);
@@ -303,15 +312,17 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       ? activeEnrolledCount
       : Math.max(0, Number(selectedStudy?.enrolled ?? selectedStudy?.enrolledParticipants) || 0);
 
-  const targetCount = Math.max(
-    0,
-    Number(
-      selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants ?? selectedStudy?.sampleSize
-    ) || 100
-  );
+  const rawTargetCount =
+    selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants ?? selectedStudy?.sampleSize;
+  const targetCount: number | null =
+    typeof rawTargetCount === 'number' && !Number.isNaN(rawTargetCount) && rawTargetCount > 0
+      ? rawTargetCount
+      : null;
 
-  const recruitmentProgress =
-    targetCount > 0 ? Math.min(100, Math.round((recruitedCount / targetCount) * 100)) : 0;
+  const recruitmentProgress: number | null =
+    targetCount !== null && targetCount > 0
+      ? Math.min(100, Math.round((recruitedCount / targetCount) * 100))
+      : null;
   const weeklyMaximum = Math.max(1, ...weeklyRecruitment.map((entry) => entry.count));
 
   // Resolved title and protocol

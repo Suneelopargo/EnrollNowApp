@@ -7,6 +7,7 @@ import com.enrollnow.identity.repositories.PermissionRepository;
 import com.enrollnow.identity.repositories.RolePermissionRepository;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.TeamMembershipRepository;
+import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
 import com.enrollnow.study.dtos.CopyStudyRequest;
@@ -80,6 +81,9 @@ public class StudyService {
     private UserRepository userRepository;
 
     @Autowired(required = false)
+    private UserEmailRepository userEmailRepository;
+
+    @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
 
     @Autowired(required = false)
@@ -131,6 +135,11 @@ public class StudyService {
     @Autowired(required = false)
     public void setUserRepository(UserRepository userRepository) {
         this.userRepository = userRepository;
+    }
+
+    @Autowired(required = false)
+    public void setUserEmailRepository(UserEmailRepository userEmailRepository) {
+        this.userEmailRepository = userEmailRepository;
     }
 
     @Autowired(required = false)
@@ -461,7 +470,7 @@ public class StudyService {
 
         Integer sampleSize = (request != null && request.getSampleSize() != null && request.getSampleSize() > 0)
                 ? request.getSampleSize()
-                : 100;
+                : null;
 
         Study study = new Study();
         study.setTenantId(effectiveTenantId);
@@ -520,7 +529,7 @@ public class StudyService {
         newStudy.setDescription("Copy of " + source.getName());
         newStudy.setLongName(source.getLongName());
         newStudy.setPrefix(source.getPrefix());
-        newStudy.setSampleSize(source.getSampleSize() != null ? source.getSampleSize() : 100);
+        newStudy.setSampleSize(source.getSampleSize());
         newStudy.setLocale(source.getLocale());
         newStudy.setAllowParticipationInOtherStudies(source.isAllowParticipationInOtherStudies());
         newStudy.setShowGlobalComments(source.isShowGlobalComments());
@@ -566,7 +575,7 @@ public class StudyService {
         String trimmedName = studyName.trim();
         String newCode = generateUniqueStudyCode(effectiveTenantId, trimmedName);
 
-        int sampleSize = 100;
+        Integer sampleSize = null;
         if (dataJSON.get("studyRequirements") instanceof Map<?, ?> reqMap && reqMap.get("sampleSize") instanceof Number n) {
             sampleSize = n.intValue();
         } else if (dataJSON.get("sampleSize") instanceof Number n) {
@@ -620,6 +629,12 @@ public class StudyService {
         if (request != null) {
             if (request.getName() != null && !request.getName().isBlank()) {
                 String newName = request.getName().trim();
+                if (newName.length() > 15) {
+                    throw new InvalidStudyException("Short study name must not exceed 15 characters");
+                }
+                if (!newName.matches("^[a-zA-Z0-9 _-]+$")) {
+                    throw new InvalidStudyException("Short study name may only contain letters, numbers, spaces, hyphens, and underscores");
+                }
                 if (!newName.equalsIgnoreCase(study.getName())) {
                     validateStudyName(study.getTenantId(), newName);
                 }
@@ -750,8 +765,8 @@ public class StudyService {
         if (newName.length() > 15) {
             throw new InvalidStudyException("Short Study Name must be 15 characters or less.");
         }
-        if (!newName.matches("^[a-zA-Z0-9 ]+$")) {
-            throw new InvalidStudyException("Short Study Name may only contain alphanumeric characters and spaces.");
+        if (!newName.matches("^[a-zA-Z0-9 _-]+$")) {
+            throw new InvalidStudyException("Short Study Name may only contain letters, numbers, spaces, hyphens, and underscores.");
         }
         if (!newName.equalsIgnoreCase(study.getName())) {
             validateStudyName(study.getTenantId(), newName);
@@ -1331,11 +1346,20 @@ public class StudyService {
                 .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
 
         UUID sId = study.getId();
+        UUID effectiveTenantId = study.getTenantId() != null ? study.getTenantId() : tenantId;
         if (studyMemberRepository != null) {
-            studyMemberRepository.deleteByIdStudyId(sId);
+            if (effectiveTenantId != null) {
+                studyMemberRepository.deleteByTenantIdAndIdStudyId(effectiveTenantId, sId);
+            } else {
+                studyMemberRepository.deleteByIdStudyId(sId);
+            }
         }
         if (teamStudyRepository != null) {
-            teamStudyRepository.deleteByIdStudyId(sId);
+            if (effectiveTenantId != null) {
+                teamStudyRepository.deleteByTenantIdAndIdStudyId(effectiveTenantId, sId);
+            } else {
+                teamStudyRepository.deleteByIdStudyId(sId);
+            }
         }
         if (studyRequirementRepository != null) {
             studyRequirementRepository.deleteById(sId);
@@ -1350,6 +1374,9 @@ public class StudyService {
         String trimmed = name.trim();
         if (trimmed.length() > 15) {
             throw new InvalidStudyException("Short study name must not exceed 15 characters");
+        }
+        if (!trimmed.matches("^[a-zA-Z0-9 _-]+$")) {
+            throw new InvalidStudyException("Short study name may only contain letters, numbers, spaces, hyphens, and underscores");
         }
         if (studyRepository != null && tenantId != null && studyRepository.existsByTenantIdAndNameIgnoreCase(tenantId, trimmed)) {
             throw new DuplicateStudyNameException("Study name already exists. Please choose another");
@@ -1445,35 +1472,72 @@ public class StudyService {
             return Collections.emptyList();
         }
 
-        List<UUID> studyIds = studyList.stream()
-                .map(Study::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        Map<UUID, List<Study>> studiesByTenant = new LinkedHashMap<>();
+        for (Study s : studyList) {
+            if (s != null && s.getId() != null && s.getTenantId() != null) {
+                studiesByTenant.computeIfAbsent(s.getTenantId(), k -> new ArrayList<>()).add(s);
+            }
+        }
 
         Map<UUID, List<StudyMember>> membersByStudyId = new HashMap<>();
-        Map<UUID, com.enrollnow.identity.models.User> usersById = new HashMap<>();
+        Map<UUID, Map<UUID, com.enrollnow.identity.models.User>> usersByTenantAndId = new HashMap<>();
+        Map<UUID, Map<UUID, String>> primaryEmailByTenantAndUserId = new HashMap<>();
 
-        if (studyMemberRepository != null && !studyIds.isEmpty()) {
-            List<StudyMember> allMembers = studyMemberRepository.findByIdStudyIdIn(studyIds);
-            for (StudyMember m : allMembers) {
-                if (m.getId() != null && m.getId().getStudyId() != null) {
-                    membersByStudyId.computeIfAbsent(m.getId().getStudyId(), k -> new ArrayList<>()).add(m);
+        for (Map.Entry<UUID, List<Study>> entry : studiesByTenant.entrySet()) {
+            UUID tenantId = entry.getKey();
+            List<Study> tenantStudies = entry.getValue();
+            List<UUID> tenantStudyIds = tenantStudies.stream()
+                    .map(Study::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            Set<UUID> tenantUserIds = new LinkedHashSet<>();
+            tenantStudies.stream()
+                    .map(Study::getCreatedBy)
+                    .filter(Objects::nonNull)
+                    .forEach(tenantUserIds::add);
+
+            if (studyMemberRepository != null && !tenantStudyIds.isEmpty()) {
+                List<StudyMember> tenantMembers = studyMemberRepository.findByTenantIdAndIdStudyIdIn(tenantId, tenantStudyIds);
+                if (tenantMembers != null) {
+                    for (StudyMember m : tenantMembers) {
+                        if (m != null && m.getId() != null && m.getId().getStudyId() != null
+                                && (m.getTenantId() == null || tenantId.equals(m.getTenantId()))) {
+                            membersByStudyId.computeIfAbsent(m.getId().getStudyId(), k -> new ArrayList<>()).add(m);
+                            if (m.getId().getUserId() != null) {
+                                tenantUserIds.add(m.getId().getUserId());
+                            }
+                        }
+                    }
                 }
             }
 
-            if (userRepository != null) {
-                Set<UUID> userIds = allMembers.stream()
-                        .map(m -> m.getId() != null ? m.getId().getUserId() : null)
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toSet());
+            if (userRepository != null && !tenantUserIds.isEmpty()) {
+                List<com.enrollnow.identity.models.User> tenantUsers =
+                        userRepository.findByTenantIdAndIdIn(tenantId, tenantUserIds);
+                if (tenantUsers != null) {
+                    Map<UUID, com.enrollnow.identity.models.User> userMap =
+                            usersByTenantAndId.computeIfAbsent(tenantId, k -> new HashMap<>());
+                    for (com.enrollnow.identity.models.User u : tenantUsers) {
+                        if (u != null && u.getId() != null && (u.getTenantId() == null || tenantId.equals(u.getTenantId()))) {
+                            userMap.put(u.getId(), u);
+                        }
+                    }
+                }
+            }
 
-                studyList.stream()
-                        .map(Study::getCreatedBy)
-                        .filter(Objects::nonNull)
-                        .forEach(userIds::add);
-
-                if (!userIds.isEmpty()) {
-                    userRepository.findAllById(userIds).forEach(u -> usersById.put(u.getId(), u));
+            if (userEmailRepository != null && !tenantUserIds.isEmpty()) {
+                List<com.enrollnow.identity.models.UserEmail> tenantEmails =
+                        userEmailRepository.findByTenantIdAndUserIdInAndPrimaryEmailTrue(tenantId, tenantUserIds);
+                if (tenantEmails != null) {
+                    Map<UUID, String> emailMap =
+                            primaryEmailByTenantAndUserId.computeIfAbsent(tenantId, k -> new HashMap<>());
+                    for (com.enrollnow.identity.models.UserEmail ue : tenantEmails) {
+                        if (ue != null && ue.getUserId() != null && ue.getEmail() != null && !ue.getEmail().isBlank()
+                                && (ue.getTenantId() == null || tenantId.equals(ue.getTenantId()))) {
+                            emailMap.put(ue.getUserId(), ue.getEmail().trim());
+                        }
+                    }
                 }
             }
         }
@@ -1487,55 +1551,68 @@ public class StudyService {
                     s.getDescription(),
                     s.isArchived()
             );
-            int sample = s.getSampleSize() != null ? s.getSampleSize() : 100;
-            res.setSampleSize(sample);
+            res.setSampleSize(s.getSampleSize());
             // No fabricated or synthetic enrollment values - represented as unrecorded/null
             res.setEnrolled(null);
             res.setStartDate(s.getRecruitmentStartDate());
             res.setEndDate(s.getRecruitmentEndDate());
+
+            UUID studyTenantId = s.getTenantId();
+            Map<UUID, com.enrollnow.identity.models.User> tenantUsers =
+                    studyTenantId != null ? usersByTenantAndId.getOrDefault(studyTenantId, Collections.emptyMap()) : Collections.emptyMap();
+            Map<UUID, String> tenantEmails =
+                    studyTenantId != null ? primaryEmailByTenantAndUserId.getOrDefault(studyTenantId, Collections.emptyMap()) : Collections.emptyMap();
 
             List<StudyAdminSummary> adminList = new ArrayList<>();
             List<StudyMember> members = membersByStudyId.getOrDefault(s.getId(), Collections.emptyList());
             for (StudyMember m : members) {
                 if (m.getId() != null && m.getId().getUserId() != null) {
                     UUID uid = m.getId().getUserId();
-                    String name = "User " + uid.toString().substring(0, 4);
-                    String email = uid + "@enrollnow.local";
-                    String initials = "U";
-                    com.enrollnow.identity.models.User u = usersById.get(uid);
+                    com.enrollnow.identity.models.User u = tenantUsers.get(uid);
+                    String name = null;
+                    String initials = null;
                     if (u != null) {
                         String first = u.getFirstName() != null ? u.getFirstName().trim() : "";
                         String last = u.getLastName() != null ? u.getLastName().trim() : "";
-                        name = (first + " " + last).trim();
-                        if (name.isEmpty()) {
-                            name = "User " + uid.toString().substring(0, 4);
+                        String fullName = (first + " " + last).trim();
+                        if (!fullName.isEmpty()) {
+                            name = fullName;
                         }
-                        initials = "";
-                        if (!first.isEmpty()) initials += Character.toUpperCase(first.charAt(0));
-                        if (!last.isEmpty()) initials += Character.toUpperCase(last.charAt(0));
-                        if (initials.isEmpty() && !name.isEmpty()) initials = ("" + Character.toUpperCase(name.charAt(0)));
+                        StringBuilder initBuilder = new StringBuilder();
+                        if (!first.isEmpty()) initBuilder.append(Character.toUpperCase(first.charAt(0)));
+                        if (!last.isEmpty()) initBuilder.append(Character.toUpperCase(last.charAt(0)));
+                        if (initBuilder.length() > 0) {
+                            initials = initBuilder.toString();
+                        }
                     }
-                    adminList.add(new StudyAdminSummary(uid, name, email, initials.isEmpty() ? "U" : initials, m.getStudyRole()));
+                    String email = tenantEmails.get(uid);
+                    adminList.add(new StudyAdminSummary(uid, name, email, initials, m.getStudyRole()));
                 }
             }
 
             if (adminList.isEmpty() && s.getCreatedBy() != null) {
                 UUID uid = s.getCreatedBy();
-                String name = "Admin";
-                String email = uid + "@enrollnow.local";
-                String initials = "AD";
-                com.enrollnow.identity.models.User u = usersById.get(uid);
+                com.enrollnow.identity.models.User u = tenantUsers.get(uid);
+                String name = null;
+                String initials = null;
                 if (u != null) {
                     String first = u.getFirstName() != null ? u.getFirstName().trim() : "";
                     String last = u.getLastName() != null ? u.getLastName().trim() : "";
-                    name = (first + " " + last).trim();
-                    if (name.isEmpty()) name = "Admin " + uid.toString().substring(0, 4);
-                    initials = "";
-                    if (!first.isEmpty()) initials += Character.toUpperCase(first.charAt(0));
-                    if (!last.isEmpty()) initials += Character.toUpperCase(last.charAt(0));
-                    if (initials.isEmpty() && !name.isEmpty()) initials = ("" + Character.toUpperCase(name.charAt(0)));
+                    String fullName = (first + " " + last).trim();
+                    if (!fullName.isEmpty()) {
+                        name = fullName;
+                    }
+                    StringBuilder initBuilder = new StringBuilder();
+                    if (!first.isEmpty()) initBuilder.append(Character.toUpperCase(first.charAt(0)));
+                    if (!last.isEmpty()) initBuilder.append(Character.toUpperCase(last.charAt(0)));
+                    if (initBuilder.length() > 0) {
+                        initials = initBuilder.toString();
+                    }
                 }
-                adminList.add(new StudyAdminSummary(uid, name, email, initials.isEmpty() ? "AD" : initials, "STUDY_ADMIN"));
+                String email = tenantEmails.get(uid);
+                if (u != null || email != null) {
+                    adminList.add(new StudyAdminSummary(uid, name, email, initials, "STUDY_ADMIN"));
+                }
             }
             res.setAdmins(adminList);
             results.add(res);
@@ -1550,7 +1627,7 @@ public class StudyService {
     }
 
     private Optional<Study> findStudyByIdOrCode(UUID tenantId, String studyId) {
-        if (studyId == null || studyId.isBlank()) {
+        if (tenantId == null || studyId == null || studyId.isBlank()) {
             return Optional.empty();
         }
 
@@ -1561,23 +1638,13 @@ public class StudyService {
         }
 
         if (idUuid != null) {
-            if (tenantId != null) {
-                Optional<Study> byId = studyRepository.findByTenantIdAndId(tenantId, idUuid);
-                if (byId.isPresent()) {
-                    return byId;
-                }
-            } else {
-                Optional<Study> byId = studyRepository.findById(idUuid);
-                if (byId.isPresent()) {
-                    return byId;
-                }
+            Optional<Study> byId = studyRepository.findByTenantIdAndId(tenantId, idUuid);
+            if (byId.isPresent()) {
+                return byId;
             }
         }
 
-        if (tenantId != null) {
-            return studyRepository.findByTenantIdAndStudyCode(tenantId, studyId.trim());
-        }
-        return Optional.empty();
+        return studyRepository.findByTenantIdAndStudyCode(tenantId, studyId.trim());
     }
 
 

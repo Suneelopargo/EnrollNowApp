@@ -51,15 +51,7 @@ export const RemoteLoader: React.FC<RemoteLoaderProps> = ({ remoteId }) => {
 
       if (eventType === 'LOGIN_SUCCESS') {
         const authToken = payload?.token || getAccessToken();
-        let authUser = payload?.user;
-        if (!authUser && payload?.username) {
-          authUser = {
-            id: 1,
-            username: payload.username,
-            email: `${payload.username}@enrollnow.local`,
-            roles: ['ROLE_SUPER_ADMIN'],
-          };
-        }
+        const authUser = payload?.user;
         if (authUser && authToken) {
           setSession(authUser, authToken);
         }

@@ -203,11 +203,12 @@ class StudyCopyAndImportControllerTest {
     }
 
     @Test
-    @DisplayName("ImportStudyRequest deserialization supports aliases: studyData, data, payload, configuration")
+    @DisplayName("ImportStudyRequest deserialization supports aliases: studyData, data, payload, configuration, study")
     void importStudyRequest_supportsAllAliases() throws Exception {
-        for (String alias : List.of("studyData", "data", "payload", "configuration")) {
-            String json = String.format("{\"studyName\":\"TestStudy\",\"%s\":{\"key\":\"val\"}}", alias);
+        for (String alias : List.of("studyData", "data", "payload", "configuration", "study")) {
+            String json = String.format("{\"studyName\":\"GEN-01\",\"%s\":{\"key\":\"val\"}}", alias);
             ImportStudyRequest req = objectMapper.readValue(json, ImportStudyRequest.class);
+            assertEquals("GEN-01", req.getStudyName());
             assertNotNull(req.getStudyData(), "Alias " + alias + " should populate studyData");
             assertEquals("val", req.getStudyData().get("key"));
         }
@@ -256,5 +257,19 @@ class StudyCopyAndImportControllerTest {
 
         assertThrows(AccessDeniedException.class, () ->
                 studyController.copyStudy(tenantId, body));
+    }
+
+    @Test
+    @DisplayName("copyStudy when caller has no tenant claim rejects request-supplied tenantId")
+    void copyStudy_missingCallerTenant_throwsAccessDeniedException() {
+        SiteAuthorizationService.CallerIdentity callerWithoutTenant =
+                new SiteAuthorizationService.CallerIdentity(userId, null);
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(callerWithoutTenant));
+
+        CopyStudyRequest body = new CopyStudyRequest("GEN-01", "source-study-id");
+
+        assertThrows(AccessDeniedException.class, () ->
+                studyController.copyStudy(tenantId, body));
+        verify(studyService, never()).copyStudy(any(), any(), any());
     }
 }

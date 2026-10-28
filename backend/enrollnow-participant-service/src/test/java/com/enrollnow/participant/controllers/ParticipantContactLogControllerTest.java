@@ -72,6 +72,16 @@ class ParticipantContactLogControllerTest {
     }
 
     @Test
+    void getContactLogs_missingCallerTenantClaim_rejectsQueryTenantId() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, null)));
+
+        assertThrows(AccessDeniedException.class, () ->
+                controller.getContactLogs(participantId, tenantId, null, null)
+        );
+    }
+
+    @Test
     void createContactLog_validPayload_returnsCreated() {
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));

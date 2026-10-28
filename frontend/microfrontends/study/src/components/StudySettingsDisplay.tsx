@@ -109,10 +109,11 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
     try {
       const data = await studyApi.getStudyDisplaySettings(studyId);
       applyResponseState(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const maybeErr = err as { response?: { data?: { message?: string } }; message?: string };
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
+        maybeErr?.response?.data?.message ||
+        maybeErr?.message ||
         'Failed to load study display settings.';
       setLoadError(msg);
     } finally {
@@ -135,10 +136,11 @@ export const StudySettingsDisplay: React.FC<StudySettingsDisplayProps> = ({
       applyResponseState(updated);
       toast.success(successMessage);
       onStudyUpdated?.();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const maybeErr = err as { response?: { data?: { message?: string } }; message?: string };
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
+        maybeErr?.response?.data?.message ||
+        maybeErr?.message ||
         'Failed to update display settings.';
       toast.error(msg);
       // Roll back optimistic UI changes to the last persisted server state.

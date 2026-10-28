@@ -49,18 +49,16 @@ public class ParticipantRegistryController {
     }
 
     private UUID resolveTenantId(UUID queryTenantId) {
+        siteAuthorizationService.requireTenantMatch(queryTenantId);
         SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
                 .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to access Registry resources"));
-        if (caller.tenantId() != null) {
-            if (queryTenantId != null && !caller.tenantId().equals(queryTenantId)) {
-                throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
-            }
-            return caller.tenantId();
+        if (caller.tenantId() == null) {
+            throw new AccessDeniedException("Authenticated caller is not associated with any tenant");
         }
-        if (queryTenantId != null) {
-            return queryTenantId;
+        if (queryTenantId != null && !caller.tenantId().equals(queryTenantId)) {
+            throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
         }
-        throw new AccessDeniedException("Authenticated caller is not associated with any tenant");
+        return caller.tenantId();
     }
 
     private UUID resolveUserId() {

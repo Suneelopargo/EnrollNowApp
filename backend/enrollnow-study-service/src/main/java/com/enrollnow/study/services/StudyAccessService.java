@@ -1,44 +1,38 @@
 package com.enrollnow.study.services;
 
-import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
-
 import com.enrollnow.common.audit.AuditChange;
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
-
-import java.util.Map;
-import com.enrollnow.identity.repositories.RoleRepository;
-import com.enrollnow.identity.repositories.UserRepository;
-import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
-import com.enrollnow.identity.services.SiteAuthorizationService;
-import com.enrollnow.identity.services.SitePermissionService;
-import com.enrollnow.study.repositories.StudyMemberRepository;
-import com.enrollnow.study.repositories.StudyRepository;
-import com.enrollnow.study.exceptions.StudyNotFoundException;
-
-import com.enrollnow.study.dtos.GrantStudyAccessRequest;
+import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.exceptions.InvalidRoleAssignmentException;
 import com.enrollnow.identity.exceptions.RoleNotFoundException;
 import com.enrollnow.identity.exceptions.UserNotFoundException;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
+import com.enrollnow.identity.repositories.RoleRepository;
+import com.enrollnow.identity.repositories.UserRepository;
+import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
+import com.enrollnow.identity.services.SiteAuthorizationService;
+import com.enrollnow.identity.services.SitePermissionService;
+import com.enrollnow.study.dtos.GrantStudyAccessRequest;
+import com.enrollnow.study.exceptions.StudyNotFoundException;
+import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.models.StudyMemberId;
-import com.enrollnow.study.models.Study;
-
+import com.enrollnow.study.repositories.StudyMemberRepository;
+import com.enrollnow.study.repositories.StudyRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
-
-import org.springframework.stereotype.Service;
 
 @Service
 public class StudyAccessService {
@@ -79,23 +73,38 @@ public class StudyAccessService {
             UUID studyId,
             UUID targetUserId
     ) {
+        if (tenantId == null || studyId == null || targetUserId == null) {
+            throw new AccessDeniedException("Access denied: tenant, study, and target user context are required");
+        }
         if (siteAuthorizationService == null || sitePermissionService == null) {
             throw new AccessDeniedException("Access denied: authorization service is not configured");
         }
         SiteAuthorizationService.CallerIdentity caller = siteAuthorizationService.getAuthenticatedCaller()
                 .orElseThrow(() -> new InsufficientAuthenticationException("Authentication is required to modify study access"));
+        if (caller.userId() == null || caller.tenantId() == null) {
+            throw new AccessDeniedException("Access denied: incomplete caller security context");
+        }
         siteAuthorizationService.requireTenantMatch(tenantId);
 
         UserEffectivePermissionsResponse callerEffective =
                 sitePermissionService.resolveEffectivePermissions(tenantId, caller.userId(), null);
+        if (callerEffective == null) {
+            throw new AccessDeniedException("Access denied: unable to resolve caller permissions");
+        }
 
         // 1. SITE_ADMIN has full study access management across the site
         if (callerEffective.isCanManageSiteAdmins()
-                || callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE)) {
+                || (callerEffective.getPermissions() != null
+                && callerEffective.getPermissions().contains(SitePermissionService.PERM_SITE_ALL_STUDIES_MANAGE))) {
             return;
         }
 
-        // 2. STUDY_ADMIN on this specific study can manage study access
+        // Non-Site-Admin callers can never grant or modify their own study access
+        if (caller.userId().equals(targetUserId)) {
+            throw new AccessDeniedException("Access denied: users cannot modify their own study access");
+        }
+
+        // 2. STUDY_ADMIN on this specific study can manage study access for other users
         OffsetDateTime now = OffsetDateTime.now();
         List<UserRoleAssignment> callerStudyAssignments =
                 userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
@@ -113,9 +122,6 @@ public class StudyAccessService {
 
         // 3. SITE_MANAGER can manage study access on studies where they are an active member (and not modifying themselves)
         if (SitePermissionService.ROLE_SITE_MANAGER.equalsIgnoreCase(callerEffective.getSiteRole())) {
-            if (caller.userId().equals(targetUserId)) {
-                throw new AccessDeniedException("Access denied: Site Managers cannot modify their own study access");
-            }
             boolean isMemberOfStudy = studyMemberRepository
                     .findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, caller.userId())
                     .map(StudyMember::isActive)
@@ -128,7 +134,7 @@ public class StudyAccessService {
 
         throw new AccessDeniedException("Access denied: insufficient permissions to modify study access");
     }
-    
+
     @Transactional
     public void grantStudyAccess(
             UUID tenantId,
@@ -194,7 +200,7 @@ public class StudyAccessService {
         );
 
         studyMemberRepository.save(studyMember);
-        
+
         List<UserRoleAssignment> activeStudyAssignments =
                 userRoleAssignmentRepository
                         .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
@@ -241,12 +247,12 @@ public class StudyAccessService {
                                     null,
                                     Map.of(
                                             "studyId", studyId,
-                                            "studyName", study.getName(),
+                                            "studyName", study.getName() != null ? study.getName() : "",
                                             "studyPermission", previousRoleCode
                                     ),
                                     Map.of(
                                             "studyId", studyId,
-                                            "studyName", study.getName(),
+                                            "studyName", study.getName() != null ? study.getName() : "",
                                             "studyPermission", role.getCode()
                                     ),
                                     List.of(
@@ -286,12 +292,12 @@ public class StudyAccessService {
                                 null,
                                 Map.of(
                                         "studyId", studyId,
-                                        "studyName", study.getName(),
+                                        "studyName", study.getName() != null ? study.getName() : "",
                                         "studyPermission", "NONE"
                                 ),
                                 Map.of(
                                         "studyId", studyId,
-                                        "studyName", study.getName(),
+                                        "studyName", study.getName() != null ? study.getName() : "",
                                         "studyPermission", role.getCode()
                                 ),
                                 List.of(
@@ -306,7 +312,7 @@ public class StudyAccessService {
             }
         }
     }
-    
+
     @Transactional
     public void removeStudyAccess(
             UUID tenantId,
@@ -365,12 +371,12 @@ public class StudyAccessService {
                                 null,
                                 Map.of(
                                         "studyId", studyId,
-                                        "studyName", study.getName(),
+                                        "studyName", study.getName() != null ? study.getName() : "",
                                         "studyPermission", previousRoleCode
                                 ),
                                 Map.of(
                                         "studyId", studyId,
-                                        "studyName", study.getName(),
+                                        "studyName", study.getName() != null ? study.getName() : "",
                                         "studyPermission", "NONE"
                                 ),
                                 List.of(

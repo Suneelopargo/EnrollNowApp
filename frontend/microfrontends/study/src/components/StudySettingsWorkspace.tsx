@@ -6,6 +6,7 @@ import { StudySettingsBulkTasks } from './StudySettingsBulkTasks';
 import { StudySettingsEmailAndText } from './StudySettingsEmailAndText';
 import { StudySettingsRequirements } from './StudySettingsRequirements';
 import { ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { requestConfirmation } from '../../../../shared/confirmation';
 
 export interface StudySettingsWorkspaceProps {
   studyId: string;
@@ -42,12 +43,17 @@ export const StudySettingsWorkspace: React.FC<StudySettingsWorkspaceProps> = ({
   const [isSchedulingOpen, setIsSchedulingOpen] = useState(true);
   const [isDetailsDirty, setIsDetailsDirty] = useState(false);
 
-  const handleSubmenuSelect = (target: StudySettingsSubmenuId) => {
+  const handleSubmenuSelect = async (target: StudySettingsSubmenuId) => {
     if (target === activeSubmenu) return;
     if (activeSubmenu === 'details' && isDetailsDirty) {
-      const proceed = window.confirm(
-        'You have unsaved changes in Study Details. Are you sure you want to discard your changes and leave?'
-      );
+      const proceed = await requestConfirmation({
+        title: 'Discard Unsaved Changes?',
+        message:
+          'You have unsaved changes in Study Details. Are you sure you want to discard your changes and leave?',
+        confirmText: 'Discard Changes',
+        cancelText: 'Stay',
+        intent: 'warning',
+      });
       if (!proceed) return;
     }
     // Note: 'participants_requirements' automatically persists uncommitted changes on leave/unmount

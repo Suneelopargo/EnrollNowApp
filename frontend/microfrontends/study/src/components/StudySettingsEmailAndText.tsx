@@ -158,8 +158,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       setStudyEvents(data.events || []);
       setTextMessagingEnabled(data.textMessagingEnabled ?? true);
       setServerCanManage(data.canManage ?? true);
-    } catch (err: any) {
-      setLoadError(err?.message || 'Failed to load email and text templates.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      setLoadError(maybeErr?.message || 'Failed to load email and text templates.');
     } finally {
       setLoading(false);
     }
@@ -232,7 +233,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
     const sa = template.scheduledAction;
     if (sa && (sa.action || sa.schedule)) {
       setEmailScheduleEnabled(true);
-      setEmailScheduleTriggerType((sa.action?.actionTriggerType as any) || 'event');
+      setEmailScheduleTriggerType(sa.action?.actionTriggerType === 'variable' ? 'variable' : 'event');
       setEmailScheduleTriggerId(sa.action?.actionTriggerId || studyEvents[0]?._id || '');
       setEmailScheduleInterval(sa.schedule?.relativeInterval ?? 1);
       setEmailScheduleUnit(sa.schedule?.relativeUnit || 'days');
@@ -342,8 +343,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       }
       updateSnapshot(updatedSnapshot);
       setEmailModalOpen(false);
-    } catch (err: any) {
-      setEmailModalError(err?.message || 'Failed to save email template.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      setEmailModalError(maybeErr?.message || 'Failed to save email template.');
     } finally {
       setSubmitting(false);
     }
@@ -374,7 +376,7 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
     const sa = template.scheduledAction;
     if (sa && (sa.action || sa.schedule)) {
       setTextScheduleEnabled(true);
-      setTextScheduleTriggerType((sa.action?.actionTriggerType as any) || 'event');
+      setTextScheduleTriggerType(sa.action?.actionTriggerType === 'variable' ? 'variable' : 'event');
       setTextScheduleTriggerId(sa.action?.actionTriggerId || studyEvents[0]?._id || '');
       setTextScheduleInterval(sa.schedule?.relativeInterval ?? 1);
       setTextScheduleUnit(sa.schedule?.relativeUnit || 'days');
@@ -479,8 +481,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       }
       updateSnapshot(updatedSnapshot);
       setTextModalOpen(false);
-    } catch (err: any) {
-      setTextModalError(err?.message || 'Failed to save text template.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      setTextModalError(maybeErr?.message || 'Failed to save text template.');
     } finally {
       setSubmitting(false);
     }
@@ -494,8 +497,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       const updated = await studyApi.copyEmailTemplate(studyId, template._id);
       updateSnapshot(updated);
       toast.success(`Template copy created for "${template.name}".`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Template copy could not be created.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      toast.error(maybeErr?.message || 'Template copy could not be created.');
     } finally {
       setSubmitting(false);
     }
@@ -508,8 +512,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       const updated = await studyApi.copyTextTemplate(studyId, template._id);
       updateSnapshot(updated);
       toast.success(`Template copy created for "${template.name}".`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Template copy could not be created.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      toast.error(maybeErr?.message || 'Template copy could not be created.');
     } finally {
       setSubmitting(false);
     }
@@ -563,8 +568,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
 
       updateSnapshot(updated);
       setConfirmModalOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || `Failed to ${confirmAction} template.`);
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      toast.error(maybeErr?.message || `Failed to ${confirmAction} template.`);
     } finally {
       setSubmitting(false);
     }
@@ -582,8 +588,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       setSubmitting(true);
       const updated = await studyApi.reorderEmailTemplates(studyId, templateIds);
       updateSnapshot(updated);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to reorder email templates.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      toast.error(maybeErr?.message || 'Failed to reorder email templates.');
     } finally {
       setSubmitting(false);
     }
@@ -601,8 +608,9 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       setSubmitting(true);
       const updated = await studyApi.reorderTextTemplates(studyId, templateIds);
       updateSnapshot(updated);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to reorder text templates.');
+    } catch (err: unknown) {
+      const maybeErr = err as { message?: string };
+      toast.error(maybeErr?.message || 'Failed to reorder text templates.');
     } finally {
       setSubmitting(false);
     }

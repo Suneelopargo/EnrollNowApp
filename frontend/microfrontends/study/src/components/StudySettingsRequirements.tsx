@@ -228,6 +228,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   }, [onDirtyChange]);
 
   // Operation-level persistence helper (replaces page-level dirty/save workflow)
+  const extractApiErrorMessage = (err: unknown, fallback: string): string => {
+    const apiErr = err as { response?: { data?: { message?: string } }; message?: string };
+    return apiErr?.response?.data?.message || apiErr?.message || fallback;
+  };
+
   const persistPartial = useCallback(
     async (
       partial: Parameters<typeof studyApi.updateStudyRequirements>[1],
@@ -239,7 +244,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         const updated = await studyApi.updateStudyRequirements(studyId, partial, {
           skipLoader: true,
           headers: { 'x-skip-loader': 'true' },
-        } as any);
+        });
         if (partial.sampleSize !== undefined) {
           setSampleSize(updated.sampleSize ?? '');
           setLastSavedSampleSize(updated.sampleSize ?? '');
@@ -272,9 +277,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
           toast.success(successMsg);
         }
         return true;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to persist requirements operation:', err);
-        toast.error(err?.response?.data?.message || err?.message || 'Failed to save changes.');
+        toast.error(extractApiErrorMessage(err, 'Failed to save changes.'));
         return false;
       } finally {
         setIsSavingOperation(false);
@@ -294,7 +299,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
               studyGroups: studyGroupsRef.current,
               customVariables: customVariablesRef.current,
             },
-            { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any
+            { skipLoader: true, headers: { 'x-skip-loader': 'true' } }
           )
           .then(() => {
             toast.success('Study requirements auto-saved.');
@@ -314,7 +319,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       const data: StudyRequirementsData = await studyApi.getStudyRequirements(studyId, {
         skipLoader: true,
         headers: { 'x-skip-loader': 'true' },
-      } as any);
+      });
       const sSize = data.sampleSize ?? '';
       setSampleSize(sSize);
       setLastSavedSampleSize(sSize);
@@ -335,9 +340,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setUnlockedVariableIds(new Set());
       isDirtyRef.current = false;
       onDirtyChangeRef.current?.(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load study requirements:', err);
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to load study requirements.');
+      toast.error(extractApiErrorMessage(err, 'Failed to load study requirements.'));
     } finally {
       setLoading(false);
     }
@@ -381,7 +386,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         milestoneDate: newMilestoneDate,
         participantTarget: target,
         description: newMilestoneDesc.trim() || undefined,
-      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } });
       setMilestones((prev) => [...prev, newM].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate)));
       setShowAddMilestoneModal(false);
       setNewMilestoneDate('');
@@ -389,8 +394,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setNewMilestoneDesc('');
       toast.success('Recruitment milestone added.');
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, 'Failed to add milestone.'));
     } finally {
       setIsSavingOperation(false);
     }
@@ -416,7 +421,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         milestoneDate: editMilestoneDate,
         participantTarget: target,
         description: editMilestoneDesc.trim() || undefined,
-      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } });
       setMilestones((prev) =>
         prev
           .map((m) => (m.id === editingMilestone.id ? updated : m))
@@ -425,8 +430,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setEditingMilestone(null);
       toast.success('Milestone updated.');
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, 'Failed to update milestone.'));
     } finally {
       setIsSavingOperation(false);
     }
@@ -443,12 +448,12 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       const newM = await studyApi.addStudyMilestone(studyId, {
         milestoneDate: today,
         participantTarget: 0,
-      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } });
       setMilestones((prev) => [...prev, newM].sort((a, b) => a.milestoneDate.localeCompare(b.milestoneDate)));
       toast.success('Recruitment milestone added.');
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to add milestone.');
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, 'Failed to add milestone.'));
     } finally {
       setIsSavingOperation(false);
     }
@@ -467,7 +472,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         milestoneDate: newDate,
         participantTarget: newTarget,
         description: m.description,
-      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
+      }, { skipLoader: true, headers: { 'x-skip-loader': 'true' } });
       setMilestones((prev) =>
         prev
           .map((item) => (item.id === m.id ? updated : item))
@@ -475,8 +480,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       );
       toast.success('Milestone updated.');
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to update milestone.');
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, 'Failed to update milestone.'));
     } finally {
       setIsSavingOperation(false);
     }
@@ -485,13 +490,13 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const handleDeleteMilestoneDirect = async (milestoneId: string) => {
     try {
       setIsSavingOperation(true);
-      await studyApi.deleteStudyMilestone(studyId, milestoneId, { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any);
+      await studyApi.deleteStudyMilestone(studyId, milestoneId, { skipLoader: true, headers: { 'x-skip-loader': 'true' } });
       setMilestones((prev) => prev.filter((m) => m.id !== milestoneId));
       setConfirmDeleteModal(null);
       toast.success('Milestone deleted.');
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to delete milestone.');
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, 'Failed to delete milestone.'));
     } finally {
       setIsSavingOperation(false);
     }
@@ -835,7 +840,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       const added = await studyApi.addGlobalVariableToStudy(studyId, globalVar.id, {
         skipLoader: true,
         headers: { 'x-skip-loader': 'true' },
-      } as any);
+      });
       const updatedVars = [...customVariables, added];
       const updatedLayout: StudyLayoutItem[] = [
         ...layout,
@@ -844,7 +849,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       await studyApi.updateStudyRequirements(
         studyId,
         { customVariableLayout: updatedLayout },
-        { skipLoader: true, headers: { 'x-skip-loader': 'true' } } as any
+        { skipLoader: true, headers: { 'x-skip-loader': 'true' } }
       );
       setCustomVariables(updatedVars);
       customVariablesRef.current = updatedVars;
@@ -852,8 +857,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setShowAddGlobalVarModal(false);
       toast.success(`Global variable "${added.name}" added to study.`);
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to add global variable.');
+    } catch (err: unknown) {
+      toast.error(extractApiErrorMessage(err, 'Failed to add global variable.'));
     } finally {
       setIsSavingOperation(false);
     }
@@ -1230,41 +1235,19 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
               <FolderPlus size={13} />
             </button>
             {assignGroupVarId === (variable.id || variable.name) && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '24px',
-                  left: '10px',
-                  zIndex: 100,
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  padding: '10px',
-                  minWidth: '200px',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                }}
-              >
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+              <div className="cv-assign-dropdown">
+                <div className="cv-assign-dropdown__title">
                   Assign to Group:
                 </div>
                 {variableGroups.length === 0 ? (
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>No groups created yet.</div>
+                  <div className="cv-assign-dropdown__empty">No groups created yet.</div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div className="cv-assign-dropdown__list">
                     {variableGroups.map((g) => (
                       <button
                         key={g.id}
                         type="button"
-                        style={{
-                          padding: '6px 10px',
-                          fontSize: '13px',
-                          textAlign: 'left',
-                          background: '#f8fafc',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          color: '#1e293b',
-                        }}
+                        className="cv-assign-dropdown__item"
                         onClick={() => {
                           handleAssignVariableToGroup(variable.id!, g.id!);
                           setAssignGroupVarId(null);
@@ -1276,17 +1259,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     {isInsideGroup && (
                       <button
                         type="button"
-                        style={{
-                          padding: '6px 10px',
-                          fontSize: '12px',
-                          textAlign: 'left',
-                          background: '#fee2e2',
-                          border: '1px solid #fca5a5',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          color: '#991b1b',
-                          marginTop: '4px',
-                        }}
+                        className="cv-assign-dropdown__remove"
                         onClick={() => {
                           handleAssignVariableToGroup(variable.id!, '');
                           setAssignGroupVarId(null);
@@ -1434,15 +1407,14 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   </div>
                 ))
               ) : (
-                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>
+                <div className="cv-options-empty">
                   No options defined yet.
                 </div>
               )}
 
               {!locked && canManageSettings && !isArchived && (
                 <div
-                  className="btn-add-item"
-                  style={{ marginTop: '6px', marginBottom: 0 }}
+                  className="btn-add-item btn-add-item--option"
                   onClick={() => handleAddOptionInline(variable.id!)}
                 >
                   Add option
@@ -1486,14 +1458,13 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         </div>
 
         {!collapsedSections.sample && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '60px', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div className="sample-req-layout">
             <div className="req-field">
               <label className="field-label">Sample Size (N)</label>
               <input
                 type="number"
                 min="0"
-                className="group-input sample-size-input"
-                style={{ width: '160px' }}
+                className="group-input sample-size-input sample-size-input--w160"
                 value={sampleSize}
                 onChange={(e) => {
                   const val = e.target.value === '' ? '' : parseInt(e.target.value, 10);
@@ -1507,12 +1478,12 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
               />
             </div>
 
-            <div style={{ flex: 1, minWidth: '320px' }}>
-              <div className="field-label" style={{ marginBottom: '8px' }}>
+            <div className="milestone-col">
+              <div className="field-label field-label--mb8">
                 Milestone
               </div>
               {milestones.map((m) => (
-                <div key={m.id || m.milestoneDate} className="req-row" style={{ marginBottom: '8px' }}>
+                <div key={m.id || m.milestoneDate} className="req-row req-row--mb8">
                   <input
                     type="date"
                     className="date-input"
@@ -1530,8 +1501,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     <input
                       type="number"
                       min="0"
-                      className="number-input"
-                      style={{ width: '85px' }}
+                      className="number-input number-input--w85"
                       placeholder="Participants"
                       value={m.participantTarget || ''}
                       onChange={(e) => {
@@ -1672,7 +1642,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                 </div>
 
                 {canManageSettings && !isArchived && grp.id && (
-                  <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                  <div className="ms-auto">
                     <button
                       type="button"
                       className="btn-trash"
@@ -1766,8 +1736,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     {!hasAgeRange ? (
                       canManageSettings && !isArchived && (
                         <div
-                          className="btn-add-item"
-                          style={{ marginBottom: 0 }}
+                          className="btn-add-item btn-add-item--flush"
                           onClick={() => grp.id && handleEnableAgeRange(grp.id)}
                         >
                           Add Age Range
@@ -1822,7 +1791,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   </div>
 
                   {canManageSettings && !isArchived && grp.id && (
-                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                    <div className="ms-auto">
                       <button
                         type="button"
                         className="btn-trash"
@@ -1926,8 +1895,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     {!hasAgeRange ? (
                       canManageSettings && !isArchived && (
                         <div
-                          className="btn-add-item"
-                          style={{ marginBottom: 0 }}
+                          className="btn-add-item btn-add-item--flush"
                           onClick={() => grp.id && handleEnableAgeRange(grp.id)}
                         >
                           Add Age Range
@@ -1984,9 +1952,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   {/* Gender group inputs */}
                   <div>
                     {grp.genderGroups && grp.genderGroups.length > 0 ? (
-                      <div className="nested-gender-list" style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="nested-gender-list">
                         {grp.genderGroups.map((gg) => (
-                          <div key={gg.id || gg.gender} className="nested-gender-row" style={{ marginBottom: 0 }}>
+                          <div key={gg.id || gg.gender} className="nested-gender-row">
                             <select
                               className="select-gender"
                               value={gg.gender}
@@ -2022,12 +1990,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                               }}
                               disabled={!canManageSettings || isArchived}
                             />
-                            <span className="field-label" style={{ margin: 0 }}>Participants</span>
+                            <span className="field-label field-label--m0">Participants</span>
                             {canManageSettings && !isArchived && grp.id && gg.id && (
                               <button
                                 type="button"
-                                className="btn-trash"
-                                style={{ width: '22px', height: '22px', padding: 0 }}
+                                className="btn-trash btn-trash--xs"
                                 onClick={() => handleDeleteNestedGender(grp.id!, gg.id!)}
                                 aria-label={`Delete nested gender ${gg.gender}`}
                               >
@@ -2038,8 +2005,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                         ))}
                         {canManageSettings && !isArchived && grp.id && (
                           <div
-                            className="btn-add-item"
-                            style={{ marginBottom: 0, marginTop: '2px' }}
+                            className="btn-add-item btn-add-item--nested-gender"
                             onClick={() => handleAddNestedGender(grp.id!)}
                           >
                             Add gender group
@@ -2049,8 +2015,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     ) : (
                       canManageSettings && !isArchived && grp.id && (
                         <div
-                          className="btn-add-item"
-                          style={{ marginBottom: 0 }}
+                          className="btn-add-item btn-add-item--flush"
                           onClick={() => handleAddNestedGender(grp.id!)}
                         >
                           Add gender group
@@ -2060,7 +2025,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   </div>
 
                   {canManageSettings && !isArchived && grp.id && (
-                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                    <div className="ms-auto">
                       <button
                         type="button"
                         className="btn-trash"
@@ -2088,7 +2053,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
             )}
 
             {/* Sub-heading divider between Ethnicity and Race */}
-            <div className="sub-heading underlined" style={{ marginTop: '20px', marginBottom: '20px' }} />
+            <div className="sub-heading underlined sub-heading--divider" />
 
             {/* Race Category Rows */}
             {raceGroups.map((grp) => {
@@ -2136,8 +2101,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     {!hasAgeRange ? (
                       canManageSettings && !isArchived && (
                         <div
-                          className="btn-add-item"
-                          style={{ marginBottom: 0 }}
+                          className="btn-add-item btn-add-item--flush"
                           onClick={() => grp.id && handleEnableAgeRange(grp.id)}
                         >
                           Add Age Range
@@ -2194,9 +2158,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   {/* Gender group inputs */}
                   <div>
                     {grp.genderGroups && grp.genderGroups.length > 0 ? (
-                      <div className="nested-gender-list" style={{ display: 'inline-flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="nested-gender-list">
                         {grp.genderGroups.map((gg) => (
-                          <div key={gg.id || gg.gender} className="nested-gender-row" style={{ marginBottom: 0 }}>
+                          <div key={gg.id || gg.gender} className="nested-gender-row">
                             <select
                               className="select-gender"
                               value={gg.gender}
@@ -2232,12 +2196,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                               }}
                               disabled={!canManageSettings || isArchived}
                             />
-                            <span className="field-label" style={{ margin: 0 }}>Participants</span>
+                            <span className="field-label field-label--m0">Participants</span>
                             {canManageSettings && !isArchived && grp.id && gg.id && (
                               <button
                                 type="button"
-                                className="btn-trash"
-                                style={{ width: '22px', height: '22px', padding: 0 }}
+                                className="btn-trash btn-trash--xs"
                                 onClick={() => handleDeleteNestedGender(grp.id!, gg.id!)}
                                 aria-label={`Delete nested gender ${gg.gender}`}
                               >
@@ -2248,8 +2211,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                         ))}
                         {canManageSettings && !isArchived && grp.id && (
                           <div
-                            className="btn-add-item"
-                            style={{ marginBottom: 0, marginTop: '2px' }}
+                            className="btn-add-item btn-add-item--nested-gender"
                             onClick={() => handleAddNestedGender(grp.id!)}
                           >
                             Add gender group
@@ -2259,8 +2221,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     ) : (
                       canManageSettings && !isArchived && grp.id && (
                         <div
-                          className="btn-add-item"
-                          style={{ marginBottom: 0 }}
+                          className="btn-add-item btn-add-item--flush"
                           onClick={() => handleAddNestedGender(grp.id!)}
                         >
                           Add gender group
@@ -2270,7 +2231,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   </div>
 
                   {canManageSettings && !isArchived && grp.id && (
-                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                    <div className="ms-auto">
                       <button
                         type="button"
                         className="btn-trash"
@@ -2326,11 +2287,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
             {/* Top Action & Search Bar */}
             <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
               <div className="search-input-container">
-                <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div className="cv-search-row">
                   <input
                     type="text"
-                    className="form-control form-control-sm"
-                    style={{ width: '240px', borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                    className="form-control form-control-sm cv-search-input"
                     placeholder="Search by name..."
                     value={variableSearch}
                     onChange={(e) => setVariableSearch(e.target.value)}
@@ -2338,13 +2298,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   />
                   <button
                     type="button"
-                    className="btn btn-sm btn-primary"
-                    style={{
-                      backgroundColor: '#1f5fd0',
-                      borderColor: '#1f5fd0',
-                      borderTopLeftRadius: 0,
-                      borderBottomLeftRadius: 0,
-                    }}
+                    className="btn btn-sm btn-primary cv-search-btn"
                     title="Search"
                   >
                     <Search size={14} />
@@ -2356,14 +2310,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                 <div>
                   <button
                     type="button"
-                    className="btn btn-sm btn-primary"
-                    style={{
-                      backgroundColor: '#1f5fd0',
-                      borderColor: '#1f5fd0',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
+                    className="btn btn-sm btn-primary cv-primary-action-btn"
                     onClick={() => setShowAddGroupModal(true)}
                   >
                     <FolderPlus size={14} /> New Group
@@ -2423,7 +2370,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           <div className="variable-group-header">
                             <ChevronDown size={14} />
                             {renamingGroupId === group.id ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div className="cv-group-rename-row">
                                 <input
                                   type="text"
                                   className="group-name-input"
@@ -2433,16 +2380,14 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                                 />
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-primary"
-                                  style={{ padding: '2px 8px', fontSize: '12px' }}
+                                  className="btn btn-sm btn-primary cv-group-btn-xs"
                                   onClick={() => handleRenameGroup(group.id!)}
                                 >
                                   Save
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-light"
-                                  style={{ padding: '2px 8px', fontSize: '12px' }}
+                                  className="btn btn-sm btn-light cv-group-btn-xs"
                                   onClick={() => setRenamingGroupId(null)}
                                 >
                                   Cancel
@@ -2460,8 +2405,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                               <div className="group-actions">
                                 <button
                                   type="button"
-                                  className="btn btn-sm btn-light"
-                                  style={{ padding: '2px 8px', fontSize: '12px', border: '1px solid #cbd5e1' }}
+                                  className="btn btn-sm btn-light cv-group-btn-xs--bordered"
                                   onClick={() => {
                                     setRenamingGroupId(group.id!);
                                     setRenameGroupValue(group.name);
@@ -2472,8 +2416,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                                 </button>
                                 <button
                                   type="button"
-                                  className="btn-trash"
-                                  style={{ width: '24px', height: '24px', padding: 0 }}
+                                  className="btn-trash btn-trash--sm"
                                   onClick={() =>
                                     setConfirmDeleteModal({
                                       type: 'variableGroup',
@@ -2492,7 +2435,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           {/* Member variables of this group */}
                           <div className="variable-group-items">
                             {groupVars.length === 0 ? (
-                              <p style={{ margin: '8px 0', fontSize: '13px', color: '#64748b' }}>
+                              <p className="cv-group-empty-text">
                                 No variables in this group yet. Use the pin button on variables to assign them.
                               </p>
                             ) : (
@@ -2526,30 +2469,14 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
               <div className="d-flex align-items-center gap-3 mt-3 mb-4">
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  style={{
-                    backgroundColor: '#1f5fd0',
-                    borderColor: '#1f5fd0',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 500,
-                  }}
+                  className="btn btn-primary cv-primary-action-btn"
                   onClick={() => setShowAddCustomVarModal(true)}
                 >
                   <Plus size={14} /> Create a New Custom Variable
                 </button>
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  style={{
-                    backgroundColor: '#1f5fd0',
-                    borderColor: '#1f5fd0',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 500,
-                  }}
+                  className="btn btn-primary cv-primary-action-btn"
                   onClick={() => setShowAddGlobalVarModal(true)}
                 >
                   <Plus size={14} /> Add an Existing Global Variable
@@ -2607,7 +2534,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     />
                   </div>
                   {canManageSettings && !isArchived && r.name !== 'Other' && (
-                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                    <div className="ms-auto">
                       <button
                         type="button"
                         className="btn-trash"
@@ -2686,7 +2613,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     />
                   </div>
                   {canManageSettings && !isArchived && o.name !== 'Other' && (
-                    <div className="ms-auto" style={{ marginLeft: 'auto' }}>
+                    <div className="ms-auto">
                       <button
                         type="button"
                         className="btn-trash"
@@ -3315,8 +3242,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       <tbody>
                         {editVarOptions.map((opt, idx) => (
                           <tr key={opt.value || idx}>
-                            <td style={{ width: '60px' }}>
-                              <div style={{ display: 'flex', gap: '2px' }}>
+                            <td className="cv-order-col">
+                              <div className="cv-order-actions">
                                 <button
                                   type="button"
                                   className="study-action-btn"
@@ -3514,7 +3441,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                       <div key={gv.id || gv.name} className="study-global-var-item">
                         <div>
                           <strong>{gv.name}</strong>
-                          <span className="study-badge study-badge--sm" style={{ marginLeft: '8px' }}>
+                          <span className="study-badge study-badge--sm study-badge--ml8">
                             {gv.variableType}
                           </span>
                         </div>

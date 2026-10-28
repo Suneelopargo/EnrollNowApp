@@ -1,11 +1,12 @@
 // frontend/microfrontends/study/src/components/StudyDashboardTab.tsx - Study Dashboard View
 import React from 'react';
+import { Study } from '../../../../shared/api/studyApi';
 
 export interface StudyDashboardTabProps {
-  selectedStudy: any;
-  targetCount: number;
+  selectedStudy?: Study;
+  targetCount: number | null;
   recruitedCount: number;
-  recruitmentProgress: number;
+  recruitmentProgress: number | null;
   weeklyRecruitment: { week: string; label: string; count: number }[];
   weeklyMaximum: number;
 }
@@ -17,25 +18,36 @@ export const StudyDashboardTab: React.FC<StudyDashboardTabProps> = ({
   weeklyRecruitment,
   weeklyMaximum,
 }) => {
+  const hasTarget = targetCount !== null && targetCount > 0;
+  const safeProgress = hasTarget && recruitmentProgress !== null ? recruitmentProgress : 0;
+
   return (
     <div className="study-dashboard-tab" role="tabpanel" id="study-tabpanel-dashboard" aria-labelledby="study-tab-dashboard">
       <section className="study-recruitment-panel" aria-labelledby="study-recruitment-title">
         <div className="study-recruitment-panel__heading">
           <div>
             <h2 id="study-recruitment-title">Recruitment Progress</h2>
-            <p>{targetCount.toLocaleString()} participant recruitment target</p>
+            <p>
+              {hasTarget
+                ? `${targetCount.toLocaleString()} participant recruitment target`
+                : 'Target not set'}
+            </p>
           </div>
-          <strong>{recruitmentProgress}%</strong>
+          <strong>{hasTarget && recruitmentProgress !== null ? `${recruitmentProgress}%` : '—'}</strong>
         </div>
         <div
           className="study-recruitment-scale"
           role="img"
-          aria-label={`${recruitedCount} of ${targetCount} participants recruited, ${recruitmentProgress}% of target`}
+          aria-label={
+            hasTarget
+              ? `${recruitedCount} of ${targetCount} participants recruited, ${safeProgress}% of target`
+              : `${recruitedCount} participants recruited, target not set`
+          }
         >
           <div className="study-recruitment-scale__track">
             <progress
               className="study-recruitment-scale__fill"
-              value={recruitmentProgress}
+              value={safeProgress}
               max={100}
               aria-hidden="true"
             />

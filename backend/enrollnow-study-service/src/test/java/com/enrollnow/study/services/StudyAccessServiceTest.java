@@ -466,4 +466,56 @@ class StudyAccessServiceTest {
                 command.changes().get(0).newValue()
         );
     }
+
+    @Test
+    void grantStudyAccess_nonSiteAdminModifyingSelf_throwsAccessDeniedException() {
+        UserEffectivePermissionsResponse nonSiteAdmin = new UserEffectivePermissionsResponse();
+        nonSiteAdmin.setCanManageSiteAdmins(false);
+        nonSiteAdmin.setPermissions(List.of());
+        when(sitePermissionService.resolveEffectivePermissions(tenantId, userId, null)).thenReturn(nonSiteAdmin);
+
+        GrantStudyAccessRequest request = new GrantStudyAccessRequest();
+        request.setStudyRole("Coordinator");
+        request.setStudyPermission("STUDY_ADMIN");
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyAccessService.grantStudyAccess(tenantId, studyId, userId, request)
+        );
+        verify(studyMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void grantStudyAccess_callerWithoutTenantClaim_throwsAccessDeniedException() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, null)));
+
+        GrantStudyAccessRequest request = new GrantStudyAccessRequest();
+        request.setStudyRole("Coordinator");
+        request.setStudyPermission("STUDY_ADMIN");
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyAccessService.grantStudyAccess(tenantId, studyId, UUID.randomUUID(), request)
+        );
+        verify(studyMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void removeStudyAccess_unauthorizedCaller_throwsAccessDeniedException() {
+        UUID otherUserId = UUID.randomUUID();
+        UserEffectivePermissionsResponse nonAdmin = new UserEffectivePermissionsResponse();
+        nonAdmin.setCanManageSiteAdmins(false);
+        nonAdmin.setSiteRole("SITE_REGISTRY");
+        nonAdmin.setPermissions(List.of("REGISTRY_VIEW"));
+        when(sitePermissionService.resolveEffectivePermissions(tenantId, userId, null)).thenReturn(nonAdmin);
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, studyId))
+                .thenReturn(List.of());
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> studyAccessService.removeStudyAccess(tenantId, studyId, otherUserId)
+        );
+        verify(studyMemberRepository, never()).save(any());
+    }
 }

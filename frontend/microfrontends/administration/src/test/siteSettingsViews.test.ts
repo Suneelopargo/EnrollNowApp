@@ -59,15 +59,14 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
     });
 
     it('renders placeholder views with correct title props', () => {
-
-      const importEl = ImportView({}) as React.ReactElement<any>;
+      const importEl = ImportView({}) as React.ReactElement<{ title?: string }>;
       expect(importEl.props.title).toBe('Data Intake & Batch Import');
 
-      const exportEl = ExportView({}) as React.ReactElement<any>;
+      const exportEl = ExportView({}) as React.ReactElement<{ title?: string }>;
       expect(exportEl.props.title).toBe('Export Configurations & Compliance Artifacts');
 
-      const auditEl = AuditLogView({}) as React.ReactElement<any>;
-      expect(auditEl.props.title).toBe('System & Security Audit Ledger');
+      const auditHtml = renderToStaticMarkup(React.createElement(AuditLogView));
+      expect(auditHtml).toContain('System &amp; Security Audit Ledger');
     });
   });
 

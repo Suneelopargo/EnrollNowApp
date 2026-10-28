@@ -17,6 +17,16 @@ import {
   UpdateStudyDetailsPayload,
 } from '../../../../shared/api/studyApi';
 import { toast } from '../../../../shared/toaster';
+import { requestConfirmation } from '../../../../shared/confirmation';
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const maybeErr = err as { response?: { data?: { message?: string } }; message?: string };
+    if (maybeErr.response?.data?.message) return maybeErr.response.data.message;
+    if (maybeErr.message) return maybeErr.message;
+  }
+  return fallback;
+}
 
 export interface StudySettingsDetailsProps {
   studyId: string;
@@ -59,11 +69,18 @@ const initialFormState: FormState = {
   grants: [],
 };
 
+interface ImportItemRecord {
+  name?: string;
+  relationship?: string;
+  outcome?: string;
+  [key: string]: unknown;
+}
+
 interface ImportCategory {
   key: string;
   label: string;
-  items: any[];
-  getName: (item: any) => string;
+  items: ImportItemRecord[];
+  getName: (item: ImportItemRecord) => string;
 }
 
 export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
@@ -83,7 +100,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   const [importing, setImporting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<any | null>(null);
+  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
   const [importCategories, setImportCategories] = useState<ImportCategory[]>([]);
   const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({});
   const [openCategory, setOpenCategory] = useState<string | null>(null);
@@ -125,8 +142,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       setForm(mapped);
       setInitialLoadedForm(mapped);
       setFieldErrors({});
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to load study details.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load study details.'));
     } finally {
       setLoading(false);
     }
@@ -168,18 +185,32 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
   const prevStudyIdRef = useRef<string>(studyId);
 
   useEffect(() => {
-    if (prevStudyIdRef.current !== studyId) {
-      if (isDirtyRef.current) {
-        const proceed = window.confirm(
-          'You have unsaved changes in Study Details. Are you sure you want to discard your changes and switch studies?'
-        );
-        if (!proceed) {
-          return;
+    let isCancelled = false;
+    const checkAndLoad = async () => {
+      if (prevStudyIdRef.current !== studyId) {
+        if (isDirtyRef.current) {
+          const proceed = await requestConfirmation({
+            title: 'Discard Unsaved Changes?',
+            message:
+              'You have unsaved changes in Study Details. Are you sure you want to discard your changes and switch studies?',
+            confirmText: 'Discard Changes',
+            cancelText: 'Stay',
+            intent: 'warning',
+          });
+          if (!proceed || isCancelled) {
+            return;
+          }
         }
+        prevStudyIdRef.current = studyId;
       }
-      prevStudyIdRef.current = studyId;
-    }
-    loadDetails();
+      if (!isCancelled) {
+        await loadDetails();
+      }
+    };
+    void checkAndLoad();
+    return () => {
+      isCancelled = true;
+    };
   }, [studyId, loadDetails]);
 
   // Notify parent on dirty change
@@ -271,8 +302,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       errors.name = 'Short Study Name is required.';
     } else if (shortName.length > 15) {
       errors.name = 'Short Study Name must be 15 characters or less.';
-    } else if (!/^[a-zA-Z0-9 ]+$/.test(shortName)) {
-      errors.name = 'Short Study Name may only contain alphanumeric characters and spaces.';
+    } else if (!/^[a-zA-Z0-9 _-]+$/.test(shortName)) {
+      errors.name = 'Short Study Name may only contain letters, numbers, spaces, hyphens, and underscores.';
     }
 
     if (form.recruitmentStartDate && form.recruitmentEndDate) {
@@ -362,8 +393,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       setInitialLoadedForm(mapped);
       toast.success('Study details updated successfully.');
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to update study details.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update study details.'));
     } finally {
       setSaving(false);
     }
@@ -386,8 +417,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to export study.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to export study.'));
     } finally {
       setExporting(false);
     }
@@ -405,17 +436,17 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
 
       try {
         const text = await selected.text();
-        const parsed = JSON.parse(text);
+        const parsed = JSON.parse(text) as Record<string, ImportItemRecord[]>;
         setParsedData(parsed);
 
         const cats: ImportCategory[] = [
-          { key: 'surveys', label: 'Surveys', items: parsed.surveys ?? [], getName: (i: any) => i.name || 'Unnamed Survey' },
-          { key: 'statuses', label: 'Statuses', items: parsed.statuses ?? [], getName: (i: any) => i.name || 'Unnamed Status' },
-          { key: 'customVariables', label: 'Custom Variables', items: parsed.customVariables ?? [], getName: (i: any) => i.name || 'Unnamed Variable' },
-          { key: 'contactRelationships', label: 'Contact Relationships', items: parsed.contactRelationships ?? [], getName: (i: any) => i.relationship || i.name || 'Unnamed Relationship' },
-          { key: 'contactOutcomes', label: 'Contact Outcomes', items: parsed.contactOutcomes ?? [], getName: (i: any) => i.outcome || i.name || 'Unnamed Outcome' },
-          { key: 'emailTemplates', label: 'Email Templates', items: parsed.emailTemplates ?? [], getName: (i: any) => i.name || 'Unnamed Template' },
-          { key: 'textTemplates', label: 'Text Templates', items: parsed.textTemplates ?? [], getName: (i: any) => i.name || 'Unnamed Template' },
+          { key: 'surveys', label: 'Surveys', items: parsed.surveys ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Survey' },
+          { key: 'statuses', label: 'Statuses', items: parsed.statuses ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Status' },
+          { key: 'customVariables', label: 'Custom Variables', items: parsed.customVariables ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Variable' },
+          { key: 'contactRelationships', label: 'Contact Relationships', items: parsed.contactRelationships ?? [], getName: (i: ImportItemRecord) => i.relationship || i.name || 'Unnamed Relationship' },
+          { key: 'contactOutcomes', label: 'Contact Outcomes', items: parsed.contactOutcomes ?? [], getName: (i: ImportItemRecord) => i.outcome || i.name || 'Unnamed Outcome' },
+          { key: 'emailTemplates', label: 'Email Templates', items: parsed.emailTemplates ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Template' },
+          { key: 'textTemplates', label: 'Text Templates', items: parsed.textTemplates ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Template' },
         ].filter((cat) => cat.items.length > 0);
 
         setImportCategories(cats);
@@ -431,7 +462,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
         if (cats.length > 0) {
           setOpenCategory(cats[0].key);
         }
-      } catch (parseErr: any) {
+      } catch {
         toast.error('File contents lack proper JSON format, please try again.');
         setParsedData(null);
         setImportCategories([]);
@@ -447,7 +478,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
     }));
   };
 
-  const handleToggleCategory = (catKey: string, items: any[]) => {
+  const handleToggleCategory = (catKey: string, items: ImportItemRecord[]) => {
     const allSelected = items.every((_, idx) => selectedItems[`${catKey}_${idx}`]);
     setSelectedItems((prev) => {
       const next = { ...prev };
@@ -473,7 +504,7 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
 
     setImporting(true);
     try {
-      const componentsToImport: Record<string, any[]> = {};
+      const componentsToImport: Record<string, ImportItemRecord[]> = {};
       importCategories.forEach((cat) => {
         const selected = cat.items.filter((_, idx) => selectedItems[`${cat.key}_${idx}`]);
         if (selected.length > 0) {
@@ -490,8 +521,8 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
       toast.success('Successfully imported unique study components.');
       await loadDetails();
       onStudyUpdated?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to import study components.');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to import study components.'));
     } finally {
       setImporting(false);
     }

@@ -34,6 +34,15 @@ export interface StudySettingsBulkTasksProps {
   onStudyUpdated?: () => void;
 }
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const maybeErr = err as { response?: { data?: { message?: string } }; message?: string };
+    if (maybeErr.response?.data?.message) return maybeErr.response.data.message;
+    if (maybeErr.message) return maybeErr.message;
+  }
+  return fallback;
+}
+
 export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
   studyId,
   isArchived = false,
@@ -92,12 +101,8 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     try {
       const data = await studyApi.getStudyBulkTasks(studyId);
       applySnapshot(data);
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to load study bulk tasks.';
-      setLoadError(msg);
+    } catch (err: unknown) {
+      setLoadError(getErrorMessage(err, 'Failed to load study bulk tasks.'));
     } finally {
       setLoading(false);
     }
@@ -218,12 +223,8 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
       setGroupModalOpen(false);
       setEditingGroup(null);
       onStudyUpdated?.();
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to save bulk task group.';
-      setGroupModalError(msg);
+    } catch (err: unknown) {
+      setGroupModalError(getErrorMessage(err, 'Failed to save bulk task group.'));
     } finally {
       setSubmitting(false);
     }
@@ -241,12 +242,8 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
       setConfirmDeleteGroup(false);
       toast.success(`Bulk task group "${deletedName}" and its tasks were deleted.`);
       onStudyUpdated?.();
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to delete bulk task group.';
-      setGroupModalError(msg);
+    } catch (err: unknown) {
+      setGroupModalError(getErrorMessage(err, 'Failed to delete bulk task group.'));
     } finally {
       setSubmitting(false);
     }
@@ -325,12 +322,8 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
       setTaskModalOpen(false);
       setEditingTask(null);
       onStudyUpdated?.();
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to save bulk task.';
-      setTaskModalError(msg);
+    } catch (err: unknown) {
+      setTaskModalError(getErrorMessage(err, 'Failed to save bulk task.'));
     } finally {
       setSubmitting(false);
     }
@@ -348,12 +341,8 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
       setConfirmDeleteTask(false);
       toast.success(`Task "${deletedName}" deleted.`);
       onStudyUpdated?.();
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to delete bulk task.';
-      setTaskModalError(msg);
+    } catch (err: unknown) {
+      setTaskModalError(getErrorMessage(err, 'Failed to delete bulk task.'));
     } finally {
       setSubmitting(false);
     }
@@ -385,12 +374,8 @@ export const StudySettingsBulkTasks: React.FC<StudySettingsBulkTasksProps> = ({
     try {
       applySnapshot(await studyApi.reorderBulkTasks(studyId, group._id, orderedIds));
       toast.success('Task order updated.');
-    } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to reorder bulk tasks.';
-      toast.error(msg);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reorder bulk tasks.'));
       await fetchBulkTasks();
     }
   };

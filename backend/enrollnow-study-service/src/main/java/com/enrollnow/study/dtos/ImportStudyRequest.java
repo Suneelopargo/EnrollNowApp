@@ -2,6 +2,7 @@ package com.enrollnow.study.dtos;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.Map;
@@ -10,10 +11,11 @@ public class ImportStudyRequest {
 
     @NotBlank(message = "Must provide a study name to import a new study.")
     @Size(max = 15, message = "Short study name must not exceed 15 characters.")
+    @Pattern(regexp = "^[a-zA-Z0-9 _-]+$", message = "Short study name may only contain letters, numbers, spaces, hyphens, and underscores.")
     @JsonAlias({"shortName", "name", "title"})
     private String studyName;
 
-    @JsonAlias({"studyData", "data", "payload", "configuration"})
+    @JsonAlias({"studyData", "data", "payload", "configuration", "study"})
     private Map<String, Object> studyData;
 
     public ImportStudyRequest() {

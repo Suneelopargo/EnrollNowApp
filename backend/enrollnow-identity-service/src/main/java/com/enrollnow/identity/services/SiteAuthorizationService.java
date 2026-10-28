@@ -74,7 +74,10 @@ public class SiteAuthorizationService {
 
     public void requireTenantMatch(UUID targetTenantId) {
         CallerIdentity caller = requireCaller();
-        if (caller.tenantId() != null && targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
+        if (caller.tenantId() == null) {
+            throw new AccessDeniedException("Access denied: authenticated caller has no tenant context");
+        }
+        if (targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
             throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
         }
     }
@@ -307,14 +310,13 @@ public class SiteAuthorizationService {
     }
 
     private UUID resolveTenantId(CallerIdentity caller, UUID targetTenantId) {
-        if (caller.tenantId() != null && targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
-            throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
-        }
-        UUID resolved = targetTenantId != null ? targetTenantId : caller.tenantId();
-        if (resolved == null) {
+        if (caller == null || caller.tenantId() == null) {
             throw new AccessDeniedException("Access denied: tenant context is required");
         }
-        return resolved;
+        if (targetTenantId != null && !caller.tenantId().equals(targetTenantId)) {
+            throw new AccessDeniedException("Access denied: cross-tenant operation is not permitted");
+        }
+        return caller.tenantId();
     }
 
     private static UUID parseUuid(String raw) {

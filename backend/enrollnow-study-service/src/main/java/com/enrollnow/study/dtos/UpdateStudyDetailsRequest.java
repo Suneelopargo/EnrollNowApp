@@ -12,7 +12,7 @@ public class UpdateStudyDetailsRequest {
 
     @NotBlank(message = "Short Study Name is required")
     @Size(max = 15, message = "Short Study Name must be 15 characters or less")
-    @Pattern(regexp = "^[a-zA-Z0-9 ]+$", message = "Short Study Name may only contain alphanumeric characters and spaces")
+    @Pattern(regexp = "^[a-zA-Z0-9 _-]+$", message = "Short Study Name may only contain letters, numbers, spaces, hyphens, and underscores")
     private String name;
 
     private String longName;
