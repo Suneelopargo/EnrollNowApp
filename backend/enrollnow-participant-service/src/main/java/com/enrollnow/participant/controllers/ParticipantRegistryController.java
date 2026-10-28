@@ -101,6 +101,7 @@ public class ParticipantRegistryController {
                 log.warn("Failed to parse customFiltersJson: {}", customFiltersJson);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Malformed customFilters parameter: invalid JSON");
             }
+            rules = registryService.removeUnfinishedFilterRules(rules);
             registryService.validateFilterRules(resolvedTenantId, rules);
         }
 
@@ -332,6 +333,7 @@ public class ParticipantRegistryController {
                 log.warn("Failed to parse customFiltersJson for export: {}", customFiltersJson);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Malformed customFilters parameter: invalid JSON");
             }
+            rules = registryService.removeUnfinishedFilterRules(rules);
             registryService.validateFilterRules(resolvedTenantId, rules);
         }
 

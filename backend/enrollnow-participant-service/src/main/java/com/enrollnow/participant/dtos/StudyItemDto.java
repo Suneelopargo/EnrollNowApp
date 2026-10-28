@@ -7,6 +7,8 @@ public class StudyItemDto {
     private boolean isLink;
     private UUID studyId;
     private String studyCode;
+    private String status;
+    private String participantStudyId;
 
     public StudyItemDto() {
     }
@@ -53,5 +55,21 @@ public class StudyItemDto {
 
     public void setStudyCode(String studyCode) {
         this.studyCode = studyCode;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getParticipantStudyId() {
+        return participantStudyId;
+    }
+
+    public void setParticipantStudyId(String participantStudyId) {
+        this.participantStudyId = participantStudyId;
     }
 }

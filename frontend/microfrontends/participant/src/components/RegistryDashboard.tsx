@@ -10,8 +10,16 @@ import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem } from '../types/participant';
-import { validateFilterRule, registerDynamicFilterFields } from '../constants/filterMetadata';
+import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition } from '../types/participant';
+import { validateFilterRule, registerDynamicFilterFields, isRangeOperator, isNoValueOperator } from '../constants/filterMetadata';
+
+const hasFilterCriteria = (rule: CustomFilterRule): boolean => {
+  if (isNoValueOperator(rule.operator || '')) return true;
+  if (isRangeOperator(rule.operator || '')) {
+    return Boolean(rule.minValue?.trim() || rule.maxValue?.trim());
+  }
+  return Boolean(rule.values?.some((value) => value.trim()) || rule.value?.trim());
+};
 
 export interface RegistryDashboardProps {
   context?: MfeContext;
@@ -33,6 +41,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [selectedStudies, setSelectedStudies] = useState<string[]>([]);
   const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [globalVariables, setGlobalVariables] = useState<GlobalVariableDefinition[]>([]);
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
   const [serverTotalCount, setServerTotalCount] = useState<number>(0);
 
@@ -105,7 +114,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       const activeAvailable = overrideFilters?.availableFilter ?? filterStateRef.current.availableFilter;
       const activeSearch = overrideFilters?.searchTerm ?? filterStateRef.current.searchTerm;
       const activeStudies = overrideFilters?.selectedStudies ?? filterStateRef.current.selectedStudies;
-      const activeCustom = overrideFilters?.customFilters ?? filterStateRef.current.customFilters;
+      const activeCustom = (overrideFilters?.customFilters ?? filterStateRef.current.customFilters)
+        .filter(hasFilterCriteria);
       const activeDuplicatesOnly = overrideFilters?.duplicatesOnly !== undefined
         ? overrideFilters.duplicatesOnly
         : filterStateRef.current.duplicatesOnly;
@@ -136,6 +146,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         id: String(p.id ?? p.participantId ?? ''),
         name: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'Unnamed Participant',
         firstName: p.firstName || '',
+        middleName: p.middleName || '',
         lastName: p.lastName || '',
         status: p.status || 'Active',
         city: p.city || '',
@@ -193,11 +204,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         const refreshed = mapped.find((m) => m.id === prev.participant?.id);
         return refreshed ? { isOpen: true, participant: refreshed } : prev;
       });
+      return true;
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to retrieve participants from the server');
       setError(errorMsg);
-      showNotification(errorMsg, 'error');
       setParticipants([]);
+      return false;
     } finally {
       if (!quiet) setIsLoading(false);
     }
@@ -208,7 +220,24 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     try {
       const meta = await participantApi.getFilterMetadata();
       if (Array.isArray(meta)) {
+        setGlobalVariables(meta
+          .filter((m: any) => m.global === true || m.isGlobal === true)
+          .map((m: any) => ({
+            id: String(m.id || ''),
+            name: String(m.label || m.name || m.id || 'Unnamed variable'),
+            type: String(m.type || 'short'),
+            isBlind: m.isBlind === true,
+            options: Array.isArray(m.options) ? m.options.map((option: any) => ({
+              value: String(option.value ?? option.optionId ?? option.label ?? ''),
+              label: String(option.label ?? option.name ?? option.value ?? ''),
+            })) : [],
+          }))
+          .filter((m: GlobalVariableDefinition) => m.id && m.name));
         const dynamicFields: FilterFieldOption[] = meta.map((m: any) => {
+          const variableLabel = String(m.label || m.name || m.id || 'Unnamed variable').trim();
+          const customFieldLabel = /^custom\s*[-:]/i.test(variableLabel)
+            ? variableLabel
+            : `Custom - ${variableLabel}`;
           let fieldType: FilterFieldOption['type'] = 'text';
           if (m.type === 'number') fieldType = 'number';
           else if (m.type === 'date' || m.type === 'dateTime') fieldType = 'date';
@@ -223,8 +252,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
 
           return {
             id: m.id,
-            label: m.global ? `${m.label} (Global)` : m.label,
-            placeholder: `Filter by ${m.label}...`,
+            label: customFieldLabel,
+            placeholder: `Filter by ${variableLabel}...`,
             type: fieldType,
             options: options.length > 0 ? options : undefined,
           };
@@ -253,11 +282,11 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     }
   };
 
-  const handleRefresh = () => {
-    fetchParticipants(false);
+  const handleRefresh = async () => {
+    const refreshed = await fetchParticipants(false);
     fetchSavedSearches();
     fetchFilterMetadata();
-    showNotification('Participant queue refreshed');
+    if (refreshed) showNotification('Participant queue refreshed');
   };
 
   const handleToggleDuplicates = () => {
@@ -342,7 +371,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         availableFilter,
         searchTerm,
         selectedStudies,
-        customFilters,
+        customFilters: customFilters.filter(hasFilterCriteria),
       });
 
       const newSaved: SavedSearch = {
@@ -403,20 +432,21 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       availableFilter: nextAvailable,
       searchTerm: nextSearch,
       selectedStudies: nextStudies,
-      customFilters: nextCustom,
+      customFilters: nextCustom.filter(hasFilterCriteria),
     });
     showNotification(`Applied saved search "${saved.name}".`);
   };
 
   const handleSearch = () => {
-    for (const filter of customFilters) {
+    const applicableFilters = customFilters.filter(hasFilterCriteria);
+    for (const filter of applicableFilters) {
       const valResult = validateFilterRule(filter);
       if (!valResult.isValid) {
         showNotification(valResult.error || 'Please provide valid filter criteria.', 'warning');
         return;
       }
     }
-    fetchParticipants(false);
+    fetchParticipants(false, { customFilters: applicableFilters });
   };
 
   const handleOpenDetail = (participant: ParticipantRecord) => {
@@ -429,6 +459,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         updatedParticipant.id,
         {
           firstName: updatedParticipant.firstName,
+          middleName: updatedParticipant.middleName,
           lastName: updatedParticipant.lastName,
           phone: updatedParticipant.contactMethods?.phone || updatedParticipant.phone,
           primaryEmail: updatedParticipant.contactMethods?.primaryEmail,
@@ -437,6 +468,12 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           postalCode: updatedParticipant.zipcode,
           status: updatedParticipant.status,
           sexAtBirth: updatedParticipant.gender,
+          dateOfBirth: updatedParticipant.demographics?.dob,
+          ethnicity: updatedParticipant.demographics?.ethnicity,
+          race: updatedParticipant.demographics?.race,
+          primaryLanguage: updatedParticipant.demographics?.primaryLanguage,
+          familyRole: updatedParticipant.family?.familyRole,
+          guardianName: updatedParticipant.family?.guardianName,
           contactForFutureStudies: updatedParticipant.contactForFutureStudies,
           tags: updatedParticipant.tags,
           familyId: updatedParticipant.familyId,
@@ -484,8 +521,38 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     });
   };
 
+  const handleDeleteSelected = (participantIds: string[]) => {
+    if (participantIds.length === 0) return;
+    void requestConfirmation({
+      title: `Delete ${participantIds.length} participants?`,
+      message: `You will not be able to recover these ${participantIds.length} participants.`,
+      intent: 'danger',
+      confirmText: `Delete ${participantIds.length} participants`,
+      loadingText: 'Deleting participants...',
+      confirmWord: 'DELETE',
+      confirmInputSubtext: 'Type DELETE in all caps and press enter',
+      onConfirm: async () => {
+        const results = await Promise.allSettled(
+          participantIds.map((id) => participantApi.deleteParticipant(id))
+        );
+        const deletedCount = results.filter((result) => result.status === 'fulfilled').length;
+        const failedCount = results.length - deletedCount;
+        await fetchParticipants(true);
+        if (failedCount > 0) {
+          showNotification(
+            `${deletedCount} participant(s) deleted; ${failedCount} could not be deleted.`,
+            'warning'
+          );
+          throw new Error(`${failedCount} participant deletion(s) failed. Refresh the registry and try again.`);
+        }
+        showNotification(`${deletedCount} participant(s) deleted.`, 'success');
+      },
+    });
+  };
+
   const handleExportServerCsv = async () => {
     try {
+      const applicableFilters = customFilters.filter(hasFilterCriteria);
       const params: RegistrySearchParams = {
         tenantId,
         siteId,
@@ -493,7 +560,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         contactFilter,
         availableFilter,
         studies: selectedStudies.length > 0 ? selectedStudies : undefined,
-        customFiltersJson: customFilters.length > 0 ? JSON.stringify(customFilters) : undefined,
+        customFiltersJson: applicableFilters.length > 0 ? JSON.stringify(applicableFilters) : undefined,
         duplicatesOnly: duplicatesOnly ? true : undefined,
       };
       const blob = await participantApi.exportRegistry(params);
@@ -579,6 +646,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           onAddParticipant={() => setIsAddModalOpen(true)}
           onOpenDetail={handleOpenDetail}
           onDeleteParticipant={handleOpenDeleteParticipant}
+          onDeleteSelected={handleDeleteSelected}
           onAssignStudyToSelected={handleAssignStudyToSelected}
           onExportServerCsv={handleExportServerCsv}
           isLoading={isLoading}
@@ -620,6 +688,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         }}
         tenantId={tenantId}
         siteId={siteId}
+        globalVariables={globalVariables}
         onParticipantUpdated={async () => {
           await fetchParticipants(true);
         }}

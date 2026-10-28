@@ -115,6 +115,7 @@ interface ParticipantGridProps {
   onAddParticipant?: () => void;
   onOpenDetail?: (participant: ParticipantRecord) => void;
   onDeleteParticipant?: (participant: ParticipantRecord) => void;
+  onDeleteSelected?: (participantIds: string[]) => void;
   onAssignStudyToSelected?: (participantIds: string[], studyName: string) => void;
   isLoading?: boolean;
   onExportServerCsv?: () => void;
@@ -135,6 +136,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   onAddParticipant,
   onOpenDetail,
   onDeleteParticipant,
+  onDeleteSelected,
   onAssignStudyToSelected,
   isLoading = false,
   onExportServerCsv,
@@ -393,6 +395,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     setStudyToAssign('');
   };
 
+  const handleBulkDelete = () => {
+    if (selectedParticipants.length === 0) return;
+    onDeleteSelected?.(selectedParticipants.map((participant) => participant.id));
+  };
+
   const getExportRows = useCallback(() => {
     const rows: ParticipantRecord[] = [];
     if (gridApi) {
@@ -630,6 +637,14 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <span className="participant-grid__selected-count">
             {selectedParticipants.length} selected
           </span>
+          <button
+            type="button"
+            className="participant-grid__apply-action participant-grid__apply-action--danger"
+            onClick={handleBulkDelete}
+            aria-label={`Delete ${selectedParticipants.length} selected participants`}
+          >
+            Delete selected
+          </button>
           <select
             value={studyToAssign}
             onChange={(event) => setStudyToAssign(event.target.value)}

@@ -956,7 +956,22 @@ public class ParticipantRegistryService {
         for (UUID sId : participantStudyIds) {
             Study study = studiesMap.get(sId);
             if (study != null) {
-                studyItems.add(new StudyItemDto(study.getName(), true, study.getId(), study.getStudyCode()));
+                StudyItemDto studyItem = new StudyItemDto(study.getName(), true, study.getId(), study.getStudyCode());
+                StudyEnrollment activeEnrollment = enrollments.stream()
+                        .filter(e -> e.isActive() && sId.equals(e.getStudyId()))
+                        .findFirst()
+                        .orElse(null);
+                StudyCandidate activeCandidate = candidates.stream()
+                        .filter(c -> c.isActive() && sId.equals(c.getStudyId()))
+                        .findFirst()
+                        .orElse(null);
+                studyItem.setStatus(activeEnrollment != null
+                        ? activeEnrollment.getStatus()
+                        : activeCandidate != null ? activeCandidate.getStatus() : "");
+                if (activeEnrollment != null) {
+                    studyItem.setParticipantStudyId(activeEnrollment.getStudyParticipantId());
+                }
+                studyItems.add(studyItem);
                 if (!study.isArchived() && !study.isAllowParticipationInOtherStudies()) {
                     canParticipateInOtherStudies = false;
                 }
@@ -1270,6 +1285,29 @@ public class ParticipantRegistryService {
                 }
             }
         }
+    }
+
+    /** Drops unfinished filter rows before validation and query construction. */
+    public List<CustomFilterRuleDto> removeUnfinishedFilterRules(List<CustomFilterRuleDto> rules) {
+        if (rules == null || rules.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return rules.stream().filter(rule -> {
+            if (rule == null || rule.getField() == null || rule.getField().isBlank()
+                    || rule.getOperator() == null || rule.getOperator().isBlank()) {
+                return false;
+            }
+            String operator = normalizeOperator(rule.getOperator());
+            if ("assigned".equals(operator) || "not_assigned".equals(operator)) {
+                return true;
+            }
+            if ("between".equals(operator) || "not_between".equals(operator)) {
+                return (rule.getEffectiveMinValue() != null && !rule.getEffectiveMinValue().isBlank())
+                        || (rule.getEffectiveMaxValue() != null && !rule.getEffectiveMaxValue().isBlank());
+            }
+            return (rule.getValue() != null && !rule.getValue().isBlank())
+                    || !rule.getEffectiveValues().isEmpty();
+        }).collect(Collectors.toList());
     }
 
     private String normalizeOperator(String op) {
@@ -1626,9 +1664,12 @@ public class ParticipantRegistryService {
                 String studyName = study != null ? study.getName() : (reqStudyId != null ? reqStudyId.toString() : "Unknown");
 
                 for (JsonNode v : varsNode) {
-                    String id = v.has("id") ? v.get("id").asText().trim() : "";
+                    String id = v.has("id") ? v.get("id").asText().trim()
+                            : v.has("_id") ? v.get("_id").asText().trim()
+                            : v.has("variableId") ? v.get("variableId").asText().trim() : "";
                     String name = v.has("name") ? v.get("name").asText().trim() : "";
-                    String type = v.has("type") ? v.get("type").asText().trim() : "text";
+                    String type = v.has("type") ? v.get("type").asText().trim()
+                            : v.has("variableType") ? v.get("variableType").asText().trim() : "short";
                     boolean isGlobal = (v.has("isGlobal") && v.get("isGlobal").asBoolean()) ||
                                        (v.has("global") && v.get("global").asBoolean());
 
@@ -1642,8 +1683,10 @@ public class ParticipantRegistryService {
                     List<Map<String, String>> options = new ArrayList<>();
                     if (v.has("options") && v.get("options").isArray()) {
                         for (JsonNode opt : v.get("options")) {
-                            String label = opt.has("label") ? opt.get("label").asText().trim() : "";
-                            String val = opt.has("value") ? opt.get("value").asText().trim() : label;
+                            String label = opt.has("label") ? opt.get("label").asText().trim()
+                                    : opt.has("name") ? opt.get("name").asText().trim() : "";
+                            String val = opt.has("value") ? opt.get("value").asText().trim()
+                                    : opt.has("optionId") ? opt.get("optionId").asText().trim() : label;
                             if (!val.isEmpty()) {
                                 Map<String, String> o = new HashMap<>();
                                 o.put("label", label.isEmpty() ? val : label);
@@ -1658,6 +1701,7 @@ public class ParticipantRegistryService {
                     fieldDef.put("label", !name.isEmpty() ? name : id);
                     fieldDef.put("type", type);
                     fieldDef.put("global", isGlobal);
+                    fieldDef.put("isBlind", v.has("isBlind") && v.get("isBlind").asBoolean());
                     if (reqStudyId != null) {
                         fieldDef.put("studyId", reqStudyId.toString());
                         fieldDef.put("studyName", studyName);

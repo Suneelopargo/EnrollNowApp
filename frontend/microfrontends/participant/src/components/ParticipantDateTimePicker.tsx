@@ -1,5 +1,6 @@
 // frontend/microfrontends/participant/src/components/ParticipantDateTimePicker.tsx
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 export interface ParticipantDateTimePickerProps {
@@ -85,6 +86,29 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   const [viewMonth, setViewMonth] = useState<number>(initialMonth);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupPosition, setPopupPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const positionPopup = () => {
+    const anchor = containerRef.current?.getBoundingClientRect();
+    if (!anchor) return;
+    const popupHeight = 370;
+    const popupWidth = 290;
+    const openAbove = window.innerHeight - anchor.bottom < popupHeight + 8 && anchor.top > popupHeight;
+    setPopupPosition({
+      top: openAbove
+        ? Math.max(8, anchor.top - popupHeight - 4)
+        : Math.max(8, Math.min(anchor.bottom + 4, window.innerHeight - popupHeight - 8)),
+      left: Math.max(8, Math.min(anchor.left, window.innerWidth - popupWidth - 8)),
+    });
+  };
+
+  const openPicker = (tab: 'date' | 'time') => {
+    if (disabled) return;
+    setActiveTab(tab);
+    positionPopup();
+    setIsOpen(true);
+  };
 
   // Sync with value changes from parent
   useEffect(() => {
@@ -102,14 +126,22 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   // Close popup on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (!containerRef.current?.contains(target) && !popupRef.current?.contains(target)) {
         setIsOpen(false);
       }
     };
+    const handleViewportChange = () => positionPopup();
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('resize', handleViewportChange);
+      window.addEventListener('scroll', handleViewportChange, true);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
   }, [isOpen]);
 
   const handlePrevMonth = (e: React.MouseEvent) => {
@@ -217,11 +249,11 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   const formattedDisplay = selectedDate ? formatResult(selectedDate, hours, minutes, isPm) : '';
 
   return (
-    <div ref={containerRef} className="participant-date-time-picker" data-testid="participant-date-time-picker">
+    <div id={id} ref={containerRef} className="participant-date-time-picker" data-testid="participant-date-time-picker">
       <div
         className={`participant-date-time-picker__input-container ${disabled ? 'disabled' : ''}`}
         onClick={() => {
-          if (!disabled) setIsOpen(true);
+          openPicker(activeTab);
         }}
       >
         <div className="participant-date-time-picker__display">
@@ -256,10 +288,7 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
             className={`participant-date-time-picker__icon-btn ${activeTab === 'date' && isOpen ? 'active' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
-              if (!disabled) {
-                setActiveTab('date');
-                setIsOpen(true);
-              }
+              openPicker('date');
             }}
             title="Open calendar"
             aria-label="Open calendar"
@@ -271,10 +300,7 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
             className={`participant-date-time-picker__icon-btn ${activeTab === 'time' && isOpen ? 'active' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
-              if (!disabled) {
-                setActiveTab('time');
-                setIsOpen(true);
-              }
+              openPicker('time');
             }}
             title="Set time"
             aria-label="Set time"
@@ -285,8 +311,14 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
       </div>
 
       {/* POPUP MODAL / CALENDAR DROPDOWN */}
-      {isOpen && (
-        <div className="participant-date-time-picker__popup" role="dialog" aria-modal="true">
+      {isOpen && popupPosition && createPortal(
+        <div
+          ref={popupRef}
+          className="participant-date-time-picker__popup"
+          role="dialog"
+          aria-label="Choose date and time"
+          style={{ position: 'fixed', top: popupPosition.top, left: popupPosition.left, zIndex: 1400 }}
+        >
           {/* Header Mode Switcher (Date / Time) */}
           <div className="participant-date-time-picker__tab-bar">
             <button
@@ -468,7 +500,8 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
               Done
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

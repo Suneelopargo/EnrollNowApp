@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
-import { ParticipantRecord, ParticipantVariable } from '../types/participant';
+import { GlobalVariableDefinition, ParticipantRecord, ParticipantVariable } from '../types/participant';
 import { ParticipantContactLogs } from './ParticipantContactLogs';
 import { ParticipantContactManagement } from './ParticipantContactManagement';
 import { ParticipantComments } from './ParticipantComments';
@@ -27,6 +27,117 @@ import { ParticipantConsentSection } from './ParticipantConsentSection';
 import { ParticipantFormsSection } from './ParticipantFormsSection';
 import { ParticipantTagSelect } from './ParticipantTagSelect';
 import { ParticipantDateTimePicker } from './ParticipantDateTimePicker';
+import { participantApi, ConsentItem } from '../../../../shared/api/participantApi';
+
+const GlobalVariableField: React.FC<{
+  variable: GlobalVariableDefinition;
+  value: string;
+  onChange: (value: string) => void;
+}> = ({ variable, value, onChange }) => {
+  const type = variable.type.toLowerCase();
+  const options = variable.options || [];
+  const fieldId = `global-variable-${variable.id}`;
+
+  let input: React.ReactNode;
+  if (variable.isBlind) {
+    input = <input className="form-input" value="####################" disabled aria-label={`${variable.name} is blinded`} />;
+  } else if (type === 'single') {
+    input = (
+      <select id={fieldId} className="form-select" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Select an option...</option>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    );
+  } else if (type === 'multi') {
+    const selected = value ? value.split(',').map((part) => part.trim()).filter(Boolean) : [];
+    input = (
+      <select
+        id={fieldId}
+        className="form-select"
+        multiple
+        value={selected}
+        onChange={(event) => onChange(Array.from(event.target.selectedOptions, (option) => option.value).join(', '))}
+      >
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    );
+  } else if (type === 'datetime') {
+    input = <ParticipantDateTimePicker id={fieldId} value={value} onChange={onChange} />;
+  } else if (type === 'date') {
+    const dateValue = /^\d{2}\/\d{2}\/\d{4}$/.test(value)
+      ? `${value.slice(6)}-${value.slice(0, 2)}-${value.slice(3, 5)}`
+      : /^\d{4}-\d{2}-\d{2}/.exec(value)?.[0] || '';
+    input = <input id={fieldId} type="date" className="form-input" value={dateValue} onChange={(event) => onChange(event.target.value)} />;
+  } else if (type === 'long') {
+    input = <textarea id={fieldId} className="form-textarea" rows={3} value={value} onChange={(event) => onChange(event.target.value)} />;
+  } else {
+    input = <input id={fieldId} type={type === 'number' ? 'number' : 'text'} className="form-input" value={value} onChange={(event) => onChange(event.target.value)} />;
+  }
+
+  return (
+    <div className="global-variable-field">
+      <div className="global-variable-field__label-row">
+        <label className="form-label" htmlFor={fieldId}>{variable.name}</label>
+        <span className="badge badge-info">Global</span>
+      </div>
+      {input}
+    </div>
+  );
+};
+
+const ParticipantStudiesInfo: React.FC<{
+  participant: ParticipantRecord;
+  tenantId?: string;
+  siteId?: string;
+}> = ({ participant, tenantId, siteId }) => {
+  const [consents, setConsents] = useState<ConsentItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setConsents([]);
+    setError('');
+    setIsLoading(true);
+    participantApi.getConsents(participant.id, { tenantId, siteId })
+      .then((items) => { if (active) setConsents(items); })
+      .catch(() => { if (active) setError('Unable to load study consent details.'); })
+      .finally(() => { if (active) setIsLoading(false); });
+    return () => { active = false; };
+  }, [participant.id, tenantId, siteId]);
+
+  return (
+    <section className="card record-detail__panel record-detail__study-info">
+      <div className="card-header"><h3>Studies Info</h3></div>
+      {error && <p className="record-detail__inline-error" role="status">{error}</p>}
+      <div className="record-detail__study-table-wrap">
+        <table className="record-detail__study-table">
+          <thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Date Consented</th></tr></thead>
+          <tbody>
+            {participant.studies?.map((study, index) => {
+              const studyId = study.studyId || study.id || '';
+              const consent = consents.find((item) => item.studyId === studyId);
+              return (
+                <tr key={studyId || `${study.name}-${index}`}>
+                  <td>{study.name}</td>
+                  <td>{study.participantStudyId || study.studyCode || '—'}</td>
+                  <td>{consent?.status || study.status || 'Not Consented'}</td>
+                  <td>{consent?.consentedAt ? new Date(consent.consentedAt).toLocaleDateString() : 'Not Consented'}</td>
+                </tr>
+              );
+            })}
+            {!isLoading && (!participant.studies || participant.studies.length === 0) && (
+              <tr><td colSpan={4} className="record-detail__study-empty">No studies are linked to this participant.</td></tr>
+            )}
+            {isLoading && (!participant.studies || participant.studies.length === 0) && (
+              <tr><td colSpan={4} className="record-detail__study-empty">Loading study information...</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
 
 export interface ParticipantDetailModalProps {
   isOpen: boolean;
@@ -37,6 +148,7 @@ export interface ParticipantDetailModalProps {
   onParticipantUpdated?: () => void;
   tenantId?: string;
   siteId?: string;
+  globalVariables?: GlobalVariableDefinition[];
 }
 
 export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
@@ -48,9 +160,13 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   onParticipantUpdated,
   tenantId,
   siteId,
+  globalVariables = [],
 }) => {
   const [activeTopNav, setActiveTopNav] = useState<'details' | 'contact' | 'demographics' | 'family' | 'variables'>('details');
   const [activeTab, setActiveTab] = useState<'comments' | 'email' | 'text' | 'contact' | 'consent' | 'forms'>('comments');
+  const [firstName, setFirstName] = useState(participant?.firstName || '');
+  const [middleName, setMiddleName] = useState(participant?.middleName || '');
+  const [lastName, setLastName] = useState(participant?.lastName || '');
 
   // Overview / General
   const [familyId, setFamilyId] = useState(participant?.familyId || '');
@@ -85,9 +201,13 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [newVarValue, setNewVarValue] = useState('');
   const [newVarType, setNewVarType] = useState('Text');
   const [isAddingVariable, setIsAddingVariable] = useState(false);
+  const [globalVariableSearch, setGlobalVariableSearch] = useState('');
 
   useEffect(() => {
     if (participant) {
+      setFirstName(participant.firstName || '');
+      setMiddleName(participant.middleName || '');
+      setLastName(participant.lastName || '');
       setFamilyId(participant.familyId || '');
       setGlobalId(participant.globalId || '');
       setTimezone(participant.timezone || 'America/New_York (EDT)');
@@ -135,9 +255,32 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setVariables((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleGlobalVariableChange = (definition: GlobalVariableDefinition, value: string) => {
+    const canonicalId = definition.id.replace(/^custom_/, '');
+    setVariables((previous) => {
+      const existingIndex = previous.findIndex((item) =>
+        item.id === canonicalId || item.id === definition.id || item.name.toLowerCase() === definition.name.toLowerCase()
+      );
+      const nextVariable: ParticipantVariable = {
+        ...(existingIndex >= 0 ? previous[existingIndex] : {}),
+        id: canonicalId,
+        name: definition.name,
+        type: definition.type,
+        value,
+        lastUpdated: new Date().toLocaleDateString(),
+      };
+      if (existingIndex < 0) return [...previous, nextVariable];
+      return previous.map((item, index) => index === existingIndex ? nextVariable : item);
+    });
+  };
+
   const handleSaveParticipant = () => {
     const updatedParticipant: ParticipantRecord = {
       ...participant,
+      firstName: firstName.trim(),
+      middleName: middleName.trim(),
+      lastName: lastName.trim(),
+      name: [firstName, middleName, lastName].map((part) => part.trim()).filter(Boolean).join(' ') || participant.name,
       familyId,
       globalId,
       timezone,
@@ -169,7 +312,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     };
 
     onSave(updatedParticipant);
-    onClose();
   };
 
   const familyMembers = participant.family?.members || [];
@@ -206,16 +348,47 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             { id: 'contact', label: 'Contact Methods', icon: <Mail size={16} /> },
             { id: 'demographics', label: 'Demographics', icon: <ShieldCheck size={16} /> },
             { id: 'family', label: `Family (${familyMembers.length || 1})`, icon: <Users size={16} /> },
-            { id: 'variables', label: `Variables (${variables.length})`, icon: <FileText size={16} /> },
+            { id: 'variables', label: `Variables (${globalVariables.length || variables.length})`, icon: <FileText size={16} /> },
           ]}
         />
 
         <div className="record-detail__sections">
           {/* TAB 1: OVERVIEW */}
           {activeTopNav === 'details' && (
+            <>
             <div className="card record-detail__panel">
               <div className="card-header"><h3>Participant overview</h3></div>
               <div className="record-detail__overview-grid">
+                <div className="record-detail__field">
+                  <label className="form-label" htmlFor="participant-first-name">First Name</label>
+                  <input
+                    id="participant-first-name"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="record-detail__field">
+                  <label className="form-label" htmlFor="participant-middle-name">Middle Name</label>
+                  <input
+                    id="participant-middle-name"
+                    type="text"
+                    value={middleName}
+                    onChange={(e) => setMiddleName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="record-detail__field">
+                  <label className="form-label" htmlFor="participant-last-name">Last Name</label>
+                  <input
+                    id="participant-last-name"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-family-id">Family ID</label>
                   <input
@@ -294,6 +467,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
               </div>
             </div>
+            <ParticipantStudiesInfo participant={participant} tenantId={tenantId} siteId={siteId} />
+            </>
           )}
 
           {/* TAB 2: CONTACT METHODS & PERSONS */}
@@ -467,22 +642,47 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           {/* TAB 5: CUSTOM VARIABLES */}
           {activeTopNav === 'variables' && (
             <section className="card record-detail__panel">
-              <div className="card-header flex items-center justify-between">
-                <div>
-                  <h3>Participant variables</h3>
-                  <p>Study-specific variables associated with this record.</p>
-                </div>
-                {!isAddingVariable && (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingVariable(true)}
-                    className="btn btn-sm btn-primary flex items-center gap-1"
-                  >
-                    <Plus size={14} /> Add Variable
-                  </button>
-                )}
+              <div className="card-header record-detail__variables-header">
+                <div><h3>Custom Variables</h3><p>Global participant variables from study configuration.</p></div>
+                <input
+                  type="search"
+                  value={globalVariableSearch}
+                  onChange={(event) => setGlobalVariableSearch(event.target.value)}
+                  placeholder="Search by name..."
+                  aria-label="Search global variables by name"
+                  className="form-input record-detail__variables-search"
+                />
               </div>
               <div className="record-detail__panel-content space-y-3">
+                <div className="record-detail__global-variable-grid">
+                  {globalVariables
+                    .filter((variable) => variable.name.toLowerCase().includes(globalVariableSearch.trim().toLowerCase()))
+                    .map((variable) => {
+                      const canonicalId = variable.id.replace(/^custom_/, '');
+                      const assigned = variables.find((item) =>
+                        item.id === canonicalId || item.id === variable.id || item.name.toLowerCase() === variable.name.toLowerCase()
+                      );
+                      return (
+                        <GlobalVariableField
+                          key={variable.id}
+                          variable={variable}
+                          value={assigned?.value || ''}
+                          onChange={(value) => handleGlobalVariableChange(variable, value)}
+                        />
+                      );
+                    })}
+                  {globalVariables.length === 0 && <p className="record-detail__study-empty">No global variables are configured for this registry.</p>}
+                </div>
+
+                <div className="record-detail__local-variables">
+                  <div className="record-detail__local-variables-heading">
+                    <h4>Additional Participant Variables</h4>
+                    {!isAddingVariable && (
+                      <button type="button" onClick={() => setIsAddingVariable(true)} className="btn btn-sm btn-primary flex items-center gap-1">
+                        <Plus size={14} /> Add Variable
+                      </button>
+                    )}
+                  </div>
                 {isAddingVariable && (
                   <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 mb-3">
                     <strong className="text-xs text-blue-900 block">Add New Variable</strong>
@@ -533,10 +733,14 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 )}
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  {variables.length > 0 ? (
+                  {variables.filter((item) => !globalVariables.some((definition) =>
+                    item.id === definition.id.replace(/^custom_/, '') || item.id === definition.id || item.name.toLowerCase() === definition.name.toLowerCase()
+                  )).length > 0 ? (
                     <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                      {variables.map((variable, idx) => (
-                        <div key={variable.id || idx} className="p-3 flex items-center justify-between hover:bg-gray-50">
+                      {variables.filter((item) => !globalVariables.some((definition) =>
+                        item.id === definition.id.replace(/^custom_/, '') || item.id === definition.id || item.name.toLowerCase() === definition.name.toLowerCase()
+                      )).map((variable) => (
+                        <div key={variable.id || variable.name} className="p-3 flex items-center justify-between hover:bg-gray-50">
                           <div>
                             <strong className="text-sm text-gray-800 block">{variable.name}</strong>
                             <div className="text-xs text-gray-600">
@@ -546,7 +750,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleRemoveVariable(idx)}
+                            onClick={() => handleRemoveVariable(variables.indexOf(variable))}
                             className="btn btn-ghost btn-sm text-red-500 hover:bg-red-50 p-1.5"
                             title="Remove variable"
                             aria-label={`Remove variable ${variable.name}`}
@@ -561,6 +765,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                       No custom variables attached to this participant. Click &ldquo;Add Variable&rdquo; to define study parameters.
                     </div>
                   )}
+                </div>
                 </div>
               </div>
             </section>

@@ -6,6 +6,21 @@ export interface StudyItem {
   studyCode?: string;
   name: string;
   isLink?: boolean;
+  status?: string;
+  participantStudyId?: string;
+}
+
+export interface GlobalVariableOption {
+  value: string;
+  label: string;
+}
+
+export interface GlobalVariableDefinition {
+  id: string;
+  name: string;
+  type: string;
+  isBlind?: boolean;
+  options?: GlobalVariableOption[];
 }
 
 export interface ContactMethods {

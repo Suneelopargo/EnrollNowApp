@@ -10,6 +10,7 @@ import {
   isNoValueOperator,
 } from '../constants/filterMetadata';
 import { CustomFilterRule } from '../types/participant';
+import { SearchableMultiSelect } from './SearchableMultiSelect';
 
 interface FilterCardProps {
   filter: CustomFilterRule;
@@ -81,20 +82,6 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
     });
   };
 
-  const handleToggleOption = (optVal: string) => {
-    const currentValues = filter.values ? [...filter.values] : (filter.value ? filter.value.split(',').map((s) => s.trim()) : []);
-    const exists = currentValues.includes(optVal);
-    const updatedValues = exists
-      ? currentValues.filter((v) => v !== optVal)
-      : [...currentValues, optVal];
-
-    onUpdate(index, {
-      ...filter,
-      values: updatedValues,
-      value: updatedValues.join(','),
-    });
-  };
-
   const renderValueControl = () => {
     if (isNoVal) {
       return (
@@ -143,32 +130,15 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
     if (currentFieldDef.type === 'multiselect' && currentFieldDef.options && currentFieldDef.options.length > 0) {
       const selected = filter.values || (filter.value ? filter.value.split(',').map((s) => s.trim()) : []);
       return (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-1 bg-gray-50/50 rounded border border-gray-200">
-            {currentFieldDef.options.map((opt) => {
-              const isSelected = selected.includes(opt.value);
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleToggleOption(opt.value)}
-                  className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
-                    isSelected
-                      ? 'bg-blue-600 text-white border-blue-600 font-medium'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
-                  }`}
-                  aria-pressed={isSelected}
-                  title={`Toggle ${opt.label}`}
-                >
-                  {opt.label} {isSelected && '✓'}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <SearchableMultiSelect
+          options={currentFieldDef.options}
+          selectedValues={selected}
+          onChange={(values) => onUpdate(index, { ...filter, values, value: values.join(',') })}
+          placeholder={currentFieldDef.placeholder || 'Select options...'}
+          ariaLabel={`Filter rule ${index + 1} values`}
+        />
       );
     }
-
     if (currentFieldDef.type === 'number') {
       return (
         <input
@@ -224,12 +194,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
               </option>
             ))}
           </select>
-          <ChevronDown
-            size={14}
-            color="#6b7280"
-            className="filter-card-chevron"
-            aria-hidden="true"
-          />
+          <ChevronDown size={14} color="#6b7280" className="filter-card-chevron" aria-hidden="true" />
         </div>
 
         {/* Operator Dropdown */}
