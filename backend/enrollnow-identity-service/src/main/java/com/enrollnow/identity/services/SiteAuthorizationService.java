@@ -244,6 +244,19 @@ public class SiteAuthorizationService {
         }
     }
 
+    public UUID requireAuditLogView(UUID targetTenantId) {
+        CallerIdentity caller = requireCaller();
+        UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);
+        UserEffectivePermissionsResponse effective =
+                sitePermissionService.resolveEffectivePermissions(effectiveTenantId, caller.userId(), null);
+
+        if (!effective.isCanManageSiteAdmins()
+                && !effective.getPermissions().contains(SitePermissionService.PERM_SITE_AUDIT_LOG_VIEW)) {
+            throw new AccessDeniedException("Access denied: viewing audit logs requires SITE_AUDIT_LOG_VIEW permission");
+        }
+        return effectiveTenantId;
+    }
+
     public void requireSecuritySettingsManage(UUID targetTenantId) {
         CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);

@@ -24,6 +24,7 @@ import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.models.StudyMemberId;
+import com.enrollnow.study.models.Study;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
@@ -138,7 +139,7 @@ public class StudyAccessService {
         requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // 1. Validate study belongs to tenant
-        studyRepository.findByTenantIdAndId(tenantId, studyId)
+        Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException(studyId));
 
         // 2. Validate user belongs to tenant
@@ -240,10 +241,12 @@ public class StudyAccessService {
                                     null,
                                     Map.of(
                                             "studyId", studyId,
+                                            "studyName", study.getName(),
                                             "studyPermission", previousRoleCode
                                     ),
                                     Map.of(
                                             "studyId", studyId,
+                                            "studyName", study.getName(),
                                             "studyPermission", role.getCode()
                                     ),
                                     List.of(
@@ -283,10 +286,12 @@ public class StudyAccessService {
                                 null,
                                 Map.of(
                                         "studyId", studyId,
+                                        "studyName", study.getName(),
                                         "studyPermission", "NONE"
                                 ),
                                 Map.of(
                                         "studyId", studyId,
+                                        "studyName", study.getName(),
                                         "studyPermission", role.getCode()
                                 ),
                                 List.of(
@@ -310,7 +315,7 @@ public class StudyAccessService {
         requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // Validate study belongs to tenant
-        studyRepository.findByTenantIdAndId(tenantId, studyId)
+        Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException(studyId));
 
         userRepository
@@ -360,10 +365,12 @@ public class StudyAccessService {
                                 null,
                                 Map.of(
                                         "studyId", studyId,
+                                        "studyName", study.getName(),
                                         "studyPermission", previousRoleCode
                                 ),
                                 Map.of(
                                         "studyId", studyId,
+                                        "studyName", study.getName(),
                                         "studyPermission", "NONE"
                                 ),
                                 List.of(

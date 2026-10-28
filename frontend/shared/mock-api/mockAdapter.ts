@@ -510,6 +510,10 @@ export const mockAdapter: AxiosAdapter = async (
     return createMockSuccessResponse(config, mockStore.getAdminAuditLogs());
   }
 
+  if (/^\/api\/v1\/administrator\/audit-logs\/[^/]+\/changes$/.test(path) && method === 'GET') {
+    return createMockSuccessResponse(config, []);
+  }
+
   // --- Security Settings ---
   if (path === '/api/v1/security-settings' || path.match(/^\/api\/v1\/tenants\/[^/]+\/security-settings$/)) {
     if (method === 'GET') {
