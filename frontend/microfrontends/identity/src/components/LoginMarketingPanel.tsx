@@ -51,9 +51,6 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
       {/* ================================================================= */}
       <section className="enl-showcase-region">
         <div className="enl-showcase-container">
-          {/* Ambient Blobs Behind Photo */}
-          <div className="enl-ambient-blob-cyan" />
-          <div className="enl-ambient-blob-yellow" />
 
           {/* Standalone Researcher Photograph */}
           <div className="enl-researcher-frame">
@@ -73,7 +70,7 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
           >
             {/* Upper Flow Line: Card 1 (Screening) -> Node 1 -> Card 2 (Appointments) */}
             <path
-              d="M 130 160 C 70 165, 35 175, 35 195 C 35 210, 20 215, 20 230"
+              d="M 130 160 C 55 165, 20 195, 20 230"
               stroke="#1F5FD0"
               strokeWidth="2.5"
               strokeDasharray="2 6"
@@ -102,7 +99,7 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
 
             {/* Lower Flow Line: Card 2 (Appointments) -> Node 2 -> Card 3 (Engage) */}
             <path
-              d="M 20 370 C 20 376, 35 375, 35 385 C 35 405, 70 430, 130 435"
+              d="M 20 370 C 20 405, 55 430, 130 435"
               stroke="#1F5FD0"
               strokeWidth="2.5"
               strokeDasharray="2 6"
@@ -112,8 +109,8 @@ export const LoginMarketingPanel: React.FC<LoginMarketingPanelProps> = ({
             {/* Anchor dot on Card 2 bottom-left */}
             <circle cx="20" cy="370" r="3.5" fill="#1F5FD0" />
 
-            {/* Node 2: Stage 2 Active Milestone (35, 385) */}
-            <g transform="translate(35, 385)">
+            {/* Node 2: Stage 2 Active Milestone (35, 404) */}
+            <g transform="translate(35, 404)">
               <circle r="14" fill="rgba(31, 95, 208, 0.16)" />
               <circle r="10" fill="#ffffff" stroke="#1F5FD0" strokeWidth="2.4" />
               <circle r="4" fill="#1F5FD0" />
