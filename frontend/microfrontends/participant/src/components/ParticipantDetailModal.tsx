@@ -1,4 +1,4 @@
-// frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
+﻿// frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
@@ -229,7 +229,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
       setFamilyRole(participant.family?.familyRole || 'Proband');
       setVariables(Array.isArray(participant.variables) ? [...participant.variables] : []);
-      setIsAddingVariable(false);
     }
   }, [participant]);
 
@@ -348,7 +347,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             { id: 'contact', label: 'Contact Methods', icon: <Mail size={16} /> },
             { id: 'demographics', label: 'Demographics', icon: <ShieldCheck size={16} /> },
             { id: 'family', label: `Family (${familyMembers.length || 1})`, icon: <Users size={16} /> },
-            { id: 'variables', label: `Variables (${globalVariables.length || variables.length})`, icon: <FileText size={16} /> },
+            { id: 'variables', label: `Variables (${globalVariables.length})`, icon: <FileText size={16} /> },
           ]}
         />
 
@@ -672,100 +671,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                       );
                     })}
                   {globalVariables.length === 0 && <p className="record-detail__study-empty">No global variables are configured for this registry.</p>}
-                </div>
-
-                <div className="record-detail__local-variables">
-                  <div className="record-detail__local-variables-heading">
-                    <h4>Additional Participant Variables</h4>
-                    {!isAddingVariable && (
-                      <button type="button" onClick={() => setIsAddingVariable(true)} className="btn btn-sm btn-primary flex items-center gap-1">
-                        <Plus size={14} /> Add Variable
-                      </button>
-                    )}
-                  </div>
-                {isAddingVariable && (
-                  <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2 mb-3">
-                    <strong className="text-xs text-blue-900 block">Add New Variable</strong>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={newVarName}
-                        onChange={(e) => setNewVarName(e.target.value)}
-                        placeholder="Variable Name"
-                        className="form-input text-xs"
-                      />
-                      <select
-                        value={newVarType}
-                        onChange={(e) => setNewVarType(e.target.value)}
-                        className="form-select text-xs"
-                      >
-                        <option value="Text">Text</option>
-                        <option value="Number">Number</option>
-                        <option value="Date">Date</option>
-                        <option value="Boolean">Boolean</option>
-                      </select>
-                    </div>
-                    <input
-                      type="text"
-                      value={newVarValue}
-                      onChange={(e) => setNewVarValue(e.target.value)}
-                      placeholder="Variable Value"
-                      className="form-input text-xs"
-                    />
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingVariable(false)}
-                        className="btn btn-sm btn-secondary"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddVariable}
-                        disabled={!newVarName.trim()}
-                        className="btn btn-sm btn-primary"
-                      >
-                        Save Variable
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  {variables.filter((item) => !globalVariables.some((definition) =>
-                    item.id === definition.id.replace(/^custom_/, '') || item.id === definition.id || item.name.toLowerCase() === definition.name.toLowerCase()
-                  )).length > 0 ? (
-                    <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto">
-                      {variables.filter((item) => !globalVariables.some((definition) =>
-                        item.id === definition.id.replace(/^custom_/, '') || item.id === definition.id || item.name.toLowerCase() === definition.name.toLowerCase()
-                      )).map((variable) => (
-                        <div key={variable.id || variable.name} className="p-3 flex items-center justify-between hover:bg-gray-50">
-                          <div>
-                            <strong className="text-sm text-gray-800 block">{variable.name}</strong>
-                            <div className="text-xs text-gray-600">
-                              Value: <strong>{variable.value}</strong> &bull; Type: {variable.type || 'Text'}
-                              {variable.lastUpdated && ` &bull; Updated: ${variable.lastUpdated}`}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveVariable(variables.indexOf(variable))}
-                            className="btn btn-ghost btn-sm text-red-500 hover:bg-red-50 p-1.5"
-                            title="Remove variable"
-                            aria-label={`Remove variable ${variable.name}`}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-5 text-center text-xs text-gray-500 bg-gray-50">
-                      No custom variables attached to this participant. Click &ldquo;Add Variable&rdquo; to define study parameters.
-                    </div>
-                  )}
-                </div>
                 </div>
               </div>
             </section>

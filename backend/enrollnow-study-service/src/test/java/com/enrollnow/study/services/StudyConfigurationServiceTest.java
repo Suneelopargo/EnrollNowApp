@@ -824,4 +824,35 @@ class StudyConfigurationServiceTest {
         // Layout preserved
         assertEquals(1, res.getCustomVariableLayout().size());
     }
+
+    @Test
+    void deserializeUpdateStudyRequirementsRequest_withVariableOptionsHavingOrder_succeeds() throws Exception {
+        String json = "{\n" +
+                "  \"customVariables\": [\n" +
+                "    {\n" +
+                "      \"id\": \"var_12345\",\n" +
+                "      \"name\": \"MyLocalGlobal\",\n" +
+                "      \"variableType\": \"single\",\n" +
+                "      \"options\": [\n" +
+                "        { \"label\": \"test\", \"value\": \"test\", \"order\": 0 },\n" +
+                "        { \"label\": \"NotValid\", \"value\": \"notvalid\", \"order\": 1 }\n" +
+                "      ],\n" +
+                "      \"isGlobal\": true,\n" +
+                "      \"isBlind\": false,\n" +
+                "      \"rank\": 0\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        UpdateStudyRequirementsRequest req = objectMapper.readValue(json, UpdateStudyRequirementsRequest.class);
+        assertNotNull(req.getCustomVariables());
+        assertEquals(1, req.getCustomVariables().size());
+        StudyCustomVariableDto var = req.getCustomVariables().get(0);
+        assertEquals("MyLocalGlobal", var.getName());
+        assertEquals(2, var.getOptions().size());
+        assertEquals(0, var.getOptions().get(0).getOrder());
+        assertEquals("test", var.getOptions().get(0).getName());
+        assertEquals("test", var.getOptions().get(0).getOptionId());
+        assertEquals(1, var.getOptions().get(1).getOrder());
+    }
 }

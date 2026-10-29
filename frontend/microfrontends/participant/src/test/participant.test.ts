@@ -585,6 +585,39 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(catOps).toContain('has no value');
   });
 
+  it('only includes global custom variables when global is checked and excludes unchecked variables', async () => {
+    const {
+      registerDynamicFilterFields,
+      getAllFilterFields,
+    } = await import('../constants/filterMetadata');
+
+    const rawMeta = [
+      { id: 'custom_global1', label: 'Global Variable 1', type: 'text', global: true },
+      { id: 'custom_local1', label: 'Local Variable', type: 'text', global: false },
+      { id: 'custom_global2', label: 'Global Variable 2', type: 'text', isGlobal: true },
+      { id: 'custom_local2', label: 'Another Local', type: 'text' },
+    ];
+
+    const globalOnly = rawMeta.filter((m: any) =>
+      m?.global === true || m?.isGlobal === true || String(m?.global).toLowerCase() === 'true' || String(m?.isGlobal).toLowerCase() === 'true'
+    );
+
+    registerDynamicFilterFields(
+      globalOnly.map((m) => ({
+        id: m.id,
+        label: `Custom - ${m.label}`,
+        placeholder: `Filter by ${m.label}...`,
+        type: 'text',
+      }))
+    );
+
+    const allFields = getAllFilterFields();
+    expect(allFields.some((f) => f.id === 'custom_global1')).toBe(true);
+    expect(allFields.some((f) => f.id === 'custom_global2')).toBe(true);
+    expect(allFields.some((f) => f.id === 'custom_local1')).toBe(false);
+    expect(allFields.some((f) => f.id === 'custom_local2')).toBe(false);
+  });
+
   it('queries /api/v1/registry/filter-metadata via participantApi.getFilterMetadata', async () => {
     const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
       data: {

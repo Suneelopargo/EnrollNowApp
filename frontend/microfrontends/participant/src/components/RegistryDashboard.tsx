@@ -229,8 +229,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     try {
       const meta = await participantApi.getFilterMetadata();
       if (Array.isArray(meta)) {
-        setGlobalVariables(meta
-          .filter((m: any) => m.global === true || m.isGlobal === true)
+        const globalOnlyMeta = meta.filter((m: any) => m?.global === true || m?.isGlobal === true || String(m?.global).toLowerCase() === 'true' || String(m?.isGlobal).toLowerCase() === 'true');
+        setGlobalVariables(globalOnlyMeta
+
           .map((m: any) => ({
             id: String(m.id || ''),
             name: String(m.label || m.name || m.id || 'Unnamed variable'),
@@ -242,7 +243,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
             })) : [],
           }))
           .filter((m: GlobalVariableDefinition) => m.id && m.name));
-        const dynamicFields: FilterFieldOption[] = meta.map((m: any) => {
+        const dynamicFields: FilterFieldOption[] = globalOnlyMeta.map((m: any) => {
           const variableLabel = String(m.label || m.name || m.id || 'Unnamed variable').trim();
           const customFieldLabel = /^custom\s*[-:]/i.test(variableLabel)
             ? variableLabel
