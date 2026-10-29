@@ -395,4 +395,41 @@ class ParticipantSpecificationsTest {
         verify(query).subquery(UUID.class);
         verify(cb).exists(mockDupSub);
     }
+
+    @Test
+    void buildSpecification_handlesStudiesFilterWithStudyIdNameAndNone() {
+        UUID studyUuid = UUID.randomUUID();
+
+        // 1. Equal to specific study UUID / name (queries StudyCandidate & StudyEnrollment, NOT customAttributes JSONB)
+        CustomFilterRuleDto eqStudyRule = new CustomFilterRuleDto(
+                "1", "studies", "equal to", "", "", "", List.of(studyUuid.toString(), "ADRC Comm Hour"), ""
+        );
+        Specification<Participant> eqSpec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(eqStudyRule)
+        );
+        Predicate eqPred = eqSpec.toPredicate(root, query, cb);
+        assertThat(eqPred).isNotNull();
+        verify(cb, never()).function(eq("jsonb_path_exists"), eq(Boolean.class), any(), any());
+
+        // 2. Equal to NONE ("Not in a study")
+        CustomFilterRuleDto noneRule = new CustomFilterRuleDto(
+                "2", "studies", "equal to", "", "", "", List.of("NONE"), ""
+        );
+        Specification<Participant> noneSpec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(noneRule)
+        );
+        Predicate nonePred = noneSpec.toPredicate(root, query, cb);
+        assertThat(nonePred).isNotNull();
+        verify(cb, atLeastOnce()).not(any(Predicate.class));
+
+        // 3. Not equal to NONE + study
+        CustomFilterRuleDto notEqComboRule = new CustomFilterRuleDto(
+                "3", "studies", "not equal to", "", "", "", List.of("NONE", studyUuid.toString()), ""
+        );
+        Specification<Participant> notEqSpec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(notEqComboRule)
+        );
+        Predicate notEqPred = notEqSpec.toPredicate(root, query, cb);
+        assertThat(notEqPred).isNotNull();
+    }
 }

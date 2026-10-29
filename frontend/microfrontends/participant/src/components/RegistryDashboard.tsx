@@ -5,13 +5,21 @@ import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { participantApi, RegistrySearchParams, CreateParticipantPayload } from '../../../../shared/api/participantApi';
+import { studyApi, Study } from '../../../../shared/api/studyApi';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition } from '../types/participant';
-import { validateFilterRule, registerDynamicFilterFields, isRangeOperator, isNoValueOperator } from '../constants/filterMetadata';
+import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition, StudyItem } from '../types/participant';
+import {
+  validateFilterRule,
+  registerDynamicFilterFields,
+  registerStudyFilterOptions,
+  DEFAULT_STUDY_FILTER_OPTIONS,
+  isRangeOperator,
+  isNoValueOperator,
+} from '../constants/filterMetadata';
 
 const hasFilterCriteria = (rule: CustomFilterRule): boolean => {
   if (isNoValueOperator(rule.operator || '')) return true;
@@ -42,6 +50,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [globalVariables, setGlobalVariables] = useState<GlobalVariableDefinition[]>([]);
+  const [availableStudies, setAvailableStudies] = useState<Study[]>([]);
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
   const [serverTotalCount, setServerTotalCount] = useState<number>(0);
 
@@ -153,8 +162,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         state: p.state || '',
         zipcode: p.zipcode || p.postalCode || '',
         phone: p.phone || '',
-        gender: p.gender || 'Unspecified',
-        age: p.age || 'N/A',
+        gender: p.gender && p.gender.toLowerCase() !== 'unspecified' ? p.gender : '',
+        age: p.age && p.age !== 'N/A' && p.age !== 'NA' ? String(p.age) : '',
         ageNumeric: p.ageNumeric ?? (typeof p.age === 'number' ? p.age : undefined),
         lastContact: p.lastContact || p.globalDateOfLastContact || '',
         familyId: p.familyId || '',
@@ -173,7 +182,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           preferredMethod: 'Email',
         },
         demographics: p.demographics || {
-          gender: p.gender || 'Unspecified',
+          gender: p.gender && p.gender.toLowerCase() !== 'unspecified' ? p.gender : '',
           primaryLanguage: 'English',
         },
         family: {
@@ -265,12 +274,50 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     }
   }, []);
 
+  // Fetch visible studies from Study Service for filter dropdowns & bulk assignment
+  const fetchStudies = useCallback(async () => {
+    try {
+      const studies = await studyApi.getStudies({ includeArchived: true });
+      if (Array.isArray(studies)) {
+        setAvailableStudies(studies);
+        const opts: FilterOptionItem[] = [
+          ...DEFAULT_STUDY_FILTER_OPTIONS,
+          ...studies
+            .map((s) => {
+              const label = String(s.name || s.shortName || s.title || '').trim();
+              const value = String(s.id ?? s.studyId ?? label).trim();
+              return { value, label };
+            })
+            .filter((o) => Boolean(o.value && o.label)),
+        ];
+        registerStudyFilterOptions(opts);
+      }
+    } catch (err) {
+      console.warn('Failed to load studies for registry:', err);
+    }
+  }, []);
+
+  const studyFilterOptions = useMemo<FilterOptionItem[]>(() => {
+    const seen = new Set<string>(['NONE']);
+    const opts: FilterOptionItem[] = [...DEFAULT_STUDY_FILTER_OPTIONS];
+    availableStudies.forEach((s) => {
+      const label = String(s.name || s.shortName || s.title || '').trim();
+      const value = String(s.id ?? s.studyId ?? label).trim();
+      if (value && label && !seen.has(value)) {
+        seen.add(value);
+        opts.push({ value, label });
+      }
+    });
+    return opts;
+  }, [availableStudies]);
+
   // Initial Load only on mount / tenant-site context change
   useEffect(() => {
     fetchParticipants();
     fetchSavedSearches();
     fetchFilterMetadata();
-  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata]);
+    fetchStudies();
+  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata, fetchStudies]);
 
   const selectedParticipant = useMemo(() => {
     return participants.find((p) => p.id === selectedParticipantId) || participants[0] || null;
@@ -286,6 +333,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     const refreshed = await fetchParticipants(false);
     fetchSavedSearches();
     fetchFilterMetadata();
+    fetchStudies();
     if (refreshed) showNotification('Participant queue refreshed');
   };
 
@@ -314,15 +362,42 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     setCustomFilters((prev) => [...prev, newFilter]);
   };
 
+  const handleSelectedStudiesChange: React.Dispatch<React.SetStateAction<string[]>> = useCallback((updater) => {
+    const current = filterStateRef.current.selectedStudies;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    filterStateRef.current = { ...filterStateRef.current, selectedStudies: next };
+    setSelectedStudies(next);
+    void fetchParticipants(false, { selectedStudies: next });
+  }, [fetchParticipants]);
+
+  const handleNavigateToStudy = useCallback((study: StudyItem) => {
+    const targetStudyId = String(study.studyId || study.id || '').trim();
+    if (!targetStudyId || !context?.navigate) return;
+    const targetTab = String(study.status || '').toUpperCase() === 'ENROLLED'
+      ? 'enrolled_participants'
+      : 'potential_participants';
+    context.navigate(`/studies?studyId=${encodeURIComponent(targetStudyId)}&tab=${targetTab}`);
+  }, [context]);
+
   const handleAssignStudyToSelected = async (participantIds: string[], studyName: string) => {
+    const matchedStudy = availableStudies.find((s) => {
+      const id = String(s.id ?? s.studyId ?? '').trim();
+      const label = String(s.name || s.shortName || s.title || '').trim();
+      return (id && id === studyName) || (label && label.toLowerCase() === studyName.trim().toLowerCase());
+    });
+    const resolvedStudyId = matchedStudy ? String(matchedStudy.id ?? matchedStudy.studyId ?? '').trim() : undefined;
+    const resolvedStudyName = matchedStudy
+      ? String(matchedStudy.name || matchedStudy.shortName || matchedStudy.title || studyName).trim()
+      : studyName;
     try {
       await participantApi.assignStudy({
         participantIds,
-        studyName,
+        ...(resolvedStudyId ? { studyId: resolvedStudyId } : {}),
+        studyName: resolvedStudyName,
         status: 'REFERRED',
         notes: 'Bulk assigned from Participant Registry',
       });
-      showNotification(`Assigned ${participantIds.length} participant(s) to ${studyName}.`, 'success');
+      showNotification(`Assigned ${participantIds.length} participant(s) to ${resolvedStudyName}.`, 'success');
       await fetchParticipants(true);
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to assign study to selected participants.');
@@ -550,7 +625,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     });
   };
 
-  const handleExportServerCsv = async () => {
+  const handleExportServerCsv = async (exportFields: string[], timezone: string) => {
     try {
       const applicableFilters = customFilters.filter(hasFilterCriteria);
       const params: RegistrySearchParams = {
@@ -562,18 +637,15 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         studies: selectedStudies.length > 0 ? selectedStudies : undefined,
         customFiltersJson: applicableFilters.length > 0 ? JSON.stringify(applicableFilters) : undefined,
         duplicatesOnly: duplicatesOnly ? true : undefined,
+        exportFields,
+        timezone,
       };
       const blob = await participantApi.exportRegistry(params);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `registry_export_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-      showNotification('Registry exported successfully.', 'success');
+      return blob;
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to export registry.');
       showNotification(errorMsg, 'error');
+      return null;
     }
   };
 
@@ -598,6 +670,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           savedSearches={savedSearches}
           onSelectSavedSearch={handleSelectSavedSearch}
           onDeleteRequest={handleOpenDeleteModal}
+          studyOptions={studyFilterOptions}
         />
       </div>
 
@@ -649,12 +722,15 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           onDeleteSelected={handleDeleteSelected}
           onAssignStudyToSelected={handleAssignStudyToSelected}
           onExportServerCsv={handleExportServerCsv}
+          globalVariables={globalVariables}
           isLoading={isLoading}
           totalCount={serverTotalCount}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           selectedStudies={selectedStudies}
-          setSelectedStudies={setSelectedStudies}
+          setSelectedStudies={handleSelectedStudiesChange}
+          studies={availableStudies}
+          onNavigateToStudy={handleNavigateToStudy}
           duplicatesOnly={duplicatesOnly}
           onToggleDuplicates={handleToggleDuplicates}
         />

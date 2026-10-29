@@ -15,6 +15,29 @@ import {
 } from 'lucide-react';
 import { ChevronDown, FileSpreadsheet, FileText, UserPlus, List } from 'lucide-react';
 import { ParticipantRecord, StudyItem } from '../types/participant';
+import { Modal } from '../../../../shared/design-system/components/Modal';
+import { toast } from '../../../../shared/toaster';
+
+const parseCsv = (csv: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = '';
+  let quoted = false;
+  for (let index = 0; index < csv.length; index += 1) {
+    const char = csv[index];
+    if (quoted && char === '"' && csv[index + 1] === '"') { value += '"'; index += 1; }
+    else if (char === '"') quoted = !quoted;
+    else if (!quoted && char === ',') { row.push(value); value = ''; }
+    else if (!quoted && (char === '\n' || char === '\r')) {
+      if (char === '\r' && csv[index + 1] === '\n') index += 1;
+      row.push(value); value = '';
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = [];
+    } else value += char;
+  }
+  if (value.length || row.length) { row.push(value); rows.push(row); }
+  return rows;
+};
 
 const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
   const [isSelected, setIsSelected] = useState(params.node ? params.node.isSelected() : false);
@@ -50,14 +73,29 @@ const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
 const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
   const studies: StudyItem[] = params.value;
   if (!studies || !Array.isArray(studies) || studies.length === 0) {
-    return <span className="text-gray-400">...</span>;
+    return <span className="text-gray-500 text-xs font-normal">...</span>;
   }
 
   return (
     <div className="flex flex-wrap items-center gap-1 leading-relaxed py-1">
       {studies.map((item, idx) => (
         <span key={idx} className="text-xs">
-          <span className="text-gray-700">{item.name}</span>
+          {item.archived ? (
+            <span className="text-gray-700" title="Study is Archived">{item.name}</span>
+          ) : item.isLink !== false && (item.studyId || item.id) && params.context?.onNavigateToStudy ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                params.context.onNavigateToStudy(item, params.data);
+              }}
+              className="participant-grid__study-link text-[#1976d2] hover:underline cursor-pointer bg-transparent border-0 p-0 text-xs text-left"
+            >
+              {item.name}
+            </button>
+          ) : (
+            <span className="text-gray-700">{item.name}</span>
+          )}
           {idx < studies.length - 1 && <span className="text-gray-500">, </span>}
         </span>
       ))}
@@ -99,9 +137,9 @@ const ParticipantActionsRenderer: React.FC<ICellRendererParams> = (params) => {
 };
 
 const DefaultTextRenderer: React.FC<ICellRendererParams> = (params) => {
-  const val = params.value;
-  if (!val || val === '...') {
-    return <span className="text-gray-600 font-normal">...</span>;
+  const val = params.value != null ? String(params.value).trim() : '';
+  if (!val || val === '...' || val === 'N/A' || val === 'NA' || val.toLowerCase() === 'unspecified') {
+    return <span className="text-gray-500 text-xs font-normal">...</span>;
   }
   return <span className="text-gray-800 text-xs font-normal">{val}</span>;
 };
@@ -118,7 +156,7 @@ interface ParticipantGridProps {
   onDeleteSelected?: (participantIds: string[]) => void;
   onAssignStudyToSelected?: (participantIds: string[], studyName: string) => void;
   isLoading?: boolean;
-  onExportServerCsv?: () => void;
+  onExportServerCsv?: (fields: string[], timezone: string) => Promise<Blob | null>;
   totalCount?: number;
   searchTerm?: string;
   setSearchTerm?: (term: string) => void;
@@ -126,6 +164,18 @@ interface ParticipantGridProps {
   setSelectedStudies?: React.Dispatch<React.SetStateAction<string[]>>;
   duplicatesOnly?: boolean;
   onToggleDuplicates?: () => void;
+  globalVariables?: { id: string; name: string }[];
+  studies?: Array<{
+    id?: string | number;
+    studyId?: string;
+    studyCode?: string;
+    name?: string;
+    shortName?: string;
+    title?: string;
+    archived?: boolean;
+    status?: string;
+  }>;
+  onNavigateToStudy?: (study: StudyItem, participant: ParticipantRecord) => void;
 }
 
 export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
@@ -147,6 +197,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   setSelectedStudies,
   duplicatesOnly = false,
   onToggleDuplicates,
+  globalVariables = [],
+  studies = [],
+  onNavigateToStudy,
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
   const [gridSearchTerm, setGridSearchTerm] = useState(searchTerm || '');
@@ -155,6 +208,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<React.CSSProperties>({});
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx' | 'pdf'>('csv');
+  const [exportTimezone, setExportTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const [isExporting, setIsExporting] = useState(false);
+  const [selectedExportFields, setSelectedExportFields] = useState<string[]>([]);
   const [filterSearchQuery, setFilterSearchQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const studyFilterButtonRef = useRef<HTMLButtonElement>(null);
@@ -188,6 +246,12 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 
   const availableStudyList = useMemo(() => {
     const list = new Set<string>();
+    if (Array.isArray(studies)) {
+      studies.forEach((s) => {
+        const label = String(s?.name || s?.shortName || s?.title || '').trim();
+        if (label) list.add(label);
+      });
+    }
     const source = allParticipants.length > 0 ? allParticipants : participants;
     source.forEach((p) => {
       if (Array.isArray(p.studies)) {
@@ -197,7 +261,27 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       }
     });
     return Array.from(list).sort();
-  }, [allParticipants, participants]);
+  }, [allParticipants, participants, studies]);
+
+  const assignableStudyOptions = useMemo(() => {
+    const activeStudies: Array<{ value: string; label: string }> = [];
+    const seen = new Set<string>();
+    if (Array.isArray(studies) && studies.length > 0) {
+      studies.forEach((s) => {
+        const isArchived = Boolean(s?.archived || String(s?.status || '').toUpperCase() === 'ARCHIVED');
+        if (isArchived) return;
+        const label = String(s?.name || s?.shortName || s?.title || '').trim();
+        if (!label) return;
+        const val = String(s?.id ?? s?.studyId ?? label).trim();
+        if (val && !seen.has(val)) {
+          seen.add(val);
+          activeStudies.push({ value: val, label });
+        }
+      });
+      return activeStudies.sort((a, b) => a.label.localeCompare(b.label));
+    }
+    return availableStudyList.map((name) => ({ value: name, label: name }));
+  }, [studies, availableStudyList]);
 
   const filteredStudyOptions = useMemo(() => {
     if (!filterSearchQuery.trim()) return availableStudyList;
@@ -412,84 +496,100 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   }, [gridApi, participants]);
 
   const exportFileName = `participants-${new Date().toISOString().slice(0, 10)}`;
-  const exportCsv = () => {
-    if (onExportServerCsv) {
-      onExportServerCsv();
-      setIsExportMenuOpen(false);
-      return;
+  const exportFields = useMemo(() => ([
+    { key: 'globalId', label: 'Global ID' },
+    { key: 'firstName', label: 'First name' },
+    { key: 'middleName', label: 'Middle name' },
+    { key: 'lastName', label: 'Last name' },
+    { key: 'gender', label: 'Sex' },
+    { key: 'age', label: 'Age' },
+    { key: 'demographics.dob', label: 'Birthday' },
+    { key: 'demographics.race', label: 'Race' },
+    { key: 'demographics.ethnicity', label: 'Ethnicity' },
+    { key: 'contactForFutureStudies', label: 'Contact for future studies' },
+    { key: 'familyId', label: 'Family ID' },
+    { key: 'tags', label: 'Tags' },
+    { key: 'dateCreated', label: 'Date created' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'contactMethods.primaryEmail', label: 'Email' },
+    { key: 'contactMethods.address', label: 'Address' },
+    { key: 'section.comments', label: 'Comments Log' },
+    { key: 'section.contacts', label: 'Participant Contacts' },
+    { key: 'section.contactLogs', label: 'Contact Log' },
+    { key: 'section.emailLogs', label: 'Email Log' },
+    { key: 'section.consentLogs', label: 'Consent Log' },
+    { key: 'city', label: 'City' },
+    { key: 'state', label: 'State' },
+    { key: 'zipcode', label: 'Zip code' },
+    ...globalVariables.map((variable) => ({ key: `variables.${variable.id}`, label: variable.name })),
+  ]), [globalVariables]);
+  const participantExportFields = useMemo(() => exportFields.filter((field) => !field.key.startsWith('variables.') && !field.key.startsWith('section.')), [exportFields]);
+  const globalVariableExportFields = useMemo(() => exportFields.filter((field) => field.key.startsWith('variables.')), [exportFields]);
+  const globalActivityExportFields = useMemo(() => exportFields.filter((field) => field.key.startsWith('section.')), [exportFields]);
+  const timezoneOptions = useMemo(() => {
+    const intlWithSupportedValues = Intl as any;
+    const values: string[] = typeof intlWithSupportedValues.supportedValuesOf === 'function'
+      ? intlWithSupportedValues.supportedValuesOf('timeZone')
+      : ['UTC'];
+    const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return [...new Set([...values, 'UTC', ...(browserTimezone ? [browserTimezone] : [])])]
+      .sort((a, b) => a.localeCompare(b))
+      .map((timezone) => ({ value: timezone, label: timezone }));
+  }, []);
+  const isTimezoneValid = useMemo(() => {
+    try { new Intl.DateTimeFormat('en-US', { timeZone: exportTimezone }); return true; }
+    catch { return false; }
+  }, [exportTimezone]);
+  const toggleExportField = (key: string) => setSelectedExportFields((fields) => fields.includes(key) ? fields.filter((field) => field !== key) : [...fields, key]);
+  const getExportValue = (participant: ParticipantRecord, key: string) => {
+    if (key.startsWith('variables.')) return participant.variables?.find((variable) => variable.id === key.slice(10) || variable.name === globalVariables.find((item) => `variables.${item.id}` === key)?.name)?.value ?? '';
+    const value = key.split('.').reduce<any>((current, part) => current?.[part], participant);
+    if (key === 'tags' && Array.isArray(value)) return value.join('; ');
+    return value == null ? '' : String(value);
+  };
+  const beginExport = (format: 'csv' | 'xlsx' | 'pdf') => {
+    setSelectedExportFields([]);
+    setExportFormat(format);
+    setIsExportDialogOpen(true);
+    setIsExportMenuOpen(false);
+  };
+  const runSelectedExport = async () => {
+    if (!selectedExportFields.length || !isTimezoneValid || isExporting) return;
+    setIsExporting(true);
+    try {
+      const selectedFieldKeys = exportFields.filter((field) => selectedExportFields.includes(field.key)).map((field) => field.key);
+      const serverCsv = onExportServerCsv ? await onExportServerCsv(selectedFieldKeys, exportTimezone) : null;
+      if (onExportServerCsv && !serverCsv) return;
+      const columns = exportFields.filter((field) => selectedExportFields.includes(field.key));
+      const rows = serverCsv ? parseCsv(await serverCsv.text()).slice(1) : getExportRows().map((participant) => columns.map((field) => getExportValue(participant, field.key)));
+      if (exportFormat === 'csv') {
+        const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+        const csv = [columns.map((field) => quote(field.label)).join(','), ...rows.map((record) => columns.map((_, index) => quote(record[index] ?? '')).join(','))].join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = `${exportFileName}.csv`; link.click(); URL.revokeObjectURL(url);
+      } else if (exportFormat === 'xlsx') {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Registry', { views: [{ state: 'frozen', ySplit: 1 }] });
+        sheet.columns = columns.map((field) => ({ header: field.label, key: field.key, width: Math.max(16, Math.min(field.label.length + 4, 32)) }));
+        rows.forEach((record) => sheet.addRow(Object.fromEntries(columns.map((field, index) => [field.key, record[index] ?? '']))));
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = `${exportFileName}.xlsx`; link.click(); URL.revokeObjectURL(url);
+      } else {
+        const document = new jsPDF({ orientation: 'landscape' });
+        document.text('Participant Registry', 14, 16);
+        autoTable(document, { startY: 24, head: [columns.map((field) => field.label)], body: rows.map((record) => columns.map((_, index) => record[index] ?? '')), styles: { fontSize: 7 }, horizontalPageBreak: true });
+        document.save(`${exportFileName}.pdf`);
+      }
+      setIsExportDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create the registry export.');
+    } finally {
+      setIsExporting(false);
     }
-    gridApi?.exportDataAsCsv({
-      fileName: `${exportFileName}.csv`,
-      columnKeys: ['name', 'studies', 'gender', 'age', 'lastContact'],
-      processCellCallback: (params) => {
-        if (params.column.getColId() === 'studies' && Array.isArray(params.value)) {
-          return params.value.map((study: StudyItem) => study.name).join(', ');
-        }
-        return params.value ?? '';
-      },
-    });
-    setIsExportMenuOpen(false);
   };
-
-  const exportExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Participants', { views: [{ state: 'frozen', ySplit: 1 }] });
-    sheet.columns = [
-      { header: 'Name', key: 'name', width: 28 },
-      { header: 'Studies', key: 'studies', width: 48 },
-      { header: 'Sex/Gender', key: 'gender', width: 18 },
-      { header: 'Age', key: 'age', width: 12 },
-      { header: 'Last Contact', key: 'lastContact', width: 24 },
-    ];
-    getExportRows().forEach((participant) => sheet.addRow({
-      name: participant.name,
-      studies: participant.studies?.map((study) => study.name).join(', ') || '',
-      gender: participant.gender || '',
-      age: participant.age || '',
-      lastContact: participant.lastContact || '',
-    }));
-    sheet.autoFilter = { from: 'A1', to: `E${Math.max(1, sheet.rowCount)}` };
-    sheet.getRow(1).height = 25;
-    sheet.getRow(1).eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF123A5A' } };
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.alignment = { vertical: 'middle' };
-    });
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${exportFileName}.xlsx`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setIsExportMenuOpen(false);
-  };
-
-  const exportPdf = () => {
-    const rows = getExportRows();
-    const document = new jsPDF({ orientation: 'landscape' });
-    document.setFontSize(16);
-    document.setTextColor('#123A5A');
-    document.text('Participant Registry', 14, 16);
-    autoTable(document, {
-      startY: 24,
-      head: [['Name', 'Studies', 'Sex/Gender', 'Age', 'Last Contact']],
-      body: rows.map((participant) => [
-        participant.name || '',
-        participant.studies?.map((study) => study.name).join(', ') || '',
-        participant.gender || '',
-        String(participant.age || ''),
-        participant.lastContact || '',
-      ]),
-      styles: { fontSize: 8, cellPadding: 3, textColor: [36, 68, 91], lineColor: [220, 231, 238], lineWidth: 0.1 },
-      headStyles: { fillColor: [18, 58, 90], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [241, 247, 251] },
-      margin: { left: 14, right: 14 },
-    });
-    document.save(`${exportFileName}.pdf`);
-    setIsExportMenuOpen(false);
-  };
-
   return (
     <section className="card">
       <div className="card-header data-grid-toolbar">
@@ -563,13 +663,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             </button>
             {isExportMenuOpen && (
               <div className="data-grid-export-menu" role="menu" aria-label="Choose export format">
-                <button type="button" role="menuitem" onClick={exportCsv}>
+                <button type="button" role="menuitem" onClick={() => beginExport('csv')}>
                   <Download size={15} /><span>CSV</span><small>Comma-separated values</small>
                 </button>
-                <button type="button" role="menuitem" onClick={() => void exportExcel()}>
+                <button type="button" role="menuitem" onClick={() => beginExport('xlsx')}>
                   <FileSpreadsheet size={15} /><span>Excel</span><small>Excel workbook (.xlsx)</small>
                 </button>
-                <button type="button" role="menuitem" onClick={exportPdf}>
+                <button type="button" role="menuitem" onClick={() => beginExport('pdf')}>
                   <FileText size={15} /><span>PDF</span><small>Portable document</small>
                 </button>
               </div>
@@ -590,6 +690,50 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           </button>
         </div>
       </div>
+
+      <Modal
+        isOpen={isExportDialogOpen}
+        onClose={() => { if (!isExporting) setIsExportDialogOpen(false); }}
+        title="Export Registry Results"
+        size="wide"
+        className="registry-export-modal"
+        footer={<>
+          <span className="mr-auto text-sm">Export format: <strong>{exportFormat.toUpperCase()}</strong></span>
+          <button type="button" className="btn btn-secondary" disabled={isExporting} onClick={() => setIsExportDialogOpen(false)}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={!selectedExportFields.length || !isTimezoneValid || isExporting} onClick={() => void runSelectedExport()}>{isExporting ? 'Preparing export...' : `Download ${exportFormat.toUpperCase()}`}</button>
+        </>}
+      >
+        <p className="mb-4">Choose the global participant details to include in your {exportFormat.toUpperCase()} file.</p>
+        <div className="mb-4 grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-center">
+          <label htmlFor="registry-export-timezone">Timezone</label>
+          <select id="registry-export-timezone" className="form-select" value={exportTimezone} onChange={(event) => setExportTimezone(event.target.value)} disabled={isExporting}>
+            {timezoneOptions.map((timezone) => <option key={timezone.value} value={timezone.value}>{timezone.label}</option>)}
+          </select>
+        </div>
+        <div className="badge-warning mb-4 px-3 py-2" role="note">Dates will be converted to this timezone. Dates entered in another timezone may appear one day off.</div>
+        <label className="mb-3 flex w-fit cursor-pointer items-center gap-2 font-semibold"><input type="checkbox" checked={exportFields.length > 0 && selectedExportFields.length === exportFields.length} onChange={(event) => setSelectedExportFields(event.target.checked ? exportFields.map((field) => field.key) : [])} disabled={isExporting} />Select all fields <span className="font-normal">({selectedExportFields.length} selected)</span></label>
+        <div className="grid gap-6 md:grid-cols-2">
+          <section aria-labelledby="participant-export-fields-heading">
+            <h3 id="participant-export-fields-heading" className="mb-2 border-b pb-2 font-semibold">Participant details</h3>
+            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              {participantExportFields.map((field) => <label key={field.key} className="flex min-w-0 cursor-pointer items-start gap-2 rounded px-2 py-2 hover:bg-slate-50"><input type="checkbox" checked={selectedExportFields.includes(field.key)} onChange={() => toggleExportField(field.key)} disabled={isExporting} /><span className="break-words">{field.label}</span></label>)}
+            </div>
+          </section>
+          {globalActivityExportFields.length > 0 && <section aria-labelledby="global-activity-export-fields-heading">
+            <h3 id="global-activity-export-fields-heading" className="mb-2 border-b pb-2 font-semibold">Global activity and contact history</h3>
+            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              {globalActivityExportFields.map((field) => <label key={field.key} className="flex min-w-0 cursor-pointer items-start gap-2 rounded px-2 py-2 hover:bg-slate-50"><input type="checkbox" checked={selectedExportFields.includes(field.key)} onChange={() => toggleExportField(field.key)} disabled={isExporting} /><span className="break-words">{field.label}</span></label>)}
+            </div>
+          </section>}
+          {globalVariableExportFields.length > 0 && <section aria-labelledby="global-variable-export-fields-heading">
+            <h3 id="global-variable-export-fields-heading" className="mb-2 border-b pb-2 font-semibold">Global variables</h3>
+            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              {globalVariableExportFields.map((field) => <label key={field.key} className="flex min-w-0 cursor-pointer items-start gap-2 rounded px-2 py-2 hover:bg-slate-50"><input type="checkbox" checked={selectedExportFields.includes(field.key)} onChange={() => toggleExportField(field.key)} disabled={isExporting} /><span className="break-words">{field.label}</span></label>)}
+            </div>
+          </section>}
+        </div>
+        <p className="mt-4 text-sm text-slate-500">Consent history includes records for each listed participant across their studies.</p>
+      </Modal>
 
       {selectedStudies.length > 0 && (
         <div className="bg-blue-50/70 border-b border-blue-100 px-5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -650,8 +794,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             onChange={(event) => setStudyToAssign(event.target.value)}
             aria-label="Choose a study for selected participants"
           >
-            <option value="">Choose Item</option>
-            {availableStudyList.map((study) => <option key={study} value={study}>{study}</option>)}
+            <option value="">--- Choose Item ---</option>
+            {assignableStudyOptions.map((study) => (
+              <option key={study.value} value={study.value}>
+                Add to {study.label}
+              </option>
+            ))}
+
           </select>
           <button
             type="button"
@@ -764,7 +913,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           quickFilterText={gridSearchTerm}
-          context={{ onOpenDetail, onDeleteParticipant }}
+          context={{ onOpenDetail, onDeleteParticipant, onNavigateToStudy }}
           onCellClicked={(params) => {
             if (params.column?.getColId() === 'expand' && params.data) {
               onOpenDetail?.(params.data);
@@ -775,7 +924,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           onRowClicked={(event) => {
             const target = event.event?.target as HTMLElement | null;
             // Row action buttons have their own behavior and must not open details.
-            if (target?.closest('.participant-grid__row-actions')) return;
+            if (target?.closest('.participant-grid__row-actions') || target?.closest('.participant-grid__study-link')) return;
             // The Select cell is selection-only. A click anywhere in that column
             // must never bubble into the row detail interaction.
             if (

@@ -25,6 +25,8 @@ export interface RegistrySearchParams {
   studies?: string[];
   customFiltersJson?: string;
   duplicatesOnly?: boolean;
+  exportFields?: string[];
+  timezone?: string;
   page?: number;
   pageSize?: number;
   sortBy?: string;
@@ -388,11 +390,28 @@ export const participantApi = {
   },
 
   async exportRegistry(params?: RegistrySearchParams): Promise<Blob> {
-    const res = await apiClient.get('/api/v1/registry/export', {
-      params,
-      responseType: 'blob',
-    });
-    return res.data;
+    try {
+      const res = await apiClient.post('/api/v1/registry/export', params ?? {}, {
+        responseType: 'blob',
+        skipToast: true,
+      } as any);
+      return res.data;
+    } catch (error: any) {
+      const responseData = error?.response?.data;
+      if (typeof Blob !== 'undefined' && responseData instanceof Blob) {
+        const body = await responseData.text();
+        let message = body;
+        try {
+          const payload = JSON.parse(body);
+          message = payload?.error?.message || payload?.message || payload?.detail || body;
+        } catch {
+          // Keep a plain-text backend error when the response is not JSON.
+        }
+        if (!message || message.trimStart().startsWith('<')) message = 'The registry export request failed. Please try again.';
+        throw new Error(message);
+      }
+      throw error;
+    }
   },
 
   async getContactLogs(participantId: string, options?: { studyId?: string; tenantId?: string; siteId?: string }): Promise<ContactLogItem[]> {

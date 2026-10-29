@@ -18,6 +18,11 @@ public interface ParticipantContactLogRepository extends JpaRepository<Participa
             UUID participantId
     );
 
+    List<ParticipantContactLog> findByTenantIdAndParticipantIdInAndGlobalTrueOrderByDateTimeOfContactDesc(
+            UUID tenantId,
+            List<UUID> participantIds
+    );
+
     Optional<ParticipantContactLog> findByTenantIdAndParticipantIdAndId(
             UUID tenantId,
             UUID participantId,

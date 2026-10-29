@@ -1,14 +1,16 @@
 package com.enrollnow.study.dtos;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateStudyRequest {
 
     @Size(max = 15, message = "Short study name must not exceed 15 characters")
     @Pattern(regexp = "^[a-zA-Z0-9 _-]+$", message = "Short study name may only contain letters, numbers, spaces, hyphens, and underscores")
-    @JsonAlias("title")
+    @JsonAlias({"title", "shortName"})
     private String name;
 
     private String description;
@@ -17,6 +19,8 @@ public class UpdateStudyRequest {
 
     @JsonAlias("targetEnrollment")
     private Integer sampleSize;
+
+    private String status;
 
     public UpdateStudyRequest() {
     }
@@ -44,6 +48,14 @@ public class UpdateStudyRequest {
         this.name = title;
     }
 
+    public String getShortName() {
+        return name;
+    }
+
+    public void setShortName(String shortName) {
+        this.name = shortName;
+    }
+
     public String getDescription() {
         return description;
     }
@@ -66,5 +78,13 @@ public class UpdateStudyRequest {
 
     public void setSampleSize(Integer sampleSize) {
         this.sampleSize = sampleSize;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

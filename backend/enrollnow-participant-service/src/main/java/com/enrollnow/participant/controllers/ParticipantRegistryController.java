@@ -28,6 +28,12 @@ import java.util.*;
 public class ParticipantRegistryController {
 
     private static final Logger log = LoggerFactory.getLogger(ParticipantRegistryController.class);
+    private static final Set<String> EXPORT_FIELD_KEYS = Set.of(
+            "globalId", "firstName", "middleName", "lastName", "gender", "age", "demographics.dob",
+            "demographics.race", "demographics.ethnicity", "contactForFutureStudies", "familyId", "tags",
+            "dateCreated", "phone", "contactMethods.primaryEmail", "contactMethods.address", "city", "state", "zipcode",
+            "section.comments", "section.contacts", "section.contactLogs", "section.emailLogs", "section.consentLogs"
+    );
 
     private final ParticipantRegistryService registryService;
     private final RegistrySavedSearchService savedSearchService;
@@ -316,7 +322,9 @@ public class ParticipantRegistryController {
             @RequestParam(required = false, defaultValue = "all") String availableFilter,
             @RequestParam(required = false) List<String> studies,
             @RequestParam(required = false) String customFiltersJson,
-            @RequestParam(required = false, defaultValue = "false") boolean duplicatesOnly) {
+            @RequestParam(required = false, defaultValue = "false") boolean duplicatesOnly,
+            @RequestParam(required = false) List<String> exportFields,
+            @RequestParam(required = false) String timezone) {
 
         UUID resolvedTenantId = resolveTenantId(tenantId);
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
@@ -335,10 +343,20 @@ public class ParticipantRegistryController {
             registryService.validateFilterRules(resolvedTenantId, rules);
         }
 
+        if (timezone != null && !timezone.isBlank()) {
+            try {
+                java.time.ZoneId.of(timezone);
+            } catch (java.time.DateTimeException exception) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid timezone: " + timezone);
+            }
+        }
+
         List<RegistryParticipantDto> matching = registryService.getAllMatchingParticipants(
                 resolvedTenantId, siteId, effectiveSearch, contactFilter, availableFilter, studies, rules, duplicatesOnly);
 
-        byte[] csvData = exportService.exportToCsv(matching);
+        byte[] csvData = exportFields == null && (timezone == null || timezone.isBlank())
+                ? exportService.exportToCsv(matching)
+                : exportService.exportToCsv(matching, exportFields, timezone, resolvedTenantId);
 
         String filename = "registry_export_" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".csv";
 
@@ -346,6 +364,32 @@ public class ParticipantRegistryController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(csvData);
+    }
+
+    @PostMapping(value = "/registry/export", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<byte[]> exportRegistry(@RequestBody RegistryExportRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Export request body is required");
+        }
+        validateExportFields(request.getExportFields());
+        return exportRegistry(
+                request.getTenantId(), request.getSiteId(), request.getSearch(), request.getSearchTerm(),
+                request.getContactFilter(), request.getAvailableFilter(), request.getStudies(),
+                request.getCustomFiltersJson(), request.isDuplicatesOnly(), request.getExportFields(), request.getTimezone());
+    }
+
+    private void validateExportFields(List<String> fields) {
+        if (fields == null || fields.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one export field");
+        }
+        if (fields.size() > 2000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Too many export fields selected");
+        }
+        boolean invalidField = fields.stream().anyMatch(field -> field == null ||
+                (!EXPORT_FIELD_KEYS.contains(field) && (!field.startsWith("variables.") || field.length() <= "variables.".length())));
+        if (invalidField) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The export contains an unsupported field");
+        }
     }
 
     public ResponseEntity<byte[]> exportRegistry(
@@ -357,6 +401,6 @@ public class ParticipantRegistryController {
             String availableFilter,
             List<String> studies,
             String customFiltersJson) {
-        return exportRegistry(tenantId, siteId, search, searchTerm, contactFilter, availableFilter, studies, customFiltersJson, false);
+        return exportRegistry(tenantId, siteId, search, searchTerm, contactFilter, availableFilter, studies, customFiltersJson, false, null, null);
     }
 }

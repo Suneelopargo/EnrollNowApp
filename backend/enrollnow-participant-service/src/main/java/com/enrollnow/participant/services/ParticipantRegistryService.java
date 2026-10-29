@@ -270,8 +270,11 @@ public class ParticipantRegistryService {
         if (selectedStudies != null && !selectedStudies.isEmpty()) {
             Set<String> studyFilterSet = selectedStudies.stream().map(String::toLowerCase).collect(Collectors.toSet());
             dtos = dtos.stream().filter(p -> {
-                if (p.getStudies() == null || p.getStudies().isEmpty()) return false;
-                return p.getStudies().stream().anyMatch(s -> studyFilterSet.contains(s.getName().toLowerCase()));
+                if (p.getStudies() == null || p.getStudies().isEmpty()) return studyFilterSet.contains("none") || studyFilterSet.contains("not in a study");
+                return p.getStudies().stream().anyMatch(s ->
+                        (s.getName() != null && studyFilterSet.contains(s.getName().toLowerCase())) ||
+                        (s.getStudyId() != null && studyFilterSet.contains(s.getStudyId().toString().toLowerCase())) ||
+                        (s.getStudyCode() != null && studyFilterSet.contains(s.getStudyCode().toLowerCase())));
             }).collect(Collectors.toList());
         }
 
@@ -901,7 +904,7 @@ public class ParticipantRegistryService {
             dto.setAgeNumeric(age);
             dto.setBirthMonth(p.getDateOfBirth().getMonth().name());
         } else {
-            dto.setAge("N/A");
+            dto.setAge("");
             dto.setAgeNumeric(null);
         }
 
@@ -956,7 +959,8 @@ public class ParticipantRegistryService {
         for (UUID sId : participantStudyIds) {
             Study study = studiesMap.get(sId);
             if (study != null) {
-                StudyItemDto studyItem = new StudyItemDto(study.getName(), true, study.getId(), study.getStudyCode());
+                StudyItemDto studyItem = new StudyItemDto(study.getName(), !study.isArchived(), study.getId(), study.getStudyCode());
+                studyItem.setArchived(study.isArchived());
                 StudyEnrollment activeEnrollment = enrollments.stream()
                         .filter(e -> e.isActive() && sId.equals(e.getStudyId()))
                         .findFirst()
@@ -1397,6 +1401,10 @@ public class ParticipantRegistryService {
         String targetVal = rule.getValue() != null ? rule.getValue().trim() : "";
         List<String> values = rule.getEffectiveValues();
 
+        if ("studies".equals(field)) {
+            return matchesStudiesRule(p, op, values, targetVal);
+        }
+
         String actualVal = getFieldValue(p, field);
 
         if ("assigned".equals(op)) {
@@ -1544,6 +1552,62 @@ public class ParticipantRegistryService {
         }
     }
 
+    private boolean matchesStudiesRule(RegistryParticipantDto p, String op, List<String> values, String targetVal) {
+        List<StudyItemDto> participantStudies = p.getStudies() != null ? p.getStudies() : Collections.emptyList();
+        boolean hasAnyStudy = !participantStudies.isEmpty();
+
+        if ("assigned".equals(op)) {
+            return hasAnyStudy;
+        }
+        if ("not_assigned".equals(op)) {
+            return !hasAnyStudy;
+        }
+
+        List<String> rawTargets = (values != null && !values.isEmpty())
+                ? values
+                : (targetVal == null || targetVal.isBlank() ? Collections.emptyList() : Arrays.asList(targetVal.split(",")));
+
+        boolean hasNone = false;
+        Set<String> lowerTargets = new HashSet<>();
+        for (String item : rawTargets) {
+            if (item == null || item.isBlank()) continue;
+            String trimmed = item.trim();
+            if ("none".equalsIgnoreCase(trimmed) || "not in a study".equalsIgnoreCase(trimmed)) {
+                hasNone = true;
+            } else {
+                lowerTargets.add(trimmed.toLowerCase());
+            }
+        }
+
+        if (!hasNone && lowerTargets.isEmpty()) {
+            return false;
+        }
+
+        boolean matchesSpecificStudy = !lowerTargets.isEmpty() && participantStudies.stream().anyMatch(s ->
+                (s.getName() != null && lowerTargets.contains(s.getName().trim().toLowerCase())) ||
+                (s.getStudyId() != null && lowerTargets.contains(s.getStudyId().toString().toLowerCase())) ||
+                (s.getStudyCode() != null && lowerTargets.contains(s.getStudyCode().trim().toLowerCase()))
+        );
+
+        if ("not_equal".equals(op)) {
+            if (hasNone && !lowerTargets.isEmpty()) {
+                return hasAnyStudy && !matchesSpecificStudy;
+            } else if (hasNone) {
+                return hasAnyStudy;
+            } else {
+                return !matchesSpecificStudy;
+            }
+        }
+
+        if (hasNone && !lowerTargets.isEmpty()) {
+            return !hasAnyStudy || matchesSpecificStudy;
+        } else if (hasNone) {
+            return !hasAnyStudy;
+        } else {
+            return matchesSpecificStudy;
+        }
+    }
+
     private boolean matchesValueOrOption(String actualVal, String targetVal) {
         if (actualVal == null || targetVal == null) return false;
         if (actualVal.equalsIgnoreCase(targetVal.trim())) return true;
@@ -1588,6 +1652,10 @@ public class ParticipantRegistryService {
                 return p.getBirthMonth();
             case "datecreated":
                 return p.getDateCreated();
+            case "studies":
+                return p.getStudies() != null
+                        ? p.getStudies().stream().map(StudyItemDto::getName).filter(Objects::nonNull).collect(Collectors.joining(","))
+                        : "";
             case "tags":
                 return p.getTags() != null ? String.join(",", p.getTags()) : "";
             default:

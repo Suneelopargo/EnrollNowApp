@@ -649,4 +649,66 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     });
     expect(presenceRule.isValid).toBe(true);
   });
+
+  it('renders Studies FilterCard as SearchableMultiSelect with Not in a study and fetched studies', async () => {
+    const { FilterCard } = await import('../components/FilterCard');
+    const { registerStudyFilterOptions, getFieldDefinition } = await import('../constants/filterMetadata');
+
+    registerStudyFilterOptions([
+      { value: 'study-1', label: 'ADRC Comm Hour' },
+      { value: 'study-2', label: 'Customer Survey' },
+    ]);
+
+    const studiesDef = getFieldDefinition('studies');
+    expect(studiesDef.options).toEqual([
+      { value: 'NONE', label: 'Not in a study' },
+      { value: 'study-1', label: 'ADRC Comm Hour' },
+      { value: 'study-2', label: 'Customer Survey' },
+    ]);
+
+    const html = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter: {
+          id: 'f-studies',
+          field: 'studies',
+          operator: 'equal to',
+          values: ['NONE', 'study-1'],
+        },
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+        studyOptions: studiesDef.options,
+      })
+    );
+
+    expect(html).toContain('searchable-multi-select');
+    expect(html).toContain('Not in a study');
+    expect(html).toContain('ADRC Comm Hour');
+    expect(html).not.toContain('Select or enter study name..');
+  });
+
+  it('renders ParticipantGrid with ellipsis (...) when no data is available and suppresses N/A and Unspecified', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ParticipantGrid, {
+        participants: [
+          {
+            id: 'p-empty-studies',
+            name: 'Kiran N Kumar',
+            gender: 'Unspecified',
+            age: 'N/A',
+            studies: [],
+            lastContact: '',
+          },
+        ],
+        studies: [
+          { id: 's-1', name: 'ADRC Comm Hour', status: 'ACTIVE', archived: false },
+          { id: 's-2', name: 'Archived Trial', status: 'ARCHIVED', archived: true },
+        ],
+      })
+    );
+    expect(html).toContain('All Participants');
+    expect(html).toContain('...');
+    expect(html).not.toContain('Unspecified');
+    expect(html).not.toContain('N/A');
+  });
 });

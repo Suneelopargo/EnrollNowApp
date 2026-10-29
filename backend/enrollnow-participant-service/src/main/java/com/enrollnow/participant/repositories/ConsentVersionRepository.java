@@ -13,4 +13,5 @@ public interface ConsentVersionRepository extends JpaRepository<ConsentVersion, 
     List<ConsentVersion> findByTenantIdAndActiveTrue(UUID tenantId);
     List<ConsentVersion> findByTenantIdAndStudyIdAndActiveTrue(UUID tenantId, UUID studyId);
     Optional<ConsentVersion> findByTenantIdAndId(UUID tenantId, UUID id);
+    List<ConsentVersion> findByTenantIdAndIdIn(UUID tenantId, List<UUID> ids);
 }
