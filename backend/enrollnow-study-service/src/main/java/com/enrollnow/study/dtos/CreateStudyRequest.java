@@ -1,10 +1,12 @@
 package com.enrollnow.study.dtos;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateStudyRequest {
 
     @NotBlank(message = "Study name/title is required")
@@ -20,6 +22,8 @@ public class CreateStudyRequest {
 
     @JsonAlias("targetEnrollment")
     private Integer sampleSize;
+
+    private String status;
 
     public CreateStudyRequest() {
     }
@@ -85,5 +89,13 @@ public class CreateStudyRequest {
 
     public void setSampleSize(Integer sampleSize) {
         this.sampleSize = sampleSize;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

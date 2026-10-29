@@ -9,7 +9,7 @@ import {
   isRangeOperator,
   isNoValueOperator,
 } from '../constants/filterMetadata';
-import { CustomFilterRule } from '../types/participant';
+import { CustomFilterRule, FilterOptionItem } from '../types/participant';
 import { SearchableMultiSelect } from './SearchableMultiSelect';
 
 interface FilterCardProps {
@@ -17,9 +17,10 @@ interface FilterCardProps {
   index: number;
   onUpdate: (index: number, updatedFilter: CustomFilterRule) => void;
   onRemove: (index: number) => void;
+  studyOptions?: FilterOptionItem[];
 }
 
-export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate, onRemove }) => {
+export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate, onRemove, studyOptions }) => {
   const currentField = filter.field || 'age';
   const currentFieldDef = getFieldDefinition(currentField);
   const availableOperators = getOperatorsForField(currentField);
@@ -127,11 +128,16 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
       );
     }
 
-    if (currentFieldDef.type === 'multiselect' && currentFieldDef.options && currentFieldDef.options.length > 0) {
+    const effectiveOptions =
+      currentField.toLowerCase() === 'studies' && studyOptions && studyOptions.length > 0
+        ? studyOptions
+        : currentFieldDef.options;
+
+    if (currentFieldDef.type === 'multiselect' && effectiveOptions && effectiveOptions.length > 0) {
       const selected = filter.values || (filter.value ? filter.value.split(',').map((s) => s.trim()) : []);
       return (
         <SearchableMultiSelect
-          options={currentFieldDef.options}
+          options={effectiveOptions}
           selectedValues={selected}
           onChange={(values) => onUpdate(index, { ...filter, values, value: values.join(',') })}
           placeholder={currentFieldDef.placeholder || 'Select options...'}

@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { FilterOptionItem } from '../types/participant';
 
 interface SearchableMultiSelectProps {
@@ -29,8 +29,9 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
 
   const filteredOptions = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
-    return term ? options.filter((option) => option.label.toLocaleLowerCase().includes(term)) : options;
-  }, [options, query]);
+    const unselected = options.filter((option) => !selectedValues.includes(option.value));
+    return term ? unselected.filter((option) => option.label.toLocaleLowerCase().includes(term)) : unselected;
+  }, [options, query, selectedValues]);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -201,9 +202,6 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
                 onMouseEnter={() => setActiveIndex(optionIndex)}
                 onClick={() => toggleValue(option.value)}
               >
-                <span className="searchable-multi-select__checkbox" aria-hidden="true">
-                  {selected && <Check size={13} />}
-                </span>
                 <span>{option.label}</span>
               </button>
             );

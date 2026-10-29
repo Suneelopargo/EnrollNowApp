@@ -9,6 +9,7 @@ public class StudyItemDto {
     private String studyCode;
     private String status;
     private String participantStudyId;
+    private boolean archived;
 
     public StudyItemDto() {
     }
@@ -71,5 +72,13 @@ public class StudyItemDto {
 
     public void setParticipantStudyId(String participantStudyId) {
         this.participantStudyId = participantStudyId;
+    }
+
+    public boolean isArchived() {
+        return archived;
+    }
+
+    public void setArchived(boolean archived) {
+        this.archived = archived;
     }
 }

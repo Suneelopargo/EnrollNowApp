@@ -2841,6 +2841,9 @@ public class StudyConfigurationService {
                 Map<String, Object> optMap = new LinkedHashMap<>();
                 optMap.put("optionId", o.getOptionId());
                 optMap.put("name", o.getName());
+                if (o.getOrder() != null) {
+                    optMap.put("order", o.getOrder());
+                }
                 opts.add(optMap);
             }
         }
@@ -2963,7 +2966,8 @@ public class StudyConfigurationService {
                         if (optObj instanceof Map<?, ?> optMap) {
                             String optId = optMap.get("optionId") != null ? optMap.get("optionId").toString() : "";
                             String optName = optMap.get("name") != null ? optMap.get("name").toString() : (optMap.get("label") != null ? optMap.get("label").toString() : "");
-                            options.add(new StudyCustomVariableDto.VariableOptionDto(optId, optName));
+                            Integer optOrder = optMap.get("order") instanceof Number n ? n.intValue() : null;
+                            options.add(new StudyCustomVariableDto.VariableOptionDto(optId, optName, optOrder));
                         }
                     }
                 }
@@ -2996,6 +3000,9 @@ public class StudyConfigurationService {
                     Map<String, Object> oMap = new LinkedHashMap<>();
                     oMap.put("optionId", opt.getOptionId() != null && !opt.getOptionId().isBlank() ? opt.getOptionId() : "opt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
                     oMap.put("name", opt.getName() != null ? opt.getName() : "");
+                    if (opt.getOrder() != null) {
+                        oMap.put("order", opt.getOrder());
+                    }
                     opts.add(oMap);
                 }
             }

@@ -767,4 +767,21 @@ class StudyControllerTest {
         );
         verifyNoInteractions(studyMemberRepository, userRoleAssignmentRepository, studyRepository);
     }
+
+    @Test
+    void createStudyAndUpdateStudyDtos_deserializeWithStrictJacksonWhenFrontendFieldsPresent() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper strictMapper = new com.fasterxml.jackson.databind.ObjectMapper()
+                .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+
+        String createJson = "{\"title\":\"Cardio1\",\"name\":\"Cardio1\",\"shortName\":\"Cardio1\",\"status\":\"ACTIVE\",\"phase\":\"Phase II\"}";
+        CreateStudyRequest createReq = strictMapper.readValue(createJson, CreateStudyRequest.class);
+        assertEquals("Cardio1", createReq.getName());
+        assertEquals("ACTIVE", createReq.getStatus());
+
+        String updateJson = "{\"name\":\"Cardio2\",\"title\":\"Cardio2\",\"shortName\":\"Cardio2\",\"status\":\"ACTIVE\"}";
+        com.enrollnow.study.dtos.UpdateStudyRequest updateReq =
+                strictMapper.readValue(updateJson, com.enrollnow.study.dtos.UpdateStudyRequest.class);
+        assertEquals("Cardio2", updateReq.getName());
+        assertEquals("ACTIVE", updateReq.getStatus());
+    }
 }

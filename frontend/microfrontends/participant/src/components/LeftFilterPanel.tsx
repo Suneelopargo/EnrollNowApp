@@ -2,7 +2,7 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import FilterCard from './FilterCard';
-import { CustomFilterRule, SavedSearch } from '../types/participant';
+import { CustomFilterRule, FilterOptionItem, SavedSearch } from '../types/participant';
 
 interface LeftFilterPanelProps {
   searchTerm: string;
@@ -22,6 +22,7 @@ interface LeftFilterPanelProps {
   savedSearches?: SavedSearch[];
   onSelectSavedSearch?: (search: SavedSearch) => void;
   onDeleteRequest?: (search: SavedSearch) => void;
+  studyOptions?: FilterOptionItem[];
 }
 
 export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
@@ -39,6 +40,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
   savedSearches = [],
   onSelectSavedSearch,
   onDeleteRequest,
+  studyOptions,
 }) => {
   return (
     <aside
@@ -134,6 +136,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
               index={index}
               onUpdate={onUpdateFilter}
               onRemove={onRemoveFilter}
+              studyOptions={studyOptions}
             />
           ))}
         </div>
