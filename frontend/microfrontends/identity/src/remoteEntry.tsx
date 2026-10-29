@@ -422,26 +422,17 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <defs>
-              <linearGradient id="enl-wave-front" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0284c7" />
-                <stop offset="35%" stopColor="#0369a1" />
-                <stop offset="70%" stopColor="#0284c7" />
-                <stop offset="100%" stopColor="#0ea5e9" />
-              </linearGradient>
-              <linearGradient id="enl-wave-back" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-                <stop offset="50%" stopColor="#7dd3fc" stopOpacity="0.55" />
-                <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.35" />
-              </linearGradient>
-            </defs>
             <path
-              d="M 0 50 C 260 85, 480 25, 780 70 C 1050 110, 1260 55, 1440 115 L 1440 180 L 0 180 Z"
-              fill="url(#enl-wave-back)"
+              d="M 0 91 C 280 50, 470 108, 740 82 C 1010 56, 1220 97, 1440 64 L 1440 180 L 0 180 Z"
+              fill="#8FAFE7"
             />
             <path
-              d="M 0 60 C 300 110, 600 35, 900 80 C 1140 115, 1280 75, 1440 140 L 1440 180 L 0 180 Z"
-              fill="url(#enl-wave-front)"
+              d="M 0 112 C 270 75, 500 126, 760 104 C 1030 82, 1240 119, 1440 91 L 1440 180 L 0 180 Z"
+              fill="#FFCB05"
+            />
+            <path
+              d="M 0 130 C 260 99, 520 145, 790 126 C 1060 108, 1260 143, 1440 120 L 1440 180 L 0 180 Z"
+              fill="#00274C"
             />
           </svg>
           <div className="enl-wave-stats-wrapper">

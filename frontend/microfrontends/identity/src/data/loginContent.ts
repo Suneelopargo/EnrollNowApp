@@ -12,8 +12,6 @@ export interface FeatureHighlight {
   title: string;
   description: string;
   iconName: 'users' | 'calendar' | 'chart' | 'shield';
-  accentColor: string;
-  bgColor: string;
 }
 
 export interface StatisticItem {
@@ -29,7 +27,7 @@ export interface FloatingCardItem {
   stageBadge?: string;
   title: string;
   iconName: 'users' | 'calendar' | 'chart';
-  type: 'checklist' | 'skeleton';
+  type: 'checklist';
   checkItems?: string[];
 }
 
@@ -65,32 +63,24 @@ export const loginContent: LoginContentConfig = {
       title: 'Recruit & Prescreen',
       description: 'Find and engage the right participants faster.',
       iconName: 'users',
-      accentColor: '#0284c7',
-      bgColor: '#e0f2fe',
     },
     {
       id: 'schedule',
       title: 'Schedule & Enroll',
       description: 'Simplify scheduling and enrollment workflows.',
       iconName: 'calendar',
-      accentColor: '#10b981',
-      bgColor: '#d1fae5',
     },
     {
       id: 'manage',
-      title: 'Manage Studies',
+      title: 'Manage Studies & Registries',
       description: 'Keep your studies organized with real-time insights.',
       iconName: 'chart',
-      accentColor: '#8b5cf6',
-      bgColor: '#ede9fe',
     },
     {
       id: 'secure',
       title: 'Secure & Compliant',
       description: 'Built for research with industry standards.',
       iconName: 'shield',
-      accentColor: '#f59e0b',
-      bgColor: '#fef3c7',
     },
   ],
   statistics: [
@@ -110,16 +100,24 @@ export const loginContent: LoginContentConfig = {
       stageNumber: 2,      
       title: 'Schedule Appointments',
       iconName: 'calendar',
-      type: 'skeleton',
-      checkItems: ['Manage appointments and enrollment'],
+      type: 'checklist',
+      checkItems: [
+        'Schedule participant visits',
+        'Track event outcomes',
+        'Mark events as completed',
+      ],
     },
     {
       id: 'engage',
       stageNumber: 3,    
       title: 'Engage Participants',
       iconName: 'chart',
-      type: 'skeleton',
-      checkItems: ['Track progress and improve outcomes'],
+      type: 'checklist',
+      checkItems: [
+        'Track email and text messages',
+        'Log outreach attempts and outcomes',
+        'Manage follow-up tasks',
+      ],
     },
   ],
 };

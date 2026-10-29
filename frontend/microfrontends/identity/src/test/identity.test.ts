@@ -68,7 +68,7 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     expect(loginContent.features.map((f) => f.title)).toEqual([
       'Recruit & Prescreen',
       'Schedule & Enroll',
-      'Manage Studies',
+      'Manage Studies & Registries',
       'Secure & Compliant',
     ]);
 

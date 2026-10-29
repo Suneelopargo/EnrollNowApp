@@ -81,8 +81,8 @@
   &:hover {
     transform: translateY(-1px);
 
-    .enl-header-brand-badge {
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(56, 189, 248, 0.5);
+    .enl-header-brand-logo {
+      filter: drop-shadow(0 2px 5px rgba(255, 255, 255, 0.2));
     }
   }
 
@@ -91,52 +91,24 @@
   }
 
   &:focus-visible {
-    .enl-header-brand-badge {
-      box-shadow: 0 0 0 2px #38bdf8;
+    .enl-header-brand-logo {
+      outline: 2px solid #38bdf8;
+      outline-offset: 3px;
     }
   }
 }
 
-.enl-header-brand-badge {
-  background: #ffffff;
-  border-radius: 9px;
-  padding: 4px 10px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-sizing: border-box;
-  transition: box-shadow 150ms ease;
-
-  .enl-brand-container {
-    height: 100%;
-    display: flex;
-    align-items: center;
-  }
-
-  .enl-brand-svg {
-    height: 25px;
-    width: auto;
-    aspect-ratio: 1200 / 245;
-    display: block;
-
-    .s0 {
-      fill: #ffcb05;
-    }
-    .s1 {
-      fill: #00274c;
-    }
-  }
+.enl-header-brand-logo {
+  display: block;
+  width: auto;
+  height: 25px;
+  max-width: min(190px, 28vw);
+  object-fit: contain;
+  transition: filter 150ms ease;
 
   @media (max-width: 640px) {
-    height: 32px;
-    padding: 3px 8px;
-
-    .enl-brand-svg {
-      height: 22px;
-    }
+    height: 23px;
+    max-width: min(165px, 34vw);
   }
 }
 
