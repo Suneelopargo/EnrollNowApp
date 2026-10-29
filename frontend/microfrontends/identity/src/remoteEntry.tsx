@@ -16,6 +16,7 @@ import { authApi } from '../../../shared/api/authApi';
 import { toast } from '../../../shared/toaster';
 import { Footer } from '../../../shared/design-system/components/Footer';
 import { AuthErrorNotification, mapAuthError } from '../../../shared/auth/authErrorMapper';
+import { validators, validateField } from '../../../shared/design-system/validation';
 import '../../../shared/design-system/styles/index.scss';
 
 // Reusable Code-Driven Marketing & Brand Components
@@ -60,12 +61,17 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [usernameError, setUsernameError] = useState('');
+  const [usernameTouched, setUsernameTouched] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recoveryAlert, setRecoveryAlert] = useState<AuthErrorNotification | null>(null);
 
-  const isFormValid = username.trim().length > 0 && password.length > 0;
+  const emailValidationError = validateField(username.trim(), [
+    validators.required('Email Address'),
+    validators.email('Email Address'),
+  ]);
+  const isFormValid = !emailValidationError && password.length > 0;
 
   useEffect(() => {
     let warningMsg: string | null = null;
@@ -96,8 +102,9 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
     e.preventDefault();
 
     let hasError = false;
-    if (!username.trim()) {
-      setUsernameError('Email address is required');
+    if (emailValidationError) {
+      setUsernameError(emailValidationError);
+      setUsernameTouched(true);
       hasError = true;
     }
     if (!password) {
@@ -274,29 +281,29 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     <Mail size={16} className="enl-field-icon" />
                     <input
                       id="email-input"
-                      type="text"
-                      className="enl-field-input"
+                      type="email"
+                      className={`enl-field-input${usernameTouched && emailValidationError ? ' is-invalid' : ''}`}
                       placeholder={usernameError && !username ? usernameError : 'Enter your email address'}
                       value={username}
                       onChange={(e) => {
                         setUsername(e.target.value);
-                        if (usernameError) setUsernameError('');
+                        setUsernameTouched(true);
+                        setUsernameError('');
                       }}
                       onBlur={() => {
-                        if (!username.trim()) {
-                          setUsernameError('Email address is required');
-                        }
+                        setUsernameTouched(true);
+                        setUsernameError(emailValidationError);
                       }}
                       autoComplete="username"
                       required
                       aria-required="true"
-                      aria-invalid={!!usernameError}
-                      aria-describedby={usernameError ? 'email-input-error' : undefined}
+                      aria-invalid={usernameTouched && Boolean(emailValidationError)}
+                      aria-describedby={usernameTouched && emailValidationError ? 'email-input-error' : undefined}
                     />
                   </div>
-                  {usernameError && (
-                    <div id="email-input-error" className="sr-only" role="alert">
-                      {usernameError}
+                  {usernameTouched && emailValidationError && (
+                    <div id="email-input-error" className="mt-1 text-xs text-red-600" role="alert">
+                      {emailValidationError}
                     </div>
                   )}
                 </div>

@@ -122,7 +122,18 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
                 autoComplete="email"
                 required
                 aria-invalid={Boolean(touched && validationError)}
+                aria-describedby={touched && validationError ? 'recover-email-error' : undefined}
               />
+              {touched && validationError && (
+                <div
+                  id="recover-email-error"
+                  className="mt-1 text-sm text-red-400"
+                  style={{ color: '#f87171' }}
+                  role="alert"
+                >
+                  {validationError}
+                </div>
+              )}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
