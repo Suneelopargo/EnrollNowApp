@@ -1,6 +1,10 @@
 // frontend/microfrontends/participant/src/constants/filterMetadata.ts - Authoritative Registry Filter Field Definitions
 import { FilterFieldOption, FilterOptionItem, CustomFilterRule } from '../types/participant';
 
+export const DEFAULT_STUDY_FILTER_OPTIONS: FilterOptionItem[] = [
+  { value: 'NONE', label: 'Not in a study' },
+];
+
 export const GENDER_OPTIONS: FilterOptionItem[] = [
   { value: 'Male', label: 'Male' },
   { value: 'Female', label: 'Female' },
@@ -101,7 +105,8 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
   {
     id: 'studies',
     label: 'Studies',
-    placeholder: 'Select or enter study name...',
+    placeholder: 'Studies',
+    options: DEFAULT_STUDY_FILTER_OPTIONS,
     type: 'multiselect',
   },
   {
@@ -189,6 +194,30 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
 ];
 
 let dynamicCustomFields: FilterFieldOption[] = [];
+let dynamicStudyFilterOptions: FilterOptionItem[] = [...DEFAULT_STUDY_FILTER_OPTIONS];
+
+export function registerStudyFilterOptions(options: FilterOptionItem[]): void {
+  const seen = new Set<string>(['NONE']);
+  const normalized: FilterOptionItem[] = [{ value: 'NONE', label: 'Not in a study' }];
+  for (const opt of options || []) {
+    const val = (opt?.value ?? '').trim();
+    const label = (opt?.label ?? '').trim();
+    if (!val || !label || val.toUpperCase() === 'NONE') continue;
+    if (!seen.has(val)) {
+      seen.add(val);
+      normalized.push({ value: val, label });
+    }
+  }
+  dynamicStudyFilterOptions = normalized;
+  const studiesField = REGISTRY_FILTER_FIELDS.find((f) => f.id === 'studies');
+  if (studiesField) {
+    studiesField.options = dynamicStudyFilterOptions;
+  }
+}
+
+export function getStudyFilterOptions(): FilterOptionItem[] {
+  return dynamicStudyFilterOptions;
+}
 
 export function registerDynamicFilterFields(fields: FilterFieldOption[]): void {
   dynamicCustomFields = fields;

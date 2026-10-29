@@ -177,18 +177,12 @@ public class ParticipantSpecifications {
 
             // 6. Selected Studies
             if (selectedStudies != null && !selectedStudies.isEmpty()) {
-                List<String> lowerStudies = selectedStudies.stream().map(String::toLowerCase).collect(Collectors.toList());
-                Subquery<UUID> studySub = query.subquery(UUID.class);
-                Root<StudyCandidate> scRoot = studySub.from(StudyCandidate.class);
-                Root<Study> sRoot = studySub.from(Study.class);
-                studySub.select(scRoot.get("participantId"))
-                        .where(
-                                cb.equal(scRoot.get("tenantId"), tenantId),
-                                cb.equal(scRoot.get("participantId"), root.get("id")),
-                                cb.equal(sRoot.get("id"), scRoot.get("studyId")),
-                                cb.lower(sRoot.get("name")).in(lowerStudies)
-                        );
-                predicates.add(cb.exists(studySub));
+                Predicate selectedStudiesPred = buildStudiesPredicate(
+                        "equal", selectedStudies, "", root, query, cb, tenantId
+                );
+                if (selectedStudiesPred != null) {
+                    predicates.add(selectedStudiesPred);
+                }
             }
 
             // 7. Dynamic Custom Filter Rules
@@ -258,6 +252,11 @@ public class ParticipantSpecifications {
             return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, values, root, cb);
         }
 
+        // Studies filter uses active StudyCandidate / StudyEnrollment memberships (including NONE = Not in a study)
+        if ("studies".equals(field)) {
+            return buildStudiesPredicate(op, values, rawVal, root, query, cb, tenantId);
+        }
+
         // Handle Special No-Value Operators for Standard Fields
         if ("assigned".equals(op)) {
             return cb.isNotNull(getFieldExpression(root, field));
@@ -321,6 +320,141 @@ public class ParticipantSpecifications {
             default:
                 // Treat any unrecognized non-standard field as a custom variable
                 return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, values, root, cb);
+        }
+    }
+
+    private static Predicate buildInAnyStudyPredicate(
+            Root<Participant> root,
+            CriteriaQuery<?> query,
+            CriteriaBuilder cb,
+            UUID tenantId) {
+
+        Subquery<UUID> candSub = query.subquery(UUID.class);
+        Root<StudyCandidate> candRoot = candSub.from(StudyCandidate.class);
+        candSub.select(candRoot.get("participantId"))
+                .where(
+                        cb.equal(candRoot.get("tenantId"), tenantId),
+                        cb.equal(candRoot.get("participantId"), root.get("id")),
+                        cb.isTrue(candRoot.get("active"))
+                );
+
+        Subquery<UUID> enrollSub = query.subquery(UUID.class);
+        Root<StudyEnrollment> enrollRoot = enrollSub.from(StudyEnrollment.class);
+        enrollSub.select(enrollRoot.get("participantId"))
+                .where(
+                        cb.equal(enrollRoot.get("tenantId"), tenantId),
+                        cb.equal(enrollRoot.get("participantId"), root.get("id")),
+                        cb.isTrue(enrollRoot.get("active"))
+                );
+
+        return cb.or(new Predicate[]{cb.exists(candSub), cb.exists(enrollSub)});
+    }
+
+    private static Predicate buildStudyIdentityMatch(
+            Root<Study> studyRoot,
+            List<String> lowerNames,
+            List<UUID> studyIds,
+            CriteriaBuilder cb) {
+
+        List<Predicate> matchPreds = new ArrayList<>();
+        if (!lowerNames.isEmpty()) {
+            matchPreds.add(cb.lower(studyRoot.get("name")).in(lowerNames));
+            matchPreds.add(cb.lower(studyRoot.get("studyCode")).in(lowerNames));
+        }
+        for (UUID studyId : studyIds) {
+            matchPreds.add(cb.equal(studyRoot.get("id"), studyId));
+        }
+        return matchPreds.size() == 1 ? matchPreds.get(0) : cb.or(matchPreds.toArray(new Predicate[0]));
+    }
+
+    private static Predicate buildStudiesPredicate(
+            String op,
+            List<String> values,
+            String rawVal,
+            Root<Participant> root,
+            CriteriaQuery<?> query,
+            CriteriaBuilder cb,
+            UUID tenantId) {
+
+        if ("assigned".equals(op)) {
+            return buildInAnyStudyPredicate(root, query, cb, tenantId);
+        }
+        if ("not_assigned".equals(op)) {
+            return cb.not(buildInAnyStudyPredicate(root, query, cb, tenantId));
+        }
+
+        List<String> rawOptions = (values != null && !values.isEmpty())
+                ? values
+                : (rawVal == null || rawVal.isBlank() ? Collections.emptyList() : Arrays.asList(rawVal.split(",")));
+
+        boolean hasNone = false;
+        List<String> lowerNames = new ArrayList<>();
+        List<UUID> targetStudyIds = new ArrayList<>();
+
+        for (String item : rawOptions) {
+            if (item == null || item.isBlank()) continue;
+            String trimmed = item.trim();
+            if ("none".equalsIgnoreCase(trimmed) || "not in a study".equalsIgnoreCase(trimmed)) {
+                hasNone = true;
+            } else {
+                lowerNames.add(trimmed.toLowerCase());
+                try {
+                    targetStudyIds.add(UUID.fromString(trimmed));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        }
+
+        if (!hasNone && lowerNames.isEmpty() && targetStudyIds.isEmpty()) {
+            return cb.disjunction();
+        }
+
+        Predicate inMatchingStudy = null;
+        if (!lowerNames.isEmpty() || !targetStudyIds.isEmpty()) {
+            Subquery<UUID> candSub = query.subquery(UUID.class);
+            Root<StudyCandidate> scRoot = candSub.from(StudyCandidate.class);
+            Root<Study> candStudyRoot = candSub.from(Study.class);
+            candSub.select(scRoot.get("participantId"))
+                    .where(
+                            cb.equal(scRoot.get("tenantId"), tenantId),
+                            cb.equal(scRoot.get("participantId"), root.get("id")),
+                            cb.isTrue(scRoot.get("active")),
+                            cb.equal(candStudyRoot.get("id"), scRoot.get("studyId")),
+                            buildStudyIdentityMatch(candStudyRoot, lowerNames, targetStudyIds, cb)
+                    );
+
+            Subquery<UUID> enrollSub = query.subquery(UUID.class);
+            Root<StudyEnrollment> seRoot = enrollSub.from(StudyEnrollment.class);
+            Root<Study> enrollStudyRoot = enrollSub.from(Study.class);
+            enrollSub.select(seRoot.get("participantId"))
+                    .where(
+                            cb.equal(seRoot.get("tenantId"), tenantId),
+                            cb.equal(seRoot.get("participantId"), root.get("id")),
+                            cb.isTrue(seRoot.get("active")),
+                            cb.equal(enrollStudyRoot.get("id"), seRoot.get("studyId")),
+                            buildStudyIdentityMatch(enrollStudyRoot, lowerNames, targetStudyIds, cb)
+                    );
+
+            inMatchingStudy = cb.or(new Predicate[]{cb.exists(candSub), cb.exists(enrollSub)});
+        }
+
+        if ("not_equal".equals(op)) {
+            if (hasNone && inMatchingStudy != null) {
+                return cb.and(new Predicate[]{buildInAnyStudyPredicate(root, query, cb, tenantId), cb.not(inMatchingStudy)});
+            } else if (hasNone) {
+                return buildInAnyStudyPredicate(root, query, cb, tenantId);
+            } else {
+                return cb.not(inMatchingStudy);
+            }
+        }
+
+        // Default: equal
+        if (hasNone && inMatchingStudy != null) {
+            return cb.or(new Predicate[]{cb.not(buildInAnyStudyPredicate(root, query, cb, tenantId)), inMatchingStudy});
+        } else if (hasNone) {
+            return cb.not(buildInAnyStudyPredicate(root, query, cb, tenantId));
+        } else {
+            return inMatchingStudy;
         }
     }
 

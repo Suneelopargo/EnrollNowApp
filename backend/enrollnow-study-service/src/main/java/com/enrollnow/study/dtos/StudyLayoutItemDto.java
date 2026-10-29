@@ -1,5 +1,6 @@
 package com.enrollnow.study.dtos;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class StudyLayoutItemDto {
 
     private String id;

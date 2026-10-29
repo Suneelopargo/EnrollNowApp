@@ -11,6 +11,7 @@ import java.util.UUID;
 @Repository
 public interface ConsentRecordRepository extends JpaRepository<ConsentRecord, UUID> {
     List<ConsentRecord> findByTenantIdAndParticipantIdOrderByCreatedAtDesc(UUID tenantId, UUID participantId);
+    List<ConsentRecord> findByTenantIdAndParticipantIdInOrderByCreatedAtDesc(UUID tenantId, List<UUID> participantIds);
     Optional<ConsentRecord> findByTenantIdAndParticipantIdAndId(UUID tenantId, UUID participantId, UUID id);
     List<ConsentRecord> findByTenantIdAndParticipantIdAndStudyId(UUID tenantId, UUID participantId, UUID studyId);
 }

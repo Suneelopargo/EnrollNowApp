@@ -3,6 +3,7 @@ package com.enrollnow.study.dtos;
 import java.util.ArrayList;
 import java.util.List;
 
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class DemographicGroupDto {
 
     private String id;
@@ -71,6 +72,7 @@ public class DemographicGroupDto {
         this.genderGroups = genderGroups != null ? genderGroups : new ArrayList<>();
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class AgeRangeDto {
         private Integer min;
         private Integer max;
@@ -100,6 +102,7 @@ public class DemographicGroupDto {
         }
     }
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class GenderGroupDto {
         private String id;
         private String gender; // "Male", "Female", "Other"

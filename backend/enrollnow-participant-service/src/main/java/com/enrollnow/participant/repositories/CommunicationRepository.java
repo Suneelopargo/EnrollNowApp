@@ -13,4 +13,9 @@ public interface CommunicationRepository extends JpaRepository<Communication, UU
     List<Communication> findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(UUID tenantId, UUID participantId, String channel);
     Optional<Communication> findByTenantIdAndParticipantIdAndId(UUID tenantId, UUID participantId, UUID id);
     List<Communication> findByTenantIdAndParticipantIdOrderByCreatedAtDesc(UUID tenantId, UUID participantId);
+    List<Communication> findByTenantIdAndParticipantIdInAndStudyIdIsNullAndChannelIgnoreCaseOrderByCreatedAtDesc(
+            UUID tenantId,
+            List<UUID> participantIds,
+            String channel
+    );
 }

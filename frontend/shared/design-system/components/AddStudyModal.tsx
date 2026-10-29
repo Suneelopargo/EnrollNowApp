@@ -116,7 +116,6 @@ export const AddStudyModal: React.FC<AddStudyModalProps> = ({
           title: trimmedName,
           name: trimmedName,
           shortName: trimmedName,
-          status: 'ACTIVE',
         };
 
         const created = await studyApi.createStudy(payload);

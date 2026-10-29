@@ -1,10 +1,12 @@
 package com.enrollnow.study.dtos;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class StudyCustomVariableDto {
 
     private String id;
@@ -93,6 +95,7 @@ public class StudyCustomVariableDto {
         this.rank = rank;
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class VariableOptionDto {
         @JsonProperty("optionId")
         @JsonAlias({"value", "id"})
@@ -102,12 +105,21 @@ public class StudyCustomVariableDto {
         @JsonAlias({"label"})
         private String name;
 
+        @JsonProperty("order")
+        @JsonAlias({"rank", "sortOrder"})
+        private Integer order;
+
         public VariableOptionDto() {
         }
 
         public VariableOptionDto(String optionId, String name) {
+            this(optionId, name, null);
+        }
+
+        public VariableOptionDto(String optionId, String name, Integer order) {
             this.optionId = optionId;
             this.name = name;
+            this.order = order;
         }
 
         public String getOptionId() {
@@ -124,6 +136,14 @@ public class StudyCustomVariableDto {
 
         public void setName(String name) {
             this.name = name;
+        }
+
+        public Integer getOrder() {
+            return order;
+        }
+
+        public void setOrder(Integer order) {
+            this.order = order;
         }
 
         @JsonProperty("value")

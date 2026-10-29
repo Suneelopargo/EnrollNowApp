@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '../../accessibility/useFocusTrap';
 
@@ -33,9 +34,9 @@ export const Modal: React.FC<ModalProps> = ({
     returnFocus: true,
   });
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal((
     <div className="modal-overlay" onClick={onClose} role="presentation">
       <div
         ref={trapRef}
@@ -62,7 +63,7 @@ export const Modal: React.FC<ModalProps> = ({
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
     </div>
-  );
+  ), document.body);
 };
 
 export default Modal;

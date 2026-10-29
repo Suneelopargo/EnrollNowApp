@@ -11,6 +11,7 @@ import java.util.UUID;
 @Repository
 public interface ParticipantCommentRepository extends JpaRepository<ParticipantComment, UUID> {
     List<ParticipantComment> findByTenantIdAndParticipantIdOrderByPinnedDescCreatedAtDesc(UUID tenantId, UUID participantId);
+    List<ParticipantComment> findByTenantIdAndParticipantIdInAndGlobalTrueOrderByCreatedAtDesc(UUID tenantId, List<UUID> participantIds);
     Optional<ParticipantComment> findByTenantIdAndParticipantIdAndId(UUID tenantId, UUID participantId, UUID id);
     long countByTenantIdAndParticipantId(UUID tenantId, UUID participantId);
 }

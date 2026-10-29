@@ -8,6 +8,7 @@ export interface StudyItem {
   isLink?: boolean;
   status?: string;
   participantStudyId?: string;
+  archived?: boolean;
 }
 
 export interface GlobalVariableOption {
