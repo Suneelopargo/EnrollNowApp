@@ -67,8 +67,17 @@ import java.util.stream.Collectors;
 @Service
 public class StudyService {
 
+    private static class StudyAssignmentMetadata {
+        String studyRole;
+        String studyPermission;
+
+        StudyAssignmentMetadata(String studyRole, String studyPermission) {
+            this.studyRole = studyRole;
+            this.studyPermission = studyPermission;
+        }
+    }
+
     private final StudyRepository studyRepository;
-    private final MyStudiesService myStudiesService;
     private final StudyConfigurationService studyConfigurationService;
     private StudyMemberRepository studyMemberRepository;
     private final RoleRepository roleRepository;
@@ -99,17 +108,12 @@ public class StudyService {
     private ObjectMapper objectMapper;
 
     public StudyService(StudyRepository studyRepository) {
-        this(studyRepository, null, null, null, null, null, null, null);
-    }
-
-    public StudyService(StudyRepository studyRepository, MyStudiesService myStudiesService) {
-        this(studyRepository, myStudiesService, null, null, null, null, null, null);
+        this(studyRepository, null, null, null, null, null, null);
     }
 
     @Autowired
     public StudyService(
             StudyRepository studyRepository,
-            @Autowired(required = false) MyStudiesService myStudiesService,
             @Autowired(required = false) StudyConfigurationService studyConfigurationService,
             @Autowired(required = false) StudyMemberRepository studyMemberRepository,
             @Autowired(required = false) RoleRepository roleRepository,
@@ -118,7 +122,6 @@ public class StudyService {
             @Autowired(required = false) TeamStudyRepository teamStudyRepository
     ) {
         this.studyRepository = studyRepository;
-        this.myStudiesService = myStudiesService;
         this.studyConfigurationService = studyConfigurationService;
         this.studyMemberRepository = studyMemberRepository;
         this.roleRepository = roleRepository;
@@ -157,6 +160,132 @@ public class StudyService {
         this.maxStudiesPerTenant = maxStudies;
     }
 
+    /**
+     * Retrieves all active studies assigned to the specified user within the authorized tenant,
+     * combining active study memberships (study_members) and active study-scoped role assignments
+     * (user_role_assignments) without duplicates.
+     */
+    @Transactional(readOnly = true)
+    public List<MyStudyResponse> getMyStudies(UUID tenantId, UUID userId) {
+        if (tenantId == null || userId == null) {
+            return List.of();
+        }
+
+        // Map of studyId -> Metadata (Role, Permission), preserving insertion order and preventing duplicates
+        Map<UUID, StudyAssignmentMetadata> studyMap = new LinkedHashMap<>();
+
+        // 1. Gather active studies from study_members (Coordinator, Investigator, etc.)
+        if (studyMemberRepository != null) {
+            List<StudyMember> memberships = studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId);
+            if (memberships != null) {
+                for (StudyMember membership : memberships) {
+                    if (membership != null && membership.isActive() && membership.getId() != null && membership.getId().getStudyId() != null) {
+                        UUID studyId = membership.getId().getStudyId();
+                        studyMap.put(studyId, new StudyAssignmentMetadata(membership.getStudyRole(), null));
+                    }
+                }
+            }
+        }
+
+        // 2. Gather active studies from user_role_assignments (STUDY_ADMIN, STUDY_LEADER, etc.)
+        OffsetDateTime now = OffsetDateTime.now();
+        if (userRoleAssignmentRepository != null) {
+            List<UserRoleAssignment> allAssignments = userRoleAssignmentRepository
+                    .findByTenantIdAndUserIdAndActiveTrue(tenantId, userId);
+
+            if (allAssignments != null) {
+                for (UserRoleAssignment assignment : allAssignments) {
+                    if (assignment == null || !assignment.isActive() || assignment.getStudyId() == null) {
+                        continue;
+                    }
+                    if (assignment.getEffectiveFrom() != null && now.isBefore(assignment.getEffectiveFrom())) {
+                        continue;
+                    }
+                    if (assignment.getEffectiveTo() != null && now.isAfter(assignment.getEffectiveTo())) {
+                        continue;
+                    }
+
+                    UUID studyId = assignment.getStudyId();
+                    Role role = (roleRepository != null && assignment.getRoleId() != null)
+                            ? roleRepository.findById(assignment.getRoleId()).orElse(null)
+                            : null;
+                    String roleName = role != null && role.getName() != null ? role.getName() : "Study Member";
+                    String roleCode = role != null ? role.getCode() : null;
+
+                    StudyAssignmentMetadata meta = studyMap.get(studyId);
+                    if (meta == null) {
+                        studyMap.put(studyId, new StudyAssignmentMetadata(roleName, roleCode));
+                    } else {
+                        if (meta.studyPermission == null && roleCode != null) {
+                            meta.studyPermission = roleCode;
+                        }
+                        if (meta.studyRole == null) {
+                            meta.studyRole = roleName;
+                        }
+                    }
+                }
+            }
+        }
+
+        List<MyStudyResponse> responses = new ArrayList<>();
+
+        for (Map.Entry<UUID, StudyAssignmentMetadata> entry : studyMap.entrySet()) {
+            UUID studyId = entry.getKey();
+            StudyAssignmentMetadata metadata = entry.getValue();
+
+            // Enforce tenant isolation: never fallback to unscoped findById or fabricate placeholder names
+            Study study = (studyRepository != null)
+                    ? studyRepository.findByTenantIdAndId(tenantId, studyId).orElse(null)
+                    : null;
+
+            if (study == null) {
+                continue;
+            }
+
+            // If we didn't get permission from step 2, try to resolve it specifically for this study
+            String studyPermission = metadata.studyPermission;
+            if (studyPermission == null && userRoleAssignmentRepository != null) {
+                List<UserRoleAssignment> assignments = userRoleAssignmentRepository
+                        .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
+                                tenantId,
+                                userId,
+                                studyId
+                        );
+
+                if (assignments != null && !assignments.isEmpty() && roleRepository != null) {
+                    for (UserRoleAssignment assignment : assignments) {
+                        if (assignment == null || !assignment.isActive()) {
+                            continue;
+                        }
+                        if (assignment.getEffectiveFrom() != null && now.isBefore(assignment.getEffectiveFrom())) {
+                            continue;
+                        }
+                        if (assignment.getEffectiveTo() != null && now.isAfter(assignment.getEffectiveTo())) {
+                            continue;
+                        }
+                        Role role = assignment.getRoleId() != null
+                                ? roleRepository.findById(assignment.getRoleId()).orElse(null)
+                                : null;
+                        if (role != null) {
+                            studyPermission = role.getCode();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            responses.add(new MyStudyResponse(
+                    studyId,
+                    study.getStudyCode(),
+                    study.getName(),
+                    metadata.studyRole != null ? metadata.studyRole : "Study Member",
+                    studyPermission
+            ));
+        }
+
+        return responses;
+    }
+
     @Transactional(readOnly = true)
     public List<StudySummaryResponse> getStudies(
             UUID tenantId,
@@ -190,8 +319,8 @@ public class StudyService {
         }
 
         // If caller is non-admin and restricted to assigned studies
-        if (callerUserId != null && !canManageSiteAdmins && myStudiesService != null && tenantId != null) {
-            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
+        if (callerUserId != null && !canManageSiteAdmins && tenantId != null) {
+            List<MyStudyResponse> myStudies = getMyStudies(tenantId, callerUserId);
             Set<UUID> assignedIds = myStudies.stream()
                     .map(MyStudyResponse::getId)
                     .collect(Collectors.toSet());
@@ -213,8 +342,8 @@ public class StudyService {
         Study study = findStudyByIdOrCode(tenantId, studyId)
                 .orElseThrow(() -> new StudyNotFoundException("Study not found: " + studyId));
 
-        if (callerUserId != null && !canManageSiteAdmins && myStudiesService != null && tenantId != null) {
-            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
+        if (callerUserId != null && !canManageSiteAdmins && tenantId != null) {
+            List<MyStudyResponse> myStudies = getMyStudies(tenantId, callerUserId);
             boolean hasAccess = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
             if (!hasAccess) {
                 throw new org.springframework.security.access.AccessDeniedException("Access denied: you do not have permission to access study " + studyId);
@@ -271,12 +400,11 @@ public class StudyService {
             throw new org.springframework.security.access.AccessDeniedException("Access denied: your study assignment is inactive or has expired.");
         }
 
-        // 3. Check access via MyStudiesService
-        boolean isAssignedViaMyStudies = false;
-        if (myStudiesService != null && tenantId != null) {
-            List<MyStudyResponse> myStudies = myStudiesService.getMyStudies(tenantId, callerUserId);
-            isAssignedViaMyStudies = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
-        }
+        // 3. Check access via consolidated getMyStudies
+        List<MyStudyResponse> myStudies = tenantId != null
+                ? getMyStudies(tenantId, callerUserId)
+                : List.of();
+        boolean isAssignedViaMyStudies = myStudies.stream().anyMatch(ms -> ms.getId().equals(study.getId()));
 
         // Non-site admins must have a valid assignment or active membership
         if (!canManageSiteAdmins && validAssignments.isEmpty() && !isMemberActive && !isAssignedViaMyStudies) {
@@ -329,8 +457,8 @@ public class StudyService {
             }
         }
 
-        if (matchedRoleCode == null && isAssignedViaMyStudies && myStudiesService != null && tenantId != null) {
-            MyStudyResponse ms = myStudiesService.getMyStudies(tenantId, callerUserId).stream()
+        if (matchedRoleCode == null && isAssignedViaMyStudies) {
+            MyStudyResponse ms = myStudies.stream()
                     .filter(s -> s.getId().equals(study.getId()))
                     .findFirst().orElse(null);
             if (ms != null && ms.getStudyPermission() != null) {

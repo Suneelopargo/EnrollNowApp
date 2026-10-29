@@ -25,10 +25,10 @@ import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequirementsRequest;
 import com.enrollnow.study.dtos.UpdateStudyRequest;
+import com.enrollnow.study.dtos.MyStudyResponse;
 import com.enrollnow.study.exceptions.InvalidStudyException;
 import com.enrollnow.study.exceptions.StudyNotFoundException;
 import com.enrollnow.study.repositories.StudyRepository;
-import com.enrollnow.study.services.MyStudiesService;
 import com.enrollnow.study.services.StudyService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,6 +67,19 @@ public class StudyController {
             SiteAuthorizationService siteAuthorizationService
     ) {
         this(studyService, siteAuthorizationService, new ObjectMapper());
+    }
+
+    @GetMapping({"/tenants/{tenantId}/users/{userId}/studies", "/users/{userId}/studies"})
+    public ResponseEntity<List<MyStudyResponse>> getMyStudies(
+            @PathVariable(name = "tenantId", required = false) UUID tenantId,
+            @PathVariable UUID userId
+    ) {
+        UUID effectiveTenantId = resolveTenantId(tenantId);
+        if (userId == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Target user ID is required");
+        }
+        siteAuthorizationService.requireSelfOrUserViewAccess(effectiveTenantId, userId, null);
+        return ResponseEntity.ok(studyService.getMyStudies(effectiveTenantId, userId));
     }
 
     public ResponseEntity<ApiResponse<List<StudySummaryResponse>>> getStudies(

@@ -45,9 +45,6 @@ class StudyCopyAndImportServiceTest {
     private StudyRepository studyRepository;
 
     @Mock
-    private MyStudiesService myStudiesService;
-
-    @Mock
     private StudyRequirementRepository studyRequirementRepository;
 
     @Mock
@@ -80,7 +77,6 @@ class StudyCopyAndImportServiceTest {
         studyConfigurationService = new StudyConfigurationService(studyRequirementRepository, objectMapper);
         studyService = new StudyService(
                 studyRepository,
-                myStudiesService,
                 studyConfigurationService,
                 studyMemberRepository,
                 roleRepository,

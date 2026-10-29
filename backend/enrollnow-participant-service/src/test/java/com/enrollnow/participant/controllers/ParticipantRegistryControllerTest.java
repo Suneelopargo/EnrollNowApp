@@ -45,6 +45,8 @@ class ParticipantRegistryControllerTest {
                 siteAuthorizationService,
                 objectMapper
         );
+        lenient().when(registryService.removeUnfinishedFilterRules(any()))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test

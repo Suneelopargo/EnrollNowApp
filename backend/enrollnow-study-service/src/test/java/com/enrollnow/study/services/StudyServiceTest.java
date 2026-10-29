@@ -49,9 +49,6 @@ class StudyServiceTest {
     private StudyRepository studyRepository;
 
     @Mock
-    private MyStudiesService myStudiesService;
-
-    @Mock
     private StudyMemberRepository studyMemberRepository;
 
     @Mock
@@ -82,7 +79,6 @@ class StudyServiceTest {
     void setUp() {
         studyService = new StudyService(
                 studyRepository,
-                myStudiesService,
                 studyConfigurationService,
                 studyMemberRepository,
                 roleRepository,
@@ -100,6 +96,7 @@ class StudyServiceTest {
     void getStudies_filtersByAssignedForNonAdmin() {
         Study study1 = new Study();
         study1.setId(studyId);
+        study1.setTenantId(tenantId);
         study1.setName("Study One");
         study1.setStudyCode("S1");
         study1.setArchived(false);
@@ -107,14 +104,20 @@ class StudyServiceTest {
         UUID otherId = UUID.randomUUID();
         Study study2 = new Study();
         study2.setId(otherId);
+        study2.setTenantId(tenantId);
         study2.setName("Study Two");
         study2.setStudyCode("S2");
         study2.setArchived(false);
 
         when(studyRepository.findByTenantIdAndArchivedFalse(tenantId)).thenReturn(List.of(study1, study2));
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study1));
 
-        MyStudyResponse assigned = new MyStudyResponse(studyId, "S1", "Study One", "Coordinator", "STUDY_MEMBER");
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+        com.enrollnow.study.models.StudyMember member = new com.enrollnow.study.models.StudyMember();
+        member.setId(new com.enrollnow.study.models.StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Coordinator");
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of(member));
 
         List<StudySummaryResponse> result = studyService.getStudies(tenantId, false, userId, false);
 
@@ -219,7 +222,6 @@ class StudyServiceTest {
         study.setId(studyId);
         study.setName("Restricted Study");
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
 
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
@@ -451,7 +453,6 @@ class StudyServiceTest {
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
         when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, studyId))
                 .thenReturn(List.of());
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
 
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
@@ -521,7 +522,6 @@ class StudyServiceTest {
         when(studyRepository.findByTenantIdAndId(tenantId, privateStudyId)).thenReturn(Optional.of(study));
         when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndStudyIdAndActiveTrue(tenantId, userId, privateStudyId))
                 .thenReturn(List.of());
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
 
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
@@ -1388,5 +1388,191 @@ class StudyServiceTest {
         );
         StudyDetailsResponse updated = studyService.updateStudyDetails(tenantId, studyId.toString(), req, userId, true);
         assertEquals("GEN-01", updated.getName());
+    }
+
+    // =========================================================================
+    // Consolidated MyStudies (getMyStudies) Service Tests
+    // =========================================================================
+
+    @Test
+    void getMyStudies_missingTenantOrUserContext_returnsEmptyList() {
+        assertTrue(studyService.getMyStudies(null, userId).isEmpty());
+        assertTrue(studyService.getMyStudies(tenantId, null).isEmpty());
+        assertTrue(studyService.getMyStudies(null, null).isEmpty());
+        verifyNoInteractions(studyRepository, studyMemberRepository, userRoleAssignmentRepository);
+    }
+
+    @Test
+    void getMyStudies_emptyAssignments_returnsEmptyList() {
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of());
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of());
+
+        List<MyStudyResponse> result = studyService.getMyStudies(tenantId, userId);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getMyStudies_activeAndInactiveStudyMemberships_returnsOnlyActive() {
+        UUID activeStudyId = UUID.randomUUID();
+        UUID inactiveStudyId = UUID.randomUUID();
+
+        com.enrollnow.study.models.StudyMember activeMember = new com.enrollnow.study.models.StudyMember();
+        activeMember.setId(new com.enrollnow.study.models.StudyMemberId(activeStudyId, userId));
+        activeMember.setTenantId(tenantId);
+        activeMember.setActive(true);
+        activeMember.setStudyRole("Coordinator");
+
+        com.enrollnow.study.models.StudyMember inactiveMember = new com.enrollnow.study.models.StudyMember();
+        inactiveMember.setId(new com.enrollnow.study.models.StudyMemberId(inactiveStudyId, userId));
+        inactiveMember.setTenantId(tenantId);
+        inactiveMember.setActive(false);
+        inactiveMember.setStudyRole("Investigator");
+
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of(activeMember, inactiveMember));
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of());
+
+        Study activeStudy = new Study();
+        activeStudy.setId(activeStudyId);
+        activeStudy.setTenantId(tenantId);
+        activeStudy.setStudyCode("ACT-01");
+        activeStudy.setName("Active Trial");
+        when(studyRepository.findByTenantIdAndId(tenantId, activeStudyId)).thenReturn(Optional.of(activeStudy));
+
+        List<MyStudyResponse> result = studyService.getMyStudies(tenantId, userId);
+
+        assertEquals(1, result.size());
+        assertEquals(activeStudyId, result.get(0).getId());
+        assertEquals("ACT-01", result.get(0).getCode());
+        assertEquals("Active Trial", result.get(0).getName());
+        assertEquals("Coordinator", result.get(0).getStudyRole());
+        verify(studyRepository, never()).findByTenantIdAndId(tenantId, inactiveStudyId);
+    }
+
+    @Test
+    void getMyStudies_activeAndInactiveOrExpiredRoleAssignments_returnsOnlyEffectiveActive() {
+        UUID activeRoleStudyId = UUID.randomUUID();
+        UUID inactiveRoleStudyId = UUID.randomUUID();
+        UUID expiredRoleStudyId = UUID.randomUUID();
+        UUID roleId = UUID.randomUUID();
+
+        UserRoleAssignment activeAssignment = new UserRoleAssignment();
+        activeAssignment.setTenantId(tenantId);
+        activeAssignment.setUserId(userId);
+        activeAssignment.setStudyId(activeRoleStudyId);
+        activeAssignment.setRoleId(roleId);
+        activeAssignment.setActive(true);
+        activeAssignment.setEffectiveFrom(java.time.OffsetDateTime.now().minusDays(2));
+        activeAssignment.setEffectiveTo(java.time.OffsetDateTime.now().plusDays(10));
+
+        UserRoleAssignment inactiveAssignment = new UserRoleAssignment();
+        inactiveAssignment.setTenantId(tenantId);
+        inactiveAssignment.setUserId(userId);
+        inactiveAssignment.setStudyId(inactiveRoleStudyId);
+        inactiveAssignment.setRoleId(roleId);
+        inactiveAssignment.setActive(false);
+
+        UserRoleAssignment expiredAssignment = new UserRoleAssignment();
+        expiredAssignment.setTenantId(tenantId);
+        expiredAssignment.setUserId(userId);
+        expiredAssignment.setStudyId(expiredRoleStudyId);
+        expiredAssignment.setRoleId(roleId);
+        expiredAssignment.setActive(true);
+        expiredAssignment.setEffectiveTo(java.time.OffsetDateTime.now().minusDays(1));
+
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of());
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of(activeAssignment, inactiveAssignment, expiredAssignment));
+
+        Role leaderRole = new Role();
+        leaderRole.setId(roleId);
+        leaderRole.setCode("STUDY_LEADER");
+        leaderRole.setName("Study Leader");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(leaderRole));
+
+        Study activeStudy = new Study();
+        activeStudy.setId(activeRoleStudyId);
+        activeStudy.setTenantId(tenantId);
+        activeStudy.setStudyCode("LDR-01");
+        activeStudy.setName("Leader Assigned Study");
+        when(studyRepository.findByTenantIdAndId(tenantId, activeRoleStudyId)).thenReturn(Optional.of(activeStudy));
+
+        List<MyStudyResponse> result = studyService.getMyStudies(tenantId, userId);
+
+        assertEquals(1, result.size());
+        assertEquals(activeRoleStudyId, result.get(0).getId());
+        assertEquals("LDR-01", result.get(0).getCode());
+        assertEquals("Leader Assigned Study", result.get(0).getName());
+        assertEquals("Study Leader", result.get(0).getStudyRole());
+        assertEquals("STUDY_LEADER", result.get(0).getStudyPermission());
+    }
+
+    @Test
+    void getMyStudies_duplicateAssignmentsAcrossMembersAndRoles_deduplicatesAndMergesMetadata() {
+        UUID roleId = UUID.randomUUID();
+
+        com.enrollnow.study.models.StudyMember member = new com.enrollnow.study.models.StudyMember();
+        member.setId(new com.enrollnow.study.models.StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Principal Investigator");
+
+        UserRoleAssignment roleAssignment = new UserRoleAssignment();
+        roleAssignment.setTenantId(tenantId);
+        roleAssignment.setUserId(userId);
+        roleAssignment.setStudyId(studyId);
+        roleAssignment.setRoleId(roleId);
+        roleAssignment.setActive(true);
+
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of(member));
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of(roleAssignment));
+
+        Role adminRole = new Role();
+        adminRole.setId(roleId);
+        adminRole.setCode("STUDY_ADMIN");
+        adminRole.setName("Study Admin");
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(adminRole));
+
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setStudyCode("DUP-01");
+        study.setName("Deduplicated Study");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        List<MyStudyResponse> result = studyService.getMyStudies(tenantId, userId);
+
+        assertEquals(1, result.size(), "Duplicate study across study_members and user_role_assignments must not be duplicated");
+        MyStudyResponse item = result.get(0);
+        assertEquals(studyId, item.getId());
+        assertEquals("DUP-01", item.getCode());
+        assertEquals("Deduplicated Study", item.getName());
+        assertEquals("Principal Investigator", item.getStudyRole());
+        assertEquals("STUDY_ADMIN", item.getStudyPermission());
+    }
+
+    @Test
+    void getMyStudies_crossTenantStudyRecord_isExcludedAndNeverFallsBackToUnscopedFindById() {
+        com.enrollnow.study.models.StudyMember member = new com.enrollnow.study.models.StudyMember();
+        member.setId(new com.enrollnow.study.models.StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Coordinator");
+
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of(member));
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of());
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.empty());
+
+        List<MyStudyResponse> result = studyService.getMyStudies(tenantId, userId);
+
+        assertTrue(result.isEmpty(), "Study not found in authorized tenant must be excluded, never fabricated");
+        verify(studyRepository, never()).findById(any());
     }
 }

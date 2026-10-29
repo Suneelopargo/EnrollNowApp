@@ -15,9 +15,15 @@ import com.enrollnow.study.dtos.StudyNavigationPermissionsResponse;
 import com.enrollnow.study.dtos.StudySummaryResponse;
 import com.enrollnow.study.dtos.UpdateStudyDetailsRequest;
 import com.enrollnow.study.dtos.UpdateStudyDisplaySettingsRequest;
+import com.enrollnow.identity.models.Role;
+import com.enrollnow.identity.models.UserRoleAssignment;
+import com.enrollnow.identity.repositories.RoleRepository;
+import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyMember;
+import com.enrollnow.study.models.StudyMemberId;
+import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
-import com.enrollnow.study.services.MyStudiesService;
 import com.enrollnow.study.services.StudyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,10 +50,16 @@ class StudyControllerTest {
     private StudyRepository studyRepository;
 
     @Mock
-    private SiteAuthorizationService siteAuthorizationService;
+    private StudyMemberRepository studyMemberRepository;
 
     @Mock
-    private MyStudiesService myStudiesService;
+    private RoleRepository roleRepository;
+
+    @Mock
+    private UserRoleAssignmentRepository userRoleAssignmentRepository;
+
+    @Mock
+    private SiteAuthorizationService siteAuthorizationService;
 
     private StudyController studyController;
 
@@ -58,7 +70,16 @@ class StudyControllerTest {
 
     @BeforeEach
     void setUp() {
-        studyController = new StudyController(new StudyService(studyRepository, myStudiesService), siteAuthorizationService, new com.fasterxml.jackson.databind.ObjectMapper());
+        StudyService studyService = new StudyService(
+                studyRepository,
+                null,
+                studyMemberRepository,
+                roleRepository,
+                userRoleAssignmentRepository,
+                null,
+                null
+        );
+        studyController = new StudyController(studyService, siteAuthorizationService, new com.fasterxml.jackson.databind.ObjectMapper());
         SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, tenantId);
         lenient().when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.of(caller));
         UserEffectivePermissionsResponse adminEffective = new UserEffectivePermissionsResponse();
@@ -106,20 +127,27 @@ class StudyControllerTest {
 
         Study study1 = new Study();
         study1.setId(studyId);
+        study1.setTenantId(tenantId);
         study1.setStudyCode("REG_AD_MCI");
         study1.setName("REG - AD/MCI");
         study1.setArchived(false);
 
         Study study2 = new Study();
         study2.setId(otherStudyId);
+        study2.setTenantId(tenantId);
         study2.setStudyCode("REG_HIV");
         study2.setName("REG - HIV");
         study2.setArchived(false);
 
         when(studyRepository.findByTenantIdAndArchivedFalse(tenantId)).thenReturn(List.of(study1, study2));
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study1));
 
-        MyStudyResponse assigned = new MyStudyResponse(studyId, "REG_AD_MCI", "REG - AD/MCI", "Coordinator", "STUDY_ADMIN");
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+        StudyMember member = new StudyMember();
+        member.setId(new StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Coordinator");
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of(member));
 
         ResponseEntity<ApiResponse<List<StudySummaryResponse>>> response =
                 studyController.getStudies(tenantId, false);
@@ -173,20 +201,27 @@ class StudyControllerTest {
 
         Study study1 = new Study();
         study1.setId(studyId);
+        study1.setTenantId(tenantId);
         study1.setStudyCode("REG_AD_MCI");
         study1.setName("REG - AD/MCI");
         study1.setArchived(false);
 
         Study study2 = new Study();
         study2.setId(otherStudyId);
+        study2.setTenantId(tenantId);
         study2.setStudyCode("REG_HIV");
         study2.setName("REG - HIV");
         study2.setArchived(false);
 
         when(studyRepository.findByTenantIdAndArchivedFalse(tenantId)).thenReturn(List.of(study1, study2));
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study1));
 
-        MyStudyResponse assigned = new MyStudyResponse(studyId, "REG_AD_MCI", "REG - AD/MCI", "Coordinator", "STUDY_ADMIN");
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of(assigned));
+        StudyMember member = new StudyMember();
+        member.setId(new StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Coordinator");
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of(member));
 
         ResponseEntity<ApiResponse<List<StudySummaryResponse>>> response =
                 studyController.getStudies(null, false);
@@ -300,14 +335,23 @@ class StudyControllerTest {
     void getStudyNavigationPermissions_found_returnsOkWithPermissions() {
         Study study = new Study();
         study.setId(studyId);
+        study.setTenantId(tenantId);
         study.setStudyCode("PROTO-200");
         study.setName("Neuro Study");
         study.setArchived(false);
 
+        StudyMember member = new StudyMember();
+        member.setId(new StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Coordinator");
+
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
-        when(myStudiesService.getMyStudies(tenantId, userId))
-                .thenReturn(List.of(new MyStudyResponse(studyId, "PROTO-200", "Neuro Study", "Coordinator", "STUDY_ADMIN")));
+        when(studyMemberRepository.findByTenantIdAndIdStudyIdAndIdUserId(tenantId, studyId, userId))
+                .thenReturn(Optional.of(member));
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId))
+                .thenReturn(List.of(member));
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
 
         ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
@@ -341,7 +385,6 @@ class StudyControllerTest {
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
         when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
-        when(myStudiesService.getMyStudies(tenantId, userId)).thenReturn(List.of());
 
         ResponseEntity<ApiResponse<StudyNavigationPermissionsResponse>> response =
                 studyController.getStudyNavigationPermissions(tenantId, studyId.toString());
@@ -589,5 +632,139 @@ class StudyControllerTest {
                 () -> studyController.getStudies(otherTenantId, false)
         );
         verify(studyRepository, never()).findByTenantIdAndArchivedFalse(any());
+    }
+
+    // =========================================================================
+    // Consolidated MyStudies Endpoint (getMyStudies) Tests
+    // =========================================================================
+
+    @Test
+    void getMyStudies_withTenantIdInPath_returnsAssignedStudies() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setStudyCode("MY-101");
+        study.setName("My Assigned Study");
+
+        StudyMember member = new StudyMember();
+        member.setId(new StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Coordinator");
+
+        UUID roleId = UUID.randomUUID();
+        UserRoleAssignment assignment = new UserRoleAssignment();
+        assignment.setTenantId(tenantId);
+        assignment.setUserId(userId);
+        assignment.setStudyId(studyId);
+        assignment.setRoleId(roleId);
+        assignment.setActive(true);
+
+        Role adminRole = new Role();
+        adminRole.setId(roleId);
+        adminRole.setCode("STUDY_ADMIN");
+        adminRole.setName("Study Admin");
+
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of(member));
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of(assignment));
+        when(roleRepository.findById(roleId)).thenReturn(Optional.of(adminRole));
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        ResponseEntity<List<MyStudyResponse>> response = studyController.getMyStudies(tenantId, userId);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(1, response.getBody().size());
+        MyStudyResponse item = response.getBody().get(0);
+        assertEquals(studyId, item.getId());
+        assertEquals("MY-101", item.getCode());
+        assertEquals("My Assigned Study", item.getName());
+        assertEquals("Coordinator", item.getStudyRole());
+        assertEquals("STUDY_ADMIN", item.getStudyPermission());
+        verify(siteAuthorizationService).requireTenantMatch(tenantId);
+        verify(siteAuthorizationService).requireSelfOrUserViewAccess(tenantId, userId, null);
+    }
+
+    @Test
+    void getMyStudies_withoutTenantIdInPath_resolvesCallerTenantAndReturnsStudies() {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setTenantId(tenantId);
+        study.setStudyCode("MY-202");
+        study.setName("Direct User Studies");
+
+        StudyMember member = new StudyMember();
+        member.setId(new StudyMemberId(studyId, userId));
+        member.setTenantId(tenantId);
+        member.setActive(true);
+        member.setStudyRole("Investigator");
+
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of(member));
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of());
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        ResponseEntity<List<MyStudyResponse>> response = studyController.getMyStudies(null, userId);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(1, response.getBody().size());
+        assertEquals("MY-202", response.getBody().get(0).getCode());
+        verify(siteAuthorizationService).requireSelfOrUserViewAccess(tenantId, userId, null);
+    }
+
+    @Test
+    void getMyStudies_emptyAssignments_returnsEmptyList() {
+        when(studyMemberRepository.findByTenantIdAndIdUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of());
+        when(userRoleAssignmentRepository.findByTenantIdAndUserIdAndActiveTrue(tenantId, userId)).thenReturn(List.of());
+
+        ResponseEntity<List<MyStudyResponse>> response = studyController.getMyStudies(tenantId, userId);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().isEmpty());
+    }
+
+    @Test
+    void getMyStudies_unauthorizedAccessToAnotherUsersStudies_throwsAccessDenied() {
+        UUID otherUserId = UUID.randomUUID();
+        doThrow(new org.springframework.security.access.AccessDeniedException("Access denied"))
+                .when(siteAuthorizationService).requireSelfOrUserViewAccess(tenantId, otherUserId, null);
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyController.getMyStudies(tenantId, otherUserId)
+        );
+        verifyNoInteractions(studyMemberRepository, userRoleAssignmentRepository, studyRepository);
+    }
+
+    @Test
+    void getMyStudies_crossTenantAccessAttempt_throwsAccessDenied() {
+        UUID otherTenantId = UUID.randomUUID();
+
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyController.getMyStudies(otherTenantId, userId)
+        );
+        verifyNoInteractions(studyMemberRepository, userRoleAssignmentRepository, studyRepository);
+    }
+
+    @Test
+    void getMyStudies_unauthenticatedCaller_throwsInsufficientAuthenticationException() {
+        when(siteAuthorizationService.getAuthenticatedCaller()).thenReturn(Optional.empty());
+
+        assertThrows(
+                org.springframework.security.authentication.InsufficientAuthenticationException.class,
+                () -> studyController.getMyStudies(tenantId, userId)
+        );
+        verifyNoInteractions(studyMemberRepository, userRoleAssignmentRepository, studyRepository);
+    }
+
+    @Test
+    void getMyStudies_missingUserId_throwsAccessDenied() {
+        assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> studyController.getMyStudies(tenantId, null)
+        );
+        verifyNoInteractions(studyMemberRepository, userRoleAssignmentRepository, studyRepository);
     }
 }
