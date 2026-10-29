@@ -175,54 +175,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
     <div className="enl-auth-page">
       <div className="enl-canvas-wrapper">
         <div className="enl-canvas">
-          {/* Ambient Glowing Background Elements */}
-          <div className="enl-ambient-glow-yellow" />
-          <div className="enl-ambient-glow-blue" />
-
-          {/* Top Dot Grid Pattern Accent */}
-          <svg
-            className="enl-dot-grid-top"
-            width="120"
-            height="70"
-            viewBox="0 0 120 70"
-            fill="none"
-            aria-hidden="true"
-          >
-            <pattern
-              id="enl-dots-top"
-              x="0"
-              y="0"
-              width="16"
-              height="16"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="3" cy="3" r="1.5" fill="#93c5fd" opacity="0.75" />
-            </pattern>
-            <rect width="120" height="70" fill="url(#enl-dots-top)" />
-          </svg>
-
-          {/* Bottom-Right Dot Grid Pattern Accent */}
-          <svg
-            className="enl-dot-grid-bottom"
-            width="100"
-            height="70"
-            viewBox="0 0 100 70"
-            fill="none"
-            aria-hidden="true"
-          >
-            <pattern
-              id="enl-dots-bottom"
-              x="0"
-              y="0"
-              width="16"
-              height="16"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="3" cy="3" r="1.5" fill="#93c5fd" opacity="0.75" />
-            </pattern>
-            <rect width="100" height="70" fill="url(#enl-dots-bottom)" />
-          </svg>
-
           {/* Three-Region Grid Layout (Column 1: Marketing, Column 2: Showcase, Column 3: Login) */}
           <div className="enl-three-region-layout">
             <LoginMarketingPanel />
@@ -422,26 +374,13 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <defs>
-              <linearGradient id="enl-wave-front" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0284c7" />
-                <stop offset="35%" stopColor="#0369a1" />
-                <stop offset="70%" stopColor="#0284c7" />
-                <stop offset="100%" stopColor="#0ea5e9" />
-              </linearGradient>
-              <linearGradient id="enl-wave-back" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-                <stop offset="50%" stopColor="#7dd3fc" stopOpacity="0.55" />
-                <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.35" />
-              </linearGradient>
-            </defs>
             <path
-              d="M 0 50 C 260 85, 480 25, 780 70 C 1050 110, 1260 55, 1440 115 L 1440 180 L 0 180 Z"
-              fill="url(#enl-wave-back)"
+              d="M 0 112 C 270 75, 500 126, 760 104 C 1030 82, 1240 119, 1440 91 L 1440 180 L 0 180 Z"
+              fill="#FFCB05"
             />
             <path
-              d="M 0 60 C 300 110, 600 35, 900 80 C 1140 115, 1280 75, 1440 140 L 1440 180 L 0 180 Z"
-              fill="url(#enl-wave-front)"
+              d="M 0 130 C 260 99, 520 145, 790 126 C 1060 108, 1260 143, 1440 120 L 1440 180 L 0 180 Z"
+              fill="#00274C"
             />
           </svg>
           <div className="enl-wave-stats-wrapper">

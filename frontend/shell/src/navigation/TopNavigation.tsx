@@ -6,7 +6,6 @@ import { useAuth } from '../auth/AuthContext';
 import { useTabWorkspace } from './TabWorkspaceContext';
 import { UserMenu } from './UserMenu';
 import { KeyboardShortcutsModal } from '../../../shared/accessibility/KeyboardShortcutsModal';
-import { EnrollNowBrand } from '../../../shared/design-system/components/EnrollNowBrand';
 import { SUPPORT_KNOWLEDGE_BASE_URL } from '../../../shared/supportLinks';
 import {
   LayoutDashboard,
@@ -179,9 +178,11 @@ export const TopNavigation: React.FC = () => {
                 title="EnrollNow Clinical Operations"
                 aria-label="EnrollNow Home"
               >
-                <div className="enl-header-brand-badge">
-                  <EnrollNowBrand size="header" />
-                </div>
+                <img
+                  src="/EnrollNow-Logo-Color.png"
+                  alt="EnrollNow"
+                  className="enl-header-brand-logo"
+                />
               </button>
             </div>
 
