@@ -1,5 +1,6 @@
 // frontend/shared/confirmation/ConfirmationContainer.tsx - Global Confirmation Dialog Host UI
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Trash2,
@@ -119,7 +120,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
     ? [details]
     : [];
 
-  return (
+  const dialogContent = (
     <div
       className={`enl-confirm-backdrop ${className}`}
       onClick={handleBackdropClick}
@@ -258,6 +259,12 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') {
+    return dialogContent;
+  }
+
+  return createPortal(dialogContent, document.body);
 };
 
 export default ConfirmationContainer;

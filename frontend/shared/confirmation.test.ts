@@ -1,6 +1,9 @@
 // frontend/shared/confirmation.test.ts - Unit Tests for Global Confirmation System
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { confirmation } from './confirmation/confirmationManager';
+import { ConfirmationContainer } from './confirmation/ConfirmationContainer';
 
 describe('Global Confirmation Box & Async Loader System', () => {
   beforeEach(() => {
@@ -199,5 +202,22 @@ describe('Global Confirmation Box & Async Loader System', () => {
 
     target.removeEventListener('enrollnow_confirm_response', eventHandler);
     (globalThis as any).window = originalWindow;
+  });
+
+  it('renders ConfirmationContainer with import confirmation buttons when open', () => {
+    confirmation.confirm({
+      title: 'Are you sure?',
+      message: 'Importing file exportRegistryStudyData.json will create study RegistryStudy and populate it with the file contents.',
+      confirmText: 'Yes, import and create study',
+      cancelText: 'Cancel',
+      intent: 'warning',
+    });
+
+    const html = renderToStaticMarkup(React.createElement(ConfirmationContainer));
+    expect(html).toContain('Are you sure?');
+    expect(html).toContain('Yes, import and create study');
+    expect(html).toContain('Cancel');
+    expect(html).toContain('enl-confirm-btn--warning');
+    expect(html).not.toContain('disabled=""');
   });
 });

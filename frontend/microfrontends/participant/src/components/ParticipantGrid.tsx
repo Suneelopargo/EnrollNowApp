@@ -89,7 +89,8 @@ const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
                 e.stopPropagation();
                 params.context.onNavigateToStudy(item, params.data);
               }}
-              className="participant-grid__study-link text-[#1976d2] hover:underline cursor-pointer bg-transparent border-0 p-0 text-xs text-left"
+              className="participant-grid__study-link cursor-pointer bg-transparent border-0 p-0 text-xs text-left"
+              style={{ color: "#1976d2" }}
             >
               {item.name}
             </button>
