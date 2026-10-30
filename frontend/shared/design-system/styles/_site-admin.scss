@@ -1207,6 +1207,32 @@
   }
 }
 
+// Let grid action tooltips flip vertically when the shared hover handler finds
+// insufficient space above the button. This also prevents the Archive label
+// from being clipped by the grid header at the top of the viewport.
+.site-admin-tooltip-btn[data-tooltip-pos="bottom"],
+.ag-pinned-right-cols-container .site-admin-tooltip-btn[data-tooltip-pos="bottom"],
+.participant-grid__row-actions .site-admin-tooltip-btn[data-tooltip-pos="bottom"],
+.ag-cell .site-admin-tooltip-btn[data-tooltip-pos="bottom"] {
+  &::before {
+    bottom: auto;
+    top: calc(100% + 8px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  &::after {
+    bottom: auto;
+    top: calc(100% + 3px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    border-width: 0 5px 5px 5px;
+    border-color: transparent transparent #2b2b2b transparent;
+  }
+}
+
 // Ensure AG Grid cells and rows do not clip CSS tooltips
 .site-admin-tooltip-cell,
 .ag-cell:has(.site-admin-tooltip-btn) {

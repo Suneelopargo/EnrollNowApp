@@ -16,19 +16,23 @@ export function initTooltipAutoPosition(): void {
 
     const rect = target.getBoundingClientRect();
     let spaceAbove = rect.top;
+    let spaceBelow = window.innerHeight - rect.bottom;
 
     // Check nearest scrolling container (AG Grid viewport, tables, dialogs)
     const scrollParent = target.closest(
-      '.ag-body-viewport, .ag-center-cols-viewport, .ag-pinned-right-cols-container, .ag-root, .ag-root-wrapper, .table-container, .modal-body, .record-detail__panel-content'
+      '.ag-body-viewport, .ag-center-cols-viewport, .ag-pinned-right-cols-container, .ag-root, .ag-root-wrapper, .table-container, .modal-body, .record-detail__panel-content, .participant-grid-card'
     );
     if (scrollParent) {
       const parentRect = scrollParent.getBoundingClientRect();
       const distFromParentTop = rect.top - parentRect.top;
+      const distFromParentBottom = parentRect.bottom - rect.bottom;
       spaceAbove = Math.min(spaceAbove, distFromParentTop);
+      spaceBelow = Math.min(spaceBelow, distFromParentBottom);
     }
 
-    // If less than 65px of vertical space above the element, position tooltip at the bottom
-    if (spaceAbove < 65) {
+    // Prefer above, but flip below when there is not enough room above and
+    // the tooltip can fit below (for example, near the top of a grid).
+    if (spaceAbove < 65 && spaceBelow > spaceAbove) {
       target.setAttribute('data-tooltip-pos', 'bottom');
     } else {
       target.removeAttribute('data-tooltip-pos');

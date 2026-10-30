@@ -12,7 +12,7 @@ import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition, StudyItem } from '../types/participant';
+import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition, isContactForFutureStudies, StudyItem } from '../types/participant';
 import {
   validateFilterRule,
   registerDynamicFilterFields,
@@ -175,7 +175,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         globalId: p.globalId || '',
         timezone: p.timezone || '',
         tags: Array.isArray(p.tags) ? p.tags : [],
-        contactForFutureStudies: p.contactForFutureStudies ?? true,
+        contactForFutureStudies: isContactForFutureStudies(p.contactForFutureStudies),
         availableToAddStudy: p.availableToAddStudy ?? true,
         globalDateOfLastContact: p.globalDateOfLastContact || '',
         birthMonth: p.birthMonth || '',

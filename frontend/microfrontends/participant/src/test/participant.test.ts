@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ParticipantModule } from '../remoteEntry';
-import { ParticipantGrid } from '../components/ParticipantGrid';
+import { ParticipantGrid, StudiesCellRenderer } from '../components/ParticipantGrid';
 import { AddParticipantModal } from '../components/AddParticipantModal';
 import { SaveFilterModal } from '../components/SaveFilterModal';
 import { ParticipantDetailModal } from '../components/ParticipantDetailModal';
@@ -301,6 +301,7 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
       timezone: 'America/New_York (EDT)',
       tags: ['Pediatric', 'Cohort A'],
       contactForFutureStudies: true,
+      globalDateOfLastContact: '10/31/2026 12:00 am',
       age: '12',
       gender: 'Female',
       contactMethods: {
@@ -342,7 +343,30 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).toContain('GLB-9988');
     expect(html).toContain('FAM-2001');
     expect(html).toContain('Contact For Future Studies?');
+    expect(html).toContain('10/31/2026');
+    expect(html).toContain('12:00 AM');
+    expect(html).toContain('checked=""');
     expect(html).toContain('Save Changes');
+  });
+
+  it('leaves the future contact checkbox unchecked when the value is missing and uses a valid last-contact date', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ParticipantDetailModal, {
+        isOpen: true,
+        participant: {
+          id: 'p-102',
+          name: 'No Contact Preference',
+          globalDateOfLastContact: 'not a date',
+          lastContact: '10/31/2026 12:00 am',
+        },
+        onClose: vi.fn(),
+        onSave: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('10/31/2026');
+    expect(html).toContain('12:00 AM');
+    expect(html).not.toContain('checked=""');
   });
 
   it('does not render ParticipantDetailModal when isOpen is false', () => {
@@ -743,6 +767,20 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).not.toContain('Unspecified');
     expect(html).not.toContain('N/A');
   });
+
+  it('shows an archived-study tooltip when archive status comes from the study list', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StudiesCellRenderer, {
+        value: [{ id: 'study-archived', name: 'MyLocalStudy' }],
+        context: { archivedStudyKeys: new Set(['study-archived']) },
+      } as import('ag-grid-community').ICellRendererParams)
+    );
+
+    expect(html).toContain('data-tooltip="Study is Archived"');
+    expect(html).toContain('data-tooltip-pos="bottom"');
+    expect(html).toContain('MyLocalStudy');
+  });
+
   describe('Legacy Timezone and Global ID Functionality', () => {
     it('participantApi.getTimezones fetches timezone options from backend', async () => {
       const timezones = ['America/Chicago', 'America/New_York', 'UTC'];

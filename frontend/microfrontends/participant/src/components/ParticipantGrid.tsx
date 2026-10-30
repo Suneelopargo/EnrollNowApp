@@ -70,7 +70,7 @@ const CheckboxCellRenderer: React.FC<ICellRendererParams> = (params) => {
   );
 };
 
-const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
+export const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
   const studies: StudyItem[] = params.value;
   if (!studies || !Array.isArray(studies) || studies.length === 0) {
     return <span className="text-gray-500 text-xs font-normal">...</span>;
@@ -80,10 +80,14 @@ const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
     <div className="flex flex-wrap items-center gap-1 leading-relaxed py-1">
       {studies.map((item, idx) => (
         <span key={idx} className="text-xs">
-          {item.archived ? (
+          {item.archived
+            || String(item.status || '').toUpperCase() === 'ARCHIVED'
+            || [item.id, item.studyId, item.studyCode, item.name]
+              .some((key) => params.context?.archivedStudyKeys?.has(String(key || '').trim().toLowerCase())) ? (
             <span
               className="text-gray-700 custom-tooltip-btn cursor-help"
               data-tooltip="Study is Archived"
+              data-tooltip-pos="bottom"
               aria-label="Study is Archived"
             >
               {item.name}
@@ -224,6 +228,18 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const studyFilterButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const archivedStudyKeys = useMemo(() => {
+    const keys = new Set<string>();
+    studies.forEach((study) => {
+      if (!study.archived && String(study.status || '').toUpperCase() !== 'ARCHIVED') return;
+      [study.id, study.studyId, study.studyCode, study.name, study.shortName, study.title]
+        .forEach((value) => {
+          const key = String(value || '').trim().toLowerCase();
+          if (key) keys.add(key);
+        });
+    });
+    return keys;
+  }, [studies]);
 
   // Synchronize internal quick-filter text if external searchTerm changes (e.g. clear filters)
   useEffect(() => {
@@ -599,7 +615,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     }
   };
   return (
-    <section className="card">
+    <section className="card participant-grid-card">
       <div className="card-header data-grid-toolbar">
         <div className="data-grid-toolbar__heading flex items-center gap-3">
           <div className="flex items-center gap-2 mr-2">
@@ -927,7 +943,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           quickFilterText={gridSearchTerm}
-          context={{ onOpenDetail, onDeleteParticipant, onNavigateToStudy }}
+          context={{ onOpenDetail, onDeleteParticipant, onNavigateToStudy, archivedStudyKeys }}
           onCellClicked={(params) => {
             if (params.column?.getColId() === 'expand' && params.data) {
               onOpenDetail?.(params.data);

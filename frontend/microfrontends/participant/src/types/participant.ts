@@ -1,5 +1,8 @@
 // frontend/microfrontends/participant/src/types/participant.ts - TypeScript Contracts for Participant & Registry
 
+export const isContactForFutureStudies = (value: unknown): boolean =>
+  value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true');
+
 export interface StudyItem {
   id?: string;
   studyId?: string;
@@ -150,4 +153,3 @@ export type {
   SurveyAssignmentItem,
   SurveyOptionItem,
 } from '../../../../shared/api/participantApi';
-

@@ -20,7 +20,7 @@ import { getStoredAuthUser } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
-import { GlobalVariableDefinition, ParticipantRecord, ParticipantVariable } from '../types/participant';
+import { GlobalVariableDefinition, isContactForFutureStudies, ParticipantRecord, ParticipantVariable } from '../types/participant';
 import { ParticipantContactLogs } from './ParticipantContactLogs';
 import { ParticipantContactManagement } from './ParticipantContactManagement';
 import { ParticipantComments } from './ParticipantComments';
@@ -29,8 +29,13 @@ import { ParticipantSmsSection } from './ParticipantSmsSection';
 import { ParticipantConsentSection } from './ParticipantConsentSection';
 import { ParticipantFormsSection } from './ParticipantFormsSection';
 import { ParticipantTagSelect } from './ParticipantTagSelect';
-import { ParticipantDateTimePicker } from './ParticipantDateTimePicker';
+import { isValidDateTimeValue, ParticipantDateTimePicker } from './ParticipantDateTimePicker';
 import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
+
+const getParticipantLastContactDate = (participant?: ParticipantRecord | null): string => {
+  const values = [participant?.globalDateOfLastContact, participant?.lastContact];
+  return values.find((value) => isValidDateTimeValue(value)) || '';
+};
 
 const GlobalVariableField: React.FC<{
   variable: GlobalVariableDefinition;
@@ -185,12 +190,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [isLoadingTimezones, setIsLoadingTimezones] = useState(false);
   const [timezoneError, setTimezoneError] = useState<string | null>(null);
   const hasExistingTimezone = Boolean(participant?.timezone && participant.timezone.trim());
-  const hasExistingDate = Boolean(
-    participant?.globalDateOfLastContact &&
-    participant.globalDateOfLastContact.trim() &&
-    participant.globalDateOfLastContact.trim() !== 'N/A' &&
-    participant.globalDateOfLastContact.trim() !== 'NA'
-  );
+  const initialLastContactDate = getParticipantLastContactDate(participant);
+  const hasExistingDate = Boolean(initialLastContactDate);
 
   const handleTimezoneChange = (newTz: string) => {
     if (hasExistingTimezone && (!newTz || !newTz.trim())) {
@@ -201,8 +202,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     setTimezoneError(null);
   };
   const [selectedTags, setSelectedTags] = useState<string[]>(Array.isArray(participant?.tags) ? participant.tags : []);
-  const [contactForFuture, setContactForFuture] = useState(participant?.contactForFutureStudies !== false);
-  const [dateLastContact, setDateLastContact] = useState(participant?.globalDateOfLastContact || participant?.lastContact || '');
+  const [contactForFuture, setContactForFuture] = useState(isContactForFutureStudies(participant?.contactForFutureStudies));
+  const [dateLastContact, setDateLastContact] = useState(initialLastContactDate);
   const [dateLastContactError, setDateLastContactError] = useState<string | null>(null);
 
   // Contact Methods
@@ -241,8 +242,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setGlobalId(participant.globalId || '');
       setTimezone(participant.timezone || '');
       setSelectedTags(Array.isArray(participant.tags) ? participant.tags : []);
-      setContactForFuture(participant.contactForFutureStudies !== false);
-      setDateLastContact(participant.globalDateOfLastContact || participant.lastContact || '');
+      setContactForFuture(isContactForFutureStudies(participant.contactForFutureStudies));
+      setDateLastContact(getParticipantLastContactDate(participant));
       setDateLastContactError(null);
       
       setPrimaryEmail(participant.contactMethods?.primaryEmail || '');
@@ -415,8 +416,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     if (familyId !== (participant.familyId || '')) return true;
     if (globalId !== (participant.globalId || '')) return true;
     if (timezone !== (participant.timezone || '')) return true;
-    if (contactForFuture !== (participant.contactForFutureStudies !== false)) return true;
-    const initialDate = participant.globalDateOfLastContact || participant.lastContact || '';
+    if (contactForFuture !== isContactForFutureStudies(participant.contactForFutureStudies)) return true;
+    const initialDate = getParticipantLastContactDate(participant);
     if (dateLastContact !== initialDate) return true;
 
     const origTags = Array.isArray(participant.tags) ? participant.tags : [];
