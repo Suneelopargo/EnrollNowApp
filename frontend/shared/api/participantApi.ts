@@ -292,8 +292,18 @@ export interface CommunicationItem {
   body: string;
   status: string;
   sentAt?: string;
+  createdAt?: string;
   pinned: boolean;
+  sticky?: boolean;
   senderName?: string;
+  authorName?: string;
+  authorInitials?: string;
+  replyTo?: string;
+  design?: string;
+  messageIsHtml?: boolean;
+  lastContact?: boolean;
+  notify?: boolean;
+  attachments?: Array<{ fileName: string; fileUploadId?: string; fileContentBase64?: string }>;
   recipients: CommunicationRecipientItem[];
 }
 
@@ -630,13 +640,45 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async sendEmail(participantId: string, payload: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; body: string; replyTo?: string; senderName?: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+  async sendEmail(
+    participantId: string,
+    payload: {
+      to: string[];
+      cc?: string[];
+      bcc?: string[];
+      replyTo?: string;
+      senderName?: string;
+      subject: string;
+      body: string;
+      pinned?: boolean;
+      sticky?: boolean;
+      studyId?: string;
+      studyIdentifier?: string;
+      design?: string;
+      messageIsHtml?: boolean;
+      lastContact?: boolean;
+      global?: boolean;
+      notify?: boolean;
+      attachments?: Array<{ fileName: string; fileUploadId?: string; fileContentBase64?: string }>;
+    },
+    options?: { tenantId?: string; siteId?: string }
+  ): Promise<CommunicationItem> {
     const res = await apiClient.post(`/api/v1/participants/${participantId}/emails`, payload, { params: options });
     return res.data?.data ?? res.data;
   },
 
   async pinEmail(participantId: string, emailId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
     const res = await apiClient.patch(`/api/v1/participants/${participantId}/emails/${emailId}/pin`, { sticky }, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async updateEmailLog(
+    participantId: string,
+    emailId: string,
+    flags: { sticky?: boolean; pinned?: boolean; lastContact?: boolean; global?: boolean; notify?: boolean },
+    options?: { tenantId?: string; siteId?: string }
+  ): Promise<CommunicationItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/emails/${emailId}`, flags, { params: options });
     return res.data?.data ?? res.data;
   },
 

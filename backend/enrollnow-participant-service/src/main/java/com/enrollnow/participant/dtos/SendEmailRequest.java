@@ -22,6 +22,12 @@ public class SendEmailRequest {
     private String replyTo;
     private String senderName;
     private boolean pinned = false;
+    private boolean lastContact = false;
+    private boolean global = false;
+    private boolean notify = false;
+    private String design;
+    private boolean messageIsHtml = false;
+    private List<String> attachments = new ArrayList<>();
     private UUID studyId;
     private String studyIdentifier;
 
@@ -43,6 +49,20 @@ public class SendEmailRequest {
     public void setSenderName(String senderName) { this.senderName = senderName; }
     public boolean isPinned() { return pinned; }
     public void setPinned(boolean pinned) { this.pinned = pinned; }
+    public boolean isSticky() { return pinned; }
+    public void setSticky(boolean sticky) { this.pinned = sticky; }
+    public boolean isLastContact() { return lastContact; }
+    public void setLastContact(boolean lastContact) { this.lastContact = lastContact; }
+    public boolean isGlobal() { return global; }
+    public void setGlobal(boolean global) { this.global = global; }
+    public boolean isNotify() { return notify; }
+    public void setNotify(boolean notify) { this.notify = notify; }
+    public String getDesign() { return design; }
+    public void setDesign(String design) { this.design = design; }
+    public boolean isMessageIsHtml() { return messageIsHtml; }
+    public void setMessageIsHtml(boolean messageIsHtml) { this.messageIsHtml = messageIsHtml; }
+    public List<String> getAttachments() { return attachments; }
+    public void setAttachments(List<String> attachments) { this.attachments = attachments != null ? attachments : new ArrayList<>(); }
     public UUID getStudyId() { return studyId; }
     public void setStudyId(UUID studyId) {
         this.studyId = studyId;

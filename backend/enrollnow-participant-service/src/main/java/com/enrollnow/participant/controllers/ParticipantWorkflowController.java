@@ -206,6 +206,21 @@ public class ParticipantWorkflowController {
         return ResponseEntity.ok(workflowService.pinCommunication(resolvedTenantId, participantId, emailId, userId, request.isSticky()));
     }
 
+    @PatchMapping("/{participantId}/emails/{emailId}")
+    public ResponseEntity<CommunicationDto> updateEmailLog(
+            @PathVariable UUID participantId,
+            @PathVariable UUID emailId,
+            @RequestBody Map<String, Object> flags,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId
+    ) {
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(workflowService.updateEmailLog(resolvedTenantId, participantId, emailId, userId, flags));
+    }
+
     @GetMapping("/{participantId}/email-recipients")
     public ResponseEntity<List<String>> getEmailRecipients(
             @PathVariable UUID participantId,

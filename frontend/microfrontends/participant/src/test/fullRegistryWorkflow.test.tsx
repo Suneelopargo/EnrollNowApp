@@ -408,7 +408,7 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         onEmailSent={() => {}}
       />
     );
-    expect(html).toContain('Compose Email');
+    expect(html).toContain('Add Participant Email');
     expect(html).toContain('Subject');
   });
 
