@@ -1,7 +1,28 @@
-// frontend/microfrontends/participant/src/components/ParticipantConsentSection.tsx - Participant Consents List & Management
+// frontend/microfrontends/participant/src/components/ParticipantConsentSection.tsx - Participant Consent History & Management
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShieldCheck, Plus, RefreshCw, FileText, CheckCircle2, Clock, XCircle, AlertCircle } from 'lucide-react';
-import { participantApi, ConsentItem } from '../../../../shared/api/participantApi';
+import {
+  ShieldCheck,
+  Plus,
+  RefreshCw,
+  FileText,
+  Clock,
+  AlertCircle,
+  Pin,
+  Pencil,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Globe,
+  Loader2,
+  Download,
+} from 'lucide-react';
+import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
+import { requestConfirmation } from '../../../../shared/confirmation';
+import {
+  participantApi,
+  ConsentLogItem,
+} from '../../../../shared/api/participantApi';
 import { RecordConsentModal } from './RecordConsentModal';
 
 export interface ParticipantConsentSectionProps {
@@ -10,6 +31,7 @@ export interface ParticipantConsentSectionProps {
   studyId?: string;
   tenantId?: string;
   siteId?: string;
+  onParticipantUpdated?: () => void;
 }
 
 export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps> = ({
@@ -18,225 +40,458 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
   studyId,
   tenantId,
   siteId,
+  onParticipantUpdated,
 }) => {
-  const [consents, setConsents] = useState<ConsentItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [logs, setLogs] = useState<ConsentLogItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
 
-  const fetchConsents = useCallback(async () => {
+  // Expandable row state
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [selectedLogForEdit, setSelectedLogForEdit] = useState<ConsentLogItem | null>(null);
+
+  // Pin action loading state
+  const [togglingPinId, setTogglingPinId] = useState<string | null>(null);
+
+  const fetchConsentLogs = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await participantApi.getConsents(participantId, { tenantId, siteId });
-      setConsents(data);
+      const data = await participantApi.getConsentLogs(participantId, { studyId, tenantId, siteId });
+      setLogs(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      console.error('Failed to load consents:', err);
-      setError(err?.response?.data?.message || err?.message || 'Failed to load consent records');
+      const msg = getApiErrorMessage(err, 'Failed to load consent logs');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [participantId, tenantId, siteId]);
+  }, [participantId, studyId, tenantId, siteId]);
 
   useEffect(() => {
-    fetchConsents();
-  }, [fetchConsents]);
+    fetchConsentLogs();
+  }, [fetchConsentLogs]);
 
-  const handleConsentRecorded = (newConsent: ConsentItem) => {
-    setConsents((prev) => [newConsent, ...prev.filter((c) => c.id !== newConsent.id)]);
+  const toggleRowExpansion = (logId: string) => {
+    setExpandedLogIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status?.toUpperCase()) {
-      case 'CONSENTED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Consented
-          </span>
-        );
-      case 'PENDING':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-            <Clock className="w-3 h-3 text-amber-600" /> Pending
-          </span>
-        );
-      case 'DECLINED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">
-            <XCircle className="w-3 h-3 text-rose-600" /> Declined
-          </span>
-        );
-      case 'WITHDRAWN':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300">
-            <AlertCircle className="w-3 h-3 text-gray-500" /> Withdrawn
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-            {status || 'Unknown'}
-          </span>
-        );
+  const handleOpenAddModal = () => {
+    setSelectedLogForEdit(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (log: ConsentLogItem) => {
+    setSelectedLogForEdit(log);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedLogForEdit(null);
+  };
+
+  const handleConsentSaved = () => {
+    fetchConsentLogs();
+    onParticipantUpdated?.();
+  };
+
+  const handleTogglePin = async (log: ConsentLogItem) => {
+    setTogglingPinId(log.id);
+    const newSticky = !log.sticky;
+    try {
+      await participantApi.pinConsentLog(participantId, log.id, newSticky, { tenantId, siteId });
+      toast.success(newSticky ? 'Consent log pinned' : 'Consent log unpinned');
+      await fetchConsentLogs();
+    } catch (err: any) {
+      const msg = getApiErrorMessage(err, 'Failed to update pin status');
+      toast.error(msg);
+    } finally {
+      setTogglingPinId(null);
     }
   };
 
-  const formatDate = (isoString?: string) => {
-    if (!isoString) return '—';
+  const handleDeleteLog = (log: ConsentLogItem) => {
+    const formattedDate = formatDateTime(log.consentDate);
+    void requestConfirmation({
+      entityName: `consent log from ${formattedDate || 'selected date'}`,
+      intent: 'danger',
+      confirmText: 'Delete Consent Log',
+      loadingText: 'Deleting consent log...',
+      title: 'Delete Consent Log',
+      message: `Delete consent log entry for ${participantName}? This action cannot be undone.`,
+      confirmWord: 'DELETE',
+      onConfirm: async () => {
+        try {
+          await participantApi.deleteConsentLog(participantId, log.id, { tenantId, siteId });
+          toast.success('Consent log deleted successfully');
+          await fetchConsentLogs();
+          onParticipantUpdated?.();
+        } catch (err: any) {
+          const msg = getApiErrorMessage(err, 'Failed to delete consent log');
+          toast.error(msg);
+        }
+      },
+    });
+  };
+
+  const formatDateTime = (isoStr?: string) => {
+    if (!isoStr) return '';
     try {
-      const d = new Date(isoString);
-      return d.toLocaleDateString(undefined, {
-        year: 'numeric',
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr;
+      return (
+        d.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }) +
+        ', ' +
+        d.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      );
+    } catch {
+      return isoStr;
+    }
+  };
+
+  const formatDateOnly = (isoStr?: string) => {
+    if (!isoStr) return '—';
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isoStr;
+      return d.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
+        year: 'numeric',
       });
     } catch {
-      return isoString;
+      return isoStr;
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50/50 p-6 space-y-4">
-      {/* Header with Title and Actions */}
-      <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-        <div>
-          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
-            Study Consents
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Active and historical consent records for {participantName}
-          </p>
-        </div>
+    <div className="space-y-4">
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
+      
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={fetchConsents}
-            disabled={isLoading}
-            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-gray-600 custom-tooltip-btn"
-            data-tooltip="Refresh consent history"
+            onClick={handleOpenAddModal}
+            className="btn btn-sm btn-primary flex items-center gap-1.5"
+            id="add-consent-log-modal-button"
+            title="Record Consent"
+            aria-label="Record Consent"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsRecordModalOpen(true)}
-            className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white custom-tooltip-btn"
-            data-tooltip="Record Consent"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Record Consent
+            <Plus size={14} /> Add Consent
           </button>
         </div>
       </div>
 
+      {/* Loading state */}
+      {isLoading && logs.length === 0 && (
+        <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
+          <Loader2 size={24} className="animate-spin text-indigo-600" />
+          <span className="text-xs">Loading consent history...</span>
+        </div>
+      )}
+
       {/* Error state */}
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm flex items-center justify-between">
-          <span>{error}</span>
-          <button type="button" onClick={fetchConsents} className="btn btn-ghost btn-sm text-red-700 hover:bg-red-100">
+      {error && !isLoading && (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchConsentLogs}
+            className="btn btn-sm btn-ghost text-red-700 underline"
+          >
             Retry
           </button>
         </div>
       )}
 
-      {/* Content area */}
-      <div className="flex-1 overflow-auto">
-        {isLoading && consents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 space-y-2 text-gray-400">
-            <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
-            <p className="text-sm">Loading consent records...</p>
-          </div>
-        ) : consents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
-            <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 mb-3">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h4 className="text-sm font-medium text-gray-900">No consent records found</h4>
-            <p className="text-xs text-gray-500 max-w-sm mt-1 mb-4">
-              There are no signed or recorded study consent forms for this participant yet.
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsRecordModalOpen(true)}
-              className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Record First Consent
-            </button>
-          </div>
-        ) : (
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
-              <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Study</th>
-                  <th scope="col" className="px-4 py-3">Consent Form / Version</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
-                  <th scope="col" className="px-4 py-3">Consent Date</th>
-                  <th scope="col" className="px-4 py-3">Method</th>
-                  <th scope="col" className="px-4 py-3">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {consents.map((consent) => (
-                  <tr key={consent.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="px-4 py-3.5 font-medium text-gray-900">
-                      {consent.studyName || 'Study'}
-                    </td>
-                    <td className="px-4 py-3.5 text-gray-700">
-                      <div className="flex items-center gap-1.5">
-                        <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <div>
-                          <span className="font-medium text-gray-800">{consent.consentVersionTitle || 'Informed Consent Form'}</span>
-                          {consent.versionNumber && (
-                            <span className="ml-1.5 text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                              v{consent.versionNumber}
+      {/* Empty State */}
+      {!isLoading && !error && logs.length === 0 && (
+        <div className="p-8 text-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
+          <FileText size={32} className="text-gray-400 mb-2" />
+          <h5 className="text-sm font-medium text-gray-700 mb-1">No consent records found</h5>
+          <p className="text-xs text-gray-500 max-w-sm mb-4">
+            No administrative consent records have been logged for {participantName} yet.
+          </p>
+          <button
+            type="button"
+            onClick={handleOpenAddModal}
+            className="btn btn-sm btn-primary flex items-center gap-1.5"
+          >
+            <Plus size={14} /> Add Consent
+          </button>
+        </div>
+      )}
+
+      {/* Legacy Footable-style Consent History Table */}
+      {!isLoading && logs.length > 0 && (
+        <div className="table-container bg-white border border-gray-200 rounded-lg shadow-xs overflow-visible">
+          <table className="min-w-full divide-y divide-gray-200 text-left text-xs" id="consent-log-list">
+            <thead className="bg-gray-50 font-semibold text-gray-600">
+              <tr>
+                <th scope="col" className="px-3.5 py-2.5">Consent Date</th>
+                <th scope="col" className="px-3.5 py-2.5">Consent Type</th>
+                <th scope="col" className="px-3.5 py-2.5">Consent Title</th>
+                <th scope="col" className="px-3.5 py-2.5">Attachment</th>
+                <th scope="col" className="px-3.5 py-2.5 text-right">&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {logs.map((log) => {
+                const isExpanded = expandedLogIds.has(log.id);
+                const isToggling = togglingPinId === log.id;
+                const formattedDate = formatDateTime(log.consentDate);
+                const authorName = log.updatedByName || log.consentedBy || log.createdByName || 'User';
+                const avatarInitials = log.updatedByInitials || log.createdByInitials || 'SK';
+
+                return (
+                  <React.Fragment key={log.id}>
+                    {/* Primary Row */}
+                    <tr
+                      className={`hover:bg-gray-50/80 transition-colors cursor-pointer ${
+                        log.sticky ? 'bg-amber-50/40' : ''
+                      }`}
+                      onClick={() => toggleRowExpansion(log.id)}
+                    >
+                      <td className="px-3.5 py-2.5 whitespace-nowrap overflow-visible">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="p-0.5 text-gray-400 hover:text-gray-700 focus:outline-none"
+                            aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRowExpansion(log.id);
+                            }}
+                          >
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
+
+                          {log.sticky && (
+                            <span
+                              className="inline-flex text-amber-600 custom-tooltip-btn cursor-default"
+                              data-tooltip="Pinned to top"
+                              aria-label="Pinned Consent"
+                            >
+                              <Pin size={13} className="fill-amber-500" />
                             </span>
                           )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      {getStatusBadge(consent.status)}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-gray-600 text-xs">
-                      {formatDate(consent.consentedAt || consent.createdAt)}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-xs text-gray-600">
-                      <span className="capitalize">{consent.consentMethod?.toLowerCase() || 'Electronic'}</span>
-                    </td>
-                    <td className="px-4 py-3.5 text-xs text-gray-500 max-w-xs truncate">
-                      {consent.withdrawalReason ? (
-                        <span className="text-red-600 italic" title={consent.withdrawalReason}>
-                          Reason: {consent.withdrawalReason}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">None</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
-      {/* Record Consent Modal */}
-      {isRecordModalOpen && (
-        <RecordConsentModal
-          isOpen={isRecordModalOpen}
-          onClose={() => setIsRecordModalOpen(false)}
-          participantId={participantId}
-          participantName={participantName}
-          tenantId={tenantId}
-          siteId={siteId}
-          onConsentRecorded={handleConsentRecorded}
-        />
+                          <span className="font-semibold text-gray-800">{formattedDate}</span>
+
+                          {log.global && (
+                            <span
+                              className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-0.5 custom-tooltip-btn cursor-default"
+                              data-tooltip={log.studyName ? `Global (${log.studyName})` : 'Global (Registry)'}
+                              aria-label={log.studyName ? `Global (${log.studyName})` : 'Global (Registry)'}
+                            >
+                              <Globe size={10} />
+                              Global ({log.studyName || 'Registry'})
+                            </span>
+                          )}
+
+                          {log.editable !== false && (
+                            <div className="participant-grid__row-actions inline-flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(log)}
+                                className="participant-grid__row-action custom-tooltip-btn"
+                                data-tooltip="Edit consent log"
+                                aria-label="Edit consent log"
+                              >
+                                <Pencil size={13} aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLog(log)}
+                                className="participant-grid__row-action participant-grid__row-action--danger custom-tooltip-btn tooltip-align-right"
+                                data-tooltip="Delete consent log"
+                                aria-label="Delete consent log"
+                              >
+                                <Trash2 size={13} aria-hidden="true" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-3.5 py-2.5 whitespace-nowrap text-gray-700">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-medium">
+                          {log.consentType}
+                        </span>
+                      </td>
+
+                      <td className="px-3.5 py-2.5 font-medium text-gray-900 max-w-xs truncate">
+                        {log.consentTitle}
+                      </td>
+
+                      <td className="px-3.5 py-2.5 whitespace-nowrap overflow-visible" onClick={(e) => e.stopPropagation()}>
+                        {log.fileAttached && log.downloadUrl ? (
+                          <a
+                            href={log.downloadUrl}
+                            download={log.fileName || 'attachment'}
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline max-w-[150px] truncate custom-tooltip-btn"
+                            data-tooltip={`Download ${log.fileName || 'attachment'}`}
+                            aria-label={`Download ${log.fileName || 'attachment'}`}
+                          >
+                            <FileText size={12} />
+                            <span className="truncate">{log.fileName || 'Attachment'}</span>
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-3.5 py-2.5 whitespace-nowrap text-right overflow-visible">
+                        <div
+                          className="comment-avatar-wrap inline-flex items-center justify-center cursor-pointer custom-tooltip-btn tooltip-align-right"
+                          data-tooltip={authorName}
+                          aria-label={authorName}
+                        >
+                          <span>{avatarInitials}</span>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Expandable Details Row */}
+                    {isExpanded && (
+                      <tr className="bg-gray-50/70 border-b border-gray-200">
+                        <td colSpan={5} className="px-6 py-3 text-xs text-gray-700">
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-2">
+                            {/* Version */}
+                            <div>
+                              <span className="font-semibold text-gray-500 block mb-0.5">Version</span>
+                              <span className="text-gray-800">{log.version || '—'}</span>
+                            </div>
+
+                            {/* Consented By */}
+                            <div>
+                              <span className="font-semibold text-gray-500 block mb-0.5">Consented By</span>
+                              <span className="text-gray-800">{log.consentedBy || '—'}</span>
+                            </div>
+
+                            {/* Expiration */}
+                            <div>
+                              <span className="font-semibold text-gray-500 block mb-0.5">Expiration</span>
+                              <span className="text-gray-800">{formatDateOnly(log.expiration)}</span>
+                            </div>
+
+                            {/* Attachment Details */}
+                            <div>
+                              <span className="font-semibold text-gray-500 block mb-0.5">Attachment</span>
+                              {log.fileAttached && log.downloadUrl ? (
+                                <a
+                                  href={log.downloadUrl}
+                                  download={log.fileName || 'attachment'}
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                >
+                                  <Download size={13} />
+                                  <span>{log.fileName || 'Download'}</span>
+                                  {log.fileSizeBytes && (
+                                    <span className="text-gray-400 text-[10px]">
+                                      ({Math.round(log.fileSizeBytes / 1024)} KB)
+                                    </span>
+                                  )}
+                                </a>
+                              ) : (
+                                <span className="text-gray-400">None</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Comments */}
+                          {log.comments && (
+                            <div className="mt-2">
+                              <span className="font-semibold text-gray-500 block mb-0.5">Comments</span>
+                              <div className="bg-white p-2 rounded-md border border-gray-200 whitespace-pre-wrap text-gray-800">
+                                {log.comments}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Mark Consent As (Checkboxes) & Audit Info */}
+                          <div className="mt-3 pt-2.5 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
+                            <div className="flex items-center gap-4">
+                              <span className="font-semibold text-gray-600">Mark Consent As:</span>
+                              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="form-checkbox h-3.5 w-3.5 text-blue-600 rounded-sm"
+                                  checked={log.sticky}
+                                  disabled={isToggling || log.pinnable === false}
+                                  onChange={() => handleTogglePin(log)}
+                                />
+                                <span className={log.sticky ? 'font-medium text-amber-700' : ''}>Pin Consent</span>
+                              </label>
+
+                              {log.global && (
+                                <span className="inline-flex items-center gap-1 text-indigo-700">
+                                  <Globe size={11} /> Global
+                                </span>
+                              )}
+
+                              {log.lastContact && (
+                                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                                  Date of Last Contact
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-gray-400">
+                              {log.createdByName && <span>Created by {log.createdByName} </span>}
+                              {log.updatedByName && log.updatedByName !== log.createdByName && (
+                                <span>&bull; Modified by {log.updatedByName}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
+
+      {/* Add / Edit Consent Modal */}
+      <RecordConsentModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        participantId={participantId}
+        participantName={participantName}
+        studyId={studyId}
+        tenantId={tenantId}
+        siteId={siteId}
+        logToEdit={selectedLogForEdit}
+        onConsentSaved={handleConsentSaved}
+      />
     </div>
   );
 };
+
+export default ParticipantConsentSection;

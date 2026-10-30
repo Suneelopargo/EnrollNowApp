@@ -113,39 +113,8 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 p-6 space-y-4">
-      {/* Header with Title and Actions */}
-      <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-        <div>
-          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-indigo-600" />
-            Forms & Surveys
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Participant surveys, intake questionnaires, and screening assessments for {participantName}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={fetchForms}
-            disabled={isLoading}
-            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-gray-600 custom-tooltip-btn"
-            data-tooltip="Refresh assigned forms"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsAssignModalOpen(true)}
-            className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white custom-tooltip-btn"
-            data-tooltip="Assign Form"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Assign Form
-          </button>
-        </div>
-      </div>
+      {/* Header with Title */}
+     
 
       {/* Error state */}
       {error && (
@@ -170,17 +139,9 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
               <ClipboardList className="w-6 h-6" />
             </div>
             <h4 className="text-sm font-medium text-gray-900">No forms assigned</h4>
-            <p className="text-xs text-gray-500 max-w-sm mt-1 mb-4">
+            <p className="text-xs text-gray-500 max-w-sm mt-1">
               There are no questionnaires or assessments currently assigned to this participant.
             </p>
-            <button
-              type="button"
-              onClick={() => setIsAssignModalOpen(true)}
-              className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Assign First Form
-            </button>
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">

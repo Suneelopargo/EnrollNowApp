@@ -172,6 +172,79 @@ export interface ContactTypeOption {
   value: string;
 }
 
+export interface ConsentTypeOption {
+  label: string;
+  value: string;
+}
+
+export interface ConsentLogItem {
+  id: string;
+  tenantId?: string;
+  participantId: string;
+  studyId?: string;
+  studyName?: string;
+  consentDate: string;
+  formattedConsentDate?: string;
+  consentType: string;
+  consentTitle: string;
+  consentedBy?: string;
+  version?: string;
+  expiration?: string;
+  formattedExpiration?: string;
+  fileAttached?: boolean;
+  fileId?: string;
+  fileName?: string;
+  fileSizeBytes?: number;
+  fileContentType?: string;
+  downloadUrl?: string;
+  comments?: string;
+  sticky?: boolean;
+  notify?: boolean;
+  global?: boolean;
+  lastContact?: boolean;
+  createdAt?: string;
+  createdBy?: string;
+  createdByName?: string;
+  createdByInitials?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedByInitials?: string;
+  editable?: boolean;
+  pinnable?: boolean;
+}
+
+export interface CreateConsentLogPayload {
+  studyId?: string;
+  studyIdentifier?: string;
+  consentDate: string;
+  consentType: string;
+  consentTitle: string;
+  consentedBy?: string;
+  version?: string;
+  expiration?: string;
+  comments?: string;
+  sticky?: boolean;
+  notify?: boolean;
+  global?: boolean;
+  lastContact?: boolean;
+}
+
+export interface UpdateConsentLogPayload {
+  consentDate?: string;
+  consentType?: string;
+  consentTitle?: string;
+  consentedBy?: string;
+  version?: string;
+  expiration?: string;
+  comments?: string;
+  sticky?: boolean;
+  notify?: boolean;
+  global?: boolean;
+  lastContact?: boolean;
+  removeAttachment?: boolean;
+}
+
 export interface ContactMethodOption {
   label: string;
   value: string;
@@ -633,6 +706,69 @@ export const participantApi = {
   async getConsentOptions(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<ConsentOptionItem[]> {
     const res = await apiClient.get(`/api/v1/participants/${participantId}/consent-options`, { params: options, skipToast: true } as any);
     return res.data?.data ?? res.data ?? [];
+  },
+
+  // 4b. Administrative Consent Logs
+  async getConsentLogs(participantId: string, options?: { studyId?: string; tenantId?: string; siteId?: string }): Promise<ConsentLogItem[]> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/consent-logs`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async getConsentLog(participantId: string, logId: string, options?: { tenantId?: string; siteId?: string }): Promise<ConsentLogItem> {
+    const res = await apiClient.get(`/api/v1/participants/${participantId}/consent-logs/${logId}`, { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data;
+  },
+
+  async getConsentTypeOptions(options?: { studyId?: string; tenantId?: string }): Promise<ConsentTypeOption[]> {
+    const res = await apiClient.get('/api/v1/participants/consent-types', { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [];
+  },
+
+  async createConsentLog(participantId: string, payload: CreateConsentLogPayload, file?: File | null, options?: { tenantId?: string; siteId?: string }): Promise<ConsentLogItem> {
+    if (file) {
+      const formData = new FormData();
+      formData.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+      formData.append('file', file);
+      const res = await apiClient.post(`/api/v1/participants/${participantId}/consent-logs`, formData, {
+        params: options,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data?.data ?? res.data;
+    }
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/consent-logs`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async updateConsentLog(participantId: string, logId: string, payload: UpdateConsentLogPayload, file?: File | null, options?: { tenantId?: string; siteId?: string }): Promise<ConsentLogItem> {
+    if (file) {
+      const formData = new FormData();
+      formData.append('data', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+      formData.append('file', file);
+      const res = await apiClient.put(`/api/v1/participants/${participantId}/consent-logs/${logId}`, formData, {
+        params: options,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data?.data ?? res.data;
+    }
+    const res = await apiClient.put(`/api/v1/participants/${participantId}/consent-logs/${logId}`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async pinConsentLog(participantId: string, logId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<ConsentLogItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/consent-logs/${logId}/pin`, { sticky }, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async deleteConsentLog(participantId: string, logId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
+    await apiClient.delete(`/api/v1/participants/${participantId}/consent-logs/${logId}`, { params: options });
+  },
+
+  getConsentAttachmentUrl(participantId: string, logId: string, options?: { tenantId?: string; siteId?: string }): string {
+    const params = new URLSearchParams();
+    if (options?.tenantId) params.append('tenantId', options.tenantId);
+    if (options?.siteId) params.append('siteId', options.siteId);
+    const qs = params.toString();
+    return `/api/v1/participants/${participantId}/consent-logs/${logId}/attachment${qs ? '?' + qs : ''}`;
   },
 
   // 5. Forms

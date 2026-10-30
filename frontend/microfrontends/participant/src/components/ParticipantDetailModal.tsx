@@ -655,7 +655,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
               </div>
             </div>
-            <ParticipantStudiesInfo participant={participant} tenantId={tenantId} siteId={siteId} />
             </>
           )}
 
@@ -874,6 +873,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
           {/* LOWER SECTION ON OVERVIEW: COMMENTS & SUB-TABS */}
           {activeTopNav === 'details' && (
+            <>
             <div className="card record-detail__panel">
               <Tabs
                 activeTab={activeTab}
@@ -950,6 +950,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Studies Info Table placed below Comments and Sub-tabs */}
+            <ParticipantStudiesInfo participant={participant} tenantId={tenantId} siteId={siteId} />
+            </>
           )}
         </div>
       </div>
