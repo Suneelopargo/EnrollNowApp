@@ -17,7 +17,7 @@ export const ParticipantTagSelect: React.FC<ParticipantTagSelectProps> = ({
   id = 'participant-tags',
   selectedTags = [],
   onChange,
-  placeholder = 'Select tags or type to create...',
+  placeholder = 'Select tags',
   disabled = false,
   tenantId,
   siteId,
@@ -207,7 +207,7 @@ export const ParticipantTagSelect: React.FC<ParticipantTagSelectProps> = ({
       data-testid="participant-tag-select"
     >
       <div
-        className={`participant-tag-select__control ${isOpen ? 'participant-tag-select__control--focused' : ''} ${disabled ? 'participant-tag-select__control--disabled' : ''}`}
+        className={`participant-tag-select__control ${isOpen ? 'participant-tag-select__control--focused participant-tag-select__control--open' : ''} ${disabled ? 'participant-tag-select__control--disabled' : ''}`}
         onClick={() => {
           if (!disabled) {
             setIsOpen(true);

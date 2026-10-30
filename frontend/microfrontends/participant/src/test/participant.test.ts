@@ -213,17 +213,16 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
 
   it('exports filtered registry as blob', async () => {
     const fakeBlob = new Blob(['csv-content'], { type: 'text/csv' });
-    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: fakeBlob,
     } as any);
 
     const blob = await participantApi.exportRegistry({ searchTerm: 'Alice' });
-    expect(getSpy).toHaveBeenCalledWith('/api/v1/registry/export', expect.objectContaining({
-      params: { searchTerm: 'Alice' },
-      responseType: 'blob',
-    }));
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/registry/export', expect.objectContaining({
+      searchTerm: 'Alice',
+    }), expect.anything());
     expect(blob).toBe(fakeBlob);
-    getSpy.mockRestore();
+    postSpy.mockRestore();
   });
 
   it('renders AddParticipantModal with accessible inputs for First, Middle, and Last Name', () => {
@@ -744,4 +743,156 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).not.toContain('Unspecified');
     expect(html).not.toContain('N/A');
   });
+  describe('Legacy Timezone and Global ID Functionality', () => {
+    it('participantApi.getTimezones fetches timezone options from backend', async () => {
+      const timezones = ['America/Chicago', 'America/New_York', 'UTC'];
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+        data: timezones,
+      } as any);
+
+      const res = await participantApi.getTimezones({ tenantId: 't-1' });
+      expect(getSpy).toHaveBeenCalledWith('/api/v1/registry/timezone-options', expect.objectContaining({
+        params: { tenantId: 't-1' },
+      }));
+      expect(res).toEqual(timezones);
+      getSpy.mockRestore();
+    });
+
+    it('renders Global ID as editable input for SITE_ADMIN', () => {
+      const p = {
+        id: 'p-1',
+        name: 'Jane Doe',
+        globalId: 'GLB-ADMIN-1',
+        timezone: 'UTC',
+      };
+      const adminUser = {
+        id: 'u-1',
+        username: 'admin',
+        email: 'admin@example.org',
+        roles: ['SITE_ADMIN'],
+        siteRole: 'SITE_ADMIN',
+        canAccessSiteAdmin: true,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(ParticipantDetailModal, {
+          isOpen: true,
+          participant: p,
+          currentUser: adminUser as any,
+          onClose: vi.fn(),
+          onSave: vi.fn(),
+        })
+      );
+
+      expect(html).toContain('id="participant-global-id"');
+      expect(html).toContain('value="GLB-ADMIN-1"');
+      expect(html).not.toContain('data-testid="participant-global-id-readonly"');
+    });
+
+    it('renders Global ID as editable input for SITE_MANAGER', () => {
+      const p = {
+        id: 'p-2',
+        name: 'Mark Doe',
+        globalId: 'GLB-MGR-2',
+        timezone: 'America/Chicago',
+      };
+      const managerUser = {
+        id: 'u-2',
+        username: 'manager',
+        email: 'mgr@example.org',
+        roles: ['SITE_MANAGER'],
+        siteRole: 'SITE_MANAGER',
+        canAccessSiteAdmin: true,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(ParticipantDetailModal, {
+          isOpen: true,
+          participant: p,
+          currentUser: managerUser as any,
+          onClose: vi.fn(),
+          onSave: vi.fn(),
+        })
+      );
+
+      expect(html).toContain('id="participant-global-id"');
+      expect(html).toContain('value="GLB-MGR-2"');
+    });
+
+    it('renders Global ID as read-only span for SITE_REGISTRY role', () => {
+      const p = {
+        id: 'p-3',
+        name: 'Bob Smith',
+        globalId: 'GLB-REG-3',
+        timezone: 'America/Denver',
+      };
+      const registryUser = {
+        id: 'u-3',
+        username: 'registry_only',
+        email: 'reg@example.org',
+        roles: ['SITE_REGISTRY'],
+        siteRole: 'SITE_REGISTRY',
+        canAccessRegistry: true,
+        canAccessSiteAdmin: false,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(ParticipantDetailModal, {
+          isOpen: true,
+          participant: p,
+          currentUser: registryUser as any,
+          onClose: vi.fn(),
+          onSave: vi.fn(),
+        })
+      );
+
+      expect(html).toContain('data-testid="participant-global-id-readonly"');
+      expect(html).toContain('GLB-REG-3');
+      expect(html).not.toContain('id="participant-global-id"');
+    });
+
+    it('displays participant persisted timezone in timezone select and includes clear option', () => {
+      const p = {
+        id: 'p-4',
+        name: 'Alice Wonder',
+        globalId: 'GLB-4',
+        timezone: 'Asia/Tokyo',
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(ParticipantDetailModal, {
+          isOpen: true,
+          participant: p,
+          onClose: vi.fn(),
+          onSave: vi.fn(),
+        })
+      );
+
+      expect(html).toContain('id="participant-timezone"');
+      expect(html).toContain('value="Asia/Tokyo"');
+      expect(html).toContain('Select timezone...');
+    });
+
+    it('always activates Overview tab when modal is opened', () => {
+      const p = {
+        id: 'p-5',
+        name: 'Bob Miller',
+        globalId: 'GLB-5',
+        variables: [{ id: 'v-1', name: 'Var1', type: 'Text', value: 'Val1' }],
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(ParticipantDetailModal, {
+          isOpen: true,
+          participant: p,
+          onClose: vi.fn(),
+          onSave: vi.fn(),
+        })
+      );
+
+      expect(html).toContain('Participant overview');
+      expect(html).toContain('First Name');
+    });
+  });
+
 });

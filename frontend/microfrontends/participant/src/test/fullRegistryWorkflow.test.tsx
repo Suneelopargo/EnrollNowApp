@@ -567,14 +567,16 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
       })
     );
 
+    const exportPostSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: new Blob(['csv-content'], { type: 'text/csv' }),
+    } as any);
     await participantApi.exportRegistry({ duplicatesOnly: true });
-    expect(getSpy).toHaveBeenCalledWith(
+    expect(exportPostSpy).toHaveBeenCalledWith(
       '/api/v1/registry/export',
-      expect.objectContaining({
-        params: expect.objectContaining({ duplicatesOnly: true }),
-        responseType: 'blob',
-      })
+      expect.objectContaining({ duplicatesOnly: true }),
+      expect.anything()
     );
+    exportPostSpy.mockRestore();
 
     // 8. Participant Creation & Duplicate Check APIs
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
@@ -700,7 +702,7 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         onChange={vi.fn()}
       />
     );
-    expect(htmlEmpty).toContain('placeholder="Select tags or type to create..."');
+    expect(htmlEmpty).toContain('placeholder="Select tags"');
   });
 
   it('renders ParticipantDetailModal with ParticipantTagSelect integrated', () => {

@@ -396,6 +396,19 @@ export const participantApi = {
       race: Array.isArray(data.race) ? data.race : [],
     };
   },
+
+  async getTimezones(options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    const res = await apiClient.get<string[] | { data: string[] }>('/api/v1/registry/timezone-options', {
+      params: options,
+      skipToast: true,
+    } as any);
+    const data = (res.data as any)?.data ?? res.data ?? [];
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getTimezoneOptions(options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    return this.getTimezones(options);
+  },
   async getFilterMetadata(studyId?: string): Promise<any[]> {
     const res = await apiClient.get('/api/v1/registry/filter-metadata', {
       params: studyId ? { studyId } : undefined,

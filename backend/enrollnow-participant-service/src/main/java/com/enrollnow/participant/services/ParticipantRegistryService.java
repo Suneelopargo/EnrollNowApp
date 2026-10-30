@@ -1,5 +1,6 @@
 package com.enrollnow.participant.services;
 
+import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
@@ -55,6 +56,13 @@ public class ParticipantRegistryService {
 
     public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
         this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    @Autowired(required = false)
+    private SiteAuthorizationService siteAuthorizationService;
+
+    public void setSiteAuthorizationService(SiteAuthorizationService siteAuthorizationService) {
+        this.siteAuthorizationService = siteAuthorizationService;
     }
 
     public ParticipantRegistryService(
@@ -514,8 +522,16 @@ public class ParticipantRegistryService {
         pref.setDoNotContact(request.getContactForFutureStudies() != null ? !request.getContactForFutureStudies() : false);
         pref.setPreferredLanguage(request.getPrimaryLanguage() != null && !request.getPrimaryLanguage().isBlank()
                 ? request.getPrimaryLanguage().trim() : "English");
-        if (request.getTimezone() != null && !request.getTimezone().isBlank()) {
-            pref.setTimezone(request.getTimezone().trim());
+        if (request.getTimezone() != null) {
+            String tz = request.getTimezone().trim();
+            if (!tz.isEmpty()) {
+                try {
+                    java.time.ZoneId.of(tz);
+                } catch (java.time.DateTimeException ex) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid timezone: " + tz);
+                }
+                pref.setTimezone(tz);
+            }
         }
         pref.setAllowEmail(true);
         pref.setAllowSms(true);
@@ -582,6 +598,11 @@ public class ParticipantRegistryService {
 
     @Transactional
     public RegistryParticipantDto updateParticipant(UUID tenantId, UUID participantId, UUID userId, UpdateParticipantRequest request) {
+        return updateParticipant(tenantId, participantId, userId, request, null);
+    }
+
+    @Transactional
+    public RegistryParticipantDto updateParticipant(UUID tenantId, UUID participantId, UUID userId, UpdateParticipantRequest request, UUID siteId) {
         Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
                 .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
 
@@ -637,22 +658,45 @@ public class ParticipantRegistryService {
         participant.setUpdatedAt(OffsetDateTime.now());
         participantRepository.save(participant);
 
+        // Lookup existing Global ID
+        List<ParticipantIdentifier> ids = identifierRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+        ParticipantIdentifier existingGlobalIdObj = ids.stream()
+                .filter(i -> "GLOBAL_ID".equalsIgnoreCase(i.getIdentifierType()))
+                .findFirst()
+                .orElse(null);
+        String existingGlobalId = existingGlobalIdObj != null ? existingGlobalIdObj.getIdentifierValue() : null;
+
         // Update Global ID if provided
-        if (request.getGlobalId() != null && !request.getGlobalId().isBlank()) {
-            List<ParticipantIdentifier> ids = identifierRepository.findByTenantIdAndParticipantId(tenantId, participantId);
-            ParticipantIdentifier globalIdObj = ids.stream()
-                    .filter(i -> "GLOBAL_ID".equalsIgnoreCase(i.getIdentifierType()))
-                    .findFirst()
-                    .orElseGet(() -> {
-                        ParticipantIdentifier newId = new ParticipantIdentifier();
-                        newId.setTenantId(tenantId);
-                        newId.setParticipantId(participantId);
-                        newId.setIdentifierType("GLOBAL_ID");
-                        newId.setPrimaryIdentifier(true);
-                        return newId;
-                    });
-            globalIdObj.setIdentifierValue(request.getGlobalId().trim());
-            identifierRepository.save(globalIdObj);
+        if (request.getGlobalId() != null) {
+            String candidateGlobalId = request.getGlobalId().trim();
+            boolean isGlobalIdChanged = (existingGlobalId == null && !candidateGlobalId.isEmpty())
+                    || (existingGlobalId != null && !existingGlobalId.equals(candidateGlobalId));
+
+            if (isGlobalIdChanged) {
+                if (siteAuthorizationService != null) {
+                    siteAuthorizationService.requireSiteAdminAccess(tenantId, siteId);
+                }
+
+                if (candidateGlobalId.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Global ID cannot be blank");
+                }
+
+                Optional<ParticipantIdentifier> existingWithId = identifierRepository
+                        .findGlobalIdIgnoreCase(tenantId, candidateGlobalId);
+                if (existingWithId.isPresent() && !existingWithId.get().getParticipantId().equals(participantId)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Global ID Already Exists");
+                }
+
+                ParticipantIdentifier globalIdObj = existingGlobalIdObj != null ? existingGlobalIdObj : new ParticipantIdentifier();
+                if (existingGlobalIdObj == null) {
+                    globalIdObj.setTenantId(tenantId);
+                    globalIdObj.setParticipantId(participantId);
+                    globalIdObj.setIdentifierType("GLOBAL_ID");
+                    globalIdObj.setPrimaryIdentifier(true);
+                }
+                globalIdObj.setIdentifierValue(candidateGlobalId);
+                identifierRepository.save(globalIdObj);
+            }
         }
 
         // Update Preference if provided
@@ -670,8 +714,18 @@ public class ParticipantRegistryService {
             if (request.getPrimaryLanguage() != null) {
                 pref.setPreferredLanguage(request.getPrimaryLanguage());
             }
-            if (request.getTimezone() != null && !request.getTimezone().isBlank()) {
-                pref.setTimezone(request.getTimezone().trim());
+            if (request.getTimezone() != null) {
+                String tz = request.getTimezone().trim();
+                if (tz.isEmpty()) {
+                    pref.setTimezone(null);
+                } else {
+                    try {
+                        java.time.ZoneId.of(tz);
+                    } catch (java.time.DateTimeException ex) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid timezone: " + tz);
+                    }
+                    pref.setTimezone(tz);
+                }
             }
             preferenceRepository.save(pref);
         }
@@ -993,7 +1047,7 @@ public class ParticipantRegistryService {
         if (pref != null && pref.getTimezone() != null && !pref.getTimezone().isBlank()) {
             dto.setTimezone(pref.getTimezone());
         } else {
-            dto.setTimezone("America/New_York (EDT)");
+            dto.setTimezone(null);
         }
 
         // Last Contact date resolution (priority: participant global_last_contact_date, then candidate last_contact_at)
@@ -1699,6 +1753,10 @@ public class ParticipantRegistryService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> getTimezoneOptions() {
+        return java.time.ZoneId.getAvailableZoneIds().stream().sorted().toList();
+    }
+
     public Map<String, List<String>> getDemographicOptions(UUID tenantId) {
         Map<String, SortedSet<String>> collected = new LinkedHashMap<>();
         collected.put("ethnicity", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));

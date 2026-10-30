@@ -15,6 +15,8 @@ import {
   Trash2, 
   ExternalLink 
 } from 'lucide-react';
+import { AuthUser } from '../../../../shared/contracts';
+import { getStoredAuthUser } from '../../../../shared/api-client';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
 import { GlobalVariableDefinition, ParticipantRecord, ParticipantVariable } from '../types/participant';
@@ -151,6 +153,7 @@ export interface ParticipantDetailModalProps {
   globalVariables?: GlobalVariableDefinition[];
   demographicOptions?: DemographicOptions;
   demographicOptionsLoading?: boolean;
+  currentUser?: AuthUser | null;
 }
 
 export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
@@ -165,6 +168,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   globalVariables = [],
   demographicOptions = { ethnicity: [], race: [] },
   demographicOptionsLoading = false,
+  currentUser = null,
 }) => {
   const [activeTopNav, setActiveTopNav] = useState<'details' | 'contact' | 'demographics' | 'family' | 'variables'>('details');
   const [activeTab, setActiveTab] = useState<'comments' | 'email' | 'text' | 'contact' | 'consent' | 'forms'>('comments');
@@ -175,7 +179,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   // Overview / General
   const [familyId, setFamilyId] = useState(participant?.familyId || '');
   const [globalId, setGlobalId] = useState(participant?.globalId || '');
-  const [timezone, setTimezone] = useState(participant?.timezone || 'America/New_York (EDT)');
+  const [timezone, setTimezone] = useState(participant?.timezone || '');
+  const [timezoneOptions, setTimezoneOptions] = useState<string[]>([]);
+  const [isLoadingTimezones, setIsLoadingTimezones] = useState(false);
+  const [timezoneError, setTimezoneError] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>(Array.isArray(participant?.tags) ? participant.tags : []);
   const [contactForFuture, setContactForFuture] = useState(participant?.contactForFutureStudies !== false);
   const [dateLastContact, setDateLastContact] = useState(participant?.globalDateOfLastContact || participant?.lastContact || '');
@@ -214,7 +221,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setLastName(participant.lastName || '');
       setFamilyId(participant.familyId || '');
       setGlobalId(participant.globalId || '');
-      setTimezone(participant.timezone || 'America/New_York (EDT)');
+      setTimezone(participant.timezone || '');
       setSelectedTags(Array.isArray(participant.tags) ? participant.tags : []);
       setContactForFuture(participant.contactForFutureStudies !== false);
       setDateLastContact(participant.globalDateOfLastContact || participant.lastContact || '');
@@ -235,6 +242,53 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setVariables(Array.isArray(participant.variables) ? [...participant.variables] : []);
     }
   }, [participant]);
+
+  // Always reset to the Overview tab whenever the modal opens or switches participant
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTopNav('details');
+      setActiveTab('comments');
+      setGlobalVariableSearch('');
+      setIsAddingVariable(false);
+    }
+  }, [isOpen, participant?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingTimezones(true);
+    setTimezoneError(null);
+    participantApi.getTimezones({ tenantId, siteId })
+      .then((options) => {
+        if (isMounted) {
+          setTimezoneOptions(Array.isArray(options) ? options : []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setTimezoneError('Unable to load timezone options');
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingTimezones(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId, siteId]);
+
+  const effectiveUser = currentUser || getStoredAuthUser<AuthUser>();
+  const canEditGlobalId = Boolean(
+    effectiveUser?.canAccessSiteAdmin ||
+    effectiveUser?.canManageSiteAdmins ||
+    effectiveUser?.siteRole === 'SITE_ADMIN' ||
+    effectiveUser?.siteRole === 'SITE_MANAGER' ||
+    effectiveUser?.roles?.some((r: string) => {
+      const u = String(r).toUpperCase();
+      return u === 'SITE_ADMIN' || u === 'ROLE_SITE_ADMIN' || u === 'SITE_MANAGER' || u === 'ROLE_SITE_MANAGER';
+    })
+  );
 
   if (!isOpen || !participant) return null;
 
@@ -416,33 +470,55 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
 
                 <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-global-id">Global ID</label>
-                  <input
-                    id="participant-global-id"
-                    type="text"
-                    value={globalId}
-                    onChange={(e) => setGlobalId(e.target.value)}
-                    className="form-input"
-                  />
+                  {canEditGlobalId ? (
+                    <>
+                      <label className="form-label" htmlFor="participant-global-id">Global ID</label>
+                      <input
+                        id="participant-global-id"
+                        type="text"
+                        value={globalId}
+                        onChange={(e) => setGlobalId(e.target.value)}
+                        className="form-input"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <span className="form-label">Global ID</span>
+                      <span className="record-detail__readonly" data-testid="participant-global-id-readonly">
+                        {globalId || '—'}
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-timezone">Timezone</label>
-                  <select
-                    id="participant-timezone"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="form-select"
-                  >
-                    <option value="America/New_York (EDT)">America/New_York (EDT)</option>
-                    <option value="America/Chicago (CDT)">America/Chicago (CDT)</option>
-                    <option value="America/Denver (MDT)">America/Denver (MDT)</option>
-                    <option value="America/Los_Angeles (PDT)">America/Los_Angeles (PDT)</option>
-                    <option value="UTC">UTC</option>
-                  </select>
+                  <div className="record-detail__input-wrap">
+                    <select
+                      id="participant-timezone"
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      className="form-select"
+                      disabled={isLoadingTimezones}
+                      aria-label="Select timezone"
+                    >
+                      <option value="">{isLoadingTimezones ? 'Loading timezones...' : 'Select timezone...'}</option>
+                      {timezone && !timezoneOptions.includes(timezone) && (
+                        <option key={timezone} value={timezone}>{timezone}</option>
+                      )}
+                      {timezoneOptions.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                    {timezoneError && (
+                      <span className="record-detail__inline-error" role="status">
+                        {timezoneError}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="record-detail__field record-detail__field--wide">
+                <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-tags">Tags</label>
                   <ParticipantTagSelect
                     id="participant-tags"
@@ -453,25 +529,25 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   />
                 </div>
 
-                <div className="record-detail__field--wide record-detail__checkbox-field">
-                  <input
-                    type="checkbox"
-                    id="futureContactCheckModal"
-                    checked={contactForFuture}
-                    onChange={(e) => setContactForFuture(e.target.checked)}
-                  />
-                  <label htmlFor="futureContactCheckModal" className="form-label">
-                    Contact For Future Studies?
-                  </label>
-                </div>
-
-                <div className="record-detail__field record-detail__field--wide">
+                <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-last-contact">Global Date of Last Contact</label>
                   <ParticipantDateTimePicker
                     id="participant-last-contact"
                     value={dateLastContact}
                     onChange={setDateLastContact}
                   />
+                </div>
+
+                <div className="record-detail__field record-detail__field--checkbox record-detail__checkbox-field">
+                  <label htmlFor="futureContactCheckModal" className="record-detail__checkbox-label">
+                    <input
+                      type="checkbox"
+                      id="futureContactCheckModal"
+                      checked={contactForFuture}
+                      onChange={(e) => setContactForFuture(e.target.checked)}
+                    />
+                    <span>Contact For Future Studies?</span>
+                  </label>
                 </div>
               </div>
             </div>

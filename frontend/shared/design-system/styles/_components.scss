@@ -365,6 +365,14 @@
   .form-select { width: 100%; min-width: 0; }
 }
 
+.record-detail__input-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  gap: $spacing-1;
+}
+
 .record-detail__field--wide { grid-column: 1 / -1; }
 
 .record-detail__readonly {
@@ -734,16 +742,40 @@
   &:not(:disabled):hover { background: #912018; }
 }
 
+.record-detail__field--checkbox,
 .record-detail__checkbox-field {
   display: flex;
   align-items: center;
   gap: $spacing-2;
   min-height: 40px;
+
+  .record-detail__checkbox-label,
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-2;
+    cursor: pointer;
+    font-size: $font-size-sm;
+    font-weight: $font-weight-medium;
+    color: $text-primary;
+    user-select: none;
+    line-height: 1.4;
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      margin-right: $spacing-2;
+      cursor: pointer;
+      accent-color: $color-brand-accent;
+      flex-shrink: 0;
+    }
+  }
 }
 
 .record-detail__panel {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .record-detail__study-info { overflow: visible; }
@@ -1037,6 +1069,7 @@
     }
   }
 
+  &__pill-list,
   &__values {
     display: flex;
     flex-wrap: wrap;
@@ -1091,6 +1124,12 @@
     }
   }
 
+  &__input-wrapper {
+    display: flex;
+    flex: 1 1 80px;
+    min-width: 60px;
+  }
+
   &__input {
     flex: 1 1 80px;
     min-width: 60px;
@@ -1140,9 +1179,10 @@
     }
   }
 
+  &__menu,
   &__dropdown {
     position: absolute;
-    top: 100%;
+    top: calc(100% + 2px);
     left: 0;
     right: 0;
     z-index: 50;
@@ -1175,7 +1215,8 @@
       color: $color-brand-accent;
     }
 
-    &--create {
+    &--create,
+    &.participant-tag-select__create-option {
       font-style: italic;
       border-top: 1px dashed $border-color;
       background-color: #fafbfc;
@@ -1205,6 +1246,7 @@
   }
 
   &__loading,
+  &__message,
   &__empty {
     display: flex;
     align-items: center;

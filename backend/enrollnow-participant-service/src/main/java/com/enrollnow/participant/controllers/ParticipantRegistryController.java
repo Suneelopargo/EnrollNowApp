@@ -196,7 +196,7 @@ public class ParticipantRegistryController {
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
 
-        RegistryParticipantDto updated = registryService.updateParticipant(resolvedTenantId, id, userId, request);
+        RegistryParticipantDto updated = registryService.updateParticipant(resolvedTenantId, id, userId, request, siteId);
         return ResponseEntity.ok(updated);
     }
 
@@ -246,6 +246,17 @@ public class ParticipantRegistryController {
 
         registryService.assignStudy(resolvedTenantId, userId, request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping({"/registry/timezone-options", "/registry/timezones"})
+    public ResponseEntity<List<String>> getTimezoneOptions(
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId) {
+
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(registryService.getTimezoneOptions());
     }
 
     @GetMapping("/registry/demographic-options")

@@ -34,7 +34,7 @@ class RegistryExportServiceTest {
         byte[] bytes = service.exportToCsv(List.of(p));
         String csv = new String(bytes, StandardCharsets.UTF_8);
 
-        assertThat(csv).contains("Participant ID,Name,First Name,Last Name,Age,Gender,Status,Phone,City,State,Zip Code,Studies,Contact For Future Studies,Date Created");
+        assertThat(csv).contains("\"Participant ID\",\"Name\",\"First Name\",\"Last Name\",\"Age\",\"Gender\",\"Status\",\"Phone\",\"City\",\"State\",\"Zip Code\",\"Studies\",\"Contact For Future Studies\",\"Date Created\"");
         assertThat(csv).contains("\"p-1\",\"Alice Walker\",\"Alice\",\"Walker\",\"35\",\"Female\",\"Active\"");
         assertThat(csv).contains("\"Autism Study\"");
     }

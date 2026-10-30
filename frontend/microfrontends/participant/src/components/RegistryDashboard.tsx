@@ -810,6 +810,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         }}
         tenantId={tenantId}
         siteId={siteId}
+        currentUser={context?.user}
         globalVariables={globalVariables}
         demographicOptions={demographicOptions}
         demographicOptionsLoading={isLoadingDemographicOptions}
