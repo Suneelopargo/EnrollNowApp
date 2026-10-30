@@ -4,7 +4,7 @@ import { MfeContext } from '../../../../shared/contracts';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
-import { participantApi, RegistrySearchParams, CreateParticipantPayload } from '../../../../shared/api/participantApi';
+import { participantApi, RegistrySearchParams, CreateParticipantPayload, DemographicOptions } from '../../../../shared/api/participantApi';
 import { studyApi, Study } from '../../../../shared/api/studyApi';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
@@ -50,6 +50,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [customFilters, setCustomFilters] = useState<CustomFilterRule[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [globalVariables, setGlobalVariables] = useState<GlobalVariableDefinition[]>([]);
+  const [demographicOptions, setDemographicOptions] = useState<DemographicOptions>({ ethnicity: [], race: [] });
+  const [isLoadingDemographicOptions, setIsLoadingDemographicOptions] = useState<boolean>(true);
   const [availableStudies, setAvailableStudies] = useState<Study[]>([]);
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
   const [serverTotalCount, setServerTotalCount] = useState<number>(0);
@@ -224,6 +226,20 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     }
   }, [tenantId, siteId]);
 
+  const fetchDemographicOptions = useCallback(async () => {
+    setIsLoadingDemographicOptions(true);
+    try {
+      const options = await participantApi.getDemographicOptions({ params: { tenantId, siteId } });
+      setDemographicOptions({ ethnicity: options.ethnicity, race: options.race });
+    } catch (err) {
+      console.warn('Failed to load demographic options:', err);
+      toast.error(getApiErrorMessage(err, 'Failed to load race and ethnicity options.'));
+      setDemographicOptions({ ethnicity: [], race: [] });
+    } finally {
+      setIsLoadingDemographicOptions(false);
+    }
+  }, [tenantId, siteId]);
+
   // Fetch dynamic custom variable filter metadata from backend
   const fetchFilterMetadata = useCallback(async () => {
     try {
@@ -317,8 +333,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     fetchParticipants();
     fetchSavedSearches();
     fetchFilterMetadata();
+    fetchDemographicOptions();
     fetchStudies();
-  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata, fetchStudies]);
+  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata, fetchDemographicOptions, fetchStudies]);
 
   const selectedParticipant = useMemo(() => {
     return participants.find((p) => p.id === selectedParticipantId) || participants[0] || null;
@@ -334,6 +351,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     const refreshed = await fetchParticipants(false);
     fetchSavedSearches();
     fetchFilterMetadata();
+    fetchDemographicOptions();
     fetchStudies();
     if (refreshed) showNotification('Participant queue refreshed');
   };
@@ -766,6 +784,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         tenantId={tenantId}
         siteId={siteId}
         globalVariables={globalVariables}
+        demographicOptions={demographicOptions}
+        demographicOptionsLoading={isLoadingDemographicOptions}
         onParticipantUpdated={async () => {
           await fetchParticipants(true);
         }}

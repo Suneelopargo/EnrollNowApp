@@ -1699,6 +1699,44 @@ public class ParticipantRegistryService {
     }
 
     @Transactional(readOnly = true)
+    public Map<String, List<String>> getDemographicOptions(UUID tenantId) {
+        Map<String, SortedSet<String>> collected = new LinkedHashMap<>();
+        collected.put("ethnicity", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
+        collected.put("race", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
+
+        if (tenantId != null && studyRequirementRepository != null) {
+            for (StudyRequirement requirement : studyRequirementRepository.findByTenantId(tenantId)) {
+                if (requirement.getConfiguration() == null || requirement.getConfiguration().isBlank()) {
+                    continue;
+                }
+                try {
+                    JsonNode groups = objectMapper.readTree(requirement.getConfiguration()).path("studyGroups");
+                    if (!groups.isArray()) {
+                        continue;
+                    }
+                    for (JsonNode group : groups) {
+                        String category = group.path("defaultCategoryName").asText("");
+                        SortedSet<String> labels = collected.get(category);
+                        if (labels == null) {
+                            continue;
+                        }
+                        String label = group.path("label").asText("").trim();
+                        if (!label.isEmpty()) {
+                            labels.add(label);
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("Unable to read demographic groups for study {}: {}",
+                            requirement.getStudyId(), ex.getMessage());
+                }
+            }
+        }
+
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        collected.forEach((category, labels) -> result.put(category, new ArrayList<>(labels)));
+        return result;
+    }
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> getFilterMetadata(UUID tenantId, String studyId) {
         if (studyRequirementRepository == null || tenantId == null) {
             return Collections.emptyList();

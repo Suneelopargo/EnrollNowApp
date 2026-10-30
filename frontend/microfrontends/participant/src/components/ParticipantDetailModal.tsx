@@ -27,7 +27,7 @@ import { ParticipantConsentSection } from './ParticipantConsentSection';
 import { ParticipantFormsSection } from './ParticipantFormsSection';
 import { ParticipantTagSelect } from './ParticipantTagSelect';
 import { ParticipantDateTimePicker } from './ParticipantDateTimePicker';
-import { participantApi, ConsentItem } from '../../../../shared/api/participantApi';
+import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
 
 const GlobalVariableField: React.FC<{
   variable: GlobalVariableDefinition;
@@ -149,6 +149,8 @@ export interface ParticipantDetailModalProps {
   tenantId?: string;
   siteId?: string;
   globalVariables?: GlobalVariableDefinition[];
+  demographicOptions?: DemographicOptions;
+  demographicOptionsLoading?: boolean;
 }
 
 export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
@@ -161,6 +163,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   tenantId,
   siteId,
   globalVariables = [],
+  demographicOptions = { ethnicity: [], race: [] },
+  demographicOptionsLoading = false,
 }) => {
   const [activeTopNav, setActiveTopNav] = useState<'details' | 'contact' | 'demographics' | 'family' | 'variables'>('details');
   const [activeTab, setActiveTab] = useState<'comments' | 'email' | 'text' | 'contact' | 'consent' | 'forms'>('comments');
@@ -312,6 +316,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
     onSave(updatedParticipant);
   };
+
+  const ethnicityOptions = [...demographicOptions.ethnicity];
+  if (ethnicity && !ethnicityOptions.includes(ethnicity)) ethnicityOptions.unshift(ethnicity);
+  const raceOptions = [...demographicOptions.race];
+  if (race && !raceOptions.includes(race)) raceOptions.unshift(race);
 
   const familyMembers = participant.family?.members || [];
 
@@ -519,23 +528,29 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-ethnicity">Ethnicity</label>
-                  <input
+                  <select
                     id="participant-ethnicity"
-                    type="text"
                     value={ethnicity}
                     onChange={(e) => setEthnicity(e.target.value)}
-                    className="form-input"
-                  />
+                    className="form-select"
+                    disabled={demographicOptionsLoading && ethnicityOptions.length === 0}
+                  >
+                    <option value="">{demographicOptionsLoading ? 'Loading ethnicity options…' : 'Select ethnicity'}</option>
+                    {ethnicityOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
                 </div>
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-race">Race</label>
-                  <input
+                  <select
                     id="participant-race"
-                    type="text"
                     value={race}
                     onChange={(e) => setRace(e.target.value)}
-                    className="form-input"
-                  />
+                    className="form-select"
+                    disabled={demographicOptionsLoading && raceOptions.length === 0}
+                  >
+                    <option value="">{demographicOptionsLoading ? 'Loading race options…' : 'Select race'}</option>
+                    {raceOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
                 </div>
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-language">Primary Language</label>

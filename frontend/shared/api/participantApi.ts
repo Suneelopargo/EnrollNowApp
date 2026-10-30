@@ -1,6 +1,10 @@
 // frontend/shared/api/participantApi.ts - Centralized Participant & Registry API
 import { apiClient } from '../api-client';
 
+export interface DemographicOptions {
+  ethnicity: string[];
+  race: string[];
+}
 export interface Participant {
   id?: string | number;
   participantId?: string;
@@ -381,6 +385,17 @@ export const participantApi = {
     await apiClient.delete(`/api/v1/registry/saved-searches/${id}`);
   },
 
+  async getDemographicOptions(config?: any): Promise<DemographicOptions> {
+    const res = await apiClient.get('/api/v1/registry/demographic-options', {
+      skipToast: true,
+      ...config,
+    } as any);
+    const data = res.data?.data ?? res.data ?? {};
+    return {
+      ethnicity: Array.isArray(data.ethnicity) ? data.ethnicity : [],
+      race: Array.isArray(data.race) ? data.race : [],
+    };
+  },
   async getFilterMetadata(studyId?: string): Promise<any[]> {
     const res = await apiClient.get('/api/v1/registry/filter-metadata', {
       params: studyId ? { studyId } : undefined,
