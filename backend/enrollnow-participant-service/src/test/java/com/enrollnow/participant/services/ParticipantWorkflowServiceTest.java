@@ -128,7 +128,111 @@ class ParticipantWorkflowServiceTest {
         assertEquals("EMAIL", sent.getChannel());
         assertEquals("Appointment Confirmation", sent.getSubject());
         assertTrue(sent.isPinned());
+        assertTrue(sent.isSticky());
         assertEquals(1, sent.getRecipients().size());
+    }
+
+    @Test
+    void testSendEmail_withValidationAndLegacyMetadata() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        SendEmailRequest request = new SendEmailRequest();
+        request.setTo(List.of("recipient@example.com"));
+        request.setCc(List.of("cc@example.com"));
+        request.setBcc(List.of("bcc@example.com"));
+        request.setReplyTo("replies@example.com");
+        request.setSenderName("Dr. Jane Smith");
+        request.setSubject("Study Welcome");
+        request.setBody("Welcome to the study!");
+        request.setSticky(true);
+        request.setLastContact(true);
+        request.setMessageIsHtml(true);
+
+        when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> {
+            Communication c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+
+        CommunicationDto sent = workflowService.sendEmail(tenantId, participantId, userId, "Jane", request);
+        assertNotNull(sent);
+        assertEquals("Dr. Jane Smith", sent.getSenderName());
+        assertEquals("DS", sent.getAuthorInitials());
+        assertEquals("replies@example.com", sent.getReplyTo());
+        assertTrue(sent.isSticky());
+        assertTrue(sent.isPinned());
+        assertTrue(sent.isLastContact());
+        assertTrue(sent.isMessageIsHtml());
+        assertEquals(3, sent.getRecipients().size());
+    }
+
+    @Test
+    void testSendEmail_invalidEmailThrowsBadRequest() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        SendEmailRequest request = new SendEmailRequest();
+        request.setTo(List.of("not-an-email"));
+        request.setSubject("Hello");
+        request.setBody("World");
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> workflowService.sendEmail(tenantId, participantId, userId, "User", request)
+        );
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("Email is not valid"));
+    }
+
+    @Test
+    void testSendEmail_duplicateEmailsThrowsBadRequest() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        SendEmailRequest request = new SendEmailRequest();
+        request.setTo(List.of("test@example.com"));
+        request.setCc(List.of("test@example.com"));
+        request.setSubject("Hello");
+        request.setBody("World");
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> workflowService.sendEmail(tenantId, participantId, userId, "User", request)
+        );
+        assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("Each email address should be unique"));
+    }
+
+    @Test
+    void testUpdateEmailLog_togglesStickyAndGlobal() {
+        UUID commId = UUID.randomUUID();
+        Communication c = new Communication();
+        c.setId(commId);
+        c.setTenantId(tenantId);
+        c.setParticipantId(participantId);
+        c.setChannel("EMAIL");
+        c.setPinned(false);
+        c.setMetadata("{\"lastContact\":false}");
+
+        when(communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId))
+                .thenReturn(Optional.of(c));
+        when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CommunicationDto updated = workflowService.updateEmailLog(tenantId, participantId, commId, userId, Map.of(
+                "sticky", true,
+                "global", true
+        ));
+        assertNotNull(updated);
+        assertTrue(updated.isPinned());
+        assertTrue(updated.isSticky());
+        assertTrue(updated.isGlobal());
     }
 
     @Test

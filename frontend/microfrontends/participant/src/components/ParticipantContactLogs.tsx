@@ -367,12 +367,11 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
                       </td>
 
                       <td className="px-3.5 py-2.5 whitespace-nowrap text-right overflow-visible">
-                        <div
-                          className="comment-avatar-wrap inline-flex items-center justify-center cursor-pointer custom-tooltip-btn tooltip-align-right"
-                          data-tooltip={authorName}
-                          aria-label={authorName}
-                        >
+                        <div className="comment-avatar-wrap inline-flex items-center justify-center cursor-pointer">
                           <span>{avatarInitials}</span>
+                          <div className="comment-avatar-tooltip tooltip-align-right" role="tooltip">
+                            {authorName}
+                          </div>
                         </div>
                       </td>
                     </tr>

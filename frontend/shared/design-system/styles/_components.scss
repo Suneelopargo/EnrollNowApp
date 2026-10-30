@@ -1676,6 +1676,16 @@
     border-right: 6px solid transparent;
     border-top: 6px solid #2e3440;
   }
+
+  &.tooltip-align-right {
+    left: auto;
+    right: -4px;
+
+    &::after {
+      left: auto;
+      right: 8px;
+    }
+  }
 }
 
 // Custom Ripple-style Tooltip for Action Buttons (Top-oriented with downward arrow, matching screenshot)

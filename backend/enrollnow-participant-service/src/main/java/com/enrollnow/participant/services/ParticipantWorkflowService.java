@@ -15,15 +15,22 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class ParticipantWorkflowService {
 
     private static final Logger log = LoggerFactory.getLogger(ParticipantWorkflowService.class);
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final ParticipantRepository participantRepository;
     private final ParticipantCommentRepository commentRepository;
@@ -218,6 +225,19 @@ public class ParticipantWorkflowService {
         return list.stream().map(this::mapCommunicationToDto).collect(Collectors.toList());
     }
 
+    private String computeInitials(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            return "SK";
+        }
+        String[] parts = fullName.trim().split("\\s+");
+        if (parts.length == 1) {
+            return parts[0].substring(0, Math.min(2, parts[0].length())).toUpperCase();
+        }
+        String first = parts[0].substring(0, 1).toUpperCase();
+        String last = parts[parts.length - 1].substring(0, 1).toUpperCase();
+        return first + last;
+    }
+
     @Transactional
     public CommunicationDto sendEmail(UUID tenantId, UUID participantId, UUID userId, String userName, SendEmailRequest request) {
         verifyParticipantExists(tenantId, participantId);
@@ -225,21 +245,96 @@ public class ParticipantWorkflowService {
         if (request.getTo() == null || request.getTo().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one recipient (To) is required");
         }
+        if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subject is required");
+        }
+        if (request.getBody() == null || request.getBody().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message is required");
+        }
+
+        // Validate emails and uniqueness across to, cc, bcc, replyTo
+        List<String> allEmails = new ArrayList<>();
+        for (String to : request.getTo()) {
+            if (to == null || to.trim().isEmpty() || !EMAIL_PATTERN.matcher(to.trim()).matches()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + to);
+            }
+            allEmails.add(to.trim().toLowerCase());
+        }
+        if (request.getCc() != null) {
+            for (String cc : request.getCc()) {
+                if (cc != null && !cc.trim().isEmpty()) {
+                    if (!EMAIL_PATTERN.matcher(cc.trim()).matches()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + cc);
+                    }
+                    allEmails.add(cc.trim().toLowerCase());
+                }
+            }
+        }
+        if (request.getBcc() != null) {
+            for (String bcc : request.getBcc()) {
+                if (bcc != null && !bcc.trim().isEmpty()) {
+                    if (!EMAIL_PATTERN.matcher(bcc.trim()).matches()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + bcc);
+                    }
+                    allEmails.add(bcc.trim().toLowerCase());
+                }
+            }
+        }
+        if (request.getReplyTo() != null && !request.getReplyTo().trim().isEmpty()) {
+            if (!EMAIL_PATTERN.matcher(request.getReplyTo().trim()).matches()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + request.getReplyTo());
+            }
+            allEmails.add(request.getReplyTo().trim().toLowerCase());
+        }
+
+        long distinctCount = allEmails.stream().distinct().count();
+        if (distinctCount != allEmails.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each email address should be unique between to, cc, bcc, and reply to.");
+        }
+
+        UUID resolvedStudyId = resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier());
+        boolean isGlobal = request.isGlobal() || resolvedStudyId == null;
+
+        String senderName = (request.getSenderName() != null && !request.getSenderName().trim().isEmpty())
+                ? request.getSenderName().trim()
+                : (userName != null && !userName.trim().isEmpty() ? userName.trim() : "System");
+        String authorInitials = computeInitials(senderName);
 
         Communication comm = new Communication();
         comm.setTenantId(tenantId);
         comm.setParticipantId(participantId);
-        comm.setStudyId(resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier()));
+        comm.setStudyId(resolvedStudyId);
         comm.setChannel("EMAIL");
         comm.setDirection("OUTBOUND");
         comm.setSubjectSnapshot(request.getSubject().trim());
         comm.setBodySnapshot(request.getBody().trim());
         comm.setStatus("SENT");
         comm.setInitiatedByUserId(userId);
-        comm.setPinned(request.isPinned());
+        comm.setPinned(request.isPinned() || request.isSticky());
         comm.setCreatedAt(OffsetDateTime.now());
         comm.setSentAt(OffsetDateTime.now());
         comm.setCompletedAt(OffsetDateTime.now());
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("replyTo", (request.getReplyTo() != null && !request.getReplyTo().trim().isEmpty()) ? request.getReplyTo().trim() : null);
+        metadata.put("senderName", senderName);
+        metadata.put("authorName", senderName);
+        metadata.put("authorInitials", authorInitials);
+        metadata.put("initiatorName", senderName);
+        metadata.put("design", request.getDesign());
+        metadata.put("messageIsHtml", request.isMessageIsHtml());
+        metadata.put("lastContact", request.isLastContact());
+        metadata.put("global", isGlobal);
+        metadata.put("notify", request.isNotify());
+        if (request.getAttachments() != null) {
+            metadata.put("attachments", request.getAttachments());
+        }
+
+        try {
+            comm.setMetadata(objectMapper.writeValueAsString(metadata));
+        } catch (Exception e) {
+            comm.setMetadata("{}");
+        }
 
         // Add recipients
         for (String to : request.getTo()) {
@@ -278,6 +373,15 @@ public class ParticipantWorkflowService {
         }
 
         Communication saved = communicationRepository.save(comm);
+
+        if (request.isLastContact()) {
+            Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId).orElse(null);
+            if (p != null) {
+                p.setGlobalLastContactDate(OffsetDateTime.now());
+                participantRepository.save(p);
+            }
+        }
+
         recordAudit(tenantId, userId, "EMAIL_SENT", "Communication", saved.getId(), "Sent email to participant " + participantId);
 
         return mapCommunicationToDto(saved);
@@ -423,6 +527,51 @@ public class ParticipantWorkflowService {
         return mapCommunicationToDto(saved);
     }
 
+    @Transactional
+    public CommunicationDto updateEmailLog(UUID tenantId, UUID participantId, UUID commId, UUID userId, Map<String, Object> flags) {
+        Communication comm = communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Communication record not found"));
+
+        if (flags.containsKey("sticky") || flags.containsKey("pinned")) {
+            boolean sticky = Boolean.TRUE.equals(flags.get("sticky")) || Boolean.TRUE.equals(flags.get("pinned"));
+            comm.setPinned(sticky);
+        }
+
+        Map<String, Object> metaMap = new LinkedHashMap<>();
+        if (comm.getMetadata() != null && !comm.getMetadata().isBlank()) {
+            try {
+                metaMap = objectMapper.readValue(comm.getMetadata(), new TypeReference<Map<String, Object>>() {});
+            } catch (Exception ignored) {}
+        }
+        if (flags.containsKey("global")) {
+            boolean isGlobal = Boolean.TRUE.equals(flags.get("global"));
+            metaMap.put("global", isGlobal);
+            if (isGlobal) {
+                comm.setStudyId(null);
+            }
+        }
+        if (flags.containsKey("lastContact")) {
+            boolean lastContact = Boolean.TRUE.equals(flags.get("lastContact"));
+            metaMap.put("lastContact", lastContact);
+            if (lastContact) {
+                Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId).orElse(null);
+                if (p != null) {
+                    p.setGlobalLastContactDate(OffsetDateTime.now());
+                    participantRepository.save(p);
+                }
+            }
+        }
+        if (flags.containsKey("notify")) {
+            metaMap.put("notify", Boolean.TRUE.equals(flags.get("notify")));
+        }
+        try {
+            comm.setMetadata(objectMapper.writeValueAsString(metaMap));
+        } catch (Exception ignored) {}
+
+        Communication saved = communicationRepository.save(comm);
+        return mapCommunicationToDto(saved);
+    }
+
     @Transactional(readOnly = true)
     public List<String> getEmailRecipients(UUID tenantId, UUID participantId) {
         Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId)
@@ -469,14 +618,58 @@ public class ParticipantWorkflowService {
         dto.setSentAt(comm.getSentAt());
         dto.setCreatedAt(comm.getCreatedAt() != null ? comm.getCreatedAt() : OffsetDateTime.now());
         dto.setPinned(comm.isPinned());
-        if (comm.getMetadata() != null && comm.getMetadata().contains("\"initiatorName\":")) {
+        dto.setSticky(comm.isPinned());
+
+        if (comm.getMetadata() != null && !comm.getMetadata().isBlank()) {
             try {
-                int start = comm.getMetadata().indexOf("\"initiatorName\":\"") + 17;
-                int end = comm.getMetadata().indexOf("\"", start);
-                if (start > 16 && end > start) {
-                    dto.setSenderName(comm.getMetadata().substring(start, end));
+                JsonNode root = objectMapper.readTree(comm.getMetadata());
+                if (root.has("replyTo") && !root.get("replyTo").isNull()) {
+                    dto.setReplyTo(root.get("replyTo").asText());
+                }
+                if (root.has("senderName") && !root.get("senderName").isNull()) {
+                    dto.setSenderName(root.get("senderName").asText());
+                } else if (root.has("initiatorName") && !root.get("initiatorName").isNull()) {
+                    dto.setSenderName(root.get("initiatorName").asText());
+                }
+                if (root.has("authorName") && !root.get("authorName").isNull()) {
+                    dto.setAuthorName(root.get("authorName").asText());
+                }
+                if (root.has("authorInitials") && !root.get("authorInitials").isNull()) {
+                    dto.setAuthorInitials(root.get("authorInitials").asText());
+                }
+                if (root.has("design") && !root.get("design").isNull()) {
+                    dto.setDesign(root.get("design").asText());
+                }
+                if (root.has("messageIsHtml")) {
+                    dto.setMessageIsHtml(root.get("messageIsHtml").asBoolean());
+                }
+                if (root.has("lastContact")) {
+                    dto.setLastContact(root.get("lastContact").asBoolean());
+                }
+                if (root.has("global")) {
+                    dto.setGlobal(root.get("global").asBoolean() || comm.getStudyId() == null);
+                }
+                if (root.has("attachments") && root.get("attachments").isArray()) {
+                    List<String> attList = new ArrayList<>();
+                    for (JsonNode n : root.get("attachments")) {
+                        if (n.isTextual()) {
+                            attList.add(n.asText());
+                        } else if (n.has("fileName") && !n.get("fileName").isNull()) {
+                            attList.add(n.get("fileName").asText());
+                        }
+                    }
+                    dto.setAttachments(attList);
                 }
             } catch (Exception ignored) {}
+        }
+        if (dto.getSenderName() == null) {
+            dto.setSenderName("System");
+        }
+        if (dto.getAuthorName() == null) {
+            dto.setAuthorName(dto.getSenderName());
+        }
+        if (dto.getAuthorInitials() == null) {
+            dto.setAuthorInitials(computeInitials(dto.getAuthorName()));
         }
 
         List<RecipientDto> rDtos = new ArrayList<>();
