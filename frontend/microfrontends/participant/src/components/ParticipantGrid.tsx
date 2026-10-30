@@ -17,6 +17,7 @@ import { ChevronDown, FileSpreadsheet, FileText, UserPlus, List } from 'lucide-r
 import { ParticipantRecord, StudyItem } from '../types/participant';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { toast } from '../../../../shared/toaster';
+import { calculateCurrentAge } from '../utils/participantDateUtils';
 
 const parseCsv = (csv: string): string[][] => {
   const rows: string[][] = [];
@@ -153,6 +154,14 @@ const DefaultTextRenderer: React.FC<ICellRendererParams> = (params) => {
     return <span className="text-gray-500 text-xs font-normal">...</span>;
   }
   return <span className="text-gray-800 text-xs font-normal">{val}</span>;
+};
+
+const AgeCellRenderer: React.FC<ICellRendererParams<ParticipantRecord>> = (params) => {
+  const age = calculateCurrentAge(params.data?.demographics?.dob, params.value);
+  if (age === '--') {
+    return <span className="text-gray-500 text-xs font-normal">...</span>;
+  }
+  return <span className="text-gray-800 text-xs font-normal">{age}</span>;
 };
 
 interface ParticipantGridProps {
@@ -454,7 +463,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       minWidth: 100,
       sortable: true,
       filter: true,
-      cellRenderer: DefaultTextRenderer,
+      cellRenderer: AgeCellRenderer,
       cellClass: 'flex items-center',
     },
     {

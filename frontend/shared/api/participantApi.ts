@@ -4,6 +4,8 @@ import { apiClient } from '../api-client';
 export interface DemographicOptions {
   ethnicity: string[];
   race: string[];
+  sex?: string[];
+  gender?: string[];
 }
 export interface Participant {
   id?: string | number;
@@ -674,6 +676,18 @@ export const participantApi = {
     return res.data?.data ?? res.data;
   },
 
+  async updateContact(participantId: string, contactId: string, payload: Partial<ParticipantContactDetail>, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantContactDetail> {
+    const res = await apiClient.put(`/api/v1/participants/${participantId}/contacts/${contactId}`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async toggleContactActive(participantId: string, contactId: string, active: boolean, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantContactDetail> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/contacts/${contactId}/archive`, null, {
+      params: { ...options, active },
+    });
+    return res.data?.data ?? res.data;
+  },
+
   async deleteContact(participantId: string, contactId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
     await apiClient.delete(`/api/v1/participants/${participantId}/contacts/${contactId}`, { params: options });
   },
@@ -688,8 +702,28 @@ export const participantApi = {
     return res.data?.data ?? res.data;
   },
 
+  async updateAddress(participantId: string, addressId: string, payload: Partial<ParticipantAddressDetail>, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantAddressDetail> {
+    const res = await apiClient.put(`/api/v1/participants/${participantId}/addresses/${addressId}`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async toggleAddressActive(participantId: string, addressId: string, active: boolean, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantAddressDetail> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/addresses/${addressId}/archive`, null, {
+      params: { ...options, active },
+    });
+    return res.data?.data ?? res.data;
+  },
+
   async deleteAddress(participantId: string, addressId: string, options?: { tenantId?: string; siteId?: string }): Promise<void> {
     await apiClient.delete(`/api/v1/participants/${participantId}/addresses/${addressId}`, { params: options });
+  },
+
+  async getRelationshipOptions(options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    const res = await apiClient.get('/api/v1/registry/relationship-options', { params: options, skipToast: true } as any);
+    return res.data?.data ?? res.data ?? [
+      'Self', 'Mother', 'Father', 'Parent / Guardian', 'Spouse / Partner',
+      'Sibling', 'Child', 'Caregiver', 'Friend', 'Other'
+    ];
   },
 
   // 4. Consent

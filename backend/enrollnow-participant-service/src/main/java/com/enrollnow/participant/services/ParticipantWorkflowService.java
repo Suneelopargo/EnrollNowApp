@@ -506,6 +506,16 @@ public class ParticipantWorkflowService {
     public ParticipantContactDto createContact(UUID tenantId, UUID participantId, UUID userId, CreateContactPersonRequest request) {
         verifyParticipantExists(tenantId, participantId);
 
+        if (request.isPreferred()) {
+            List<ParticipantContact> existingContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            for (ParticipantContact other : existingContacts) {
+                if (other.isPreferred()) {
+                    other.setPreferred(false);
+                    contactRepository.save(other);
+                }
+            }
+        }
+
         ParticipantContact contact = new ParticipantContact();
         contact.setTenantId(tenantId);
         contact.setParticipantId(participantId);
@@ -526,6 +536,84 @@ public class ParticipantWorkflowService {
 
         ParticipantContact saved = contactRepository.save(contact);
         recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_CREATED", "ParticipantContact", saved.getId(), "Created contact on participant " + participantId);
+
+        return mapContactToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantContactDto updateContact(UUID tenantId, UUID participantId, UUID contactId, UUID userId, UpdateContactPersonRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
+
+        if (request.getContactType() != null && !request.getContactType().isBlank()) {
+            contact.setContactType(request.getContactType().toUpperCase().trim());
+        }
+        if (request.getContactValue() != null && !request.getContactValue().isBlank()) {
+            contact.setContactValue(request.getContactValue().trim());
+        }
+        if (request.getLabel() != null) {
+            contact.setLabel(request.getLabel().trim());
+        }
+        if (request.getContactName() != null) {
+            contact.setContactName(request.getContactName().trim());
+        }
+        if (request.getRelationship() != null) {
+            contact.setRelationship(request.getRelationship().trim());
+        }
+        if (request.getCanLeaveMessage() != null) {
+            contact.setCanLeaveMessage(request.getCanLeaveMessage());
+        }
+        if (request.getNotes() != null) {
+            contact.setNotes(request.getNotes().trim());
+        }
+        if (request.getPrimaryContact() != null) {
+            contact.setPrimaryContact(request.getPrimaryContact());
+        }
+        if (request.getActive() != null) {
+            contact.setActive(request.getActive());
+            if (!request.getActive()) {
+                contact.setPreferred(false);
+            }
+        }
+        if (request.getIsPreferred() != null) {
+            boolean newPreferred = request.getIsPreferred();
+            contact.setPreferred(newPreferred);
+            if (newPreferred) {
+                contact.setActive(true);
+                List<ParticipantContact> allContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+                for (ParticipantContact other : allContacts) {
+                    if (!other.getId().equals(contactId) && other.isPreferred()) {
+                        other.setPreferred(false);
+                        contactRepository.save(other);
+                    }
+                }
+            }
+        }
+
+        contact.setUpdatedBy(userId);
+        contact.setUpdatedAt(OffsetDateTime.now());
+        ParticipantContact saved = contactRepository.save(contact);
+        recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_UPDATED", "ParticipantContact", saved.getId(), "Updated contact on participant " + participantId);
+
+        return mapContactToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantContactDto toggleContactActive(UUID tenantId, UUID participantId, UUID contactId, UUID userId, boolean active) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
+
+        contact.setActive(active);
+        if (!active) {
+            contact.setPreferred(false);
+        }
+        contact.setUpdatedBy(userId);
+        contact.setUpdatedAt(OffsetDateTime.now());
+        ParticipantContact saved = contactRepository.save(contact);
+        recordAudit(tenantId, userId, active ? "PARTICIPANT_CONTACT_RESTORED" : "PARTICIPANT_CONTACT_ARCHIVED",
+                "ParticipantContact", saved.getId(), (active ? "Restored" : "Archived") + " contact on participant " + participantId);
 
         return mapContactToDto(saved);
     }
@@ -589,6 +677,64 @@ public class ParticipantWorkflowService {
 
         ParticipantAddress saved = addressRepository.save(address);
         recordAudit(tenantId, userId, "PARTICIPANT_ADDRESS_CREATED", "ParticipantAddress", saved.getId(), "Created address on participant " + participantId);
+
+        return mapAddressToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantAddressDto updateAddress(UUID tenantId, UUID participantId, UUID addressId, UUID userId, UpdateAddressRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+
+        if (request.getAddressType() != null && !request.getAddressType().isBlank()) {
+            address.setAddressType(request.getAddressType().toUpperCase().trim());
+        }
+        if (request.getAddressLine1() != null) {
+            address.setAddressLine1(request.getAddressLine1().trim());
+        }
+        if (request.getAddressLine2() != null) {
+            address.setAddressLine2(request.getAddressLine2().trim());
+        }
+        if (request.getCity() != null) {
+            address.setCity(request.getCity().trim());
+        }
+        if (request.getStateRegion() != null) {
+            address.setStateRegion(request.getStateRegion().trim());
+        }
+        if (request.getPostalCode() != null) {
+            address.setPostalCode(request.getPostalCode().trim());
+        }
+        if (request.getCountryCode() != null) {
+            address.setCountryCode(request.getCountryCode().trim());
+        }
+        if (request.getPrimaryAddress() != null) {
+            address.setPrimaryAddress(request.getPrimaryAddress());
+        }
+        if (request.getActive() != null) {
+            address.setActive(request.getActive());
+        }
+
+        address.setUpdatedBy(userId);
+        address.setUpdatedAt(OffsetDateTime.now());
+        ParticipantAddress saved = addressRepository.save(address);
+        recordAudit(tenantId, userId, "PARTICIPANT_ADDRESS_UPDATED", "ParticipantAddress", saved.getId(), "Updated address on participant " + participantId);
+
+        return mapAddressToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantAddressDto toggleAddressActive(UUID tenantId, UUID participantId, UUID addressId, UUID userId, boolean active) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+
+        address.setActive(active);
+        address.setUpdatedBy(userId);
+        address.setUpdatedAt(OffsetDateTime.now());
+        ParticipantAddress saved = addressRepository.save(address);
+        recordAudit(tenantId, userId, active ? "PARTICIPANT_ADDRESS_RESTORED" : "PARTICIPANT_ADDRESS_ARCHIVED",
+                "ParticipantAddress", saved.getId(), (active ? "Restored" : "Archived") + " address on participant " + participantId);
 
         return mapAddressToDto(saved);
     }

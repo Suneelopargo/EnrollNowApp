@@ -1233,4 +1233,141 @@ class ParticipantRegistryServiceTest {
         assertThat(p.getLastName()).isEqualTo("Jones");
     }
 
+    @Test
+    void getDemographicOptions_returnsStandardOptionsAndMergesStudyGroups() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        Map<String, List<String>> options = service.getDemographicOptions(tenantId);
+        assertThat(options).isNotNull();
+        assertThat(options).containsKey("sex");
+        assertThat(options).containsKey("ethnicity");
+        assertThat(options).containsKey("race");
+
+        assertThat(options.get("sex")).contains("Female", "Male", "Other", "Unspecified");
+        assertThat(options.get("ethnicity")).contains("Hispanic or Latino", "Not Hispanic or Latino");
+        assertThat(options.get("race")).contains("Asian", "White", "Black or African American");
+    }
+
+    @Test
+    void getRelationshipOptions_returnsStandardLegacyRelationships() {
+        List<String> options = service.getRelationshipOptions();
+        assertThat(options).isNotNull();
+        assertThat(options).contains("Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner", "Sibling", "Caregiver", "Other");
+    }
+
+    @Test
+    void updateParticipant_withFutureDob_throwsBadRequest() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setDateOfBirth(LocalDate.now().plusYears(1).toString());
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateParticipant(tenantId, partId, userId, req, siteId)
+        );
+
+        assertThat(ex.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+        assertThat(ex.getReason()).contains("Birthday cannot be in the future");
+    }
+
+    @Test
+    void updateParticipant_withValidDob_updatesDobAndClearsWhenEmpty() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setDateOfBirth("1995-06-15");
+
+        service.updateParticipant(tenantId, partId, userId, req, siteId);
+        assertThat(p.getDateOfBirth()).isEqualTo(LocalDate.of(1995, 6, 15));
+
+        // Clearing DOB with empty string
+        UpdateParticipantRequest clearReq = new UpdateParticipantRequest();
+        clearReq.setDateOfBirth("   ");
+        service.updateParticipant(tenantId, partId, userId, clearReq, siteId);
+        assertThat(p.getDateOfBirth()).isNull();
+    }
+
+    @Test
+    void updateParticipant_withInvalidDobFormat_throwsBadRequest() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setDateOfBirth("invalid-date-format");
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateParticipant(tenantId, partId, userId, req, siteId)
+        );
+
+        assertThat(ex.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+        assertThat(ex.getReason()).contains("Birthday is not valid");
+    }
+
+    @Test
+    void updateParticipant_withDemographics_updatesAndClearsExplicitly() throws Exception {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setSexAtBirth("Female");
+        req.setGenderIdentity("Female");
+        req.setEthnicity("Hispanic or Latino");
+        req.setRace("Asian");
+
+        service.updateParticipant(tenantId, partId, userId, req, siteId);
+        assertThat(p.getSexAtBirth()).isEqualTo("Female");
+        assertThat(p.getGenderIdentity()).isEqualTo("Female");
+
+        Map<String, Object> attrs = new ObjectMapper().readValue(p.getCustomAttributes(), Map.class);
+        assertThat(attrs.get("ethnicity")).isEqualTo("Hispanic or Latino");
+        assertThat(attrs.get("race")).isEqualTo("Asian");
+
+        // Clear explicitly with blank strings
+        UpdateParticipantRequest clearReq = new UpdateParticipantRequest();
+        clearReq.setSexAtBirth("   ");
+        clearReq.setGenderIdentity("   ");
+        clearReq.setEthnicity("   ");
+        clearReq.setRace("   ");
+
+        service.updateParticipant(tenantId, partId, userId, clearReq, siteId);
+        assertThat(p.getSexAtBirth()).isNull();
+        assertThat(p.getGenderIdentity()).isNull();
+
+        Map<String, Object> clearedAttrs = new ObjectMapper().readValue(p.getCustomAttributes(), Map.class);
+        assertThat(clearedAttrs.containsKey("ethnicity")).isFalse();
+        assertThat(clearedAttrs.containsKey("race")).isFalse();
+    }
+
+    @Test
+    void updateParticipant_partialUpdate_preservesOmittedDemographics() throws Exception {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        p.setSexAtBirth("Male");
+        p.setCustomAttributes("{\"ethnicity\":\"Not Hispanic or Latino\",\"race\":\"White\"}");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        UpdateParticipantRequest partialReq = new UpdateParticipantRequest();
+        partialReq.setFirstName("Bob");
+
+        service.updateParticipant(tenantId, partId, userId, partialReq, siteId);
+        assertThat(p.getFirstName()).isEqualTo("Bob");
+        assertThat(p.getDateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+        assertThat(p.getSexAtBirth()).isEqualTo("Male");
+
+        Map<String, Object> attrs = new ObjectMapper().readValue(p.getCustomAttributes(), Map.class);
+        assertThat(attrs.get("ethnicity")).isEqualTo("Not Hispanic or Latino");
+        assertThat(attrs.get("race")).isEqualTo("White");
+    }
+
 }

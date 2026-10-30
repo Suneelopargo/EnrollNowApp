@@ -199,6 +199,116 @@ class ParticipantWorkflowServiceTest {
     }
 
     @Test
+    void testUpdateContact_updatesFieldsAndMaintainsPreferredExclusivity() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        UUID contactId = UUID.randomUUID();
+        ParticipantContact existing = new ParticipantContact();
+        existing.setId(contactId);
+        existing.setTenantId(tenantId);
+        existing.setParticipantId(participantId);
+        existing.setContactType("PHONE");
+        existing.setContactValue("+15551234567");
+        existing.setPreferred(false);
+        existing.setActive(true);
+
+        UUID otherContactId = UUID.randomUUID();
+        ParticipantContact other = new ParticipantContact();
+        other.setId(otherContactId);
+        other.setTenantId(tenantId);
+        other.setParticipantId(participantId);
+        other.setPreferred(true);
+        other.setActive(true);
+
+        when(contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId))
+                .thenReturn(Optional.of(existing));
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, participantId))
+                .thenReturn(new ArrayList<>(List.of(existing, other)));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateContactPersonRequest updateReq = new UpdateContactPersonRequest();
+        updateReq.setContactValue("+15559876543");
+        updateReq.setIsPreferred(true);
+        updateReq.setRelationship("Guardian");
+        updateReq.setCanLeaveMessage(false);
+
+        ParticipantContactDto updated = workflowService.updateContact(tenantId, participantId, contactId, userId, updateReq);
+        assertNotNull(updated);
+        assertEquals("+15559876543", updated.getContactValue());
+        assertEquals("Guardian", updated.getRelationship());
+        assertTrue(updated.isPreferred());
+        assertFalse(updated.isCanLeaveMessage());
+        // Verify other contact's preferred flag was cleared
+        assertFalse(other.isPreferred());
+    }
+
+    @Test
+    void testToggleContactActive_archivingClearsPreferred() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        UUID contactId = UUID.randomUUID();
+        ParticipantContact existing = new ParticipantContact();
+        existing.setId(contactId);
+        existing.setTenantId(tenantId);
+        existing.setParticipantId(participantId);
+        existing.setPreferred(true);
+        existing.setActive(true);
+
+        when(contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId))
+                .thenReturn(Optional.of(existing));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ParticipantContactDto archived = workflowService.toggleContactActive(tenantId, participantId, contactId, userId, false);
+        assertNotNull(archived);
+        assertFalse(archived.isActive());
+        assertFalse(archived.isPreferred());
+
+        ParticipantContactDto restored = workflowService.toggleContactActive(tenantId, participantId, contactId, userId, true);
+        assertNotNull(restored);
+        assertTrue(restored.isActive());
+    }
+
+    @Test
+    void testUpdateAddress_andToggleAddressActive() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        UUID addressId = UUID.randomUUID();
+        ParticipantAddress existing = new ParticipantAddress();
+        existing.setId(addressId);
+        existing.setTenantId(tenantId);
+        existing.setParticipantId(participantId);
+        existing.setAddressLine1("123 Old St");
+        existing.setCity("Philadelphia");
+        existing.setActive(true);
+
+        when(addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId))
+                .thenReturn(Optional.of(existing));
+        when(addressRepository.save(any(ParticipantAddress.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateAddressRequest updateReq = new UpdateAddressRequest();
+        updateReq.setAddressLine1("456 New Ave");
+        updateReq.setCity("Pittsburgh");
+        updateReq.setPostalCode("15213");
+
+        ParticipantAddressDto updated = workflowService.updateAddress(tenantId, participantId, addressId, userId, updateReq);
+        assertNotNull(updated);
+        assertEquals("456 New Ave", updated.getAddressLine1());
+        assertEquals("Pittsburgh", updated.getCity());
+
+        ParticipantAddressDto archived = workflowService.toggleAddressActive(tenantId, participantId, addressId, userId, false);
+        assertFalse(archived.isActive());
+    }
+
+    @Test
     void testRecordConsent() {
         Participant participant = new Participant();
         participant.setId(participantId);

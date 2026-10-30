@@ -186,7 +186,16 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
     <div className="space-y-4">
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
-        
+        <div className="flex items-center gap-2">
+          <Clock size={16} className="text-blue-600" />
+          <div>
+            <h4 className="text-sm font-semibold text-gray-800">Contact History</h4>
+            <p className="text-xs text-gray-500">
+              Audit log of participant outreach attempts, screening outcomes, and follow-ups.
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             type="button"

@@ -188,7 +188,16 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
     <div className="space-y-4">
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
-      
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={16} className="text-indigo-600" />
+          <div>
+            <h4 className="text-sm font-semibold text-gray-800">Study Consents</h4>
+            <p className="text-xs text-gray-500">
+              Administrative and legal consent logs, versions, and attachments for {participantName}.
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             type="button"

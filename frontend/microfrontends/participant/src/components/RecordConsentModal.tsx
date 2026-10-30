@@ -128,7 +128,7 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
     } else {
       setConsentTitle('');
       setConsentDate(formatDateTimeLocal(new Date()));
-      setConsentType('Initial Consent');
+      setConsentType('');
       setVersion('');
       setConsentedBy('');
       setExpiration('');

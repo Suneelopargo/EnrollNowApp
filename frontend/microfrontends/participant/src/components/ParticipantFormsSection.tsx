@@ -114,7 +114,28 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
   return (
     <div className="flex flex-col h-full bg-slate-50/50 p-6 space-y-4">
       {/* Header with Title */}
-     
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="w-5 h-5 text-indigo-600" />
+          <div>
+            <h4 className="text-sm font-semibold text-gray-800">Forms & Surveys</h4>
+            <p className="text-xs text-gray-500">
+              Participant surveys, intake questionnaires, and screening assessments for {participantName}.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsAssignModalOpen(true)}
+            className="btn btn-sm btn-primary flex items-center gap-1.5"
+            id="assign-form-btn"
+          >
+            <Plus className="w-3.5 h-3.5" /> Assign Form
+          </button>
+        </div>
+      </div>
 
       {/* Error state */}
       {error && (

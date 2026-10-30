@@ -133,7 +133,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
         setOtherOutcome(logToEdit.outcome);
       }
     } else {
-      setContactType('Phone Call');
+      setContactType('');
       setDateTimeOfContact(formatDateTimeLocal(new Date()));
       setContactMethod('');
       setSpokeTo('');
@@ -145,9 +145,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
       setSticky(false);
       setNotify(false);
       setGlobal(true);
-      if (teamMembers.length > 0) {
-        setContactedBy(teamMembers[0].id);
-      }
+      setContactedBy('');
     }
   }, [logToEdit, outcomeOptions, teamMembers]);
 
@@ -171,9 +169,6 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
         setContactMethodOptions(methods);
         setTeamMembers(members);
 
-        if (!logToEdit && members.length > 0 && !contactedBy) {
-          setContactedBy(members[0].id);
-        }
       })
       .catch((err) => {
         if (!isMounted) return;

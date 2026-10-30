@@ -235,11 +235,16 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     setIsLoadingDemographicOptions(true);
     try {
       const options = await participantApi.getDemographicOptions({ params: { tenantId, siteId } });
-      setDemographicOptions({ ethnicity: options.ethnicity, race: options.race });
+      setDemographicOptions({
+        ethnicity: options.ethnicity || [],
+        race: options.race || [],
+        sex: options.sex || options.gender || [],
+        gender: options.gender || options.sex || [],
+      });
     } catch (err) {
       console.warn('Failed to load demographic options:', err);
       toast.error(getApiErrorMessage(err, 'Failed to load race and ethnicity options.'));
-      setDemographicOptions({ ethnicity: [], race: [] });
+      setDemographicOptions({ ethnicity: [], race: [], sex: [], gender: [] });
     } finally {
       setIsLoadingDemographicOptions(false);
     }
