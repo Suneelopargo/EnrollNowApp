@@ -1,6 +1,7 @@
 package com.enrollnow.study.services;
 
 import com.enrollnow.common.audit.AuditChange;
+import com.enrollnow.common.audit.AuditOperation;
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
@@ -142,7 +143,38 @@ public class StudyAccessService {
             UUID userId,
             GrantStudyAccessRequest request
     ) {
-        requireStudyAccessManageAuthorization(tenantId, studyId, userId);
+        grantStudyAccess(
+                tenantId,
+                studyId,
+                userId,
+                request,
+                null
+        );
+    }
+
+    @Transactional
+    public void removeStudyAccess(
+            UUID tenantId,
+            UUID studyId,
+            UUID userId
+    ) {
+        removeStudyAccess(
+                tenantId,
+                studyId,
+                userId,
+                null
+        );
+    }
+    
+    @Transactional
+    public void grantStudyAccess(
+            UUID tenantId,
+            UUID studyId,
+            UUID userId,
+            GrantStudyAccessRequest request,
+            AuditOperation auditOperation
+    ) {
+    	requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // 1. Validate study belongs to tenant
         Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
@@ -233,7 +265,18 @@ public class StudyAccessService {
 
                 userRoleAssignmentRepository.saveAndFlush(targetAssignment);
 
-                if (auditRecorder != null) {
+                if (auditOperation != null) {
+
+                    auditOperation.addChange(
+                            "STUDY",
+                            studyId,
+                            "studyPermission",
+                            previousRoleCode,
+                            role.getCode()
+                    );
+
+                } else if (auditRecorder != null) {
+
                     auditRecorder.record(
                             new AuditEventCommand(
                                     tenantId,
@@ -278,7 +321,18 @@ public class StudyAccessService {
 
             userRoleAssignmentRepository.save(assignment);
 
-            if (auditRecorder != null) {
+            if (auditOperation != null) {
+
+                auditOperation.addChange(
+                        "STUDY",
+                        studyId,
+                        "studyPermission",
+                        "NONE",
+                        role.getCode()
+                );
+
+            } else if (auditRecorder != null) {
+
                 auditRecorder.record(
                         new AuditEventCommand(
                                 tenantId,
@@ -312,13 +366,15 @@ public class StudyAccessService {
             }
         }
     }
-
+    
     @Transactional
     public void removeStudyAccess(
             UUID tenantId,
             UUID studyId,
-            UUID userId) {
-        requireStudyAccessManageAuthorization(tenantId, studyId, userId);
+            UUID userId,
+            AuditOperation auditOperation
+    ) {
+    	requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
         // Validate study belongs to tenant
         Study study = studyRepository.findByTenantIdAndId(tenantId, studyId)
@@ -357,7 +413,18 @@ public class StudyAccessService {
             assignment.setActive(false);
             userRoleAssignmentRepository.save(assignment);
 
-            if (auditRecorder != null) {
+            if (auditOperation != null) {
+
+                auditOperation.addChange(
+                        "STUDY",
+                        studyId,
+                        "studyPermission",
+                        previousRoleCode,
+                        "NONE"
+                );
+
+            } else if (auditRecorder != null) {
+
                 auditRecorder.record(
                         new AuditEventCommand(
                                 tenantId,
@@ -371,12 +438,16 @@ public class StudyAccessService {
                                 null,
                                 Map.of(
                                         "studyId", studyId,
-                                        "studyName", study.getName() != null ? study.getName() : "",
+                                        "studyName", study.getName() != null
+                                                ? study.getName()
+                                                : "",
                                         "studyPermission", previousRoleCode
                                 ),
                                 Map.of(
                                         "studyId", studyId,
-                                        "studyName", study.getName() != null ? study.getName() : "",
+                                        "studyName", study.getName() != null
+                                                ? study.getName()
+                                                : "",
                                         "studyPermission", "NONE"
                                 ),
                                 List.of(

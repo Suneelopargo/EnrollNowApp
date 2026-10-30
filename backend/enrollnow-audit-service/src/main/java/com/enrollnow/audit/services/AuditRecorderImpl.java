@@ -64,6 +64,7 @@ public class AuditRecorderImpl implements AuditRecorder {
         AuditEvent event = new AuditEvent();
 
         event.setTenantId(command.tenantId());
+
         UUID actorUserId = command.actorUserId() != null
                 ? command.actorUserId()
                 : currentActorProvider.getCurrentUserId().orElse(null);
@@ -93,27 +94,34 @@ public class AuditRecorderImpl implements AuditRecorder {
             return;
         }
 
-        /*
-         * Field-level history requires an identifiable target entity.
-         */
-        if (command.entityId() == null) {
-            throw new IllegalArgumentException(
-                    "entityId must not be null when field-level audit changes are supplied");
-        }
-
         for (AuditChange change : command.changes()) {
 
-            if (change == null) {
-                continue;
+            String changeEntityType =
+                    change.entityType() != null
+                            ? change.entityType()
+                            : command.entityType();
+
+            UUID changeEntityId =
+                    change.entityId() != null
+                            ? change.entityId()
+                            : command.entityId();
+
+            if (changeEntityId == null) {
+                throw new IllegalArgumentException(
+                        "entityId is required for field-level audit changes"
+                );
             }
 
             EntityChangeHistory history = new EntityChangeHistory();
 
+            history.setId(UUID.randomUUID());
             history.setTenantId(command.tenantId());
             history.setAuditEventId(savedEvent.getId());
-            history.setEntityType(command.entityType());
-            history.setEntityId(command.entityId());
+
+            history.setEntityType(changeEntityType);
+            history.setEntityId(changeEntityId);
             history.setFieldName(change.fieldName());
+
             history.setPreviousValue(
                     objectMapper.valueToTree(change.previousValue())
             );
@@ -121,6 +129,7 @@ public class AuditRecorderImpl implements AuditRecorder {
             history.setNewValue(
                     objectMapper.valueToTree(change.newValue())
             );
+
             history.setChangedAt(now);
 
             entityChangeHistoryRepository.save(history);

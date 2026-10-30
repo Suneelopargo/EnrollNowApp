@@ -236,4 +236,74 @@ class AuditRecorderImplTest {
                 savedEvent.getActorUserId()
         );
     }
+    
+    @Test
+    void shouldRecordChildChangeForDifferentEntity() {
+
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID studyId = UUID.randomUUID();
+        UUID actorUserId = UUID.randomUUID();
+
+        when(currentActorProvider.getCurrentUserId())
+                .thenReturn(Optional.of(actorUserId));
+
+        when(auditEventRepository.save(any(AuditEvent.class)))
+                .thenAnswer(invocation -> {
+                    AuditEvent event = invocation.getArgument(0);
+                    event.setId(UUID.randomUUID());
+                    return event;
+                });
+
+        AuditEventCommand command = new AuditEventCommand(
+                tenantId,
+                null,
+                "USER",
+                userId,
+                "USER_ACCESS_UPDATED",
+                "User access updated",
+                "API",
+                null,
+                null,
+                null,
+                null,
+                List.of(
+                        new AuditChange(
+                                "STUDY",
+                                studyId,
+                                "studyPermission",
+                                "STUDY_RA",
+                                "STUDY_ADMIN"
+                        )
+                )
+        );
+
+        auditRecorder.record(command);
+
+        ArgumentCaptor<EntityChangeHistory> historyCaptor =
+                ArgumentCaptor.forClass(EntityChangeHistory.class);
+
+        verify(entityChangeHistoryRepository)
+                .save(historyCaptor.capture());
+
+        EntityChangeHistory history = historyCaptor.getValue();
+
+        assertEquals("STUDY", history.getEntityType());
+        assertEquals(studyId, history.getEntityId());
+
+        assertEquals(
+                "studyPermission",
+                history.getFieldName()
+        );
+
+        assertEquals(
+                "STUDY_RA",
+                history.getPreviousValue().asText()
+        );
+
+        assertEquals(
+                "STUDY_ADMIN",
+                history.getNewValue().asText()
+        );
+    }
 }

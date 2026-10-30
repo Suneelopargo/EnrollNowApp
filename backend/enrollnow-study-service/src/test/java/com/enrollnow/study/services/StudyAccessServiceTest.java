@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditOperation;
 import com.enrollnow.common.audit.AuditRecorder;
 
 import org.mockito.ArgumentCaptor;
@@ -517,5 +518,106 @@ class StudyAccessServiceTest {
                 () -> studyAccessService.removeStudyAccess(tenantId, studyId, otherUserId)
         );
         verify(studyMemberRepository, never()).save(any());
+    }
+    
+    @Test
+    void removeStudyAccess_AddsChangeToAuditOperation_WhenOperationProvided() {
+
+        Study study = new Study();
+        User user = new User();
+
+        Role existingRole = new Role();
+        existingRole.setId(UUID.randomUUID());
+        existingRole.setCode("STUDY_ADMIN");
+        existingRole.setScopeType("STUDY");
+
+        StudyMember existingMember = new StudyMember();
+        existingMember.setId(new StudyMemberId(studyId, userId));
+        existingMember.setTenantId(tenantId);
+        existingMember.setActive(true);
+
+        UserRoleAssignment existingAssignment =
+                new UserRoleAssignment();
+
+        existingAssignment.setId(UUID.randomUUID());
+        existingAssignment.setTenantId(tenantId);
+        existingAssignment.setUserId(userId);
+        existingAssignment.setStudyId(studyId);
+        existingAssignment.setRoleId(existingRole.getId());
+        existingAssignment.setActive(true);
+
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId))
+                .thenReturn(Optional.of(study));
+
+        when(userRepository.findByTenantIdAndId(tenantId, userId))
+                .thenReturn(Optional.of(user));
+
+        when(studyMemberRepository
+                .findByTenantIdAndIdStudyIdAndIdUserId(
+                        tenantId,
+                        studyId,
+                        userId
+                ))
+                .thenReturn(Optional.of(existingMember));
+
+        when(userRoleAssignmentRepository
+                .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
+                        tenantId,
+                        userId,
+                        studyId
+                ))
+                .thenReturn(List.of(existingAssignment));
+
+        when(roleRepository.findById(existingRole.getId()))
+                .thenReturn(Optional.of(existingRole));
+
+        AuditOperation auditOperation =
+                new AuditOperation(
+                        tenantId,
+                        "USER",
+                        userId,
+                        "USER_ACCESS_UPDATED",
+                        "User access updated",
+                        "API"
+                );
+
+        studyAccessService.removeStudyAccess(
+                tenantId,
+                studyId,
+                userId,
+                auditOperation
+        );
+
+        assertFalse(existingMember.isActive());
+        assertFalse(existingAssignment.isActive());
+
+        assertEquals(1, auditOperation.getChanges().size());
+
+        assertEquals(
+                "STUDY",
+                auditOperation.getChanges().get(0).entityType()
+        );
+
+        assertEquals(
+                studyId,
+                auditOperation.getChanges().get(0).entityId()
+        );
+
+        assertEquals(
+                "studyPermission",
+                auditOperation.getChanges().get(0).fieldName()
+        );
+
+        assertEquals(
+                "STUDY_ADMIN",
+                auditOperation.getChanges().get(0).previousValue()
+        );
+
+        assertEquals(
+                "NONE",
+                auditOperation.getChanges().get(0).newValue()
+        );
+
+        verify(auditRecorder, never()).record(any());
     }
 }

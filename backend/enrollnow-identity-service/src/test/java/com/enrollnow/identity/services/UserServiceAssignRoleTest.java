@@ -28,6 +28,7 @@ import static org.mockito.Mockito.verify;
 import org.mockito.ArgumentCaptor;
 
 import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditOperation;
 import com.enrollnow.common.audit.AuditRecorder;
 
 @ExtendWith(MockitoExtension.class)
@@ -161,6 +162,105 @@ class UserServiceAssignRoleTest {
                 newRole.getCode(),
                 command.changes().get(0).newValue()
         );
+    }
+    
+    @Test
+    @DisplayName("assignRole adds new site permission to supplied audit operation")
+    void shouldAddNewSitePermissionToAuditOperation() {
+
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID siteId = UUID.randomUUID();
+
+        User user = new User();
+        user.setId(userId);
+        user.setTenantId(tenantId);
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("SITE_ADMIN");
+        role.setScopeType("SITE");
+        role.setActive(true);
+
+        Site site = new Site();
+        site.setId(siteId);
+        site.setTenantId(tenantId);
+
+        when(userRepository.findByTenantIdAndId(tenantId, userId))
+                .thenReturn(Optional.of(user));
+
+        when(roleRepository.findByCode("SITE_ADMIN"))
+                .thenReturn(Optional.of(role));
+
+        when(siteRepository.findById(siteId))
+                .thenReturn(Optional.of(site));
+
+        when(userRoleAssignmentRepository
+                .findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
+                        tenantId,
+                        userId,
+                        siteId
+                ))
+                .thenReturn(List.of());
+
+        when(userRoleAssignmentRepository.save(any(UserRoleAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AssignRoleRequest request =
+                new AssignRoleRequest(
+                        "SITE_ADMIN",
+                        "SITE",
+                        siteId
+                );
+
+        AuditOperation auditOperation =
+                new AuditOperation(
+                        tenantId,
+                        "USER",
+                        userId,
+                        "USER_ACCESS_UPDATED",
+                        "User access updated",
+                        "API"
+                );
+
+        UserRoleAssignment result =
+                userService.assignRole(
+                        tenantId,
+                        userId,
+                        request,
+                        auditOperation
+                );
+
+        assertNotNull(result);
+
+        assertEquals(1, auditOperation.getChanges().size());
+
+        assertEquals(
+                "USER",
+                auditOperation.getChanges().get(0).entityType()
+        );
+
+        assertEquals(
+                userId,
+                auditOperation.getChanges().get(0).entityId()
+        );
+
+        assertEquals(
+                "sitePermission",
+                auditOperation.getChanges().get(0).fieldName()
+        );
+
+        assertEquals(
+                "NONE",
+                auditOperation.getChanges().get(0).previousValue()
+        );
+
+        assertEquals(
+                "SITE_ADMIN",
+                auditOperation.getChanges().get(0).newValue()
+        );
+
+        verify(auditRecorder, never()).record(any());
     }
 
     @Test
