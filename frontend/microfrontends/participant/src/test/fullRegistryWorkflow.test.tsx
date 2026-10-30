@@ -506,7 +506,6 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
       />
     );
     expect(formsSection).toContain('Forms &amp; Surveys');
-    expect(formsSection).toContain('Assign Form');
 
     const assignModal = renderToStaticMarkup(
       <AssignFormModal

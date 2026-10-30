@@ -324,6 +324,36 @@ public class ParticipantWorkflowController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    @PutMapping("/{participantId}/contacts/{contactId}")
+    public ResponseEntity<ParticipantContactDto> updateContact(
+            @PathVariable UUID participantId,
+            @PathVariable UUID contactId,
+            @RequestBody UpdateContactPersonRequest request,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId
+    ) {
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(workflowService.updateContact(resolvedTenantId, participantId, contactId, userId, request));
+    }
+
+    @PatchMapping("/{participantId}/contacts/{contactId}/archive")
+    public ResponseEntity<ParticipantContactDto> toggleContactActive(
+            @PathVariable UUID participantId,
+            @PathVariable UUID contactId,
+            @RequestParam boolean active,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId
+    ) {
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(workflowService.toggleContactActive(resolvedTenantId, participantId, contactId, userId, active));
+    }
+
     @DeleteMapping("/{participantId}/contacts/{contactId}")
     public ResponseEntity<Void> deleteContact(
             @PathVariable UUID participantId,
@@ -363,6 +393,36 @@ public class ParticipantWorkflowController {
 
         ParticipantAddressDto created = workflowService.createAddress(resolvedTenantId, participantId, userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
+    @PutMapping("/{participantId}/addresses/{addressId}")
+    public ResponseEntity<ParticipantAddressDto> updateAddress(
+            @PathVariable UUID participantId,
+            @PathVariable UUID addressId,
+            @RequestBody UpdateAddressRequest request,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId
+    ) {
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(workflowService.updateAddress(resolvedTenantId, participantId, addressId, userId, request));
+    }
+
+    @PatchMapping("/{participantId}/addresses/{addressId}/archive")
+    public ResponseEntity<ParticipantAddressDto> toggleAddressActive(
+            @PathVariable UUID participantId,
+            @PathVariable UUID addressId,
+            @RequestParam boolean active,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId
+    ) {
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(workflowService.toggleAddressActive(resolvedTenantId, participantId, addressId, userId, active));
     }
 
     @DeleteMapping("/{participantId}/addresses/{addressId}")

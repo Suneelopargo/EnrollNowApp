@@ -123,6 +123,7 @@ export const AssignFormModal: React.FC<AssignFormModalProps> = ({
                   errors.form ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
+                <option value="">Select a questionnaire / form...</option>
                 {availableForms.map((f) => (
                   <option key={f.surveyDefinitionId} value={f.surveyDefinitionId}>
                     {f.name} ({f.code || 'FORM'})

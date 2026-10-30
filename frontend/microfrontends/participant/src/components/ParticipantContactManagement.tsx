@@ -1,6 +1,19 @@
 // frontend/microfrontends/participant/src/components/ParticipantContactManagement.tsx - Full Contact Management
-import React, { useState, useEffect, useCallback } from 'react';
-import { Phone, Mail, MapPin, Plus, Trash2, Loader2, Star, AlertCircle, RefreshCw, CheckCircle2, User } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Plus,
+  Trash2,
+  Loader2,
+  Star,
+  Pencil,
+  Archive,
+  RotateCcw,
+  MessageSquare,
+  FolderArchive,
+} from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
@@ -33,7 +46,13 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
   const [error, setError] = useState<string | null>(null);
 
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<ParticipantContactDetail | null>(null);
+
   const [isAddAddressOpen, setIsAddAddressOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<ParticipantAddressDetail | null>(null);
+
+  const [showArchivedContacts, setShowArchivedContacts] = useState(false);
+  const [showArchivedAddresses, setShowArchivedAddresses] = useState(false);
 
   const fetchContactDetails = useCallback(async () => {
     if (!participantId) return;
@@ -58,7 +77,80 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
     fetchContactDetails();
   }, [fetchContactDetails]);
 
-  const handleDeleteContact = (c: ParticipantContactDetail) => {
+  // Legacy Ripple sorting: Unarchived first, preferred first, self second, others by name
+  const sortedContacts = useMemo(() => {
+    const list = [...contacts];
+    return list.sort((a, b) => {
+      const aArchived = a.active === false ? 1 : 0;
+      const bArchived = b.active === false ? 1 : 0;
+      if (aArchived !== bArchived) return aArchived - bArchived;
+
+      const aPriority = a.isPreferred ? 1 : (a.relationship?.toLowerCase() === 'self' ? 2 : 3);
+      const bPriority = b.isPreferred ? 1 : (b.relationship?.toLowerCase() === 'self' ? 2 : 3);
+      if (aPriority !== bPriority) return aPriority - bPriority;
+
+      const aName = (a.contactName || '').toUpperCase();
+      const bName = (b.contactName || '').toUpperCase();
+      return aName.localeCompare(bName);
+    });
+  }, [contacts]);
+
+  const displayedContacts = useMemo(() => {
+    if (showArchivedContacts) return sortedContacts;
+    return sortedContacts.filter((c) => c.active !== false);
+  }, [showArchivedContacts, sortedContacts]);
+
+  const hasArchivedContacts = useMemo(() => {
+    return contacts.some((c) => c.active === false);
+  }, [contacts]);
+
+  const displayedAddresses = useMemo(() => {
+    if (showArchivedAddresses) return addresses;
+    return addresses.filter((a) => a.active !== false);
+  }, [showArchivedAddresses, addresses]);
+
+  const hasArchivedAddresses = useMemo(() => {
+    return addresses.some((a) => a.active === false);
+  }, [addresses]);
+
+  const handleOpenEditContact = (c: ParticipantContactDetail) => {
+    setEditingContact(c);
+    setIsAddContactOpen(true);
+  };
+
+  const handleOpenEditAddress = (a: ParticipantAddressDetail) => {
+    setEditingAddress(a);
+    setIsAddAddressOpen(true);
+  };
+
+  const handleToggleContactActive = async (c: ParticipantContactDetail, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const newActive = c.active === false;
+      await participantApi.toggleContactActive(participantId, c.id, newActive, { tenantId, siteId });
+      toast.success(newActive ? 'Contact restored' : 'Contact archived');
+      await fetchContactDetails();
+      onUpdated?.();
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to update contact status'));
+    }
+  };
+
+  const handleToggleAddressActive = async (a: ParticipantAddressDetail, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      const newActive = a.active === false;
+      await participantApi.toggleAddressActive(participantId, a.id, newActive, { tenantId, siteId });
+      toast.success(newActive ? 'Address restored' : 'Address archived');
+      await fetchContactDetails();
+      onUpdated?.();
+    } catch (err: any) {
+      toast.error(getApiErrorMessage(err, 'Failed to update address status'));
+    }
+  };
+
+  const handleDeleteContact = (c: ParticipantContactDetail, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     void requestConfirmation({
       entityName: c.contactValue,
       intent: 'danger',
@@ -81,7 +173,8 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
     });
   };
 
-  const handleDeleteAddress = (a: ParticipantAddressDetail) => {
+  const handleDeleteAddress = (a: ParticipantAddressDetail, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     void requestConfirmation({
       entityName: a.addressLine1 || 'Address',
       intent: 'danger',
@@ -116,17 +209,12 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={fetchContactDetails}
-              disabled={isLoading}
-              className="btn btn-ghost btn-xs text-gray-500 hover:text-gray-900"
-              title="Refresh contacts"
-            >
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAddContactOpen(true)}
+              onClick={() => {
+                setEditingContact(null);
+                setIsAddContactOpen(true);
+              }}
               className="btn btn-sm btn-primary flex items-center gap-1.5"
+              id="add-contact-person-btn"
             >
               <Plus size={14} /> Add Contact
             </button>
@@ -141,61 +229,115 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
             </div>
           )}
 
-          {!isLoading && contacts.length === 0 && (
+          {!isLoading && displayedContacts.length === 0 && (
             <div className="p-6 text-center text-xs text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-              No contacts recorded yet. Click &ldquo;Add Contact&rdquo; to register phone numbers or email addresses.
+              {contacts.length > 0 && !showArchivedContacts
+                ? 'All contact methods are currently archived. Click "Show Archived Contacts" below to view them.'
+                : 'No contacts recorded yet. Click "Add Contact" to register phone numbers or email addresses.'}
             </div>
           )}
 
-          {!isLoading && contacts.length > 0 && (
+          {!isLoading && displayedContacts.length > 0 && (
             <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-              {contacts.map((c) => (
-                <div key={c.id} className="p-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 p-1.5 rounded-full bg-blue-50 text-blue-700">
-                      {c.contactType === 'EMAIL' ? <Mail size={14} /> : <Phone size={14} />}
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-xs text-gray-900 font-semibold">{c.contactValue}</strong>
-                        {c.isPreferred && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5">
-                            <Star size={10} className="fill-amber-500" /> Preferred
-                          </span>
-                        )}
-                        {c.primaryContact && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                            Primary
-                          </span>
-                        )}
-                        {c.label && <span className="badge badge-neutral text-[10px]">{c.label}</span>}
-                      </div>
+              {displayedContacts.map((c) => {
+                const isArchived = c.active === false;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => handleOpenEditContact(c)}
+                    className={`p-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${
+                      isArchived ? 'bg-gray-50/60 opacity-75' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span className={`mt-0.5 p-1.5 rounded-full ${isArchived ? 'bg-gray-200 text-gray-500' : 'bg-blue-50 text-blue-700'}`}>
+                        {c.contactType === 'EMAIL' ? <Mail size={14} /> : <Phone size={14} />}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-xs text-gray-900 font-semibold">{c.contactValue}</strong>
+                          {c.isPreferred && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5">
+                              <Star size={10} className="fill-amber-500" /> Preferred
+                            </span>
+                          )}
+                          {c.primaryContact && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                              Primary
+                            </span>
+                          )}
+                          {isArchived && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
+                              <FolderArchive size={10} /> Archived
+                            </span>
+                          )}
+                          {c.label && <span className="badge badge-neutral text-[10px]">{c.label}</span>}
+                        </div>
 
-                      <div className="text-[11px] text-gray-500 mt-0.5">
-                        <span className="font-medium text-gray-700">{c.contactName || participantName}</span>
-                        {c.relationship && ` • ${c.relationship}`}
-                        {c.canLeaveMessage ? ' • Can Leave Voicemail' : ' • Do Not Leave Message'}
-                      </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          <span className="font-medium text-gray-700">{c.contactName || participantName}</span>
+                          {c.relationship && ` • ${c.relationship}`}
+                          {c.canLeaveMessage ? ' • Can Leave Voicemail' : ' • Do Not Leave Message'}
+                        </div>
 
-                      {c.notes && (
-                        <p className="text-[11px] text-gray-600 bg-gray-50 p-1.5 rounded mt-1 border border-gray-100">
-                          {c.notes}
-                        </p>
-                      )}
+                        {c.notes && (
+                          <p className="text-[11px] text-gray-600 bg-gray-50 p-1.5 rounded mt-1 border border-gray-100 flex items-start gap-1">
+                            <MessageSquare size={12} className="text-gray-400 mt-0.5 shrink-0" />
+                            <span>{c.notes}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditContact(c)}
+                        className="btn btn-ghost btn-xs text-gray-500 hover:text-blue-600 p-1 custom-tooltip-btn tooltip-align-right"
+                        data-tooltip="Edit contact"
+                        aria-label={`Edit contact ${c.contactValue}`}
+                      >
+                        <Pencil size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleContactActive(c, e)}
+                        className={`btn btn-ghost btn-xs p-1 custom-tooltip-btn tooltip-align-right ${
+                          isArchived ? 'text-emerald-600 hover:text-emerald-700' : 'text-gray-400 hover:text-amber-600'
+                        }`}
+                        data-tooltip={isArchived ? 'Restore contact' : 'Archive contact'}
+                        aria-label={isArchived ? 'Restore contact' : 'Archive contact'}
+                      >
+                        {isArchived ? <RotateCcw size={13} /> : <Archive size={13} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteContact(c, e)}
+                        className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
+                        data-tooltip="Delete contact"
+                        aria-label={`Delete contact ${c.contactValue}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteContact(c)}
-                    className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
-                    data-tooltip="Remove contact"
-                    aria-label={`Remove contact ${c.contactValue}`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+          {hasArchivedContacts && (
+            <div className="mt-3 text-right">
+              <button
+                type="button"
+                onClick={() => setShowArchivedContacts(!showArchivedContacts)}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 underline transition-colors"
+                id="toggle-archived-contacts-btn"
+              >
+                {showArchivedContacts ? 'Hide Archived Contacts' : 'Show Archived Contacts'}
+              </button>
             </div>
           )}
         </div>
@@ -210,8 +352,12 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
           </div>
           <button
             type="button"
-            onClick={() => setIsAddAddressOpen(true)}
+            onClick={() => {
+              setEditingAddress(null);
+              setIsAddAddressOpen(true);
+            }}
             className="btn btn-sm btn-primary flex items-center gap-1.5"
+            id="add-address-btn"
           >
             <Plus size={14} /> Add Address
           </button>
@@ -225,49 +371,102 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
             </div>
           )}
 
-          {!isLoading && addresses.length === 0 && (
+          {!isLoading && displayedAddresses.length === 0 && (
             <div className="p-6 text-center text-xs text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-              No addresses recorded. Click &ldquo;Add Address&rdquo; to add residential or mailing addresses.
+              {addresses.length > 0 && !showArchivedAddresses
+                ? 'All addresses are currently archived. Click "Show Archived Addresses" below to view them.'
+                : 'No addresses recorded. Click "Add Address" to add residential or mailing addresses.'}
             </div>
           )}
 
-          {!isLoading && addresses.length > 0 && (
+          {!isLoading && displayedAddresses.length > 0 && (
             <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-              {addresses.map((a) => (
-                <div key={a.id} className="p-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 p-1.5 rounded-full bg-emerald-50 text-emerald-700">
-                      <MapPin size={14} />
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <strong className="text-xs text-gray-900 font-semibold">{a.addressLine1}</strong>
-                        {a.addressLine2 && <span className="text-xs text-gray-600">{a.addressLine2}</span>}
-                        {a.primaryAddress && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Primary
-                          </span>
-                        )}
-                        <span className="badge badge-neutral text-[10px]">{a.addressType}</span>
-                      </div>
+              {displayedAddresses.map((a) => {
+                const isArchived = a.active === false;
+                return (
+                  <div
+                    key={a.id}
+                    onClick={() => handleOpenEditAddress(a)}
+                    className={`p-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${
+                      isArchived ? 'bg-gray-50/60 opacity-75' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span className={`mt-0.5 p-1.5 rounded-full ${isArchived ? 'bg-gray-200 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>
+                        <MapPin size={14} />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-xs text-gray-900 font-semibold">{a.addressLine1}</strong>
+                          {a.addressLine2 && <span className="text-xs text-gray-600">{a.addressLine2}</span>}
+                          {a.primaryAddress && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Primary
+                            </span>
+                          )}
+                          {isArchived && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
+                              <FolderArchive size={10} /> Archived
+                            </span>
+                          )}
+                          <span className="badge badge-neutral text-[10px]">{a.addressType}</span>
+                        </div>
 
-                      <div className="text-[11px] text-gray-500 mt-0.5">
-                        {[a.city, a.stateRegion, a.postalCode, a.countryCode].filter(Boolean).join(', ')}
+                        <div className="text-[11px] text-gray-500 mt-0.5">
+                          {[a.city, a.stateRegion, a.postalCode, a.countryCode].filter(Boolean).join(', ')}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteAddress(a)}
-                    className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
-                    data-tooltip="Remove address"
-                    aria-label={`Remove address ${a.addressLine1}`}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditAddress(a)}
+                        className="btn btn-ghost btn-xs text-gray-500 hover:text-blue-600 p-1 custom-tooltip-btn tooltip-align-right"
+                        data-tooltip="Edit address"
+                        aria-label={`Edit address ${a.addressLine1}`}
+                      >
+                        <Pencil size={13} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleAddressActive(a, e)}
+                        className={`btn btn-ghost btn-xs p-1 custom-tooltip-btn tooltip-align-right ${
+                          isArchived ? 'text-emerald-600 hover:text-emerald-700' : 'text-gray-400 hover:text-amber-600'
+                        }`}
+                        data-tooltip={isArchived ? 'Restore address' : 'Archive address'}
+                        aria-label={isArchived ? 'Restore address' : 'Archive address'}
+                      >
+                        {isArchived ? <RotateCcw size={13} /> : <Archive size={13} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteAddress(a, e)}
+                        className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
+                        data-tooltip="Delete address"
+                        aria-label={`Delete address ${a.addressLine1}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {hasArchivedAddresses && (
+            <div className="mt-3 text-right">
+              <button
+                type="button"
+                onClick={() => setShowArchivedAddresses(!showArchivedAddresses)}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 underline transition-colors"
+                id="toggle-archived-addresses-btn"
+              >
+                {showArchivedAddresses ? 'Hide Archived Addresses' : 'Show Archived Addresses'}
+              </button>
             </div>
           )}
         </div>
@@ -276,9 +475,13 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
       {/* Modals */}
       <AddContactModal
         isOpen={isAddContactOpen}
-        onClose={() => setIsAddContactOpen(false)}
+        onClose={() => {
+          setIsAddContactOpen(false);
+          setEditingContact(null);
+        }}
         participantId={participantId}
         participantName={participantName}
+        contactToEdit={editingContact}
         tenantId={tenantId}
         siteId={siteId}
         onContactAdded={() => {
@@ -289,9 +492,13 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
 
       <AddAddressModal
         isOpen={isAddAddressOpen}
-        onClose={() => setIsAddAddressOpen(false)}
+        onClose={() => {
+          setIsAddAddressOpen(false);
+          setEditingAddress(null);
+        }}
         participantId={participantId}
         participantName={participantName}
+        addressToEdit={editingAddress}
         tenantId={tenantId}
         siteId={siteId}
         onAddressAdded={() => {

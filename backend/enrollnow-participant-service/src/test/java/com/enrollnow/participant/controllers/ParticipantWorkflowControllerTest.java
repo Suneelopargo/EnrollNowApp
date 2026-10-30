@@ -162,6 +162,81 @@ class ParticipantWorkflowControllerTest {
     }
 
     @Test
+    void updateContact_returnsOk() {
+        mockAuth();
+        UUID contactId = UUID.randomUUID();
+        UpdateContactPersonRequest req = new UpdateContactPersonRequest();
+        req.setContactValue("+15551234567");
+        req.setIsPreferred(true);
+
+        ParticipantContactDto dto = new ParticipantContactDto();
+        dto.setId(contactId);
+        dto.setContactValue("+15551234567");
+        dto.setPreferred(true);
+
+        when(workflowService.updateContact(eq(tenantId), eq(participantId), eq(contactId), eq(userId), eq(req)))
+                .thenReturn(dto);
+
+        ResponseEntity<ParticipantContactDto> res = controller.updateContact(participantId, contactId, req, null, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody().getContactValue()).isEqualTo("+15551234567");
+        assertThat(res.getBody().isPreferred()).isTrue();
+    }
+
+    @Test
+    void toggleContactActive_returnsOk() {
+        mockAuth();
+        UUID contactId = UUID.randomUUID();
+
+        ParticipantContactDto dto = new ParticipantContactDto();
+        dto.setId(contactId);
+        dto.setActive(false);
+
+        when(workflowService.toggleContactActive(eq(tenantId), eq(participantId), eq(contactId), eq(userId), eq(false)))
+                .thenReturn(dto);
+
+        ResponseEntity<ParticipantContactDto> res = controller.toggleContactActive(participantId, contactId, false, null, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody().isActive()).isFalse();
+    }
+
+    @Test
+    void updateAddress_returnsOk() {
+        mockAuth();
+        UUID addressId = UUID.randomUUID();
+        UpdateAddressRequest req = new UpdateAddressRequest();
+        req.setAddressLine1("789 Oak St");
+
+        ParticipantAddressDto dto = new ParticipantAddressDto();
+        dto.setId(addressId);
+        dto.setAddressLine1("789 Oak St");
+
+        when(workflowService.updateAddress(eq(tenantId), eq(participantId), eq(addressId), eq(userId), eq(req)))
+                .thenReturn(dto);
+
+        ResponseEntity<ParticipantAddressDto> res = controller.updateAddress(participantId, addressId, req, null, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody().getAddressLine1()).isEqualTo("789 Oak St");
+    }
+
+    @Test
+    void toggleAddressActive_returnsOk() {
+        mockAuth();
+        UUID addressId = UUID.randomUUID();
+
+        ParticipantAddressDto dto = new ParticipantAddressDto();
+        dto.setId(addressId);
+        dto.setActive(false);
+
+        when(workflowService.toggleAddressActive(eq(tenantId), eq(participantId), eq(addressId), eq(userId), eq(false)))
+                .thenReturn(dto);
+
+        ResponseEntity<ParticipantAddressDto> res = controller.toggleAddressActive(participantId, addressId, false, null, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody().isActive()).isFalse();
+    }
+
+    @Test
     void handleSmsWebhook_validSignatureUpdatesStatus() {
         Map<String, String> params = Map.of("MessageSid", "SM12345", "MessageStatus", "delivered");
         when(workflowService.validateTwilioWebhookSignature(eq("valid-sig"), any(), eq(params))).thenReturn(true);

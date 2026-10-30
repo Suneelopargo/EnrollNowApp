@@ -610,11 +610,29 @@ public class ParticipantRegistryService {
         if (request.getMiddleName() != null) participant.setMiddleName(request.getMiddleName());
         if (request.getLastName() != null) participant.setLastName(request.getLastName());
         if (request.getPreferredName() != null) participant.setPreferredName(request.getPreferredName());
-        if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
-            participant.setDateOfBirth(parseDate(request.getDateOfBirth()));
+        if (request.getDateOfBirth() != null) {
+            if (request.getDateOfBirth().isBlank()) {
+                participant.setDateOfBirth(null);
+            } else {
+                LocalDate parsedDob = parseDate(request.getDateOfBirth());
+                if (parsedDob != null) {
+                    if (parsedDob.isAfter(LocalDate.now())) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Birthday cannot be in the future");
+                    }
+                    participant.setDateOfBirth(parsedDob);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Birthday is not valid");
+                }
+            }
         }
-        if (request.getSexAtBirth() != null) participant.setSexAtBirth(request.getSexAtBirth());
-        if (request.getGenderIdentity() != null) participant.setGenderIdentity(request.getGenderIdentity());
+        if (request.getSexAtBirth() != null) {
+            String val = request.getSexAtBirth().trim();
+            participant.setSexAtBirth(val.isEmpty() ? null : val);
+        }
+        if (request.getGenderIdentity() != null) {
+            String val = request.getGenderIdentity().trim();
+            participant.setGenderIdentity(val.isEmpty() ? null : val);
+        }
         if (request.getStatus() != null) participant.setStatus(request.getStatus().toUpperCase());
         if (request.getGlobalDateOfLastContact() != null) {
             if (request.getGlobalDateOfLastContact().isBlank()) {
@@ -644,8 +662,22 @@ public class ParticipantRegistryService {
         }
         if (request.getFamilyRole() != null) attrs.put("familyRole", request.getFamilyRole());
         if (request.getGuardianName() != null) attrs.put("guardianName", request.getGuardianName());
-        if (request.getEthnicity() != null) attrs.put("ethnicity", request.getEthnicity());
-        if (request.getRace() != null) attrs.put("race", request.getRace());
+        if (request.getEthnicity() != null) {
+            String eth = request.getEthnicity().trim();
+            if (eth.isEmpty()) {
+                attrs.remove("ethnicity");
+            } else {
+                attrs.put("ethnicity", eth);
+            }
+        }
+        if (request.getRace() != null) {
+            String r = request.getRace().trim();
+            if (r.isEmpty()) {
+                attrs.remove("race");
+            } else {
+                attrs.put("race", r);
+            }
+        }
         if (request.getFamilyId() != null) attrs.put("familyId", request.getFamilyId().trim());
         if (request.getVariables() != null) attrs.put("variables", request.getVariables());
         try {
@@ -1757,10 +1789,35 @@ public class ParticipantRegistryService {
         return java.time.ZoneId.getAvailableZoneIds().stream().sorted().toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<String> getRelationshipOptions() {
+        return List.of(
+                "Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner",
+                "Sibling", "Child", "Caregiver", "Friend", "Other"
+        );
+    }
+
     public Map<String, List<String>> getDemographicOptions(UUID tenantId) {
         Map<String, SortedSet<String>> collected = new LinkedHashMap<>();
+        collected.put("sex", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
         collected.put("ethnicity", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
         collected.put("race", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
+
+        // Default standard legacy options
+        collected.get("sex").addAll(List.of("Female", "Male", "Other", "Unspecified"));
+        collected.get("ethnicity").addAll(List.of("Hispanic or Latino", "Not Hispanic or Latino", "Unknown / Not Reported"));
+        collected.get("race").addAll(List.of(
+                "American Indian",
+                "American Indian or Alaska Native",
+                "Asian",
+                "Black / African American",
+                "Black or African American",
+                "Hawaiian",
+                "Native Hawaiian or Other Pacific Islander",
+                "White",
+                "More Than One Race",
+                "Unknown / Not Reported"
+        ));
 
         if (tenantId != null && studyRequirementRepository != null) {
             for (StudyRequirement requirement : studyRequirementRepository.findByTenantId(tenantId)) {
@@ -1773,7 +1830,8 @@ public class ParticipantRegistryService {
                         continue;
                     }
                     for (JsonNode group : groups) {
-                        String category = group.path("defaultCategoryName").asText("");
+                        String category = group.path("defaultCategoryName").asText("").toLowerCase().trim();
+                        if ("gender".equals(category)) category = "sex";
                         SortedSet<String> labels = collected.get(category);
                         if (labels == null) {
                             continue;
@@ -1792,6 +1850,9 @@ public class ParticipantRegistryService {
 
         Map<String, List<String>> result = new LinkedHashMap<>();
         collected.forEach((category, labels) -> result.put(category, new ArrayList<>(labels)));
+        if (result.containsKey("sex")) {
+            result.put("gender", result.get("sex"));
+        }
         return result;
     }
     @Transactional(readOnly = true)

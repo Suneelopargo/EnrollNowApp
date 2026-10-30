@@ -77,6 +77,14 @@ public class UpdateParticipantRequest {
         this.dateOfBirth = dateOfBirth;
     }
 
+    public String getDob() {
+        return dateOfBirth;
+    }
+
+    public void setDob(String dob) {
+        this.dateOfBirth = dob;
+    }
+
     public String getSexAtBirth() {
         return sexAtBirth;
     }
@@ -91,6 +99,15 @@ public class UpdateParticipantRequest {
 
     public void setGenderIdentity(String genderIdentity) {
         this.genderIdentity = genderIdentity;
+    }
+
+    public String getGender() {
+        return sexAtBirth != null ? sexAtBirth : genderIdentity;
+    }
+
+    public void setGender(String gender) {
+        this.sexAtBirth = gender;
+        this.genderIdentity = gender;
     }
 
     public String getStatus() {

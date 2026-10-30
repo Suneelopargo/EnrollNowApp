@@ -31,6 +31,10 @@ import { ParticipantFormsSection } from './ParticipantFormsSection';
 import { ParticipantTagSelect } from './ParticipantTagSelect';
 import { isValidDateTimeValue, ParticipantDateTimePicker } from './ParticipantDateTimePicker';
 import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
+import { toast } from '../../../../shared/toaster';
+import { calculateCurrentAge, formatDobForDateInput } from '../utils/participantDateUtils';
+
+export { calculateCurrentAge, formatDobForDateInput } from '../utils/participantDateUtils';
 
 const getParticipantLastContactDate = (participant?: ParticipantRecord | null): string => {
   const values = [participant?.globalDateOfLastContact, participant?.lastContact];
@@ -211,17 +215,18 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [secondaryEmail, setSecondaryEmail] = useState(participant?.contactMethods?.secondaryEmail || '');
   const [phone, setPhone] = useState(participant?.contactMethods?.phone || participant?.phone || '');
   const [address, setAddress] = useState(participant?.contactMethods?.address || '');
-  const [preferredMethod, setPreferredMethod] = useState(participant?.contactMethods?.preferredMethod || 'Email');
+  const [preferredMethod, setPreferredMethod] = useState(participant?.contactMethods?.preferredMethod || '');
 
   // Demographics
   const [dob, setDob] = useState(participant?.demographics?.dob || '');
-  const [gender, setGender] = useState(participant?.gender || participant?.demographics?.gender || 'Unspecified');
+  const [gender, setGender] = useState(participant?.gender || participant?.demographics?.gender || '');
   const [ethnicity, setEthnicity] = useState(participant?.demographics?.ethnicity || '');
   const [race, setRace] = useState(participant?.demographics?.race || '');
-  const [primaryLanguage, setPrimaryLanguage] = useState(participant?.demographics?.primaryLanguage || 'English');
+  const [internalDemographicOptions, setInternalDemographicOptions] = useState<DemographicOptions | null>(null);
+  const [internalDemographicLoading, setInternalDemographicLoading] = useState(false);
 
   // Family
-  const [familyRole, setFamilyRole] = useState(participant?.family?.familyRole || 'Proband');
+  const [familyRole, setFamilyRole] = useState(participant?.family?.familyRole || '');
 
   // Variables
   const [variables, setVariables] = useState<ParticipantVariable[]>(
@@ -250,18 +255,44 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setSecondaryEmail(participant.contactMethods?.secondaryEmail || '');
       setPhone(participant.contactMethods?.phone || participant.phone || '');
       setAddress(participant.contactMethods?.address || '');
-      setPreferredMethod(participant.contactMethods?.preferredMethod || 'Email');
+      setPreferredMethod(participant.contactMethods?.preferredMethod || '');
 
       setDob(participant.demographics?.dob || '');
-      setGender(participant.gender || participant.demographics?.gender || 'Unspecified');
+      setGender(participant.gender || participant.demographics?.gender || '');
       setEthnicity(participant.demographics?.ethnicity || '');
       setRace(participant.demographics?.race || '');
-      setPrimaryLanguage(participant.demographics?.primaryLanguage || 'English');
 
-      setFamilyRole(participant.family?.familyRole || 'Proband');
+      setFamilyRole(participant.family?.familyRole || '');
       setVariables(Array.isArray(participant.variables) ? [...participant.variables] : []);
     }
   }, [participant]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const hasPropsOptions = (demographicOptions.ethnicity && demographicOptions.ethnicity.length > 0) ||
+      (demographicOptions.race && demographicOptions.race.length > 0);
+    if (!hasPropsOptions && !internalDemographicOptions && !internalDemographicLoading) {
+      let isMounted = true;
+      setInternalDemographicLoading(true);
+      participantApi.getDemographicOptions({ params: { tenantId, siteId } })
+        .then((opts) => {
+          if (isMounted) {
+            setInternalDemographicOptions(opts);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not load demographic options in detail modal:', err);
+        })
+        .finally(() => {
+          if (isMounted) {
+            setInternalDemographicLoading(false);
+          }
+        });
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, tenantId, siteId, demographicOptions, internalDemographicOptions, internalDemographicLoading]);
 
   // Always reset to the Overview tab whenever the modal opens or switches participant
   useEffect(() => {
@@ -364,6 +395,18 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       return;
     }
 
+    if (dob && dob.trim()) {
+      const ageStr = calculateCurrentAge(dob);
+      if (ageStr === 'Invalid (Future Date)') {
+        toast.error('Birthday cannot be in the future');
+        return;
+      }
+      if (ageStr === 'Invalid Date') {
+        toast.error('Birthday is not valid');
+        return;
+      }
+    }
+
     const updatedParticipant: ParticipantRecord = {
       ...participant,
       firstName: firstName.trim(),
@@ -391,7 +434,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         gender,
         ethnicity,
         race,
-        primaryLanguage,
       },
       family: {
         ...participant.family,
@@ -403,10 +445,23 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     onSave(updatedParticipant);
   };
 
-  const ethnicityOptions = [...demographicOptions.ethnicity];
+  const effectiveDemographicOptions = (demographicOptions.ethnicity && demographicOptions.ethnicity.length > 0) ||
+    (demographicOptions.race && demographicOptions.race.length > 0)
+    ? demographicOptions
+    : (internalDemographicOptions || { ethnicity: [], race: [], sex: [] });
+
+  const effectiveDemographicLoading = demographicOptionsLoading || internalDemographicLoading;
+
+  const ethnicityOptions = [...(effectiveDemographicOptions.ethnicity || [])];
   if (ethnicity && !ethnicityOptions.includes(ethnicity)) ethnicityOptions.unshift(ethnicity);
-  const raceOptions = [...demographicOptions.race];
+  const raceOptions = [...(effectiveDemographicOptions.race || [])];
   if (race && !raceOptions.includes(race)) raceOptions.unshift(race);
+
+  const serverGenders = effectiveDemographicOptions.sex || effectiveDemographicOptions.gender || [];
+  const genderOptions = serverGenders.length > 0 ? [...serverGenders] : ['Female', 'Male', 'Other', 'Unspecified'];
+  if (gender && !genderOptions.some((g) => g.toLowerCase() === gender.toLowerCase())) {
+    genderOptions.unshift(gender);
+  }
 
   const isFormDirty = () => {
     if (!participant) return false;
@@ -427,15 +482,14 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     if (secondaryEmail !== (participant.contactMethods?.secondaryEmail || '')) return true;
     if (phone !== (participant.contactMethods?.phone || participant.phone || '')) return true;
     if (address !== (participant.contactMethods?.address || '')) return true;
-    if (preferredMethod !== (participant.contactMethods?.preferredMethod || 'Email')) return true;
+    if (preferredMethod !== (participant.contactMethods?.preferredMethod || '')) return true;
 
     if (dob !== (participant.demographics?.dob || '')) return true;
-    if (gender !== (participant.gender || participant.demographics?.gender || 'Unspecified')) return true;
+    if (gender !== (participant.gender || participant.demographics?.gender || '')) return true;
     if (ethnicity !== (participant.demographics?.ethnicity || '')) return true;
     if (race !== (participant.demographics?.race || '')) return true;
-    if (primaryLanguage !== (participant.demographics?.primaryLanguage || 'English')) return true;
 
-    if (familyRole !== (participant.family?.familyRole || 'Proband')) return true;
+    if (familyRole !== (participant.family?.familyRole || '')) return true;
 
     const origVars = Array.isArray(participant.variables) ? participant.variables : [];
     if (origVars.length !== variables.length) return true;
@@ -655,7 +709,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
               </div>
             </div>
-            <ParticipantStudiesInfo participant={participant} tenantId={tenantId} siteId={siteId} />
             </>
           )}
 
@@ -681,16 +734,15 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   <label className="form-label" htmlFor="participant-dob">Date of Birth</label>
                   <input
                     id="participant-dob"
-                    type="text"
-                    value={dob}
+                    type="date"
+                    value={formatDobForDateInput(dob)}
                     onChange={(e) => setDob(e.target.value)}
-                    placeholder="MM/DD/YYYY"
                     className="form-input"
                   />
                 </div>
                 <div className="record-detail__field">
                   <span className="form-label">Current Age</span>
-                  <span className="record-detail__readonly">{participant.age || 'N/A'}</span>
+                  <span className="record-detail__readonly">{calculateCurrentAge(dob, participant.age)}</span>
                 </div>
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-sex-gender">Sex / gender</label>
@@ -699,11 +751,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                     className="form-select"
+                    disabled={effectiveDemographicLoading && genderOptions.length === 0}
                   >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                    <option value="Unspecified">Unspecified</option>
+                    <option value="">{effectiveDemographicLoading ? 'Loading sex/gender options…' : 'Select sex/gender'}</option>
+                    {genderOptions.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="record-detail__field">
@@ -713,9 +766,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     value={ethnicity}
                     onChange={(e) => setEthnicity(e.target.value)}
                     className="form-select"
-                    disabled={demographicOptionsLoading && ethnicityOptions.length === 0}
+                    disabled={effectiveDemographicLoading && ethnicityOptions.length === 0}
                   >
-                    <option value="">{demographicOptionsLoading ? 'Loading ethnicity options…' : 'Select ethnicity'}</option>
+                    <option value="">{effectiveDemographicLoading ? 'Loading ethnicity options…' : 'Select ethnicity'}</option>
                     {ethnicityOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
                 </div>
@@ -726,22 +779,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     value={race}
                     onChange={(e) => setRace(e.target.value)}
                     className="form-select"
-                    disabled={demographicOptionsLoading && raceOptions.length === 0}
+                    disabled={effectiveDemographicLoading && raceOptions.length === 0}
                   >
-                    <option value="">{demographicOptionsLoading ? 'Loading race options…' : 'Select race'}</option>
+                    <option value="">{effectiveDemographicLoading ? 'Loading race options…' : 'Select race'}</option>
                     {raceOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
-                </div>
-                <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-language">Primary Language</label>
-                  <input
-                    id="participant-language"
-                    type="text"
-                    value={primaryLanguage}
-                    onChange={(e) => setPrimaryLanguage(e.target.value)}
-                    placeholder="Primary Language"
-                    className="form-input"
-                  />
                 </div>
               </div>
             </div>
@@ -764,6 +806,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                       onChange={(e) => setFamilyRole(e.target.value)}
                       className="form-select"
                     >
+                      <option value="">Select family role...</option>
                       <option value="Proband">Proband (Primary)</option>
                       <option value="Mother">Mother</option>
                       <option value="Father">Father</option>
@@ -788,7 +831,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                         <div>
                           <strong className="text-sm text-blue-900">{participant.name}</strong>
                           <div className="text-xs text-gray-500">
-                            {familyRole} &bull; {gender} &bull; Age: {participant.age || 'N/A'}
+                            {familyRole || 'Family role not selected'} &bull; {gender || 'Sex/gender not selected'} &bull; Age: {calculateCurrentAge(dob, participant.age)}
                           </div>
                         </div>
                       </div>
@@ -874,6 +917,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
           {/* LOWER SECTION ON OVERVIEW: COMMENTS & SUB-TABS */}
           {activeTopNav === 'details' && (
+            <>
             <div className="card record-detail__panel">
               <Tabs
                 activeTab={activeTab}
@@ -950,6 +994,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Studies Info Table placed below Comments and Sub-tabs */}
+            <ParticipantStudiesInfo participant={participant} tenantId={tenantId} siteId={siteId} />
+            </>
           )}
         </div>
       </div>
