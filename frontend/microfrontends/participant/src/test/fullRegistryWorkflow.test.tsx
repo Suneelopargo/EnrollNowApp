@@ -89,6 +89,26 @@ describe('Full Registry Workflow - API Client Integration', () => {
       expect.anything()
     );
     patchSpy.mockRestore();
+
+    const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
+      data: { id: 'c-1', participantId, text: 'Updated text', pinned: true, global: false, createdAt: '2026-04-10T09:00:00Z', updatedAt: '2026-04-10T09:10:00Z' },
+    } as any);
+    const updated = await participantApi.updateComment(participantId, 'c-1', { text: 'Updated text' });
+    expect(putSpy).toHaveBeenCalledWith(
+      `/api/v1/participants/${participantId}/comments/c-1`,
+      { text: 'Updated text' },
+      expect.anything()
+    );
+    expect(updated.text).toBe('Updated text');
+    putSpy.mockRestore();
+
+    const deleteSpy = vi.spyOn(apiClient, 'delete').mockResolvedValueOnce({ data: null } as any);
+    await participantApi.deleteComment(participantId, 'c-1');
+    expect(deleteSpy).toHaveBeenCalledWith(
+      `/api/v1/participants/${participantId}/comments/c-1`,
+      expect.anything()
+    );
+    deleteSpy.mockRestore();
   });
 
   // 2. Email API
@@ -165,14 +185,26 @@ describe('Full Registry Workflow - API Client Integration', () => {
     const sentSms = await participantApi.sendSms(participantId, {
       toPhone: '+15559876543',
       body: 'Thank you',
+      pinned: true,
     });
     expect(postSpy).toHaveBeenCalledWith(
       `/api/v1/participants/${participantId}/sms`,
-      { toPhone: '+15559876543', body: 'Thank you' },
+      { toPhone: '+15559876543', body: 'Thank you', pinned: true },
       expect.anything()
     );
     expect(sentSms.id).toBe('sms-2');
     postSpy.mockRestore();
+
+    const pinSmsSpy = vi.spyOn(apiClient, 'patch').mockResolvedValueOnce({
+      data: { id: 'sms-1', pinned: true },
+    } as any);
+    const pinnedSms = await participantApi.pinSms(participantId, 'sms-1', true);
+    expect(pinSmsSpy).toHaveBeenCalledWith(
+      `/api/v1/participants/${participantId}/sms/sms-1/pin`,
+      { sticky: true },
+      expect.anything()
+    );
+    pinSmsSpy.mockRestore();
   });
 
   // 4. Contact & Address Management API
@@ -387,8 +419,7 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         participantName="Emily Davis"
       />
     );
-    expect(html).toContain('SMS Communication Gateway');
-    expect(html).toContain('Send SMS');
+    expect(html).toContain('Add Text');
   });
 
   it('renders ComposeSmsModal when open', () => {
@@ -401,7 +432,8 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         onSmsSent={() => {}}
       />
     );
-    expect(html).toContain('Send SMS');
+    expect(html).toContain('Add Participant Text');
+    expect(html).toContain('Send Text');
     expect(html).toContain('Message');
   });
 

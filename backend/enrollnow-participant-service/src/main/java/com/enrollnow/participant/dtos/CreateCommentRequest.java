@@ -11,6 +11,7 @@ public class CreateCommentRequest {
     private boolean global = true;
     private UUID studyId;
     private String studyIdentifier;
+    private String authorName;
 
     public CreateCommentRequest() {}
 
@@ -56,5 +57,13 @@ public class CreateCommentRequest {
 
     public void setStudyIdentifier(String studyIdentifier) {
         this.studyIdentifier = studyIdentifier;
+    }
+
+    public String getAuthorName() {
+        return authorName;
+    }
+
+    public void setAuthorName(String authorName) {
+        this.authorName = authorName;
     }
 }

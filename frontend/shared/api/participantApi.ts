@@ -188,6 +188,7 @@ export interface ParticipantCommentItem {
   id: string;
   participantId: string;
   studyId?: string;
+  studyName?: string;
   text: string;
   pinned: boolean;
   global: boolean;
@@ -208,6 +209,8 @@ export interface CommunicationItem {
   id: string;
   participantId: string;
   studyId?: string;
+  studyName?: string;
+  global?: boolean;
   channel: 'EMAIL' | 'SMS' | 'PHONE' | 'OTHER';
   direction: 'OUTBOUND' | 'INBOUND';
   subject?: string;
@@ -523,7 +526,11 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async createComment(participantId: string, payload: { text: string; pinned?: boolean; global?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantCommentItem> {
+  async createComment(
+    participantId: string,
+    payload: { text: string; pinned?: boolean; global?: boolean; studyId?: string; authorName?: string },
+    options?: { tenantId?: string; siteId?: string }
+  ): Promise<ParticipantCommentItem> {
     const res = await apiClient.post(`/api/v1/participants/${participantId}/comments`, payload, { params: options });
     return res.data?.data ?? res.data;
   },
@@ -568,8 +575,13 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async sendSms(participantId: string, payload: { toPhone: string; body: string; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+  async sendSms(participantId: string, payload: { toPhone?: string; toPhones?: string[]; body: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
     const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async pinSms(participantId: string, smsId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/sms/${smsId}/pin`, { sticky }, { params: options });
     return res.data?.data ?? res.data;
   },
 

@@ -188,8 +188,8 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
                   <button
                     type="button"
                     onClick={() => handleDeleteContact(c)}
-                    className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1"
-                    title="Remove contact"
+                    className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
+                    data-tooltip="Remove contact"
                     aria-label={`Remove contact ${c.contactValue}`}
                   >
                     <Trash2 size={13} />
@@ -260,8 +260,8 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
                   <button
                     type="button"
                     onClick={() => handleDeleteAddress(a)}
-                    className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1"
-                    title="Remove address"
+                    className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
+                    data-tooltip="Remove address"
                     aria-label={`Remove address ${a.addressLine1}`}
                   >
                     <Trash2 size={13} />

@@ -7,6 +7,7 @@ public class ParticipantCommentDto {
     private UUID id;
     private UUID participantId;
     private UUID studyId;
+    private String studyName;
     private String text;
     private boolean pinned;
     private boolean global;
@@ -23,6 +24,8 @@ public class ParticipantCommentDto {
     public void setParticipantId(UUID participantId) { this.participantId = participantId; }
     public UUID getStudyId() { return studyId; }
     public void setStudyId(UUID studyId) { this.studyId = studyId; }
+    public String getStudyName() { return studyName; }
+    public void setStudyName(String studyName) { this.studyName = studyName; }
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }
     public boolean isPinned() { return pinned; }

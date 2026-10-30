@@ -81,7 +81,13 @@ const StudiesCellRenderer: React.FC<ICellRendererParams> = (params) => {
       {studies.map((item, idx) => (
         <span key={idx} className="text-xs">
           {item.archived ? (
-            <span className="text-gray-700" title="Study is Archived">{item.name}</span>
+            <span
+              className="text-gray-700 custom-tooltip-btn cursor-help"
+              data-tooltip="Study is Archived"
+              aria-label="Study is Archived"
+            >
+              {item.name}
+            </span>
           ) : item.isLink !== false && (item.studyId || item.id) && params.context?.onNavigateToStudy ? (
             <button
               type="button"
@@ -118,8 +124,8 @@ const ParticipantActionsRenderer: React.FC<ICellRendererParams> = (params) => {
       <button
         type="button"
         onClick={(event) => { event.stopPropagation(); openDetails(); }}
-        className="participant-grid__row-action"
-        title="View details"
+        className="participant-grid__row-action custom-tooltip-btn"
+        data-tooltip="View details"
         aria-label="View participant details"
       >
         <Eye size={15} aria-hidden="true" />
@@ -127,8 +133,8 @@ const ParticipantActionsRenderer: React.FC<ICellRendererParams> = (params) => {
       <button
         type="button"
         onClick={(event) => { event.stopPropagation(); deleteParticipant(); }}
-        className="participant-grid__row-action participant-grid__row-action--danger"
-        title="Delete participant"
+        className="participant-grid__row-action participant-grid__row-action--danger custom-tooltip-btn tooltip-align-right"
+        data-tooltip="Delete participant"
         aria-label="Delete participant"
       >
         <Trash2 size={15} aria-hidden="true" />
@@ -358,8 +364,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             setFilterPopoverPosition({ position: 'fixed', left, top, margin: 0 });
             setIsDropdownOpen(true);
           }}
-          title="Click to filter by checkbox"
-          className={`p-1 rounded cursor-pointer transition-colors flex items-center gap-1 ${
+          data-tooltip="Click to filter by checkbox"
+          aria-label="Filter studies by checkbox"
+          className={`p-1 rounded cursor-pointer transition-colors flex items-center gap-1 custom-tooltip-btn ${
             selectedStudies.length > 0
               ? 'bg-[#1976d2] text-white shadow-2xs'
               : 'text-gray-500 hover:text-[#1976d2] hover:bg-gray-100'
@@ -603,8 +610,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             <button
               id="bulk-actions-toggle"
               type="button"
-              className="bulk-action-icon p-1 text-gray-500 hover:text-gray-800 rounded transition-colors"
-              title="Bulk actions"
+              className="bulk-action-icon p-1 text-gray-500 hover:text-gray-800 rounded transition-colors custom-tooltip-btn"
+              data-tooltip="Bulk actions"
               aria-label="Bulk actions"
             >
               <List size={16} aria-hidden="true" />
@@ -623,8 +630,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
               <button
                 type="button"
                 onClick={handleClearSearch}
-                className="btn btn-ghost btn-sm"
-                title="Clear"
+                className="btn btn-ghost btn-sm custom-tooltip-btn"
+                data-tooltip="Clear search"
                 aria-label="Clear search"
               >
                 <X size={14} />
@@ -636,7 +643,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <button
             type="button"
             onClick={onAddParticipant}
-            className="btn btn-primary participant-grid__add-button"
+            className="btn btn-primary participant-grid__add-button custom-tooltip-btn"
+            data-tooltip="Add Participant"
           >
             <span className="participant-grid__add-icon"><UserPlus size={17} strokeWidth={2.4} /></span>
             <span>Add Participant</span>
@@ -647,7 +655,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <button
             type="button"
             onClick={onRefresh}
-            className="btn btn-secondary"
+            className="btn btn-secondary custom-tooltip-btn"
+            data-tooltip="Refresh"
           >
             Refresh
           </button>
@@ -655,7 +664,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
             <button
               type="button"
-              className="data-grid-export-trigger"
+              className="data-grid-export-trigger custom-tooltip-btn"
+              data-tooltip="Export"
               aria-haspopup="menu"
               aria-expanded={isExportMenuOpen}
               onClick={() => setIsExportMenuOpen((open) => !open)}
@@ -681,11 +691,11 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             type="button"
             onClick={onToggleDuplicates}
             id="potential-duplicates-toggle"
-            title="Display only potential participant duplicates"
+            data-tooltip="Display only potential participant duplicates"
             aria-label="Display only potential participant duplicates"
             aria-pressed={duplicatesOnly}
             style={duplicatesOnly ? { backgroundColor: '#0d3b66', color: '#ffffff', borderColor: '#0d3b66' } : {}}
-            className={`btn participant-dupes ${duplicatesOnly ? 'btn-info bg-[#0d3b66] text-white hover:bg-[#0a2f52] border-[#0d3b66]' : 'btn-secondary text-gray-700 hover:bg-gray-100'}`}
+            className={`btn participant-dupes custom-tooltip-btn tooltip-align-right ${duplicatesOnly ? 'btn-info bg-[#0d3b66] text-white hover:bg-[#0a2f52] border-[#0d3b66]' : 'btn-secondary text-gray-700 hover:bg-gray-100'}`}
           >
             <Users size={16} aria-hidden="true" />
           </button>
@@ -758,7 +768,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <button
             type="button"
             onClick={handleClearAll}
-            className="text-blue-700 hover:text-red-600 text-xs font-medium underline cursor-pointer"
+            className="text-blue-700 hover:text-red-600 text-xs font-medium underline cursor-pointer custom-tooltip-btn"
+            data-tooltip="Clear all selected studies"
           >
             Clear all ({selectedStudies.length})
           </button>
@@ -784,7 +795,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           </span>
           <button
             type="button"
-            className="participant-grid__apply-action participant-grid__apply-action--danger"
+            className="participant-grid__apply-action participant-grid__apply-action--danger custom-tooltip-btn"
+            data-tooltip={`Delete ${selectedParticipants.length} selected participants`}
             onClick={handleBulkDelete}
             aria-label={`Delete ${selectedParticipants.length} selected participants`}
           >
@@ -805,7 +817,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           </select>
           <button
             type="button"
-            className="participant-grid__apply-action"
+            className="participant-grid__apply-action custom-tooltip-btn"
+            data-tooltip="Add selected participants to study"
             onClick={handleBulkAction}
             disabled={!studyToAssign}
           >

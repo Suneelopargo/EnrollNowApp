@@ -135,6 +135,15 @@ public class SiteAuthorizationService {
         }
     }
 
+    public boolean canAccessSiteAdmin(UUID targetTenantId, UUID siteId) {
+        try {
+            requireSiteAdminAccess(targetTenantId, siteId);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void requireSelfOrUserViewAccess(UUID targetTenantId, UUID targetUserId, UUID siteId) {
         CallerIdentity caller = requireCaller();
         UUID effectiveTenantId = resolveTenantId(caller, targetTenantId);

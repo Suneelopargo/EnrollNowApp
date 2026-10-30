@@ -8,6 +8,8 @@ export interface ParticipantDateTimePickerProps {
   value?: string; // Expects "MM/DD/YYYY hh:mm A" or ISO string
   onChange: (formattedValue: string) => void;
   disabled?: boolean;
+  allowClear?: boolean;
+  error?: string | null;
 }
 
 const MONTH_NAMES = [
@@ -69,6 +71,8 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   value = '',
   onChange,
   disabled = false,
+  allowClear = true,
+  error = null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'date' | 'time'>('date');
@@ -251,7 +255,8 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   return (
     <div id={id} ref={containerRef} className="participant-date-time-picker" data-testid="participant-date-time-picker">
       <div
-        className={`participant-date-time-picker__input-container ${disabled ? 'disabled' : ''}`}
+        className={`participant-date-time-picker__input-container ${disabled ? 'disabled' : ''} ${error ? 'border-red-500' : ''}`}
+        style={error ? { borderColor: '#ef4444' } : undefined}
         onClick={() => {
           openPicker(activeTab);
         }}
@@ -272,7 +277,7 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
         </div>
 
         <div className="participant-date-time-picker__icons">
-          {formattedDisplay && !disabled && (
+          {allowClear && formattedDisplay && !disabled && (
             <button
               type="button"
               className="participant-date-time-picker__clear-btn"

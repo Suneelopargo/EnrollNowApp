@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -36,6 +37,7 @@ public class ParticipantWorkflowService {
     private final SurveyDefinitionRepository surveyDefinitionRepository;
     private final StudyRepository studyRepository;
     private final AuditRecorder auditRecorder;
+    private final SmsGatewayService smsGatewayService;
 
     public ParticipantWorkflowService(
             ParticipantRepository participantRepository,
@@ -51,6 +53,27 @@ public class ParticipantWorkflowService {
             StudyRepository studyRepository,
             @Autowired(required = false) AuditRecorder auditRecorder
     ) {
+        this(participantRepository, commentRepository, communicationRepository, recipientRepository,
+                contactRepository, addressRepository, consentRecordRepository, consentVersionRepository,
+                surveyAssignmentRepository, surveyDefinitionRepository, studyRepository, auditRecorder, null);
+    }
+
+    @Autowired
+    public ParticipantWorkflowService(
+            ParticipantRepository participantRepository,
+            ParticipantCommentRepository commentRepository,
+            CommunicationRepository communicationRepository,
+            CommunicationRecipientRepository recipientRepository,
+            ParticipantContactRepository contactRepository,
+            ParticipantAddressRepository addressRepository,
+            ConsentRecordRepository consentRecordRepository,
+            ConsentVersionRepository consentVersionRepository,
+            SurveyAssignmentRepository surveyAssignmentRepository,
+            SurveyDefinitionRepository surveyDefinitionRepository,
+            StudyRepository studyRepository,
+            @Autowired(required = false) AuditRecorder auditRecorder,
+            @Autowired(required = false) SmsGatewayService smsGatewayService
+    ) {
         this.participantRepository = participantRepository;
         this.commentRepository = commentRepository;
         this.communicationRepository = communicationRepository;
@@ -63,6 +86,7 @@ public class ParticipantWorkflowService {
         this.surveyDefinitionRepository = surveyDefinitionRepository;
         this.studyRepository = studyRepository;
         this.auditRecorder = auditRecorder;
+        this.smsGatewayService = smsGatewayService != null ? smsGatewayService : new SmsGatewayService("twilio", "", "", "", "US");
     }
 
     // =========================================================================
@@ -90,7 +114,10 @@ public class ParticipantWorkflowService {
         comment.setPinned(request.isPinned());
         comment.setGlobal(request.isGlobal());
         comment.setAuthorId(userId);
-        comment.setAuthorName(userName != null && !userName.isBlank() ? userName : "Current User");
+        String finalAuthorName = (request.getAuthorName() != null && !request.getAuthorName().isBlank())
+                ? request.getAuthorName().trim()
+                : (userName != null && !userName.isBlank() ? userName.trim() : "Current User");
+        comment.setAuthorName(finalAuthorName);
         comment.setCreatedBy(userId);
         comment.setUpdatedBy(userId);
         comment.setCreatedAt(OffsetDateTime.now());
@@ -103,14 +130,22 @@ public class ParticipantWorkflowService {
     }
 
     @Transactional
-    public ParticipantCommentDto updateComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, UpdateCommentRequest request) {
+    public ParticipantCommentDto updateComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean canAccessAdmin, UpdateCommentRequest request) {
         ParticipantComment comment = commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
+
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        if (!isAuthor && !canAccessAdmin) {
+            throw new AccessDeniedException("Only the author or an administrator can edit this comment");
+        }
 
         if (request.getText() != null) {
             comment.setText(request.getText().trim());
         }
         if (request.getPinned() != null) {
+            if (!canAccessAdmin && !isAuthor) {
+                throw new AccessDeniedException("Permission denied to change pinned state");
+            }
             comment.setPinned(request.getPinned());
         }
         comment.setUpdatedBy(userId);
@@ -123,9 +158,14 @@ public class ParticipantWorkflowService {
     }
 
     @Transactional
-    public ParticipantCommentDto pinComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean pinned) {
+    public ParticipantCommentDto pinComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean canAccessAdmin, boolean pinned) {
         ParticipantComment comment = commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
+
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        if (!isAuthor && !canAccessAdmin) {
+            throw new AccessDeniedException("Only the author or an administrator can pin/unpin comments");
+        }
 
         comment.setPinned(pinned);
         comment.setUpdatedBy(userId);
@@ -136,9 +176,14 @@ public class ParticipantWorkflowService {
     }
 
     @Transactional
-    public void deleteComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId) {
+    public void deleteComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean canAccessAdmin) {
         ParticipantComment comment = commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
+
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        if (!isAuthor && !canAccessAdmin) {
+            throw new AccessDeniedException("Only the author or an administrator can delete this comment");
+        }
 
         commentRepository.delete(comment);
         recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_DELETED", "ParticipantComment", commentId, "Deleted comment on participant " + participantId);
@@ -149,6 +194,7 @@ public class ParticipantWorkflowService {
         dto.setId(comment.getId());
         dto.setParticipantId(comment.getParticipantId());
         dto.setStudyId(comment.getStudyId());
+        dto.setStudyName(resolveStudyName(comment.getTenantId(), comment.getStudyId()));
         dto.setText(comment.getText());
         dto.setPinned(comment.isPinned());
         dto.setGlobal(comment.isGlobal());
@@ -250,29 +296,119 @@ public class ParticipantWorkflowService {
     public CommunicationDto sendSms(UUID tenantId, UUID participantId, UUID userId, String userName, SendSmsRequest request) {
         verifyParticipantExists(tenantId, participantId);
 
+        List<String> rawRecipients = new ArrayList<>();
+        if (request.getToPhones() != null && !request.getToPhones().isEmpty()) {
+            for (String p : request.getToPhones()) {
+                if (p != null && !p.isBlank() && !rawRecipients.contains(p.trim())) {
+                    rawRecipients.add(p.trim());
+                }
+            }
+        }
+        if (request.getToPhone() != null && !request.getToPhone().isBlank()) {
+            for (String part : request.getToPhone().split("[,;]")) {
+                if (!part.isBlank() && !rawRecipients.contains(part.trim())) {
+                    rawRecipients.add(part.trim());
+                }
+            }
+        }
+
+        if (rawRecipients.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipient phone number is required");
+        }
+        if (request.getBody() == null || request.getBody().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SMS message body cannot be empty");
+        }
+        if (request.getBody().length() > SmsGatewayService.MAX_MESSAGE_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SMS message exceeds maximum length of " + SmsGatewayService.MAX_MESSAGE_LENGTH + " characters");
+        }
+
+        List<String> normalizedPhones = new ArrayList<>();
+        for (String raw : rawRecipients) {
+            try {
+                String norm = smsGatewayService.normalizePhoneNumber(raw);
+                if (!normalizedPhones.contains(norm)) {
+                    normalizedPhones.add(norm);
+                }
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is not valid for region. Try changing the phone number.");
+            }
+        }
+
+        // Duplicate SMS Protection:
+        // Check if an identical outbound SMS was dispatched to this participant & phone within the past 15 seconds.
+        OffsetDateTime recentCutoff = OffsetDateTime.now().minusSeconds(15);
+        List<Communication> recentSms = communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(
+                tenantId, participantId, "SMS"
+        );
+        for (Communication existing : recentSms) {
+            if ("OUTBOUND".equalsIgnoreCase(existing.getDirection())
+                    && existing.getCreatedAt() != null
+                    && existing.getCreatedAt().isAfter(recentCutoff)
+                    && request.getBody().trim().equals(existing.getBodySnapshot())) {
+                boolean recipientMatches = existing.getRecipients() != null && existing.getRecipients().stream()
+                        .anyMatch(r -> normalizedPhones.contains(r.getRecipientValue()));
+                if (recipientMatches) {
+                    log.info("Duplicate SMS submission detected for participant {} to {}; returning existing communication record {}",
+                            participantId, normalizedPhones, existing.getId());
+                    return mapCommunicationToDto(existing);
+                }
+            }
+        }
+
         Communication comm = new Communication();
         comm.setTenantId(tenantId);
         comm.setParticipantId(participantId);
         comm.setStudyId(resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier()));
         comm.setChannel("SMS");
         comm.setDirection("OUTBOUND");
-        comm.setSubjectSnapshot("SMS to " + request.getToPhone().trim());
+        comm.setSubjectSnapshot("SMS to " + String.join(", ", normalizedPhones));
         comm.setBodySnapshot(request.getBody().trim());
-        comm.setStatus("SENT");
         comm.setInitiatedByUserId(userId);
+        comm.setPinned(request.isPinned());
         comm.setCreatedAt(OffsetDateTime.now());
-        comm.setSentAt(OffsetDateTime.now());
-        comm.setCompletedAt(OffsetDateTime.now());
 
-        CommunicationRecipient r = new CommunicationRecipient();
-        r.setTenantId(tenantId);
-        r.setParticipantId(participantId);
-        r.setRecipientType("TO");
-        r.setRecipientValue(request.getToPhone().trim());
-        comm.addRecipient(r);
+        // Dispatch via real SMS Gateway for each recipient
+        String lastExternalId = null;
+        String finalStatus = "SENT";
+        String gatewayProvider = smsGatewayService.getProvider();
+        StringBuilder metaJson = new StringBuilder("{\"gateway\":\"").append(gatewayProvider).append("\"");
+
+        for (String normPhone : normalizedPhones) {
+            SmsGatewayService.SmsDeliveryResult result = smsGatewayService.sendSms(normPhone, request.getBody().trim());
+            if (result.isSuccess()) {
+                lastExternalId = result.getMessageId();
+                if (!"FAILED".equals(finalStatus)) finalStatus = "SENT";
+            } else if (!result.isConfigured()) {
+                if (!"FAILED".equals(finalStatus)) finalStatus = "QUEUED";
+                log.info("SMS to {} queued for participant {}: gateway unconfigured ({})", normPhone, participantId, result.getError());
+            } else {
+                finalStatus = "FAILED";
+                log.warn("SMS to {} failed for participant {}: {}", normPhone, participantId, result.getError());
+            }
+
+            CommunicationRecipient r = new CommunicationRecipient();
+            r.setTenantId(tenantId);
+            r.setParticipantId(participantId);
+            r.setRecipientType("TO");
+            r.setRecipientValue(normPhone);
+            comm.addRecipient(r);
+        }
+
+        comm.setStatus(finalStatus);
+        if ("SENT".equals(finalStatus)) {
+            comm.setSentAt(OffsetDateTime.now());
+            comm.setCompletedAt(OffsetDateTime.now());
+            comm.setExternalMessageId(lastExternalId);
+            metaJson.append(",\"messageId\":\"").append(escapeJson(lastExternalId != null ? lastExternalId : "")).append("\"");
+        } else {
+            comm.setSentAt(null);
+            comm.setCompletedAt(null);
+        }
+        metaJson.append(",\"initiatorName\":\"").append(escapeJson(userName != null && !userName.isBlank() ? userName.trim() : "Current User")).append("\"}");
+        comm.setMetadata(metaJson.toString());
 
         Communication saved = communicationRepository.save(comm);
-        recordAudit(tenantId, userId, "SMS_SENT", "Communication", saved.getId(), "Sent SMS to " + request.getToPhone());
+        recordAudit(tenantId, userId, "SMS_" + comm.getStatus(), "Communication", saved.getId(), "Dispatched SMS to " + String.join(", ", normalizedPhones) + " with status: " + comm.getStatus());
 
         return mapCommunicationToDto(saved);
     }
@@ -293,10 +429,9 @@ public class ParticipantWorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found"));
 
         Set<String> emails = new LinkedHashSet<>();
-        // Fetch all email contacts
         List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
         for (ParticipantContact c : contacts) {
-            if ("EMAIL".equalsIgnoreCase(c.getContactType()) && c.getContactValue() != null && !c.getContactValue().isBlank()) {
+            if (c.isActive() && "EMAIL".equalsIgnoreCase(c.getContactType()) && c.getContactValue() != null && !c.getContactValue().isBlank()) {
                 emails.add(c.getContactValue().trim());
             }
         }
@@ -311,7 +446,7 @@ public class ParticipantWorkflowService {
         Set<String> phones = new LinkedHashSet<>();
         List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
         for (ParticipantContact c : contacts) {
-            if (("PHONE".equalsIgnoreCase(c.getContactType()) || "SMS".equalsIgnoreCase(c.getContactType()))
+            if (c.isActive() && ("PHONE".equalsIgnoreCase(c.getContactType()) || "SMS".equalsIgnoreCase(c.getContactType()))
                     && c.getContactValue() != null && !c.getContactValue().isBlank()) {
                 phones.add(c.getContactValue().trim());
             }
@@ -324,13 +459,25 @@ public class ParticipantWorkflowService {
         dto.setId(comm.getId());
         dto.setParticipantId(comm.getParticipantId());
         dto.setStudyId(comm.getStudyId());
+        dto.setStudyName(resolveStudyName(comm.getTenantId(), comm.getStudyId()));
+        dto.setGlobal(comm.getStudyId() == null);
         dto.setChannel(comm.getChannel());
         dto.setDirection(comm.getDirection());
         dto.setSubject(comm.getSubjectSnapshot());
         dto.setBody(comm.getBodySnapshot());
         dto.setStatus(comm.getStatus());
-        dto.setSentAt(comm.getSentAt() != null ? comm.getSentAt() : comm.getCreatedAt());
+        dto.setSentAt(comm.getSentAt());
+        dto.setCreatedAt(comm.getCreatedAt() != null ? comm.getCreatedAt() : OffsetDateTime.now());
         dto.setPinned(comm.isPinned());
+        if (comm.getMetadata() != null && comm.getMetadata().contains("\"initiatorName\":")) {
+            try {
+                int start = comm.getMetadata().indexOf("\"initiatorName\":\"") + 17;
+                int end = comm.getMetadata().indexOf("\"", start);
+                if (start > 16 && end > start) {
+                    dto.setSenderName(comm.getMetadata().substring(start, end));
+                }
+            } catch (Exception ignored) {}
+        }
 
         List<RecipientDto> rDtos = new ArrayList<>();
         if (comm.getRecipients() != null) {
@@ -675,6 +822,64 @@ public class ParticipantWorkflowService {
     // =========================================================================
     // HELPER METHODS
     // =========================================================================
+
+    @Transactional
+    public boolean updateSmsStatusByExternalMessageId(String externalMessageId, String status) {
+        if (externalMessageId == null || externalMessageId.isBlank()) return false;
+        Optional<Communication> opt = communicationRepository.findByExternalMessageId(externalMessageId.trim());
+        if (opt.isEmpty()) {
+            log.warn("Webhook received for unknown externalMessageId: {}", externalMessageId);
+            return false;
+        }
+
+        Communication comm = opt.get();
+        if (!"SMS".equalsIgnoreCase(comm.getChannel())) {
+            log.warn("Webhook attempted to update non-SMS communication: {}", comm.getId());
+            return false;
+        }
+
+        String currentStatus = comm.getStatus() != null ? comm.getStatus().toUpperCase() : "";
+        String newStatus = status != null ? status.toUpperCase() : "DELIVERED";
+
+        boolean isCurrentTerminal = "DELIVERED".equals(currentStatus) || "FAILED".equals(currentStatus) || "UNDELIVERED".equals(currentStatus);
+        boolean isNewTerminal = "DELIVERED".equals(newStatus) || "FAILED".equals(newStatus) || "UNDELIVERED".equals(newStatus);
+
+        if (isCurrentTerminal && !isNewTerminal) {
+            log.info("Ignoring out-of-order status update for {} from {} to {}", externalMessageId, currentStatus, newStatus);
+            return true;
+        }
+
+        comm.setStatus(newStatus);
+        if (isNewTerminal && comm.getCompletedAt() == null) {
+            comm.setCompletedAt(OffsetDateTime.now());
+        }
+        communicationRepository.save(comm);
+        return true;
+    }
+
+    public boolean validateTwilioWebhookSignature(String signatureHeader, String requestUrl, Map<String, String> postParams) {
+        return smsGatewayService.validateTwilioSignature(signatureHeader, requestUrl, postParams);
+    }
+
+    private String resolveStudyName(UUID tenantId, UUID studyId) {
+        if (studyId == null) {
+            return null;
+        }
+        return studyRepository.findByTenantIdAndId(tenantId, studyId)
+                .map(Study::getName)
+                .orElse(null);
+    }
+
+    private String escapeJson(String str) {
+        if (str == null) return "";
+        return str.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
 
     private UUID resolveStudyId(UUID tenantId, UUID studyId, String studyIdentifier) {
         if (studyId != null) {

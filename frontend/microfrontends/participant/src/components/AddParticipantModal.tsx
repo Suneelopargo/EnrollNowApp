@@ -99,10 +99,11 @@ export const AddParticipantModal: React.FC<AddParticipantModalProps> = ({
     setServerError(null);
 
     const validationErrors = validateForm(
-      { firstName: firstName.trim(), lastName: lastName.trim() },
+      { firstName: firstName.trim(), middleName: middleName.trim(), lastName: lastName.trim() },
       {
-        firstName: [validators.required('First Name'), validators.personName('First Name')],
-        lastName: [validators.required('Last Name'), validators.personName('Last Name')],
+        firstName: [validators.required('First Name'), validators.text('First Name')],
+        middleName: [validators.text('Middle Name')],
+        lastName: [validators.required('Last Name'), validators.text('Last Name')],
       },
     );
     setFirstNameError(validationErrors.firstName || '');

@@ -3,11 +3,16 @@ package com.enrollnow.participant.controllers;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.services.ParticipantWorkflowService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -51,6 +56,27 @@ public class ParticipantWorkflowController {
     }
 
     private String resolveUserName() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null) {
+            if (auth.getPrincipal() instanceof Jwt jwt) {
+                String name = jwt.getClaimAsString("name");
+                if (name != null && !name.isBlank()) return name;
+                String given = jwt.getClaimAsString("given_name");
+                String family = jwt.getClaimAsString("family_name");
+                if (given != null && !given.isBlank()) {
+                    return (family != null && !family.isBlank()) ? (given + " " + family).trim() : given.trim();
+                }
+                String preferredUsername = jwt.getClaimAsString("preferred_username");
+                if (preferredUsername != null && !preferredUsername.isBlank()) return preferredUsername;
+                String email = jwt.getClaimAsString("email");
+                if (email != null && !email.isBlank()) return email;
+            }
+            if (auth.getName() != null && !auth.getName().isBlank()) {
+                if (!auth.getName().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                    return auth.getName();
+                }
+            }
+        }
         return "Current User";
     }
 
@@ -80,7 +106,10 @@ public class ParticipantWorkflowController {
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
 
-        ParticipantCommentDto created = workflowService.createComment(resolvedTenantId, participantId, userId, resolveUserName(), request);
+        String authorName = (request.getAuthorName() != null && !request.getAuthorName().isBlank())
+                ? request.getAuthorName().trim()
+                : resolveUserName();
+        ParticipantCommentDto created = workflowService.createComment(resolvedTenantId, participantId, userId, authorName, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
@@ -95,8 +124,9 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(workflowService.updateComment(resolvedTenantId, participantId, commentId, userId, request));
+        return ResponseEntity.ok(workflowService.updateComment(resolvedTenantId, participantId, commentId, userId, canAccessAdmin, request));
     }
 
     @PatchMapping("/{participantId}/comments/{commentId}/pin")
@@ -110,8 +140,9 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(workflowService.pinComment(resolvedTenantId, participantId, commentId, userId, request.isSticky()));
+        return ResponseEntity.ok(workflowService.pinComment(resolvedTenantId, participantId, commentId, userId, canAccessAdmin, request.isSticky()));
     }
 
     @DeleteMapping("/{participantId}/comments/{commentId}")
@@ -124,8 +155,9 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
 
-        workflowService.deleteComment(resolvedTenantId, participantId, commentId, userId);
+        workflowService.deleteComment(resolvedTenantId, participantId, commentId, userId, canAccessAdmin);
         return ResponseEntity.noContent().build();
     }
 
@@ -220,6 +252,46 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
         return ResponseEntity.ok(workflowService.getSmsRecipients(resolvedTenantId, participantId));
+    }
+
+    @PatchMapping("/{participantId}/sms/{smsId}/pin")
+    public ResponseEntity<CommunicationDto> pinSms(
+            @PathVariable UUID participantId,
+            @PathVariable UUID smsId,
+            @RequestBody PinContactLogRequest request,
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId
+    ) {
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(workflowService.pinCommunication(resolvedTenantId, participantId, smsId, userId, request.isSticky()));
+    }
+
+    @PostMapping("/sms/webhook")
+    public ResponseEntity<Void> handleSmsWebhook(
+            @RequestHeader(value = "X-Twilio-Signature", required = false) String twilioSignature,
+            @RequestParam Map<String, String> allParams,
+            HttpServletRequest request
+    ) {
+        String messageSid = allParams.get("MessageSid");
+        String messageStatus = allParams.get("MessageStatus");
+
+        if (messageSid == null || messageSid.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String webhookUrl = request != null ? request.getRequestURL().toString() : "";
+        if (!workflowService.validateTwilioWebhookSignature(twilioSignature, webhookUrl, allParams)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        boolean updated = workflowService.updateSmsStatusByExternalMessageId(messageSid, messageStatus);
+        if (!updated) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok().build();
     }
 
     // =========================================================================

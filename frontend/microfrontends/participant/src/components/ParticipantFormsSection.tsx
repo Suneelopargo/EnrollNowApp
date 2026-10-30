@@ -129,7 +129,8 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
             type="button"
             onClick={fetchForms}
             disabled={isLoading}
-            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-gray-600"
+            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-gray-600 custom-tooltip-btn"
+            data-tooltip="Refresh assigned forms"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
@@ -137,7 +138,8 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
           <button
             type="button"
             onClick={() => setIsAssignModalOpen(true)}
-            className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+            className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white custom-tooltip-btn"
+            data-tooltip="Assign Form"
           >
             <Plus className="w-3.5 h-3.5" />
             Assign Form

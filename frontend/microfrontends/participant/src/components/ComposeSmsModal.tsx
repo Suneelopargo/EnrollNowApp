@@ -1,6 +1,7 @@
-// frontend/microfrontends/participant/src/components/ComposeSmsModal.tsx - Compose and Send SMS Message
-import React, { useState, useEffect } from 'react';
-import { Phone, Send, Loader2 } from 'lucide-react';
+// frontend/microfrontends/participant/src/components/ComposeSmsModal.tsx - Add Participant Text Modal (matching legacy Ripple)
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X, ChevronDown, Loader2, AlertCircle } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
@@ -27,157 +28,417 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
   siteId,
   onSmsSent,
 }) => {
-  const [toPhone, setToPhone] = useState('');
+  const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
   const [availablePhones, setAvailablePhones] = useState<string[]>([]);
-  const [body, setBody] = useState('');
+  const [inputValue, setInputValue] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [isPinned, setIsPinned] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [bannerError, setBannerError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<string | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && participantId) {
       participantApi
         .getSmsRecipients(participantId, { tenantId, siteId })
         .then((phones) => {
-          setAvailablePhones(phones);
-          if (phones.length > 0) {
-            setToPhone(phones[0]);
+          setAvailablePhones(phones || []);
+          if (phones && phones.length > 0) {
+            setSelectedPhones([phones[0]]);
           } else {
-            setToPhone('');
+            setSelectedPhones([]);
           }
         })
         .catch((err) => {
           console.warn('Failed to load SMS phones:', err);
         });
 
-      setBody('');
-      setErrors({});
+      setMessage('');
+      setIsPinned(false);
+      setInputValue('');
+      setBannerError(null);
+      setPhoneError(null);
+      setMessageError(null);
+      setIsDropdownOpen(false);
     }
   }, [isOpen, participantId, tenantId, siteId]);
 
+  // Click outside listener for creatable select dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (!isOpen) return null;
+
+  const handleAddPhone = (phone: string) => {
+    const trimmed = phone.trim();
+    if (!trimmed) return;
+    if (!selectedPhones.includes(trimmed)) {
+      setSelectedPhones((prev) => [...prev, trimmed]);
+    }
+    setInputValue('');
+    setPhoneError(null);
+    setBannerError(null);
+    setIsDropdownOpen(false);
+  };
+
+  const handleRemovePhone = (phoneToRemove: string) => {
+    setSelectedPhones((prev) => prev.filter((p) => p !== phoneToRemove));
+  };
+
+  const handleClearAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedPhones([]);
+    setInputValue('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (inputValue.trim()) {
+        handleAddPhone(inputValue);
+      }
+    } else if (e.key === 'Backspace' && !inputValue && selectedPhones.length > 0) {
+      setSelectedPhones((prev) => prev.slice(0, -1));
+    }
+  };
+
+  const filteredAvailable = availablePhones.filter(
+    (p) => !selectedPhones.includes(p) && p.toLowerCase().includes(inputValue.toLowerCase())
+  );
+
+  const canCreate =
+    inputValue.trim().length > 0 &&
+    !selectedPhones.includes(inputValue.trim()) &&
+    !availablePhones.includes(inputValue.trim());
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newErrors: Record<string, string> = {};
+    setBannerError(null);
+    setPhoneError(null);
+    setMessageError(null);
 
-    if (!toPhone.trim()) {
-      newErrors.toPhone = 'Recipient phone number is required';
-    }
-    if (!body.trim()) {
-      newErrors.body = 'SMS message text cannot be empty';
+    // If there is still text typed in input that wasn't committed, add it
+    let currentPhones = [...selectedPhones];
+    if (inputValue.trim() && !currentPhones.includes(inputValue.trim())) {
+      currentPhones.push(inputValue.trim());
+      setSelectedPhones(currentPhones);
+      setInputValue('');
     }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
+    let hasError = false;
+    if (currentPhones.length === 0) {
+      setPhoneError('required');
+      hasError = true;
     }
+
+    if (!message.trim()) {
+      setMessageError('required');
+      hasError = true;
+    } else if (message.length > 1600) {
+      setMessageError('Message needs to be 1600 characters or less');
+      hasError = true;
+    }
+
+    if (hasError) return;
 
     setIsSending(true);
     try {
       const sent = await participantApi.sendSms(
         participantId,
         {
-          toPhone: toPhone.trim(),
-          body: body.trim(),
+          toPhone: currentPhones.join(', '),
+          toPhones: currentPhones,
+          body: message.trim(),
+          pinned: isPinned,
           studyId: studyId?.trim() || undefined,
         },
         { tenantId, siteId }
       );
 
-      toast.success('SMS sent successfully');
+      toast.success(sent.status === 'QUEUED' ? 'Success! Text Message log added.' : 'Success! Text Message sent.');
       onSmsSent(sent);
       onClose();
     } catch (err: any) {
-      const msg = getApiErrorMessage(err, 'Failed to send SMS');
-      toast.error(msg);
+      const msg = getApiErrorMessage(err, 'Phone number is not valid for region. Try changing the phone number.');
+      setBannerError(msg);
+      // Also highlight field error if relevant
+      if (msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('region')) {
+        setPhoneError('Phone number is not valid');
+      }
     } finally {
       setIsSending(false);
     }
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Send SMS — ${participantName}`}
-      footer={
-        <div className="flex items-center justify-between w-full">
-          <button type="button" onClick={onClose} className="btn btn-secondary" disabled={isSending}>
-            Cancel
-          </button>
+    <>
+      {/* Top of screen error banner matching legacy Bert alert (Image 8) */}
+      {bannerError && typeof document !== 'undefined' && createPortal(
+        <div
+          id="bert-alert-top-banner"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            width: '100%',
+            zIndex: 999999,
+            backgroundColor: '#d9534f',
+            color: '#ffffff',
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '13px',
+            fontWeight: 500,
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25)',
+          }}
+          role="alert"
+        >
           <button
-            type="submit"
-            form="composeSmsForm"
-            className="btn btn-primary flex items-center gap-1.5"
-            disabled={isSending}
+            type="button"
+            onClick={() => setBannerError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#ffffff',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              padding: '0 4px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            aria-label="Dismiss alert"
           >
-            {isSending ? (
-              <>
-                <Loader2 size={15} className="animate-spin" /> Sending...
-              </>
-            ) : (
-              <>
-                <Send size={15} /> Send SMS
-              </>
-            )}
+            ✕
           </button>
-        </div>
-      }
-    >
-      <form id="composeSmsForm" onSubmit={handleSend} className="space-y-3.5 text-xs">
-        {/* Recipient Phone */}
-        <div className="form-group" data-error={Boolean(errors.toPhone)}>
-          <label className="form-label font-semibold text-gray-700" htmlFor="sms-phone">
-            Recipient Mobile Phone <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="sms-phone"
-            type="tel"
-            value={toPhone}
-            onChange={(e) => setToPhone(e.target.value)}
-            placeholder="e.g. +1 (215) 555-0199"
-            className={`form-input ${errors.toPhone ? 'border-red-500' : ''}`}
-          />
+          <span>{bannerError}</span>
+        </div>,
+        document.body
+      )}
 
-          {availablePhones.length > 0 && (
-            <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
-              <span>Known participant numbers:</span>
-              {availablePhones.map((ph) => (
-                <button
-                  key={ph}
-                  type="button"
-                  onClick={() => setToPhone(ph)}
-                  className="text-blue-600 hover:underline"
-                >
-                  {ph}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {errors.toPhone && <span className="text-red-500 text-xs block mt-1">{errors.toPhone}</span>}
-        </div>
-
-        {/* Message Body */}
-        <div className="form-group" data-error={Boolean(errors.body)}>
-          <div className="flex items-center justify-between mb-1">
-            <label className="form-label font-semibold text-gray-700" htmlFor="sms-body">
-              Text Message <span className="text-red-500">*</span>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title="Add Participant Text"
+      >
+        <div className="compose-text-message-container relative">
+          <form onSubmit={handleSend} className="space-y-4">
+          {/* TO FIELD */}
+          <div className="form-group grid grid-cols-12 gap-3 items-start">
+            <label className="col-span-12 sm:col-span-2 text-sm text-gray-700 font-normal pt-1.5" htmlFor="text-to-phone">
+              To
             </label>
-            <span className="text-[11px] text-gray-400">{body.length} / 160 chars</span>
+            <div className="col-span-12 sm:col-span-10">
+              <div
+                ref={containerRef}
+                className={`relative min-h-[38px] border rounded bg-white flex items-center flex-wrap gap-1 px-2 py-1 transition-colors cursor-text ${
+                  phoneError ? 'border-red-500' : 'border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500'
+                }`}
+                onClick={() => {
+                  inputRef.current?.focus();
+                  setIsDropdownOpen(true);
+                }}
+              >
+                {/* Selected phone chips */}
+                {selectedPhones.map((ph) => (
+                  <span
+                    key={ph}
+                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded border border-gray-200"
+                  >
+                    <span>{ph}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemovePhone(ph);
+                      }}
+                      className="text-gray-400 hover:text-gray-700 font-bold ml-0.5"
+                      aria-label={`Remove ${ph}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+
+                {/* Input text */}
+                <input
+                  ref={inputRef}
+                  id="text-to-phone"
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => {
+                    setInputValue(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={selectedPhones.length === 0 ? 'To' : ''}
+                  className="flex-1 min-w-[120px] outline-none border-none text-xs text-gray-800 p-0 bg-transparent"
+                  disabled={isSending}
+                />
+
+                {/* Clear all (X) and Chevron */}
+                <div className="flex items-center gap-1 ml-auto text-gray-400">
+                  {selectedPhones.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      className="hover:text-gray-600 p-0.5"
+                      aria-label="Clear all recipients"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                  <ChevronDown
+                    size={16}
+                    className="cursor-pointer hover:text-gray-600"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDropdownOpen((prev) => !prev);
+                    }}
+                  />
+                </div>
+
+                {/* Creatable dropdown menu */}
+                {isDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto z-50 py-1 text-xs">
+                    {filteredAvailable.map((ph) => (
+                      <div
+                        key={ph}
+                        onClick={() => handleAddPhone(ph)}
+                        className="px-3 py-1.5 hover:bg-blue-50 hover:text-blue-700 cursor-pointer text-gray-700"
+                      >
+                        {ph}
+                      </div>
+                    ))}
+
+                    {canCreate && (
+                      <div
+                        onClick={() => handleAddPhone(inputValue)}
+                        className="px-3 py-2 bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 cursor-pointer border-t border-blue-100 flex items-center justify-between"
+                      >
+                        <span>Create "{inputValue.trim()}"</span>
+                        <span className="text-[10px] text-blue-500 bg-white px-1.5 py-0.5 rounded border border-blue-200">↵ Enter</span>
+                      </div>
+                    )}
+
+                    {filteredAvailable.length === 0 && !canCreate && (
+                      <div className="px-3 py-2 text-gray-400 italic text-center">
+                        {availablePhones.length === 0 ? 'Type a phone number and press Enter' : 'No matching numbers'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Validation helper text */}
+              <div className="mt-1">
+                {phoneError ? (
+                  <i className="text-red-500 text-xs italic block">*{phoneError}</i>
+                ) : (
+                  <i className="text-gray-400 text-xs italic block">*required</i>
+                )}
+              </div>
+            </div>
           </div>
 
-          <textarea
-            id="sms-body"
-            rows={4}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Type SMS notification or reminder message..."
-            className={`form-textarea text-xs ${errors.body ? 'border-red-500' : ''}`}
-          />
-          {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
-        </div>
-      </form>
+          {/* MESSAGE FIELD */}
+          <div className="form-group grid grid-cols-12 gap-3 items-start">
+            <label className="col-span-12 sm:col-span-2 text-sm text-gray-700 font-normal pt-1.5" htmlFor="text-msg-input">
+              Message
+            </label>
+            <div className="col-span-12 sm:col-span-10">
+              <textarea
+                id="text-msg-input"
+                rows={6}
+                value={message}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  if (messageError) setMessageError(null);
+                }}
+                className={`w-full text-xs rounded border p-2.5 outline-none transition-colors ${
+                  messageError ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                }`}
+                disabled={isSending}
+              />
+              <div className="mt-1 flex items-center justify-between">
+                {messageError ? (
+                  <i className="text-red-500 text-xs italic block">*{messageError}</i>
+                ) : (
+                  <i className="text-gray-400 text-xs italic block">*required</i>
+                )}
+                {message.length > 0 && (
+                  <span className={`text-[11px] ${message.length > 1600 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                    {message.length} / 1600
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* MARK TEXT AS */}
+          <div className="form-group grid grid-cols-12 gap-3 items-center pt-1">
+            <span className="col-span-12 sm:col-span-2 text-sm text-gray-700 font-normal">
+              Mark Text As
+            </span>
+            <div className="col-span-12 sm:col-span-10 flex items-center gap-2">
+              <label className="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isPinned}
+                  onChange={(e) => setIsPinned(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  disabled={isSending}
+                />
+                <span>Pin Text</span>
+              </label>
+            </div>
+          </div>
+
+          {/* FOOTER BUTTON */}
+          <div className="pt-3">
+            <button
+              type="submit"
+              disabled={isSending}
+              className="btn btn-primary"
+              style={{
+                backgroundColor: '#1d4ed8',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '13px',
+                padding: '8px 24px',
+                borderRadius: '4px',
+                border: 'none',
+              }}
+            >
+              {isSending ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" /> Sending...
+                </span>
+              ) : (
+                'Send Text'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </Modal>
-  );
+  </>
+);
 };
+
+export default ComposeSmsModal;

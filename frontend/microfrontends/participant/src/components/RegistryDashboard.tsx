@@ -173,7 +173,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         familyId: p.familyId || '',
         dateCreated: p.dateCreated || '',
         globalId: p.globalId || '',
-        timezone: p.timezone || 'America/New_York (EDT)',
+        timezone: p.timezone || '',
         tags: Array.isArray(p.tags) ? p.tags : [],
         contactForFutureStudies: p.contactForFutureStudies ?? true,
         availableToAddStudy: p.availableToAddStudy ?? true,

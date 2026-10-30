@@ -162,10 +162,13 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="enl-confirm-body">
-          <div id="enl-confirm-message" className="enl-confirm-message">
-            {message}
-          </div>
+        {(message || detailsList.length > 0 || confirmWord || errorMessage) && (
+          <div className="enl-confirm-body">
+            {message && (
+              <div id="enl-confirm-message" className="enl-confirm-message">
+                {message}
+              </div>
+            )}
 
           {/* Optional Consequence / Details Callout */}
           {detailsList.length > 0 && (
@@ -228,6 +231,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Footer with Actions */}
         <div className="enl-confirm-footer">
