@@ -344,19 +344,26 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 {/* Divider */}
                 <div className="enl-card-divider" />
 
-                {/* Compliance & Activity Monitoring Warning Notice */}
+                {/* Authorized use and monitoring notice */}
                 <div className="enl-compliance-notice">
                   <div className="enl-compliance-header">
                     <ShieldCheck size={14} className="enl-compliance-icon" />
-                    <span className="enl-compliance-title">Authorized Access & System Monitoring</span>
+                    <span className="enl-compliance-title">Authorized Use and Monitoring Notice</span>
                   </div>
                   <p className="enl-compliance-text">
-                    This system should only be accessed by authorized users. Individuals
-                    using this system are subject to having their activities on this system
-                    monitored and recorded by system administrators. If this monitoring
-                    reveals possible criminal activity or policy violation, system
-                    administrators may terminate your access privileges and may provide
-                    the evidence to law enforcement or other officials.
+                    This application contains confidential information, including protected
+                    health information (PHI) and/or regulated electronic records. Access is
+                    restricted to authorized users for approved purposes.
+                  </p>
+                  <p className="enl-compliance-text">
+                    Your access and activity may be monitored, logged, and reviewed. Do not
+                    share your account or credentials, or access, use, or disclose information
+                    beyond your authorization. Unauthorized use may result in disciplinary
+                    action and/or civil or criminal penalties.
+                  </p>
+                  <p className="enl-compliance-text">
+                    By continuing, you acknowledge this notice and agree to use the application
+                    in accordance with applicable laws and organizational policies.
                   </p>
                 </div>
               </form>

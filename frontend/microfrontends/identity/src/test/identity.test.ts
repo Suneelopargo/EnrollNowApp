@@ -168,5 +168,13 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     expect(html).toContain('Log In');
     expect(html).toContain('Enter your email address');
     expect(html).toContain('Enter your password');
+    expect(html).toContain('Authorized Use and Monitoring Notice');
+    expect(html).toContain(
+      'This application contains confidential information, including protected health information (PHI) and/or regulated electronic records.'
+    );
+    expect(html).toContain(
+      'By continuing, you acknowledge this notice and agree to use the application in accordance with applicable laws and organizational policies.'
+    );
+    expect(html).not.toContain('This system should only be accessed by authorized users.');
   });
 });
