@@ -8,6 +8,8 @@ export interface ParticipantDateTimePickerProps {
   value?: string; // Expects "MM/DD/YYYY hh:mm A" or ISO string
   onChange: (formattedValue: string) => void;
   disabled?: boolean;
+  allowClear?: boolean;
+  error?: string | null;
 }
 
 const MONTH_NAMES = [
@@ -24,7 +26,7 @@ function parseDateParts(dateStr?: string): { date: Date | null; hours: number; m
   }
 
   // Check if standard "MM/DD/YYYY hh:mm A" format
-  const customMatch = dateStr.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i);
+  const customMatch = dateStr.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[,\s]+(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*(AM|PM))?)?$/i);
   if (customMatch) {
     const month = parseInt(customMatch[1], 10) - 1;
     const day = parseInt(customMatch[2], 10);
@@ -35,7 +37,17 @@ function parseDateParts(dateStr?: string): { date: Date | null; hours: number; m
     const isPm = ampm === 'PM';
 
     const d = new Date(year, month, day);
-    return { date: isNaN(d.getTime()) ? null : d, hours: hours > 12 ? 12 : hours || 12, minutes, isPm };
+    const validDate = !isNaN(d.getTime())
+      && d.getFullYear() === year
+      && d.getMonth() === month
+      && d.getDate() === day;
+    const validTime = hours >= 0 && hours <= 12 && minutes >= 0 && minutes <= 59;
+    return {
+      date: validDate && validTime ? d : null,
+      hours: hours > 12 ? 12 : hours || 12,
+      minutes,
+      isPm,
+    };
   }
 
   // Fallback to JS Date parser (ISO etc.)
@@ -50,6 +62,10 @@ function parseDateParts(dateStr?: string): { date: Date | null; hours: number; m
   }
 
   return { date: null, hours: 12, minutes: 0, isPm: false };
+}
+
+export function isValidDateTimeValue(value?: string): boolean {
+  return parseDateParts(value).date !== null;
 }
 
 function formatResult(date: Date, hours: number, minutes: number, isPm: boolean): string {
@@ -69,6 +85,8 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   value = '',
   onChange,
   disabled = false,
+  allowClear = true,
+  error = null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'date' | 'time'>('date');
@@ -251,7 +269,8 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
   return (
     <div id={id} ref={containerRef} className="participant-date-time-picker" data-testid="participant-date-time-picker">
       <div
-        className={`participant-date-time-picker__input-container ${disabled ? 'disabled' : ''}`}
+        className={`participant-date-time-picker__input-container ${disabled ? 'disabled' : ''} ${error ? 'border-red-500' : ''}`}
+        style={error ? { borderColor: '#ef4444' } : undefined}
         onClick={() => {
           openPicker(activeTab);
         }}
@@ -272,7 +291,7 @@ export const ParticipantDateTimePicker: React.FC<ParticipantDateTimePickerProps>
         </div>
 
         <div className="participant-date-time-picker__icons">
-          {formattedDisplay && !disabled && (
+          {allowClear && formattedDisplay && !disabled && (
             <button
               type="button"
               className="participant-date-time-picker__clear-btn"

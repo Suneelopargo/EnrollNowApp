@@ -95,15 +95,17 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
             type="button"
             onClick={fetchEmails}
             disabled={isLoading}
-            className="btn btn-ghost btn-xs text-gray-500 hover:text-gray-900"
-            title="Refresh emails"
+            className="btn btn-ghost btn-xs text-gray-500 hover:text-gray-900 custom-tooltip-btn"
+            data-tooltip="Refresh emails"
+            aria-label="Refresh emails"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
           <button
             type="button"
             onClick={() => setIsComposeOpen(true)}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
+            className="btn btn-sm btn-primary flex items-center gap-1.5 custom-tooltip-btn"
+            data-tooltip="Compose Email"
           >
             <Plus size={14} /> Compose Email
           </button>
@@ -175,8 +177,9 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
                       type="button"
                       onClick={() => handleTogglePin(email)}
                       disabled={togglingPinId === email.id}
-                      title={email.pinned ? 'Unpin email' : 'Pin email to top'}
-                      className={`p-1 rounded text-xs flex items-center gap-1 ${
+                      data-tooltip={email.pinned ? 'Unpin email' : 'Pin email to top'}
+                      aria-label={email.pinned ? 'Unpin email' : 'Pin email to top'}
+                      className={`p-1 rounded text-xs flex items-center gap-1 custom-tooltip-btn ${
                         email.pinned
                           ? 'text-amber-700 font-semibold hover:bg-amber-100'
                           : 'text-gray-400 hover:text-amber-600 hover:bg-gray-100'

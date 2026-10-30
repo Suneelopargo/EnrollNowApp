@@ -8,6 +8,8 @@ import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.server.ResponseStatusException;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -243,5 +245,178 @@ class ParticipantWorkflowServiceTest {
         assertNotNull(assigned);
         assertEquals("ASSIGNED", assigned.getStatus());
         assertEquals(studyId, assigned.getStudyId());
+    }
+    @Test
+    void testUpdateComment_unauthorizedThrowsAccessDenied() {
+        UUID otherUserId = UUID.randomUUID();
+        ParticipantComment comment = new ParticipantComment();
+        comment.setId(UUID.randomUUID());
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setAuthorId(otherUserId);
+        comment.setText("Original");
+
+        when(commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comment.getId()))
+                .thenReturn(Optional.of(comment));
+
+        UpdateCommentRequest updateReq = new UpdateCommentRequest();
+        updateReq.setText("Hacked text");
+
+        assertThrows(AccessDeniedException.class, () ->
+                workflowService.updateComment(tenantId, participantId, comment.getId(), userId, false, updateReq));
+    }
+
+    @Test
+    void testUpdateComment_authorOrAdminAllowed() {
+        ParticipantComment comment = new ParticipantComment();
+        comment.setId(UUID.randomUUID());
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setAuthorId(userId);
+        comment.setText("Original");
+
+        when(commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comment.getId()))
+                .thenReturn(Optional.of(comment));
+        when(commentRepository.save(any(ParticipantComment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateCommentRequest updateReq = new UpdateCommentRequest();
+        updateReq.setText("Updated text");
+
+        ParticipantCommentDto updated = workflowService.updateComment(tenantId, participantId, comment.getId(), userId, false, updateReq);
+        assertEquals("Updated text", updated.getText());
+    }
+
+    @Test
+    void testDeleteComment_unauthorizedThrowsAccessDenied() {
+        UUID otherUserId = UUID.randomUUID();
+        ParticipantComment comment = new ParticipantComment();
+        comment.setId(UUID.randomUUID());
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setAuthorId(otherUserId);
+
+        when(commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comment.getId()))
+                .thenReturn(Optional.of(comment));
+
+        assertThrows(AccessDeniedException.class, () ->
+                workflowService.deleteComment(tenantId, participantId, comment.getId(), userId, false));
+    }
+
+    @Test
+    void testSendSms_exceedsLengthThrowsBadRequest() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        SendSmsRequest req = new SendSmsRequest();
+        req.setToPhone("+12155550199");
+        req.setBody("A".repeat(1601)); // Exceeds 1600 limit
+
+        assertThrows(ResponseStatusException.class, () ->
+                workflowService.sendSms(tenantId, participantId, userId, "Dr. Bob", req));
+    }
+
+    @Test
+    void testPinCommunication() {
+        Communication comm = new Communication();
+        comm.setId(UUID.randomUUID());
+        comm.setTenantId(tenantId);
+        comm.setParticipantId(participantId);
+        comm.setChannel("SMS");
+        comm.setPinned(false);
+
+        
+        when(communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comm.getId()))
+                .thenReturn(Optional.of(comm));
+        when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CommunicationDto pinned = workflowService.pinCommunication(tenantId, participantId, comm.getId(), userId, true);
+        assertTrue(pinned.isPinned());
+    }
+    @Test
+    void testSendSms_unconfiguredGatewayMarkedQueued() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        SendSmsRequest req = new SendSmsRequest();
+        req.setToPhone("+12155550199");
+        req.setBody("Hello from clinic");
+
+        when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> {
+            Communication c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+
+        CommunicationDto sent = workflowService.sendSms(tenantId, participantId, userId, "Dr. Alice", req);
+        assertNotNull(sent);
+        assertEquals("QUEUED", sent.getStatus());
+        assertNull(sent.getSentAt());
+    }
+
+    @Test
+    void testSendSms_duplicateProtectionReturnsExisting() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        Communication existing = new Communication();
+        existing.setId(UUID.randomUUID());
+        existing.setTenantId(tenantId);
+        existing.setParticipantId(participantId);
+        existing.setChannel("SMS");
+        existing.setDirection("OUTBOUND");
+        existing.setBodySnapshot("Duplicate body");
+        existing.setStatus("SENT");
+        existing.setCreatedAt(java.time.OffsetDateTime.now().minusSeconds(5));
+
+        CommunicationRecipient rec = new CommunicationRecipient();
+        rec.setRecipientType("TO");
+        rec.setRecipientValue("+12155550199");
+        existing.addRecipient(rec);
+
+        when(communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(tenantId, participantId, "SMS"))
+                .thenReturn(List.of(existing));
+
+        SendSmsRequest req = new SendSmsRequest();
+        req.setToPhone("+12155550199");
+        req.setBody("Duplicate body");
+
+        CommunicationDto result = workflowService.sendSms(tenantId, participantId, userId, "Dr. Alice", req);
+        assertEquals(existing.getId(), result.getId());
+        assertEquals("SENT", result.getStatus());
+        verify(communicationRepository, never()).save(any());
+    }
+
+    @Test
+    void testUpdateSmsStatusByExternalMessageId_successAndTerminalProtection() {
+        Communication comm = new Communication();
+        comm.setId(UUID.randomUUID());
+        comm.setExternalMessageId("SM-12345");
+        comm.setChannel("SMS");
+        comm.setStatus("SENT");
+
+        when(communicationRepository.findByExternalMessageId("SM-12345")).thenReturn(Optional.of(comm));
+        when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // 1. Delivery callback updates status to DELIVERED
+        boolean updated = workflowService.updateSmsStatusByExternalMessageId("SM-12345", "delivered");
+        assertTrue(updated);
+        assertEquals("DELIVERED", comm.getStatus());
+        assertNotNull(comm.getCompletedAt());
+
+        // 2. Out-of-order callback (receiving "sent" after "delivered") does not regress terminal status
+        boolean ignored = workflowService.updateSmsStatusByExternalMessageId("SM-12345", "sent");
+        assertTrue(ignored);
+        assertEquals("DELIVERED", comm.getStatus());
+
+        // 3. Unknown external message ID returns false
+        when(communicationRepository.findByExternalMessageId("SM-UNKNOWN")).thenReturn(Optional.empty());
+        boolean unknown = workflowService.updateSmsStatusByExternalMessageId("SM-UNKNOWN", "delivered");
+        assertFalse(unknown);
     }
 }

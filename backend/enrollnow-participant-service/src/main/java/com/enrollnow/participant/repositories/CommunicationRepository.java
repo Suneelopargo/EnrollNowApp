@@ -18,4 +18,5 @@ public interface CommunicationRepository extends JpaRepository<Communication, UU
             List<UUID> participantIds,
             String channel
     );
+    Optional<Communication> findByExternalMessageId(String externalMessageId);
 }

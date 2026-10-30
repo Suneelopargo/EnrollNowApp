@@ -34,9 +34,9 @@ export const Modal: React.FC<ModalProps> = ({
     returnFocus: true,
   });
 
-  if (!isOpen || typeof document === 'undefined') return null;
+  if (!isOpen) return null;
 
-  return createPortal((
+  const modalContent = (
     <div className="modal-overlay" onClick={onClose} role="presentation">
       <div
         ref={trapRef}
@@ -63,7 +63,13 @@ export const Modal: React.FC<ModalProps> = ({
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
     </div>
-  ), document.body);
+  );
+
+  if (typeof document === 'undefined') {
+    return modalContent;
+  }
+
+  return createPortal(modalContent, document.body);
 };
 
 export default Modal;

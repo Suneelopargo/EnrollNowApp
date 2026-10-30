@@ -1,5 +1,6 @@
 package com.enrollnow.participant.services;
 
+import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
@@ -43,6 +44,7 @@ class ParticipantRegistryServiceTest {
     @Mock private StudyEnrollmentRepository enrollmentRepository;
     @Mock private StudyRepository studyRepository;
     @Mock private StudyRequirementRepository studyRequirementRepository;
+    @Mock private SiteAuthorizationService siteAuthorizationService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ParticipantRegistryService service;
@@ -66,6 +68,7 @@ class ParticipantRegistryServiceTest {
                 objectMapper
         );
         ReflectionTestUtils.setField(service, "studyRequirementRepository", studyRequirementRepository);
+        ReflectionTestUtils.setField(service, "siteAuthorizationService", siteAuthorizationService);
     }
 
     @Test
@@ -986,4 +989,248 @@ class ParticipantRegistryServiceTest {
         p.setUpdatedAt(OffsetDateTime.now());
         return p;
     }
+    @Test
+    void getTimezoneOptions_returnsFullSetOfSortedTimezones() {
+        List<String> options = service.getTimezoneOptions();
+
+        assertThat(options).isNotEmpty();
+        assertThat(options).contains("UTC", "America/New_York", "Europe/London", "Asia/Tokyo");
+
+        // Verify alphabetically sorted
+        List<String> sorted = new ArrayList<>(options);
+        Collections.sort(sorted);
+        assertThat(options).isEqualTo(sorted);
+    }
+
+    @Test
+    void getParticipantById_whenTimezoneNotSet_returnsNullTimezoneWithoutFakeFallback() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+        when(preferenceRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Optional.empty());
+        when(addressRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+        when(candidateRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        Optional<RegistryParticipantDto> dtoOpt = service.getParticipantById(tenantId, partId);
+
+        assertThat(dtoOpt).isPresent();
+        assertThat(dtoOpt.get().getTimezone()).isNull();
+    }
+
+    @Test
+    void getParticipantById_whenTimezonePersisted_returnsPersistedTimezone() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        ParticipantPreference pref = new ParticipantPreference();
+        pref.setTenantId(tenantId);
+        pref.setParticipantId(partId);
+        pref.setTimezone("Europe/London");
+        when(preferenceRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Optional.of(pref));
+        when(addressRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+        when(candidateRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        Optional<RegistryParticipantDto> dtoOpt = service.getParticipantById(tenantId, partId);
+
+        assertThat(dtoOpt).isPresent();
+        assertThat(dtoOpt.get().getTimezone()).isEqualTo("Europe/London");
+    }
+
+    @Test
+    void updateParticipant_withValidTimezone_persistsTimezone() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        ParticipantPreference pref = new ParticipantPreference();
+        pref.setTenantId(tenantId);
+        pref.setParticipantId(partId);
+        when(preferenceRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Optional.of(pref));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setTimezone("America/Chicago");
+
+        service.updateParticipant(tenantId, partId, userId, req);
+
+        verify(preferenceRepository).save(argThat(savedPref -> "America/Chicago".equals(savedPref.getTimezone())));
+    }
+
+    @Test
+    void updateParticipant_withEmptyTimezone_clearsPersistedTimezone() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+
+        ParticipantPreference pref = new ParticipantPreference();
+        pref.setTenantId(tenantId);
+        pref.setParticipantId(partId);
+        pref.setTimezone("America/New_York");
+        when(preferenceRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Optional.of(pref));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setTimezone("   ");
+
+        service.updateParticipant(tenantId, partId, userId, req);
+
+        verify(preferenceRepository).save(argThat(savedPref -> savedPref.getTimezone() == null));
+    }
+
+    @Test
+    void updateParticipant_withInvalidTimezone_throwsBadRequest() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setTimezone("Mars/Curiosity_Base");
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateParticipant(tenantId, partId, userId, req)
+        );
+
+        assertThat(ex.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+        assertThat(ex.getReason()).contains("Invalid timezone");
+    }
+
+    @Test
+    void updateParticipant_withModifiedGlobalId_whenUnauthorized_throwsAccessDenied() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantIdentifier existingId = new ParticipantIdentifier();
+        existingId.setTenantId(tenantId);
+        existingId.setParticipantId(partId);
+        existingId.setIdentifierType("GLOBAL_ID");
+        existingId.setIdentifierValue("OLD-GLB-1");
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(List.of(existingId));
+
+        doThrow(new org.springframework.security.access.AccessDeniedException("Access denied: Site Administration access requires SITE_MANAGER or SITE_ADMIN role"))
+                .when(siteAuthorizationService).requireSiteAdminAccess(tenantId, siteId);
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setGlobalId("NEW-GLB-2");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> service.updateParticipant(tenantId, partId, userId, req, siteId)
+        );
+
+        verify(identifierRepository, never()).save(any(ParticipantIdentifier.class));
+    }
+
+    @Test
+    void updateParticipant_withBlankGlobalId_throwsBadRequest() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantIdentifier existingId = new ParticipantIdentifier();
+        existingId.setTenantId(tenantId);
+        existingId.setParticipantId(partId);
+        existingId.setIdentifierType("GLOBAL_ID");
+        existingId.setIdentifierValue("OLD-GLB-1");
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(List.of(existingId));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setGlobalId("   ");
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateParticipant(tenantId, partId, userId, req, siteId)
+        );
+
+        assertThat(ex.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.BAD_REQUEST);
+        assertThat(ex.getReason()).contains("Global ID cannot be blank");
+    }
+
+    @Test
+    void updateParticipant_withDuplicateGlobalId_throwsConflict() {
+        UUID partId = UUID.randomUUID();
+        UUID otherPartId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantIdentifier existingId = new ParticipantIdentifier();
+        existingId.setTenantId(tenantId);
+        existingId.setParticipantId(partId);
+        existingId.setIdentifierType("GLOBAL_ID");
+        existingId.setIdentifierValue("OLD-GLB-1");
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(List.of(existingId));
+
+        ParticipantIdentifier otherDuplicate = new ParticipantIdentifier();
+        otherDuplicate.setTenantId(tenantId);
+        otherDuplicate.setParticipantId(otherPartId);
+        otherDuplicate.setIdentifierType("GLOBAL_ID");
+        otherDuplicate.setIdentifierValue("EXISTING-ID");
+        when(identifierRepository.findGlobalIdIgnoreCase(tenantId, "EXISTING-ID")).thenReturn(Optional.of(otherDuplicate));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setGlobalId("EXISTING-ID");
+
+        org.springframework.web.server.ResponseStatusException ex = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service.updateParticipant(tenantId, partId, userId, req, siteId)
+        );
+
+        assertThat(ex.getStatusCode()).isEqualTo(org.springframework.http.HttpStatus.CONFLICT);
+        assertThat(ex.getReason()).isEqualTo("Global ID Already Exists");
+    }
+
+    @Test
+    void updateParticipant_withUnchangedGlobalId_doesNotRequireSiteAdminAndPreserves() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantIdentifier existingId = new ParticipantIdentifier();
+        existingId.setTenantId(tenantId);
+        existingId.setParticipantId(partId);
+        existingId.setIdentifierType("GLOBAL_ID");
+        existingId.setIdentifierValue("SAME-GLB-1");
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(List.of(existingId));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setGlobalId("SAME-GLB-1");
+        req.setFirstName("Alicia");
+
+        service.updateParticipant(tenantId, partId, userId, req, siteId);
+
+        // Verification: requireSiteAdminAccess is NOT called for unchanged Global ID
+        verify(siteAuthorizationService, never()).requireSiteAdminAccess(any(), any());
+        assertThat(p.getFirstName()).isEqualTo("Alicia");
+    }
+
+    @Test
+    void updateParticipant_withNullGlobalId_preservesExistingGlobalId() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantIdentifier existingId = new ParticipantIdentifier();
+        existingId.setTenantId(tenantId);
+        existingId.setParticipantId(partId);
+        existingId.setIdentifierType("GLOBAL_ID");
+        existingId.setIdentifierValue("PERSISTED-GLB");
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(List.of(existingId));
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setLastName("Jones");
+        req.setGlobalId(null);
+
+        service.updateParticipant(tenantId, partId, userId, req, siteId);
+
+        verify(siteAuthorizationService, never()).requireSiteAdminAccess(any(), any());
+        verify(identifierRepository, never()).save(any(ParticipantIdentifier.class));
+        assertThat(p.getLastName()).isEqualTo("Jones");
+    }
+
 }

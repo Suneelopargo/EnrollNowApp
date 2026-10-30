@@ -328,8 +328,8 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
                     <button
                       type="button"
                       onClick={() => handleOpenEditModal(log)}
-                      className="btn btn-ghost btn-xs text-gray-600 hover:text-blue-600 p-1"
-                      title="Edit Contact Log"
+                      className="btn btn-ghost btn-xs text-gray-600 hover:text-blue-600 p-1 custom-tooltip-btn"
+                      data-tooltip="Edit Contact Log"
                       aria-label="Edit Contact Log"
                     >
                       <Edit2 size={13} />
@@ -337,8 +337,8 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
                     <button
                       type="button"
                       onClick={() => handleDeleteLog(log)}
-                      className="btn btn-ghost btn-xs text-gray-500 hover:text-red-600 p-1"
-                      title="Delete Contact Log"
+                      className="btn btn-ghost btn-xs text-gray-500 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
+                      data-tooltip="Delete Contact Log"
                       aria-label="Delete Contact Log"
                     >
                       <Trash2 size={13} />

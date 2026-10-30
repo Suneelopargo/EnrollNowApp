@@ -114,7 +114,8 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
             type="button"
             onClick={fetchConsents}
             disabled={isLoading}
-            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-gray-600"
+            className="btn btn-secondary btn-sm flex items-center gap-1.5 text-xs text-gray-600 custom-tooltip-btn"
+            data-tooltip="Refresh consent history"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
@@ -122,7 +123,8 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
           <button
             type="button"
             onClick={() => setIsRecordModalOpen(true)}
-            className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+            className="btn btn-primary btn-sm flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white custom-tooltip-btn"
+            data-tooltip="Record Consent"
           >
             <Plus className="w-3.5 h-3.5" />
             Record Consent

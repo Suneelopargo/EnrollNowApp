@@ -1,6 +1,7 @@
 // frontend/microfrontends/participant/src/remoteEntry.tsx - Participant MFE Remote Entry
 import React from 'react';
 import { MfeContext } from '../../../shared/contracts';
+import '../../../shared/design-system/tooltip';
 import RegistryDashboard from './components/RegistryDashboard';
 
 export interface ParticipantModuleProps {

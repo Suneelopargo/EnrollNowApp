@@ -127,4 +127,65 @@ class ParticipantWorkflowControllerTest {
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(res.getBody().getStatus()).isEqualTo("ASSIGNED");
     }
+    @Test
+    void updateComment_passesCanAccessAdmin() {
+        mockAuth();
+        UUID commentId = UUID.randomUUID();
+        UpdateCommentRequest req = new UpdateCommentRequest();
+        req.setText("Updated text");
+
+        when(siteAuthorizationService.canAccessSiteAdmin(any(UUID.class), isNull())).thenReturn(true);
+        ParticipantCommentDto dto = new ParticipantCommentDto();
+        dto.setText("Updated text");
+        when(workflowService.updateComment(eq(tenantId), eq(participantId), eq(commentId), eq(userId), eq(true), eq(req)))
+                .thenReturn(dto);
+
+        ResponseEntity<ParticipantCommentDto> res = controller.updateComment(participantId, commentId, req, null, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody().getText()).isEqualTo("Updated text");
+    }
+
+    @Test
+    void pinSms_returnsOk() {
+        mockAuth();
+        UUID smsId = UUID.randomUUID();
+        PinContactLogRequest req = new PinContactLogRequest();
+        req.setSticky(true);
+
+        CommunicationDto dto = new CommunicationDto();
+        dto.setPinned(true);
+        when(workflowService.pinCommunication(tenantId, participantId, smsId, userId, true)).thenReturn(dto);
+
+        ResponseEntity<CommunicationDto> res = controller.pinSms(participantId, smsId, req, null, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(res.getBody().isPinned()).isTrue();
+    }
+
+    @Test
+    void handleSmsWebhook_validSignatureUpdatesStatus() {
+        Map<String, String> params = Map.of("MessageSid", "SM12345", "MessageStatus", "delivered");
+        when(workflowService.validateTwilioWebhookSignature(eq("valid-sig"), any(), eq(params))).thenReturn(true);
+        when(workflowService.updateSmsStatusByExternalMessageId("SM12345", "delivered")).thenReturn(true);
+
+        ResponseEntity<Void> res = controller.handleSmsWebhook("valid-sig", params, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(workflowService).updateSmsStatusByExternalMessageId("SM12345", "delivered");
+    }
+
+    @Test
+    void handleSmsWebhook_invalidSignatureForbidden() {
+        Map<String, String> params = Map.of("MessageSid", "SM12345", "MessageStatus", "delivered");
+        when(workflowService.validateTwilioWebhookSignature(eq("bad-sig"), any(), eq(params))).thenReturn(false);
+
+        ResponseEntity<Void> res = controller.handleSmsWebhook("bad-sig", params, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        verify(workflowService, never()).updateSmsStatusByExternalMessageId(any(), any());
+    }
+
+    @Test
+    void handleSmsWebhook_blankSidBadRequest() {
+        Map<String, String> params = Map.of("MessageSid", "", "MessageStatus", "delivered");
+        ResponseEntity<Void> res = controller.handleSmsWebhook(null, params, null);
+        assertThat(res.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
 }

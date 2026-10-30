@@ -110,6 +110,11 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
 
     // 4. Handle Tab / Shift+Tab keyboard focus containment
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If this container is currently inert (e.g. obscured by a stacked/nested dialog), ignore key events
+      if (typeof container.closest === 'function' && container.closest('[inert]')) {
+        return;
+      }
+
       if (e.key === 'Escape') {
         if (onEscapeRef.current) {
           e.preventDefault();

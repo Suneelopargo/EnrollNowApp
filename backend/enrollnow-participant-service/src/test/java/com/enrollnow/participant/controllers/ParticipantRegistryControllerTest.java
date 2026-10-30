@@ -318,4 +318,61 @@ class ParticipantRegistryControllerTest {
 
         verify(registryService, never()).getParticipantTags(any(), any(), any(), anyInt());
     }
+    @Test
+    void getTimezoneOptions_returnsTimezonesList_whenAuthorized() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(registryService.getTimezoneOptions())
+                .thenReturn(List.of("America/Chicago", "America/New_York", "UTC"));
+
+        ResponseEntity<List<String>> response = controller.getTimezoneOptions(tenantId, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).containsExactly("America/Chicago", "America/New_York", "UTC");
+        verify(siteAuthorizationService).requireRegistryAccess(tenantId, null);
+        verify(registryService).getTimezoneOptions();
+    }
+
+    @Test
+    void getTimezoneOptions_rejectsUnauthorizedAccess() {
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        doThrow(new AccessDeniedException("Access denied"))
+                .when(siteAuthorizationService).requireRegistryAccess(tenantId, null);
+
+        assertThrows(AccessDeniedException.class, () ->
+                controller.getTimezoneOptions(tenantId, null)
+        );
+
+        verify(registryService, never()).getTimezoneOptions();
+    }
+
+    @Test
+    void updateParticipant_delegatesWithSiteId() {
+        UUID partId = UUID.randomUUID();
+        UUID siteId = UUID.randomUUID();
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setGlobalId("GLB-100");
+        req.setTimezone("UTC");
+
+        RegistryParticipantDto updatedDto = new RegistryParticipantDto();
+        updatedDto.setId(partId.toString());
+        updatedDto.setGlobalId("GLB-100");
+        updatedDto.setTimezone("UTC");
+
+        when(siteAuthorizationService.getAuthenticatedCaller())
+                .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
+        when(registryService.updateParticipant(tenantId, partId, userId, req, siteId))
+                .thenReturn(updatedDto);
+
+        ResponseEntity<RegistryParticipantDto> response = controller.updateParticipant(partId, tenantId, siteId, req);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getGlobalId()).isEqualTo("GLB-100");
+        assertThat(response.getBody().getTimezone()).isEqualTo("UTC");
+        verify(siteAuthorizationService).requireRegistryAccess(tenantId, siteId);
+        verify(registryService).updateParticipant(tenantId, partId, userId, req, siteId);
+    }
+
 }

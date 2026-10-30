@@ -9,12 +9,15 @@ public class CommunicationDto {
     private UUID id;
     private UUID participantId;
     private UUID studyId;
+    private String studyName;
+    private boolean global = true;
     private String channel;
     private String direction;
     private String subject;
     private String body;
     private String status;
     private OffsetDateTime sentAt;
+    private OffsetDateTime createdAt;
     private boolean pinned;
     private String senderName;
     private List<RecipientDto> recipients = new ArrayList<>();
@@ -27,6 +30,10 @@ public class CommunicationDto {
     public void setParticipantId(UUID participantId) { this.participantId = participantId; }
     public UUID getStudyId() { return studyId; }
     public void setStudyId(UUID studyId) { this.studyId = studyId; }
+    public String getStudyName() { return studyName; }
+    public void setStudyName(String studyName) { this.studyName = studyName; }
+    public boolean isGlobal() { return global; }
+    public void setGlobal(boolean global) { this.global = global; }
     public String getChannel() { return channel; }
     public void setChannel(String channel) { this.channel = channel; }
     public String getDirection() { return direction; }
@@ -39,6 +46,8 @@ public class CommunicationDto {
     public void setStatus(String status) { this.status = status; }
     public OffsetDateTime getSentAt() { return sentAt; }
     public void setSentAt(OffsetDateTime sentAt) { this.sentAt = sentAt; }
+    public OffsetDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public boolean isPinned() { return pinned; }
     public void setPinned(boolean pinned) { this.pinned = pinned; }
     public String getSenderName() { return senderName; }

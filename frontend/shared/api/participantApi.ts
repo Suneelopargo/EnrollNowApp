@@ -188,6 +188,7 @@ export interface ParticipantCommentItem {
   id: string;
   participantId: string;
   studyId?: string;
+  studyName?: string;
   text: string;
   pinned: boolean;
   global: boolean;
@@ -208,6 +209,8 @@ export interface CommunicationItem {
   id: string;
   participantId: string;
   studyId?: string;
+  studyName?: string;
+  global?: boolean;
   channel: 'EMAIL' | 'SMS' | 'PHONE' | 'OTHER';
   direction: 'OUTBOUND' | 'INBOUND';
   subject?: string;
@@ -396,6 +399,19 @@ export const participantApi = {
       race: Array.isArray(data.race) ? data.race : [],
     };
   },
+
+  async getTimezones(options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    const res = await apiClient.get<string[] | { data: string[] }>('/api/v1/registry/timezone-options', {
+      params: options,
+      skipToast: true,
+    } as any);
+    const data = (res.data as any)?.data ?? res.data ?? [];
+    return Array.isArray(data) ? data : [];
+  },
+
+  async getTimezoneOptions(options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+    return this.getTimezones(options);
+  },
   async getFilterMetadata(studyId?: string): Promise<any[]> {
     const res = await apiClient.get('/api/v1/registry/filter-metadata', {
       params: studyId ? { studyId } : undefined,
@@ -510,7 +526,11 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async createComment(participantId: string, payload: { text: string; pinned?: boolean; global?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<ParticipantCommentItem> {
+  async createComment(
+    participantId: string,
+    payload: { text: string; pinned?: boolean; global?: boolean; studyId?: string; authorName?: string },
+    options?: { tenantId?: string; siteId?: string }
+  ): Promise<ParticipantCommentItem> {
     const res = await apiClient.post(`/api/v1/participants/${participantId}/comments`, payload, { params: options });
     return res.data?.data ?? res.data;
   },
@@ -555,8 +575,13 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async sendSms(participantId: string, payload: { toPhone: string; body: string; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+  async sendSms(participantId: string, payload: { toPhone?: string; toPhones?: string[]; body: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
     const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, payload, { params: options });
+    return res.data?.data ?? res.data;
+  },
+
+  async pinSms(participantId: string, smsId: string, sticky: boolean, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+    const res = await apiClient.patch(`/api/v1/participants/${participantId}/sms/${smsId}/pin`, { sticky }, { params: options });
     return res.data?.data ?? res.data;
   },
 

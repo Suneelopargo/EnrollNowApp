@@ -1,5 +1,6 @@
 // frontend/shared/confirmation/ConfirmationContainer.tsx - Global Confirmation Dialog Host UI
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Trash2,
@@ -119,7 +120,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
     ? [details]
     : [];
 
-  return (
+  const dialogContent = (
     <div
       className={`enl-confirm-backdrop ${className}`}
       onClick={handleBackdropClick}
@@ -161,10 +162,13 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="enl-confirm-body">
-          <div id="enl-confirm-message" className="enl-confirm-message">
-            {message}
-          </div>
+        {(message || detailsList.length > 0 || confirmWord || errorMessage) && (
+          <div className="enl-confirm-body">
+            {message && (
+              <div id="enl-confirm-message" className="enl-confirm-message">
+                {message}
+              </div>
+            )}
 
           {/* Optional Consequence / Details Callout */}
           {detailsList.length > 0 && (
@@ -227,6 +231,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Footer with Actions */}
         <div className="enl-confirm-footer">
@@ -258,6 +263,12 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') {
+    return dialogContent;
+  }
+
+  return createPortal(dialogContent, document.body);
 };
 
 export default ConfirmationContainer;

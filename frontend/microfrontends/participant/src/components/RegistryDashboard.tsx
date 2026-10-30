@@ -6,12 +6,13 @@ import { getApiErrorMessage } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { participantApi, RegistrySearchParams, CreateParticipantPayload, DemographicOptions } from '../../../../shared/api/participantApi';
 import { studyApi, Study } from '../../../../shared/api/studyApi';
+import { administrationApi } from '../../../../shared/api/administrationApi';
 import LeftFilterPanel from './LeftFilterPanel';
 import ParticipantGrid from './ParticipantGrid';
 import AddParticipantModal from './AddParticipantModal';
 import SaveFilterModal from './SaveFilterModal';
 import ParticipantDetailModal from './ParticipantDetailModal';
-import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition, StudyItem } from '../types/participant';
+import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, FilterOptionItem, GlobalVariableDefinition, isContactForFutureStudies, StudyItem } from '../types/participant';
 import {
   validateFilterRule,
   registerDynamicFilterFields,
@@ -53,6 +54,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [demographicOptions, setDemographicOptions] = useState<DemographicOptions>({ ethnicity: [], race: [] });
   const [isLoadingDemographicOptions, setIsLoadingDemographicOptions] = useState<boolean>(true);
   const [availableStudies, setAvailableStudies] = useState<Study[]>([]);
+  const [userStudyIds, setUserStudyIds] = useState<Set<string>>(() => new Set());
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
   const [serverTotalCount, setServerTotalCount] = useState<number>(0);
 
@@ -171,13 +173,16 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         familyId: p.familyId || '',
         dateCreated: p.dateCreated || '',
         globalId: p.globalId || '',
-        timezone: p.timezone || 'America/New_York (EDT)',
+        timezone: p.timezone || '',
         tags: Array.isArray(p.tags) ? p.tags : [],
-        contactForFutureStudies: p.contactForFutureStudies ?? true,
+        contactForFutureStudies: isContactForFutureStudies(p.contactForFutureStudies),
         availableToAddStudy: p.availableToAddStudy ?? true,
         globalDateOfLastContact: p.globalDateOfLastContact || '',
         birthMonth: p.birthMonth || '',
-        studies: Array.isArray(p.studies) ? p.studies : [],
+        studies: Array.isArray(p.studies) ? p.studies.map((study: StudyItem) => ({
+          ...study,
+          isLink: Boolean(userStudyIds.has(String(study.studyId || study.id || '').trim())),
+        })) : [],
         contactMethods: p.contactMethods || {
           primaryEmail: p.email || '',
           phone: p.phone || '',
@@ -224,7 +229,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     } finally {
       if (!quiet) setIsLoading(false);
     }
-  }, [tenantId, siteId]);
+  }, [tenantId, siteId, userStudyIds]);
 
   const fetchDemographicOptions = useCallback(async () => {
     setIsLoadingDemographicOptions(true);
@@ -290,6 +295,28 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       console.warn('Failed to load dynamic custom filter metadata:', err);
     }
   }, []);
+
+  // Fetch the current user's study memberships to control Registry study links
+  useEffect(() => {
+    const userId = context?.user?.id;
+    if (userId === undefined || userId === null || !tenantId) {
+      setUserStudyIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+    administrationApi.getUserStudies(userId, tenantId)
+      .then((studies) => {
+        if (cancelled) return;
+        setUserStudyIds(new Set(studies.map((study: any) => String(study.id ?? study.studyId ?? '').trim()).filter(Boolean)));
+      })
+      .catch((err) => {
+        console.warn('Failed to load user study memberships for registry:', err);
+        if (!cancelled) setUserStudyIds(new Set());
+      });
+
+    return () => { cancelled = true; };
+  }, [context?.user?.id, tenantId]);
 
   // Fetch visible studies from Study Service for filter dropdowns & bulk assignment
   const fetchStudies = useCallback(async () => {
@@ -783,6 +810,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         }}
         tenantId={tenantId}
         siteId={siteId}
+        currentUser={context?.user}
         globalVariables={globalVariables}
         demographicOptions={demographicOptions}
         demographicOptionsLoading={isLoadingDemographicOptions}

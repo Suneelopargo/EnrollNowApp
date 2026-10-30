@@ -1,6 +1,8 @@
 package com.enrollnow.participant.models;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +65,7 @@ public class Communication {
     @Column(name = "external_message_id", length = 255)
     private String externalMessageId;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metadata", columnDefinition = "jsonb")
     private String metadata = "{}";
 

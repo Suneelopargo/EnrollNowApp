@@ -1,4 +1,4 @@
-﻿// frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
+// frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
@@ -15,9 +15,12 @@ import {
   Trash2, 
   ExternalLink 
 } from 'lucide-react';
+import { AuthUser } from '../../../../shared/contracts';
+import { getStoredAuthUser } from '../../../../shared/api-client';
+import { requestConfirmation } from '../../../../shared/confirmation';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
-import { GlobalVariableDefinition, ParticipantRecord, ParticipantVariable } from '../types/participant';
+import { GlobalVariableDefinition, isContactForFutureStudies, ParticipantRecord, ParticipantVariable } from '../types/participant';
 import { ParticipantContactLogs } from './ParticipantContactLogs';
 import { ParticipantContactManagement } from './ParticipantContactManagement';
 import { ParticipantComments } from './ParticipantComments';
@@ -26,8 +29,13 @@ import { ParticipantSmsSection } from './ParticipantSmsSection';
 import { ParticipantConsentSection } from './ParticipantConsentSection';
 import { ParticipantFormsSection } from './ParticipantFormsSection';
 import { ParticipantTagSelect } from './ParticipantTagSelect';
-import { ParticipantDateTimePicker } from './ParticipantDateTimePicker';
+import { isValidDateTimeValue, ParticipantDateTimePicker } from './ParticipantDateTimePicker';
 import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
+
+const getParticipantLastContactDate = (participant?: ParticipantRecord | null): string => {
+  const values = [participant?.globalDateOfLastContact, participant?.lastContact];
+  return values.find((value) => isValidDateTimeValue(value)) || '';
+};
 
 const GlobalVariableField: React.FC<{
   variable: GlobalVariableDefinition;
@@ -71,7 +79,7 @@ const GlobalVariableField: React.FC<{
   } else if (type === 'long') {
     input = <textarea id={fieldId} className="form-textarea" rows={3} value={value} onChange={(event) => onChange(event.target.value)} />;
   } else {
-    input = <input id={fieldId} type={type === 'number' ? 'number' : 'text'} className="form-input" value={value} onChange={(event) => onChange(event.target.value)} />;
+    input = <input id={fieldId} type={type === 'number' ? 'number' : 'text'} className="form-input" value={value} onChange={(event) => onChange(event.target.value)} placeholder={variable.name || 'Enter value...'} />;
   }
 
   return (
@@ -151,6 +159,7 @@ export interface ParticipantDetailModalProps {
   globalVariables?: GlobalVariableDefinition[];
   demographicOptions?: DemographicOptions;
   demographicOptionsLoading?: boolean;
+  currentUser?: AuthUser | null;
 }
 
 export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
@@ -165,6 +174,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   globalVariables = [],
   demographicOptions = { ethnicity: [], race: [] },
   demographicOptionsLoading = false,
+  currentUser = null,
 }) => {
   const [activeTopNav, setActiveTopNav] = useState<'details' | 'contact' | 'demographics' | 'family' | 'variables'>('details');
   const [activeTab, setActiveTab] = useState<'comments' | 'email' | 'text' | 'contact' | 'consent' | 'forms'>('comments');
@@ -175,10 +185,26 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   // Overview / General
   const [familyId, setFamilyId] = useState(participant?.familyId || '');
   const [globalId, setGlobalId] = useState(participant?.globalId || '');
-  const [timezone, setTimezone] = useState(participant?.timezone || 'America/New_York (EDT)');
+  const [timezone, setTimezone] = useState(participant?.timezone || '');
+  const [timezoneOptions, setTimezoneOptions] = useState<string[]>([]);
+  const [isLoadingTimezones, setIsLoadingTimezones] = useState(false);
+  const [timezoneError, setTimezoneError] = useState<string | null>(null);
+  const hasExistingTimezone = Boolean(participant?.timezone && participant.timezone.trim());
+  const initialLastContactDate = getParticipantLastContactDate(participant);
+  const hasExistingDate = Boolean(initialLastContactDate);
+
+  const handleTimezoneChange = (newTz: string) => {
+    if (hasExistingTimezone && (!newTz || !newTz.trim())) {
+      setTimezoneError('Timezone cannot be removed once set. Please select a valid timezone.');
+      return;
+    }
+    setTimezone(newTz);
+    setTimezoneError(null);
+  };
   const [selectedTags, setSelectedTags] = useState<string[]>(Array.isArray(participant?.tags) ? participant.tags : []);
-  const [contactForFuture, setContactForFuture] = useState(participant?.contactForFutureStudies !== false);
-  const [dateLastContact, setDateLastContact] = useState(participant?.globalDateOfLastContact || participant?.lastContact || '');
+  const [contactForFuture, setContactForFuture] = useState(isContactForFutureStudies(participant?.contactForFutureStudies));
+  const [dateLastContact, setDateLastContact] = useState(initialLastContactDate);
+  const [dateLastContactError, setDateLastContactError] = useState<string | null>(null);
 
   // Contact Methods
   const [primaryEmail, setPrimaryEmail] = useState(participant?.contactMethods?.primaryEmail || '');
@@ -214,10 +240,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setLastName(participant.lastName || '');
       setFamilyId(participant.familyId || '');
       setGlobalId(participant.globalId || '');
-      setTimezone(participant.timezone || 'America/New_York (EDT)');
+      setTimezone(participant.timezone || '');
       setSelectedTags(Array.isArray(participant.tags) ? participant.tags : []);
-      setContactForFuture(participant.contactForFutureStudies !== false);
-      setDateLastContact(participant.globalDateOfLastContact || participant.lastContact || '');
+      setContactForFuture(isContactForFutureStudies(participant.contactForFutureStudies));
+      setDateLastContact(getParticipantLastContactDate(participant));
+      setDateLastContactError(null);
       
       setPrimaryEmail(participant.contactMethods?.primaryEmail || '');
       setSecondaryEmail(participant.contactMethods?.secondaryEmail || '');
@@ -235,6 +262,56 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setVariables(Array.isArray(participant.variables) ? [...participant.variables] : []);
     }
   }, [participant]);
+
+  // Always reset to the Overview tab whenever the modal opens or switches participant
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTopNav('details');
+      setActiveTab('comments');
+      setGlobalVariableSearch('');
+      setIsAddingVariable(false);
+    } else {
+      setActiveTopNav('details');
+      setActiveTab('comments');
+    }
+  }, [isOpen, participant?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingTimezones(true);
+    setTimezoneError(null);
+    participantApi.getTimezones({ tenantId, siteId })
+      .then((options) => {
+        if (isMounted) {
+          setTimezoneOptions(Array.isArray(options) ? options : []);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setTimezoneError('Unable to load timezone options');
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingTimezones(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId, siteId]);
+
+  const effectiveUser = currentUser || getStoredAuthUser<AuthUser>();
+  const canEditGlobalId = Boolean(
+    effectiveUser?.canAccessSiteAdmin ||
+    effectiveUser?.canManageSiteAdmins ||
+    effectiveUser?.siteRole === 'SITE_ADMIN' ||
+    effectiveUser?.siteRole === 'SITE_MANAGER' ||
+    effectiveUser?.roles?.some((r: string) => {
+      const u = String(r).toUpperCase();
+      return u === 'SITE_ADMIN' || u === 'ROLE_SITE_ADMIN' || u === 'SITE_MANAGER' || u === 'ROLE_SITE_MANAGER';
+    })
+  );
 
   if (!isOpen || !participant) return null;
 
@@ -278,6 +355,15 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   };
 
   const handleSaveParticipant = () => {
+    if (hasExistingTimezone && (!timezone || !timezone.trim())) {
+      setTimezoneError('Timezone cannot be removed once set. Please select a valid timezone.');
+      return;
+    }
+    if (hasExistingDate && (!dateLastContact || !dateLastContact.trim())) {
+      setDateLastContactError('Global Date of Last Contact cannot be removed once set.');
+      return;
+    }
+
     const updatedParticipant: ParticipantRecord = {
       ...participant,
       firstName: firstName.trim(),
@@ -322,17 +408,73 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const raceOptions = [...demographicOptions.race];
   if (race && !raceOptions.includes(race)) raceOptions.unshift(race);
 
+  const isFormDirty = () => {
+    if (!participant) return false;
+    if (firstName !== (participant.firstName || '')) return true;
+    if (middleName !== (participant.middleName || '')) return true;
+    if (lastName !== (participant.lastName || '')) return true;
+    if (familyId !== (participant.familyId || '')) return true;
+    if (globalId !== (participant.globalId || '')) return true;
+    if (timezone !== (participant.timezone || '')) return true;
+    if (contactForFuture !== isContactForFutureStudies(participant.contactForFutureStudies)) return true;
+    const initialDate = getParticipantLastContactDate(participant);
+    if (dateLastContact !== initialDate) return true;
+
+    const origTags = Array.isArray(participant.tags) ? participant.tags : [];
+    if (origTags.length !== selectedTags.length || origTags.some((t, i) => t !== selectedTags[i])) return true;
+
+    if (primaryEmail !== (participant.contactMethods?.primaryEmail || '')) return true;
+    if (secondaryEmail !== (participant.contactMethods?.secondaryEmail || '')) return true;
+    if (phone !== (participant.contactMethods?.phone || participant.phone || '')) return true;
+    if (address !== (participant.contactMethods?.address || '')) return true;
+    if (preferredMethod !== (participant.contactMethods?.preferredMethod || 'Email')) return true;
+
+    if (dob !== (participant.demographics?.dob || '')) return true;
+    if (gender !== (participant.gender || participant.demographics?.gender || 'Unspecified')) return true;
+    if (ethnicity !== (participant.demographics?.ethnicity || '')) return true;
+    if (race !== (participant.demographics?.race || '')) return true;
+    if (primaryLanguage !== (participant.demographics?.primaryLanguage || 'English')) return true;
+
+    if (familyRole !== (participant.family?.familyRole || 'Proband')) return true;
+
+    const origVars = Array.isArray(participant.variables) ? participant.variables : [];
+    if (origVars.length !== variables.length) return true;
+    for (let i = 0; i < variables.length; i++) {
+      if (variables[i].id !== origVars[i]?.id || variables[i].value !== origVars[i]?.value) return true;
+    }
+
+    return false;
+  };
+
+  const handleCloseModal = async () => {
+    if (isFormDirty()) {
+      const confirmed = await requestConfirmation({
+        title: 'Are you sure you wish to discard your changes?',
+        message: '',
+        intent: 'warning',
+        confirmText: 'Yes, discard changes.',
+        cancelText: 'No, cancel!',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    setActiveTopNav('details');
+    setActiveTab('comments');
+    onClose();
+  };
+
   const familyMembers = participant.family?.members || [];
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleCloseModal}
       title="Participant Details"
       size="wide"
       footer={(
         <>
-          <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button type="button" onClick={handleCloseModal} className="btn btn-secondary">Cancel</button>
           <button type="button" onClick={handleSaveParticipant} className="btn btn-primary">
             <Check size={16} /> Save Changes
           </button>
@@ -374,6 +516,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First Name"
                     className="form-input"
                   />
                 </div>
@@ -384,6 +527,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     type="text"
                     value={middleName}
                     onChange={(e) => setMiddleName(e.target.value)}
+                    placeholder="Middle Name"
                     className="form-input"
                   />
                 </div>
@@ -394,6 +538,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Last Name"
                     className="form-input"
                   />
                 </div>
@@ -404,6 +549,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     type="text"
                     value={familyId}
                     onChange={(e) => setFamilyId(e.target.value)}
+                    placeholder="Family ID"
                     className="form-input"
                   />
                 </div>
@@ -416,36 +562,60 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                 </div>
 
                 <div className="record-detail__field">
-                  <label className="form-label" htmlFor="participant-global-id">Global ID</label>
-                  <input
-                    id="participant-global-id"
-                    type="text"
-                    value={globalId}
-                    onChange={(e) => setGlobalId(e.target.value)}
-                    className="form-input"
-                  />
+                  {canEditGlobalId ? (
+                    <>
+                      <label className="form-label" htmlFor="participant-global-id">Global ID</label>
+                      <input
+                        id="participant-global-id"
+                        type="text"
+                        value={globalId}
+                        onChange={(e) => setGlobalId(e.target.value)}
+                        placeholder="Global ID"
+                        className="form-input"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <span className="form-label">Global ID</span>
+                      <span className="record-detail__readonly" data-testid="participant-global-id-readonly">
+                        {globalId || '—'}
+                      </span>
+                    </>
+                  )}
                 </div>
 
                 <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-timezone">Timezone</label>
-                  <select
-                    id="participant-timezone"
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="form-select"
-                  >
-                    <option value="America/New_York (EDT)">America/New_York (EDT)</option>
-                    <option value="America/Chicago (CDT)">America/Chicago (CDT)</option>
-                    <option value="America/Denver (MDT)">America/Denver (MDT)</option>
-                    <option value="America/Los_Angeles (PDT)">America/Los_Angeles (PDT)</option>
-                    <option value="UTC">UTC</option>
-                  </select>
+                  <div className="record-detail__input-wrap">
+                    <select
+                      id="participant-timezone"
+                      value={timezone}
+                      onChange={(e) => handleTimezoneChange(e.target.value)}
+                      className="form-select"
+                      disabled={isLoadingTimezones}
+                      aria-label="Select timezone"
+                    >
+                      <option value="" disabled={hasExistingTimezone}>{isLoadingTimezones ? 'Loading timezones...' : 'Select timezone...'}</option>
+                      {timezone && !timezoneOptions.includes(timezone) && (
+                        <option key={timezone} value={timezone}>{timezone}</option>
+                      )}
+                      {timezoneOptions.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                    {timezoneError && (
+                      <span className="record-detail__inline-error" role="status">
+                        {timezoneError}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="record-detail__field record-detail__field--wide">
+                <div className="record-detail__field">
                   <label className="form-label" htmlFor="participant-tags">Tags</label>
                   <ParticipantTagSelect
                     id="participant-tags"
+                    placeholder="Select tags"
                     selectedTags={selectedTags}
                     onChange={setSelectedTags}
                     tenantId={tenantId}
@@ -453,25 +623,35 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   />
                 </div>
 
-                <div className="record-detail__field--wide record-detail__checkbox-field">
-                  <input
-                    type="checkbox"
-                    id="futureContactCheckModal"
-                    checked={contactForFuture}
-                    onChange={(e) => setContactForFuture(e.target.checked)}
-                  />
-                  <label htmlFor="futureContactCheckModal" className="form-label">
-                    Contact For Future Studies?
+                <div className="record-detail__field">
+                  <label className="form-label" htmlFor="participant-last-contact">
+                    Global Date of Last Contact
                   </label>
-                </div>
-
-                <div className="record-detail__field record-detail__field--wide">
-                  <label className="form-label" htmlFor="participant-last-contact">Global Date of Last Contact</label>
                   <ParticipantDateTimePicker
                     id="participant-last-contact"
                     value={dateLastContact}
-                    onChange={setDateLastContact}
+                    onChange={(val) => {
+                      setDateLastContact(val);
+                      if (val && val.trim()) {
+                        setDateLastContactError(null);
+                      }
+                    }}
+                    allowClear={!hasExistingDate}
+                    error={dateLastContactError}
                   />
+                </div>
+
+                <div className="record-detail__field record-detail__field--checkbox record-detail__checkbox-field">
+                  <label htmlFor="futureContactCheckModal" className="record-detail__checkbox-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      id="futureContactCheckModal"
+                      checked={contactForFuture}
+                      onChange={(e) => setContactForFuture(e.target.checked)}
+                      style={{ width: '16px', height: '16px', margin: 0, marginRight: '8px', cursor: 'pointer', accentColor: '#0284c7', flexShrink: 0 }}
+                    />
+                    <span>Contact For Future Studies?</span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -559,6 +739,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     type="text"
                     value={primaryLanguage}
                     onChange={(e) => setPrimaryLanguage(e.target.value)}
+                    placeholder="Primary Language"
                     className="form-input"
                   />
                 </div>
@@ -712,9 +893,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   <ParticipantComments
                     participantId={participant.id}
                     participantName={participant.name}
-                    studyId={participant.studies?.[0]?.studyId || (participant.studies?.[0] as any)?.id || participant.studies?.[0]?.name}
+                    studyId={undefined}
                     tenantId={tenantId}
                     siteId={siteId}
+                    currentUser={effectiveUser}
                   />
                 )}
 
@@ -733,6 +915,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     participantName={participant.name}
                     tenantId={tenantId}
                     siteId={siteId}
+                    currentUser={effectiveUser}
                   />
                 )}
 
@@ -750,7 +933,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   <ParticipantConsentSection
                     participantId={participant.id}
                     participantName={participant.name}
-                    studyId={participant.studies?.[0]?.studyId || (participant.studies?.[0] as any)?.id || participant.studies?.[0]?.name}
+                    studyId={undefined}
                     tenantId={tenantId}
                     siteId={siteId}
                   />
@@ -760,7 +943,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                   <ParticipantFormsSection
                     participantId={participant.id}
                     participantName={participant.name}
-                    studyId={participant.studies?.[0]?.studyId || (participant.studies?.[0] as any)?.id || participant.studies?.[0]?.name}
+                    studyId={undefined}
                     tenantId={tenantId}
                     siteId={siteId}
                   />

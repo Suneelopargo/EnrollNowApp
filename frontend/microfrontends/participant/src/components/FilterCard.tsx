@@ -177,9 +177,9 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
         <button
           type="button"
           onClick={() => onRemove(index)}
-          title="Remove Filter"
+          data-tooltip="Remove Filter"
           aria-label={`Remove filter rule ${index + 1}`}
-          className="filter-card-remove"
+          className="filter-card-remove custom-tooltip-btn"
         >
           <X size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
