@@ -374,7 +374,7 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     studies: [{ name: 'Study Alpha' }],
   };
 
-  it('renders ParticipantComments with title and actions', () => {
+  it('renders ParticipantComments form and actions', () => {
     const html = renderToStaticMarkup(
       <ParticipantComments
         participantId="p-100"
@@ -382,20 +382,19 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         studyId="Study Alpha"
       />
     );
-    expect(html).toContain('Comments');
     expect(html).toContain('Add Comment');
     expect(html).toContain('Pin Comment');
   });
 
-  it('renders ParticipantEmailSection with compose trigger', () => {
+  it('renders ParticipantEmailSection with Add Email trigger', () => {
     const html = renderToStaticMarkup(
       <ParticipantEmailSection
         participantId="p-100"
         participantName="Emily Davis"
       />
     );
-    expect(html).toContain('Email Communication History');
-    expect(html).toContain('Compose Email');
+    expect(html).not.toContain('Email Communication History');
+    expect(html).toContain('Add Email');
   });
 
   it('renders ComposeEmailModal when open', () => {
@@ -420,6 +419,9 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
       />
     );
     expect(html).toContain('Add Text');
+    expect(html).toContain('Search text messages...');
+    expect(html).toContain('min-h-[46px]');
+    expect(html).toContain('aria-label="Add Text"');
   });
 
   it('renders ComposeSmsModal when open', () => {
@@ -435,6 +437,12 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(html).toContain('Add Participant Text');
     expect(html).toContain('Send Text');
     expect(html).toContain('Message');
+    expect(html.indexOf('Message')).toBeLessThan(html.indexOf('Mark Text As'));
+    expect(html.indexOf('Mark Text As')).toBeLessThan(html.indexOf('Pin Text'));
+    expect(html).toContain('compose-text-modal');
+    expect(html).toContain('compose-text-form');
+    expect(html).toContain('compose-text-row');
+    expect(html).toContain('rows="8"');
   });
 
   it('renders ParticipantContactManagement with Contact Persons and Addresses', () => {
@@ -483,8 +491,8 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         participantName="Emily Davis"
       />
     );
-    expect(consentSection).toContain('Study Consents');
-    expect(consentSection).toContain('Record Consent');
+    expect(consentSection).toContain('Search consents...');
+    expect(consentSection).toContain('aria-label="Add Consent"');
 
     const consentModal = renderToStaticMarkup(
       <RecordConsentModal
@@ -498,14 +506,16 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(consentModal).toContain('Record Consent Decision');
   });
 
-  it('renders ParticipantFormsSection and AssignFormModal', () => {
+  it('renders the participant forms grid without an Assign Form action', () => {
     const formsSection = renderToStaticMarkup(
       <ParticipantFormsSection
         participantId="p-100"
         participantName="Emily Davis"
       />
     );
-    expect(formsSection).toContain('Forms &amp; Surveys');
+    expect(formsSection).toContain('Search forms...');
+    expect(formsSection).toContain('participant-forms-grid');
+    expect(formsSection).not.toContain('Assign Form');
 
     const assignModal = renderToStaticMarkup(
       <AssignFormModal
@@ -548,6 +558,8 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(modalHtml).toContain('Contact');
     expect(modalHtml).toContain('Consent');
     expect(modalHtml).toContain('Forms');
+    expect(modalHtml).toContain('Search studies');
+    expect(modalHtml).toContain('record-detail__study-grid');
   });
 
   // 7. Potential Duplicate Participants Workflow

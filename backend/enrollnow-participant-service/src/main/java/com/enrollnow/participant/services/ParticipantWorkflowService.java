@@ -2,6 +2,8 @@ package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.identity.services.InvitationEmailService;
+import com.enrollnow.identity.services.MailAttachment;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
@@ -45,6 +47,7 @@ public class ParticipantWorkflowService {
     private final StudyRepository studyRepository;
     private final AuditRecorder auditRecorder;
     private final SmsGatewayService smsGatewayService;
+    private final InvitationEmailService invitationEmailService;
 
     public ParticipantWorkflowService(
             ParticipantRepository participantRepository,
@@ -62,7 +65,28 @@ public class ParticipantWorkflowService {
     ) {
         this(participantRepository, commentRepository, communicationRepository, recipientRepository,
                 contactRepository, addressRepository, consentRecordRepository, consentVersionRepository,
-                surveyAssignmentRepository, surveyDefinitionRepository, studyRepository, auditRecorder, null);
+                surveyAssignmentRepository, surveyDefinitionRepository, studyRepository, auditRecorder, null, null);
+    }
+
+    public ParticipantWorkflowService(
+            ParticipantRepository participantRepository,
+            ParticipantCommentRepository commentRepository,
+            CommunicationRepository communicationRepository,
+            CommunicationRecipientRepository recipientRepository,
+            ParticipantContactRepository contactRepository,
+            ParticipantAddressRepository addressRepository,
+            ConsentRecordRepository consentRecordRepository,
+            ConsentVersionRepository consentVersionRepository,
+            SurveyAssignmentRepository surveyAssignmentRepository,
+            SurveyDefinitionRepository surveyDefinitionRepository,
+            StudyRepository studyRepository,
+            @Autowired(required = false) AuditRecorder auditRecorder,
+            @Autowired(required = false) SmsGatewayService smsGatewayService
+    ) {
+        this(participantRepository, commentRepository, communicationRepository, recipientRepository,
+                contactRepository, addressRepository, consentRecordRepository, consentVersionRepository,
+                surveyAssignmentRepository, surveyDefinitionRepository, studyRepository, auditRecorder,
+                smsGatewayService, null);
     }
 
     @Autowired
@@ -79,7 +103,8 @@ public class ParticipantWorkflowService {
             SurveyDefinitionRepository surveyDefinitionRepository,
             StudyRepository studyRepository,
             @Autowired(required = false) AuditRecorder auditRecorder,
-            @Autowired(required = false) SmsGatewayService smsGatewayService
+            @Autowired(required = false) SmsGatewayService smsGatewayService,
+            InvitationEmailService invitationEmailService
     ) {
         this.participantRepository = participantRepository;
         this.commentRepository = commentRepository;
@@ -94,6 +119,7 @@ public class ParticipantWorkflowService {
         this.studyRepository = studyRepository;
         this.auditRecorder = auditRecorder;
         this.smsGatewayService = smsGatewayService != null ? smsGatewayService : new SmsGatewayService("twilio", "", "", "", "US");
+        this.invitationEmailService = invitationEmailService;
     }
 
     // =========================================================================
@@ -300,6 +326,44 @@ public class ParticipantWorkflowService {
                 : (userName != null && !userName.trim().isEmpty() ? userName.trim() : "System");
         String authorInitials = computeInitials(senderName);
 
+        if (invitationEmailService == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery is not configured");
+        }
+        List<MailAttachment> attachments = request.getAttachments().stream()
+                .map(attachment -> {
+                    if (attachment == null
+                            || attachment.getFileName() == null
+                            || attachment.getFileName().isBlank()
+                            || attachment.getFileContentBase64() == null
+                            || attachment.getFileContentBase64().isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email attachment content is required");
+                    }
+                    try {
+                        Base64.getDecoder().decode(attachment.getFileContentBase64());
+                    } catch (IllegalArgumentException e) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email attachment content is not valid base64");
+                    }
+                    String contentType = attachment.getFileContentType();
+                    return new MailAttachment(
+                            attachment.getFileName().trim(),
+                            contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType,
+                            attachment.getFileContentBase64()
+                    );
+                })
+                .toList();
+        invitationEmailService.sendParticipantEmail(
+                request.getTo().stream().map(String::trim).toList(),
+                request.getCc() == null ? List.of() : request.getCc().stream()
+                        .filter(address -> address != null && !address.isBlank()).map(String::trim).toList(),
+                request.getBcc() == null ? List.of() : request.getBcc().stream()
+                        .filter(address -> address != null && !address.isBlank()).map(String::trim).toList(),
+                request.getReplyTo() == null ? null : request.getReplyTo().trim(),
+                request.getSubject().trim(),
+                request.getBody().trim(),
+                request.isMessageIsHtml(),
+                attachments
+        );
+
         Communication comm = new Communication();
         comm.setTenantId(tenantId);
         comm.setParticipantId(participantId);
@@ -326,8 +390,8 @@ public class ParticipantWorkflowService {
         metadata.put("lastContact", request.isLastContact());
         metadata.put("global", isGlobal);
         metadata.put("notify", request.isNotify());
-        if (request.getAttachments() != null) {
-            metadata.put("attachments", request.getAttachments());
+        if (!attachments.isEmpty()) {
+            metadata.put("attachments", attachments.stream().map(MailAttachment::fileName).toList());
         }
 
         try {

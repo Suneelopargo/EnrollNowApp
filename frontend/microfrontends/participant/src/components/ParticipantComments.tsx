@@ -1,11 +1,13 @@
 // frontend/microfrontends/participant/src/components/ParticipantComments.tsx - Legacy Ripple Compatible Participant Comments
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Pin, Trash2, Edit2, Loader2, MessageSquare, AlertCircle, RefreshCw } from 'lucide-react';
+import { Pin, Trash2, Edit2, Loader2, AlertCircle, Search, X } from 'lucide-react';
 import { AuthUser } from '../../../../shared/contracts';
 import { getStoredAuthUser, getApiErrorMessage } from '../../../../shared/api-client';
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { participantApi, ParticipantCommentItem } from '../../../../shared/api/participantApi';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton as CommentActionTooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 
 export interface ParticipantCommentsProps {
   participantId: string;
@@ -33,9 +35,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
   const [isPinned, setIsPinned] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [togglingPinId, setTogglingPinId] = useState<string | null>(null);
-
-  // Hovered avatar for custom tooltip
-  const [hoveredAvatarId, setHoveredAvatarId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Inline editing state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -79,15 +79,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
     return 'Suneel Kumar';
   };
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'SK';
-    const clean = name.trim();
-    const parts = clean.split(/\s+/);
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    }
-    return clean.substring(0, 2).toUpperCase();
-  };
+
 
   const formatCommentDate = (dateStr?: string) => {
     if (!dateStr) return '';
@@ -255,18 +247,209 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
     });
   };
 
+
+  const columnDefs = useMemo<ColDef<ParticipantCommentItem>[]>(() => [
+    {
+      colId: 'createdAt',
+      headerName: 'Date',
+      minWidth: 290,
+      flex: 1,
+      filter: false,
+      floatingFilter: false,
+      valueGetter: (params) => {
+        const comment = params.data;
+        return comment?.createdAt || '';
+      },
+      getQuickFilterText: (params) => {
+        const comment = params.data;
+        if (!comment) return '';
+        return `${formatCommentDate(comment.createdAt)} ${comment.global ? 'Global Registry' : ''}`;
+      },
+      comparator: (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+      cellRenderer: (params: ICellRendererParams<ParticipantCommentItem>) => {
+        const comment = params.data;
+        if (!comment) return null;
+        return (
+          <div className="flex items-center gap-2 whitespace-nowrap py-1">
+            <span className="shrink-0 text-xs text-gray-800">
+              {formatCommentDate(comment.createdAt)}
+            </span>
+            {comment.global && (
+              <span
+                title="Global (Registry)"
+                style={{
+                  display: 'inline-block',
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  backgroundColor: '#0284c7',
+                  borderRadius: '9999px',
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}
+              >
+                Global (Registry)
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      colId: 'editedAt',
+      headerName: 'Edited Date',
+      width: 145,
+      minWidth: 145,
+      maxWidth: 145,
+      filter: false,
+      floatingFilter: false,
+      valueGetter: (params) => params.data && isCommentEdited(params.data)
+        ? params.data.updatedAt || ''
+        : '',
+      valueFormatter: (params) => params.value ? formatCommentDate(params.value) : '—',
+      comparator: (a, b) => new Date(a || 0).getTime() - new Date(b || 0).getTime(),
+    },
+    {
+      colId: 'author',
+      headerName: 'Author',
+      minWidth: 150,
+      valueGetter: (params) => params.data ? getCommentAuthorName(params.data) : '',
+    },
+    {
+      field: 'text',
+      headerName: 'Comment',
+      minWidth: 240,
+      flex: 1,
+      autoHeight: true,
+      wrapText: true,
+      cellRenderer: (params: ICellRendererParams<ParticipantCommentItem>) => {
+        const comment = params.data;
+        if (!comment) return null;
+        if (editingCommentId === comment.id) {
+          return (
+            <div className="space-y-2 py-2">
+              <textarea
+                rows={5}
+                value={editText}
+                onChange={(event) => setEditText(event.target.value)}
+                aria-label="Edit comment text"
+                className="min-h-[150px] w-full resize-y rounded border border-gray-300 p-2 text-xs"
+                disabled={isSavingEdit}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={editIsPinned}
+                    onChange={(event) => setEditIsPinned(event.target.checked)}
+                  />
+                  Pin Comment
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelEditComment}
+                    className="btn btn-sm btn-secondary"
+                    disabled={isSavingEdit}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveEdit(comment.id)}
+                    className="btn btn-sm btn-primary"
+                    disabled={!editText.trim() || isSavingEdit}
+                  >
+                    {isSavingEdit ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <span className="block whitespace-pre-wrap py-2 text-xs leading-relaxed text-gray-800">
+            {comment.text}
+          </span>
+        );
+      },
+    },
+    {
+      colId: 'actions',
+      headerName: 'Actions',
+      width: 132,
+      minWidth: 132,
+      maxWidth: 132,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<ParticipantCommentItem>) => {
+        const comment = params.data;
+        if (!comment) return null;
+        return (
+          <div className="participant-grid__row-actions">
+            <CommentActionTooltipButton
+              label={comment.pinned ? 'Unpin comment' : 'Pin comment'}
+              disabled={togglingPinId === comment.id}
+              className="participant-grid__row-action"
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleTogglePin(comment);
+              }}
+            >
+              {togglingPinId === comment.id
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Pin size={14} className={comment.pinned ? 'fill-amber-500 text-amber-600' : ''} />}
+            </CommentActionTooltipButton>
+            {canEditOrDelete(comment) && editingCommentId !== comment.id && (
+              <>
+                <CommentActionTooltipButton
+                  label="Edit comment"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    startEditComment(comment);
+                  }}
+                  className="participant-grid__row-action"
+                >
+                  <Edit2 size={14} />
+                </CommentActionTooltipButton>
+                <CommentActionTooltipButton
+                  label="Delete comment"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDeleteComment(comment);
+                  }}
+                  className="participant-grid__row-action participant-grid__row-action--danger"
+                >
+                  <Trash2 size={14} />
+                </CommentActionTooltipButton>
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+  ], [editingCommentId, editText, editIsPinned, isSavingEdit, togglingPinId, canEditOrDelete, startEditComment, cancelEditComment, handleSaveEdit, handleDeleteComment, handleTogglePin]);
+
+  const defaultColDef = useMemo<ColDef<ParticipantCommentItem>>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+  }), []);
   return (
     <div className="space-y-4">
       {/* Add Comment Form - Legacy Ripple Style */}
       <form onSubmit={handleAddComment} className="comment-editor-wrapper bg-white p-3 rounded border border-gray-200">
         <textarea
           id="comment-input"
-          rows={3}
+          rows={5}
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="Add comment"
           aria-label="Add Comment"
-          className="form-textarea w-full text-xs rounded border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+          className="form-textarea min-h-[120px] w-full resize-y rounded border border-gray-300 bg-white text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           disabled={isSubmitting}
         />
 
@@ -290,34 +473,15 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
 
           <button
             type="submit"
-            className="btn btn-sm btn-primary px-4 py-1.5 text-xs font-medium custom-tooltip-btn"
+            className="btn btn-sm btn-primary"
             disabled={!commentText.trim() || isSubmitting}
-            style={{ minWidth: '70px', backgroundColor: '#1d4ed8', color: '#ffffff' }}
             aria-label="Save comment"
-            data-tooltip="Save comment"
+            title="Save comment"
           >
             {isSubmitting ? <Loader2 size={13} className="animate-spin inline" /> : 'Save'}
           </button>
         </div>
       </form>
-
-      {/* Header & Refresh */}
-      <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
-          <MessageSquare size={14} className="text-blue-600" />
-          Comments & Notes ({comments.length})
-        </span>
-        <button
-          type="button"
-          onClick={fetchComments}
-          disabled={isLoading}
-          className="btn btn-ghost btn-xs text-gray-500 hover:text-gray-900 custom-tooltip-btn"
-          data-tooltip="Refresh comments"
-          aria-label="Refresh comments"
-        >
-          <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
-        </button>
-      </div>
 
       {/* Error state */}
       {error && !isLoading && (
@@ -347,192 +511,44 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
         </div>
       )}
 
-      {/* Comments List - Legacy Ripple CommentItem Layout */}
       {!isLoading && comments.length > 0 && (
-        <div className="record-detail__comments-list space-y-2.5">
-          {comments.map((comment) => {
-            const isEditing = editingCommentId === comment.id;
-            const canModify = canEditOrDelete(comment);
-            const edited = isCommentEdited(comment);
-            const authorName = getCommentAuthorName(comment);
-            const initials = getInitials(authorName);
-
-            return (
-              <div
-                key={comment.id}
-                className="record-detail__comment-item p-3 rounded border border-gray-200 transition-all"
-                style={{ backgroundColor: '#f4f5f7' }}
+        <div>
+          <label className="relative mb-3 block max-w-sm">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search comments..."
+              aria-label="Search comments"
+              className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                aria-label="Clear comments search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
               >
-                {/* Line 1: Avatar with initials + tooltip, Date, Pin, Global Badge, and Action Buttons */}
-                <div className="flex items-center justify-between flex-wrap gap-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* User Avatar: White box with border & dark text, plus custom tooltip matching screenshot */}
-                    <div
-                      className="comment-avatar-wrap"
-                      onMouseEnter={() => setHoveredAvatarId(comment.id)}
-                      onMouseLeave={() => setHoveredAvatarId(null)}
-                      data-testid={`comment-avatar-${comment.id}`}
-                    >
-                      <span>{initials}</span>
-
-                      {/* Tooltip matching screenshot with downward pointing triangle */}
-                      <div
-                        className={`comment-avatar-tooltip ${hoveredAvatarId === comment.id ? 'is-visible' : ''}`}
-                        role="tooltip"
-                      >
-                        {authorName}
-                      </div>
-                    </div>
-
-                    {/* Date and edited indicator */}
-                    <span className="text-xs text-gray-800 font-normal">
-                      {formatCommentDate(comment.createdAt)}
-                      {edited && ` (edited ${formatCommentDate(comment.updatedAt)})`}
-                    </span>
-
-                    {/* Pin icon (if pinned) placed right next to date */}
-                    {comment.pinned && (
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePin(comment)}
-                        disabled={togglingPinId === comment.id}
-                        title="Pinned comment (click to unpin)"
-                        className="inline-flex items-center text-gray-900 hover:text-amber-700 cursor-pointer p-0 border-0 bg-transparent"
-                        aria-label="Pinned comment"
-                      >
-                        <Pin size={13} className="fill-gray-900 text-gray-900 -rotate-45" />
-                      </button>
-                    )}
-
-                    {/* Global (Registry) badge placed right next to date & pin */}
-                    {comment.global && (
-                      <span
-                        className="badge-global-comment"
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 10px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          color: '#ffffff',
-                          backgroundColor: '#0284c7',
-                          borderRadius: '9999px',
-                          lineHeight: '1.4',
-                        }}
-                      >
-                        Global (Registry)
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Action buttons (Edit & Delete) on Right */}
-                  {canModify && !isEditing && (
-                    <div className="flex items-center gap-2">
-                      {/* Edit Button: white rectangular box with pencil icon */}
-                      <button
-                        type="button"
-                        onClick={() => startEditComment(comment)}
-                        className="btn-edit-comment custom-tooltip-btn"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '3px 6px',
-                          backgroundColor: '#ffffff',
-                          border: '1px solid #d1d5db',
-                          borderRadius: '3px',
-                          cursor: 'pointer',
-                          color: '#374151',
-                        }}
-                        data-tooltip="Edit comment"
-                        aria-label="Edit comment"
-                        data-testid={`comment-edit-${comment.id}`}
-                      >
-                        <Edit2 size={13} />
-                      </button>
-
-                      {/* Delete Button: red rectangular box with white trash icon */}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteComment(comment)}
-                        className="btn-delete-comment custom-tooltip-btn"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '3px 6px',
-                          backgroundColor: '#d9534f',
-                          border: '1px solid #d43f3a',
-                          borderRadius: '3px',
-                          cursor: 'pointer',
-                          color: '#ffffff',
-                        }}
-                        data-tooltip="Delete comment"
-                        aria-label="Delete comment"
-                        data-testid={`comment-delete-${comment.id}`}
-                      >
-                        <Trash2 size={13} color="#ffffff" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Inline Editing Form */}
-                {isEditing ? (
-                  <div className="p-3 bg-white rounded border border-blue-200 space-y-2 mt-2">
-                    <textarea
-                      rows={3}
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      placeholder="Update comment"
-                      className="form-textarea w-full text-xs rounded border border-gray-300 bg-white"
-                      disabled={isSavingEdit}
-                      aria-label="Edit comment text"
-                    />
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <label className="text-xs font-normal text-gray-700">
-                          Mark Comment As:
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={editIsPinned}
-                            onChange={(e) => setEditIsPinned(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                          />
-                          <span>Pin Comment</span>
-                        </label>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={cancelEditComment}
-                          className="btn btn-sm btn-secondary px-3 py-1 text-xs"
-                          disabled={isSavingEdit}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSaveEdit(comment.id)}
-                          className="btn btn-sm btn-primary px-4 py-1 text-xs"
-                          disabled={!editText.trim() || isSavingEdit}
-                          style={{ backgroundColor: '#1d4ed8', color: '#ffffff' }}
-                        >
-                          {isSavingEdit ? <Loader2 size={13} className="animate-spin inline" /> : 'Save'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* Comment text directly below the header line */
-                  <div className="text-xs text-gray-900 mt-2 whitespace-pre-wrap leading-relaxed">
-                    {comment.text}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                <X size={14} />
+              </button>
+            )}
+          </label>
+          <DataGrid<ParticipantCommentItem>
+            key={editingCommentId || 'comments-grid'}
+            wrapperClassName="participant-email-grid"
+            rowData={comments}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            quickFilterText={searchTerm}
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[5, 10, 20, 50]}
+            headerHeight={42}
+            animateRows
+            suppressCellFocus
+            overlayNoRowsTemplate="<span class='text-slate-500'>No comments recorded.</span>"
+          />
         </div>
       )}
     </div>

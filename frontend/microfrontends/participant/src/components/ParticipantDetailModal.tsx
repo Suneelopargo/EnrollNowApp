@@ -1,5 +1,5 @@
 // frontend/microfrontends/participant/src/components/ParticipantDetailModal.tsx - Detailed Participant Drawer & Editor
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -13,14 +13,18 @@ import {
   Users, 
   ShieldCheck, 
   Trash2, 
-  ExternalLink 
+  ExternalLink,
+  Search,
+  X,
 } from 'lucide-react';
 import { AuthUser } from '../../../../shared/contracts';
 import { getStoredAuthUser } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
-import { GlobalVariableDefinition, isContactForFutureStudies, ParticipantRecord, ParticipantVariable } from '../types/participant';
+import { DataGrid, type ColDef } from '../../../../shared/design-system/components/DataGrid';
+import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
+import { GlobalVariableDefinition, isContactForFutureStudies, ParticipantRecord, ParticipantVariable, StudyItem } from '../types/participant';
 import { ParticipantContactLogs } from './ParticipantContactLogs';
 import { ParticipantContactManagement } from './ParticipantContactManagement';
 import { ParticipantComments } from './ParticipantComments';
@@ -30,7 +34,6 @@ import { ParticipantConsentSection } from './ParticipantConsentSection';
 import { ParticipantFormsSection } from './ParticipantFormsSection';
 import { ParticipantTagSelect } from './ParticipantTagSelect';
 import { isValidDateTimeValue, ParticipantDateTimePicker } from './ParticipantDateTimePicker';
-import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
 import { toast } from '../../../../shared/toaster';
 import { calculateCurrentAge, formatDobForDateInput } from '../utils/participantDateUtils';
 
@@ -105,6 +108,7 @@ const ParticipantStudiesInfo: React.FC<{
   const [consents, setConsents] = useState<ConsentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -118,35 +122,67 @@ const ParticipantStudiesInfo: React.FC<{
     return () => { active = false; };
   }, [participant.id, tenantId, siteId]);
 
+  const studyRows = useMemo(() => (participant.studies || []).map((study: StudyItem) => {
+    const studyId = study.studyId || study.id || '';
+    const consent = consents.find((item) => item.studyId === studyId);
+    return {
+      id: studyId || study.name,
+      name: study.name,
+      participantStudyId: study.participantStudyId || study.studyCode || '—',
+      status: consent?.status || study.status || 'Not Consented',
+      consentedAt: consent?.consentedAt,
+    };
+  }), [participant.studies, consents]);
+
+  const studyColumns = useMemo<ColDef<(typeof studyRows)[number]>[]>(() => [
+    { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
+    { field: 'participantStudyId', headerName: 'ID', minWidth: 130, width: 160 },
+    { field: 'status', headerName: 'Status', minWidth: 150, width: 175 },
+    {
+      field: 'consentedAt',
+      headerName: 'Date Consented',
+      minWidth: 160,
+      width: 190,
+      valueFormatter: (params) => params.value
+        ? new Date(params.value).toLocaleDateString()
+        : 'Not Consented',
+    },
+  ], []);
+
   return (
     <section className="card record-detail__panel record-detail__study-info">
       <div className="card-header"><h3>Studies Info</h3></div>
       {error && <p className="record-detail__inline-error" role="status">{error}</p>}
-      <div className="record-detail__study-table-wrap">
-        <table className="record-detail__study-table">
-          <thead><tr><th>Name</th><th>ID</th><th>Status</th><th>Date Consented</th></tr></thead>
-          <tbody>
-            {participant.studies?.map((study, index) => {
-              const studyId = study.studyId || study.id || '';
-              const consent = consents.find((item) => item.studyId === studyId);
-              return (
-                <tr key={studyId || `${study.name}-${index}`}>
-                  <td>{study.name}</td>
-                  <td>{study.participantStudyId || study.studyCode || '—'}</td>
-                  <td>{consent?.status || study.status || 'Not Consented'}</td>
-                  <td>{consent?.consentedAt ? new Date(consent.consentedAt).toLocaleDateString() : 'Not Consented'}</td>
-                </tr>
-              );
-            })}
-            {!isLoading && (!participant.studies || participant.studies.length === 0) && (
-              <tr><td colSpan={4} className="record-detail__study-empty">No studies are linked to this participant.</td></tr>
-            )}
-            {isLoading && (!participant.studies || participant.studies.length === 0) && (
-              <tr><td colSpan={4} className="record-detail__study-empty">Loading study information...</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <label className="record-detail__study-search">
+        <Search size={15} aria-hidden="true" />
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search studies..."
+          aria-label="Search studies"
+        />
+        {searchTerm && (
+          <button type="button" onClick={() => setSearchTerm('')} aria-label="Clear studies search">
+            <X size={14} />
+          </button>
+        )}
+      </label>
+      <DataGrid
+        wrapperClassName="record-detail__study-grid"
+        rowData={studyRows}
+        columnDefs={studyColumns}
+        defaultColDef={{ sortable: true, resizable: true, filter: true, floatingFilter: true }}
+        quickFilterText={searchTerm}
+        loading={isLoading}
+        pagination
+        paginationPageSize={10}
+        paginationPageSizeSelector={[5, 10, 20, 50]}
+        rowHeight={42}
+        headerHeight={42}
+        suppressCellFocus
+        overlayNoRowsTemplate="<span class='text-slate-500'>No studies are linked to this participant.</span>"
+      />
     </section>
   );
 };

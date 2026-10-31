@@ -27,7 +27,7 @@ public class SendEmailRequest {
     private boolean notify = false;
     private String design;
     private boolean messageIsHtml = false;
-    private List<String> attachments = new ArrayList<>();
+    private List<EmailAttachmentRequest> attachments = new ArrayList<>();
     private UUID studyId;
     private String studyIdentifier;
 
@@ -61,8 +61,8 @@ public class SendEmailRequest {
     public void setDesign(String design) { this.design = design; }
     public boolean isMessageIsHtml() { return messageIsHtml; }
     public void setMessageIsHtml(boolean messageIsHtml) { this.messageIsHtml = messageIsHtml; }
-    public List<String> getAttachments() { return attachments; }
-    public void setAttachments(List<String> attachments) { this.attachments = attachments != null ? attachments : new ArrayList<>(); }
+    public List<EmailAttachmentRequest> getAttachments() { return attachments; }
+    public void setAttachments(List<EmailAttachmentRequest> attachments) { this.attachments = attachments != null ? attachments : new ArrayList<>(); }
     public UUID getStudyId() { return studyId; }
     public void setStudyId(UUID studyId) {
         this.studyId = studyId;

@@ -4,11 +4,8 @@ import {
   Send,
   Loader2,
   X,
-  Plus,
-  Paperclip,
   Star,
   AlertCircle,
-  Trash2,
 } from 'lucide-react';
 import EmailEditor from 'react-email-editor';
 import type { Design, EditorRef, HtmlExport } from 'react-email-editor';
@@ -33,13 +30,6 @@ interface KnownRecipient {
   email: string;
   isPreferred?: boolean;
   label?: string;
-}
-
-interface EmailAttachment {
-  fileName: string;
-  fileSize?: number;
-  fileUploadId?: string;
-  fileContentBase64?: string;
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -101,10 +91,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   const [globalEmail, setGlobalEmail] = useState(true);
   const [notify, setNotify] = useState(false);
 
-  // Attachments
-  const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -161,7 +147,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
 
       setSubject('');
       setReplyTo('');
-      setAttachments([]);
       setLastContact(true);
       setSticky(false);
       setGlobalEmail(true);
@@ -208,42 +193,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     setList: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
     setList(list.filter((e) => e !== email));
-  };
-
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = typeof reader.result === 'string' ? reader.result.split(',')[1] : '';
-        setAttachments((prev) => [
-          ...prev,
-          {
-            fileName: file.name,
-            fileSize: file.size,
-            fileContentBase64: base64,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleEditorReady = useCallback(() => {
@@ -353,11 +302,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           global: globalEmail,
           notify,
           messageIsHtml: true,
-          attachments: attachments.map((a) => ({
-            fileName: a.fileName,
-            fileUploadId: a.fileUploadId,
-            fileContentBase64: a.fileContentBase64,
-          })),
         },
         { tenantId, siteId }
       );
@@ -377,7 +321,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Add Participant Email — ${participantName}`}
+      title="Add Participant Email"
       size="wide"
       footer={
         <div className="flex items-center justify-between w-full">
@@ -403,7 +347,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         </div>
       }
     >
-      <form id="composeEmailForm" onSubmit={handleSend} className="space-y-3.5 text-xs">
+      <form id="composeEmailForm" onSubmit={handleSend} className="compose-email-form space-y-3.5 text-xs">
         {errors.generic && (
           <div className="p-2.5 rounded bg-red-50 border border-red-200 text-red-700 flex items-center gap-2">
             <AlertCircle size={14} className="shrink-0" />
@@ -412,12 +356,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         )}
 
         {/* To Recipients */}
-        <div className="form-group" data-error={Boolean(errors.to)}>
-          <div className="flex items-center justify-between mb-1">
-            <label className="form-label font-semibold text-gray-700" htmlFor="to-input">
-              To <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-2 text-[11px] text-blue-600">
+        <div className="form-group compose-email-row" data-error={Boolean(errors.to)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="to-input">
+            To <span className="text-red-500">*</span>
+          </label>
+          <div className="compose-email-control">
+            <div className="flex items-center justify-end gap-2 mb-1 text-[11px] text-blue-600">
               {!showCc && (
                 <button type="button" onClick={() => setShowCc(true)} className="hover:underline">
                   + CC
@@ -434,10 +378,9 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 </button>
               )}
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
-            {toRecipients.map((email) => (
+            <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
+              {toRecipients.map((email) => (
               <span
                 key={email}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 text-xs"
@@ -452,65 +395,67 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                   <X size={12} />
                 </button>
               </span>
-            ))}
+              ))}
 
-            <input
-              id="to-input"
-              type="email"
-              value={newToInput}
-              onChange={(e) => setNewToInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ',') {
-                  e.preventDefault();
-                  handleAddRecipient('TO', newToInput, setNewToInput, toRecipients, setToRecipients);
-                }
-              }}
-              placeholder={toRecipients.length === 0 ? 'Enter recipient email...' : 'Add another...'}
-              className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
-            />
-          </div>
-
-          {/* Known participant emails with preferred star */}
-          {knownRecipients.length > 0 && (
-            <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
-              <span>Participant emails:</span>
-              {knownRecipients.map((item) => {
-                const isSelected = toRecipients.includes(item.email);
-                return (
-                  <button
-                    key={item.email}
-                    type="button"
-                    onClick={() => {
-                      if (!isSelected) setToRecipients([...toRecipients, item.email]);
-                    }}
-                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                      isSelected
-                        ? 'bg-blue-100 text-blue-800 cursor-default'
-                        : 'bg-gray-100 text-blue-600 hover:bg-gray-200 cursor-pointer'
-                    }`}
-                  >
-                    {item.isPreferred && <Star size={10} className="fill-amber-400 text-amber-500" />}
-                    <span>{item.email}</span>
-                    {item.label && <span className="text-gray-400">· {item.label}</span>}
-                  </button>
-                );
-              })}
+              <input
+                id="to-input"
+                type="email"
+                value={newToInput}
+                onChange={(e) => setNewToInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    handleAddRecipient('TO', newToInput, setNewToInput, toRecipients, setToRecipients);
+                  }
+                }}
+                placeholder={toRecipients.length === 0 ? 'Enter recipient email...' : 'Add another...'}
+                className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
+              />
             </div>
-          )}
-          {isLoadingRecipients && (
-            <span className="mt-1 block text-[11px] text-gray-500">Loading participant email addresses...</span>
-          )}
 
-          {errors.to && <span className="text-red-500 text-xs block mt-1">{errors.to}</span>}
+            {/* Known participant emails with preferred star */}
+            {knownRecipients.length > 0 && (
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
+                <span>Participant emails:</span>
+                {knownRecipients.map((item) => {
+                  const isSelected = toRecipients.includes(item.email);
+                  return (
+                    <button
+                      key={item.email}
+                      type="button"
+                      onClick={() => {
+                        if (!isSelected) setToRecipients([...toRecipients, item.email]);
+                      }}
+                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                        isSelected
+                          ? 'bg-blue-100 text-blue-800 cursor-default'
+                          : 'bg-gray-100 text-blue-600 hover:bg-gray-200 cursor-pointer'
+                      }`}
+                    >
+                      {item.isPreferred && <Star size={10} className="fill-amber-400 text-amber-500" />}
+                      <span>{item.email}</span>
+                      {item.label && <span className="text-gray-400">· {item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {isLoadingRecipients && (
+              <span className="mt-1 block text-[11px] text-gray-500">Loading participant email addresses...</span>
+            )}
+
+            {errors.to && <span className="text-red-500 text-xs block mt-1">{errors.to}</span>}
+          </div>
         </div>
 
         {/* CC */}
         {showCc && (
-          <div className="form-group" data-error={Boolean(errors.cc)}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label font-semibold text-gray-700" htmlFor="cc-input">
-                CC
-              </label>
+          <div className="form-group compose-email-row" data-error={Boolean(errors.cc)}>
+            <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="cc-input">
+              CC
+            </label>
+            <div className="compose-email-control">
+              <div className="mb-1 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -555,16 +500,18 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               />
             </div>
             {errors.cc && <span className="text-red-500 text-xs block mt-1">{errors.cc}</span>}
+            </div>
           </div>
         )}
 
         {/* BCC */}
         {showBcc && (
-          <div className="form-group" data-error={Boolean(errors.bcc)}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label font-semibold text-gray-700" htmlFor="bcc-input">
-                BCC
-              </label>
+          <div className="form-group compose-email-row" data-error={Boolean(errors.bcc)}>
+            <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="bcc-input">
+              BCC
+            </label>
+            <div className="compose-email-control">
+              <div className="mb-1 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -609,16 +556,18 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               />
             </div>
             {errors.bcc && <span className="text-red-500 text-xs block mt-1">{errors.bcc}</span>}
+            </div>
           </div>
         )}
 
         {/* Reply-To Address */}
         {showReplyTo && (
-          <div className="form-group" data-error={Boolean(errors.replyTo)}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label font-semibold text-gray-700" htmlFor="reply-to-input">
-                Reply To Address
-              </label>
+          <div className="form-group compose-email-row" data-error={Boolean(errors.replyTo)}>
+            <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="reply-to-input">
+              Reply To Address
+            </label>
+            <div className="compose-email-control">
+              <div className="mb-1 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -639,14 +588,15 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               className={`form-input ${errors.replyTo ? 'border-red-500' : ''}`}
             />
             {errors.replyTo && <span className="text-red-500 text-xs block mt-1">{errors.replyTo}</span>}
+            </div>
           </div>
         )}
 
-        <div className="space-y-3">
-          <div className="form-group" data-error={Boolean(errors.senderName)}>
-            <label className="form-label font-semibold text-gray-700" htmlFor="sender-name">
-              Sender Name <span className="text-red-500">*</span>
-            </label>
+        <div className="form-group compose-email-row" data-error={Boolean(errors.senderName)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="sender-name">
+            Sender Name <span className="text-red-500">*</span>
+          </label>
+          <div className="compose-email-control">
             <input
               id="sender-name"
               type="text"
@@ -659,10 +609,11 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           </div>
         </div>
 
-        <div className="form-group" data-error={Boolean(errors.subject)}>
-          <label className="form-label font-semibold text-gray-700" htmlFor="email-subject">
+        <div className="form-group compose-email-row" data-error={Boolean(errors.subject)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="email-subject">
             Subject <span className="text-red-500">*</span>
           </label>
+          <div className="compose-email-control">
           <input
             id="email-subject"
             type="text"
@@ -672,16 +623,16 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
             className={`form-input ${errors.subject ? 'border-red-500' : ''}`}
           />
           {errors.subject && <span className="text-red-500 text-xs block mt-1">{errors.subject}</span>}
+          </div>
         </div>
 
         {/* Drag-and-drop email builder */}
-        <div className="form-group" data-error={Boolean(errors.body)}>
-          <div className="flex items-center justify-between mb-1">
-            <label className="form-label font-semibold text-gray-700">
-              Message <span className="text-red-500">*</span>
-            </label>
-          </div>
-          <div data-testid="email-design-editor" aria-label="Email message designer" className="relative overflow-hidden rounded-md border border-gray-200">
+        <div className="form-group compose-email-row" data-error={Boolean(errors.body)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700">
+            Message <span className="text-red-500">*</span>
+          </label>
+          <div className="compose-email-control">
+            <div data-testid="email-design-editor" aria-label="Email message designer" className="relative overflow-hidden rounded-md border border-gray-200">
             {!isEditorReady && !editorError && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50 text-sm text-gray-500">
                 Loading email designer...
@@ -693,81 +644,19 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               onReady={handleEditorReady}
               options={{ displayMode: 'email', appearance: { theme: 'light' } }}
             />
-          </div>
-          {editorError && <span className="text-red-600 text-xs block mt-1" role="alert">{editorError}</span>}
-          {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
-        </div>
-
-        {/* Attachments Section */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-semibold text-gray-700 flex items-center gap-1">
-              <Paperclip size={13} /> Attachments
-            </span>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFilesSelected}
-              multiple
-              className="hidden"
-              id="email-file-input"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
-            >
-              <Plus size={11} /> Attach Files
-            </button>
-          </div>
-
-          {attachments.length > 0 && (
-            <div className="space-y-1 p-2 bg-gray-50 border rounded-md">
-              {attachments.map((att, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs text-gray-700">
-                  <span className="flex items-center gap-1.5 truncate max-w-sm">
-                    <Paperclip size={12} className="text-gray-400" />
-                    <span className="font-medium truncate">{att.fileName}</span>
-                    {att.fileSize && (
-                      <span className="text-[10px] text-gray-400">({formatFileSize(att.fileSize)})</span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveAttachment(idx)}
-                    className="text-gray-400 hover:text-red-600 p-0.5"
-                    aria-label={`Remove attachment ${att.fileName}`}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
             </div>
-          )}
+            {editorError && <span className="text-red-600 text-xs block mt-1" role="alert">{editorError}</span>}
+            {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
+          </div>
         </div>
 
         {/* Mark Email As (Matching Legacy Ripple Checkboxes) */}
-        <div className="pt-2 border-t border-gray-200">
-          <span className="font-semibold text-gray-700 block mb-1.5">Mark Email As:</span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-            {/* Contact */}
+        <div className="compose-email-row mt-1 border-t border-slate-200 pt-3">
+          <span className="font-semibold text-gray-700">Mark Email As:</span>
+          <div className="flex flex-wrap items-center gap-5 text-xs">
             <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Mark as 'Date of Last Contact' for participant."
-            >
-              <input
-                type="checkbox"
-                checked={lastContact}
-                onChange={(e) => setLastContact(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <span>Contact</span>
-            </label>
-
-            {/* Pin Email */}
-            <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Pin current email to top of list."
+              className="flex items-center gap-2 cursor-pointer text-gray-700"
+              title="Pin current email to top of list."
             >
               <input
                 type="checkbox"
@@ -776,33 +665,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 className="w-4 h-4 text-blue-600 rounded border-gray-300"
               />
               <span>Pin Email</span>
-            </label>
-
-            {/* Global */}
-            <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Save contact log to global registry data."
-            >
-              <input
-                type="checkbox"
-                checked={globalEmail}
-                onChange={(e) => setGlobalEmail(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <span>Global</span>
-            </label>
-
-            <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Notify the participant about this email."
-            >
-              <input
-                type="checkbox"
-                checked={notify}
-                onChange={(e) => setNotify(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <span>Notify</span>
             </label>
           </div>
         </div>

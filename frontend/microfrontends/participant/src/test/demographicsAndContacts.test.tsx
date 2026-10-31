@@ -8,6 +8,7 @@ import { AddContactModal } from '../components/AddContactModal';
 import { AddAddressModal } from '../components/AddAddressModal';
 import { RecordConsentModal } from '../components/RecordConsentModal';
 import { AddContactLogModal } from '../components/AddContactLogModal';
+import { ParticipantContactLogs } from '../components/ParticipantContactLogs';
 import { ParticipantRecord } from '../types/participant';
 import { ParticipantContactDetail, ParticipantAddressDetail } from '../../../../shared/api/participantApi';
 
@@ -207,6 +208,19 @@ describe('Contact Methods and Related Contacts Components', () => {
     expect(html).toContain('Save Updates');
   });
 
+  it('renders contact history search and Add Contact controls in one row', () => {
+    const html = renderToStaticMarkup(
+      <ParticipantContactLogs
+        participantId="part-uuid-1"
+        participantName="John Doe"
+      />
+    );
+
+    expect(html).toContain('Search contact history...');
+    expect(html).toContain('aria-label="Add Contact"');
+    expect(html).toMatch(/class="flex items-center justify-between gap-3"><label class="relative block min-w-0 flex-1">[\s\S]*Search contact history\.\.\.[\s\S]*<\/label><button/s);
+  });
+
   it('does not preselect contact, address, consent, or contact-log dropdown values', () => {
     const contactHtml = renderToStaticMarkup(
       <AddContactModal
@@ -250,5 +264,13 @@ describe('Contact Methods and Related Contacts Components', () => {
     expect(contactLogHtml).toContain('Select contact type...');
     expect(contactLogHtml).toContain('Select who contacted the participant...');
     expect(contactLogHtml).toContain('Select contact outcome...');
+    expect(contactLogHtml).toContain('contact-log-modal');
+    expect(contactLogHtml).toContain('contact-log-form');
+    expect(contactLogHtml).toContain('Contact Date/Time');
+    expect(contactLogHtml).toContain('Mark Contact As:');
+    expect(contactLogHtml).toContain('Pin Contact');
+    expect(contactLogHtml).not.toContain('Date of Last Contact');
+    expect(contactLogHtml).not.toContain('Notify Team');
+    expect(contactLogHtml).not.toContain('Global Registry Record');
   });
 });

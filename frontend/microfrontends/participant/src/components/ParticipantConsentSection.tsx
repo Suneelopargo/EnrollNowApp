@@ -1,20 +1,17 @@
 // frontend/microfrontends/participant/src/components/ParticipantConsentSection.tsx - Participant Consent History & Management
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  ShieldCheck,
   Plus,
-  RefreshCw,
   FileText,
-  Clock,
   AlertCircle,
   Pin,
   Pencil,
   Trash2,
-  ChevronDown,
-  ChevronRight,
   Globe,
   Loader2,
-  Download,
+  Eye,
+  Search,
+  X,
 } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
@@ -23,6 +20,9 @@ import {
   participantApi,
   ConsentLogItem,
 } from '../../../../shared/api/participantApi';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
+import { Modal } from '../../../../shared/design-system/components/Modal';
 import { RecordConsentModal } from './RecordConsentModal';
 
 export interface ParticipantConsentSectionProps {
@@ -46,8 +46,8 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Expandable row state
-  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
+  const [selectedLog, setSelectedLog] = useState<ConsentLogItem | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -76,18 +76,6 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
     fetchConsentLogs();
   }, [fetchConsentLogs]);
 
-  const toggleRowExpansion = (logId: string) => {
-    setExpandedLogIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(logId)) {
-        next.delete(logId);
-      } else {
-        next.add(logId);
-      }
-      return next;
-    });
-  };
-
   const handleOpenAddModal = () => {
     setSelectedLogForEdit(null);
     setIsModalOpen(true);
@@ -108,11 +96,36 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
     onParticipantUpdated?.();
   };
 
+  const handlePreviewAttachment = async (log: ConsentLogItem) => {
+    const previewTab = window.open('about:blank', '_blank');
+    if (!previewTab) {
+      toast.error('Allow pop-ups to preview this attachment in a new tab.');
+      return;
+    }
+
+    previewTab.opener = null;
+    try {
+      const file = await participantApi.getConsentAttachment(participantId, log.id, { tenantId, siteId });
+      const previewUrl = URL.createObjectURL(file);
+      previewTab.location.href = previewUrl;
+      const cleanup = window.setInterval(() => {
+        if (previewTab.closed) {
+          URL.revokeObjectURL(previewUrl);
+          window.clearInterval(cleanup);
+        }
+      }, 1000);
+    } catch (err: unknown) {
+      previewTab.close();
+      toast.error(getApiErrorMessage(err, 'Unable to load the consent attachment.'));
+    }
+  };
+
   const handleTogglePin = async (log: ConsentLogItem) => {
     setTogglingPinId(log.id);
     const newSticky = !log.sticky;
     try {
       await participantApi.pinConsentLog(participantId, log.id, newSticky, { tenantId, siteId });
+      setSelectedLog((current) => current?.id === log.id ? { ...current, sticky: newSticky } : current);
       toast.success(newSticky ? 'Consent log pinned' : 'Consent log unpinned');
       await fetchConsentLogs();
     } catch (err: any) {
@@ -136,6 +149,7 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
       onConfirm: async () => {
         try {
           await participantApi.deleteConsentLog(participantId, log.id, { tenantId, siteId });
+          setSelectedLog((current) => current?.id === log.id ? null : current);
           toast.success('Consent log deleted successfully');
           await fetchConsentLogs();
           onParticipantUpdated?.();
@@ -184,32 +198,140 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
     }
   };
 
+  const columnDefs = useMemo<ColDef<ConsentLogItem>[]>(() => [
+    {
+      field: 'consentDate',
+      headerName: 'Consent Date',
+      minWidth: 165,
+      width: 170,
+      valueFormatter: (params) => formatDateTime(params.value),
+    },
+    { field: 'consentType', headerName: 'Consent Type', minWidth: 145, width: 150 },
+    {
+      field: 'consentTitle',
+      headerName: 'Consent Title',
+      minWidth: 145,
+      flex: 1,
+      maxWidth: 240,
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      field: 'consentedBy',
+      headerName: 'Consented By',
+      minWidth: 145,
+      width: 150,
+      valueGetter: (params) => params.data?.consentedBy || params.data?.createdByName || '—',
+    },
+    {
+      colId: 'actions',
+      headerName: 'Actions',
+      width: 168,
+      minWidth: 168,
+      maxWidth: 168,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<ConsentLogItem>) => {
+        const log = params.data;
+        if (!log) return null;
+        return (
+          <div className="participant-grid__row-actions">
+            <TooltipButton
+              label={log.sticky ? 'Unpin consent' : 'Pin consent'}
+              disabled={togglingPinId === log.id || log.pinnable === false}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleTogglePin(log);
+              }}
+              className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
+            >
+              {togglingPinId === log.id
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
+            </TooltipButton>
+            {log.fileAttached && log.downloadUrl ? (
+              <TooltipButton
+                label={`Preview ${log.fileName || 'consent attachment'}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handlePreviewAttachment(log);
+                }}
+                className="participant-grid__row-action"
+              >
+                <Eye size={14} />
+              </TooltipButton>
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
+            {log.editable !== false && (
+              <>
+                <TooltipButton
+                  label="Edit consent log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenEditModal(log);
+                  }}
+                  className="participant-grid__row-action"
+                >
+                  <Pencil size={14} />
+                </TooltipButton>
+                <TooltipButton
+                  label="Delete consent log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDeleteLog(log);
+                  }}
+                  className="participant-grid__row-action participant-grid__row-action--danger"
+                >
+                  <Trash2 size={14} />
+                </TooltipButton>
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+  ], [togglingPinId, handleTogglePin, handleOpenEditModal, handleDeleteLog]);
+
+  const defaultColDef = useMemo<ColDef<ConsentLogItem>>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+  }), []);
+
   return (
     <div className="space-y-4">
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={16} className="text-indigo-600" />
-          <div>
-            <h4 className="text-sm font-semibold text-gray-800">Study Consents</h4>
-            <p className="text-xs text-gray-500">
-              Administrative and legal consent logs, versions, and attachments for {participantName}.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-            id="add-consent-log-modal-button"
-            title="Record Consent"
-            aria-label="Record Consent"
-          >
-            <Plus size={14} /> Add Consent
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search consents..."
+            aria-label="Search consents"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear consent search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <TooltipButton
+          label="Add Consent"
+          id="add-consent-log-modal-button"
+          onClick={handleOpenAddModal}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Plus size={14} /> Add Consent
+        </TooltipButton>
       </div>
 
       {/* Loading state */}
@@ -245,246 +367,81 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
           <p className="text-xs text-gray-500 max-w-sm mb-4">
             No administrative consent records have been logged for {participantName} yet.
           </p>
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-          >
-            <Plus size={14} /> Add Consent
-          </button>
         </div>
       )}
 
-      {/* Legacy Footable-style Consent History Table */}
       {!isLoading && logs.length > 0 && (
-        <div className="table-container bg-white border border-gray-200 rounded-lg shadow-xs overflow-visible">
-          <table className="min-w-full divide-y divide-gray-200 text-left text-xs" id="consent-log-list">
-            <thead className="bg-gray-50 font-semibold text-gray-600">
-              <tr>
-                <th scope="col" className="px-3.5 py-2.5">Consent Date</th>
-                <th scope="col" className="px-3.5 py-2.5">Consent Type</th>
-                <th scope="col" className="px-3.5 py-2.5">Consent Title</th>
-                <th scope="col" className="px-3.5 py-2.5">Attachment</th>
-                <th scope="col" className="px-3.5 py-2.5 text-right">&nbsp;</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {logs.map((log) => {
-                const isExpanded = expandedLogIds.has(log.id);
-                const isToggling = togglingPinId === log.id;
-                const formattedDate = formatDateTime(log.consentDate);
-                const authorName = log.updatedByName || log.consentedBy || log.createdByName || 'User';
-                const avatarInitials = log.updatedByInitials || log.createdByInitials || 'SK';
-
-                return (
-                  <React.Fragment key={log.id}>
-                    {/* Primary Row */}
-                    <tr
-                      className={`hover:bg-gray-50/80 transition-colors cursor-pointer ${
-                        log.sticky ? 'bg-amber-50/40' : ''
-                      }`}
-                      onClick={() => toggleRowExpansion(log.id)}
-                    >
-                      <td className="px-3.5 py-2.5 whitespace-nowrap overflow-visible">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="p-0.5 text-gray-400 hover:text-gray-700 focus:outline-none"
-                            aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRowExpansion(log.id);
-                            }}
-                          >
-                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-
-                          {log.sticky && (
-                            <span
-                              className="inline-flex text-amber-600 custom-tooltip-btn cursor-default"
-                              data-tooltip="Pinned to top"
-                              aria-label="Pinned Consent"
-                            >
-                              <Pin size={13} className="fill-amber-500" />
-                            </span>
-                          )}
-
-                          <span className="font-semibold text-gray-800">{formattedDate}</span>
-
-                          {log.global && (
-                            <span
-                              className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-0.5 custom-tooltip-btn cursor-default"
-                              data-tooltip={log.studyName ? `Global (${log.studyName})` : 'Global (Registry)'}
-                              aria-label={log.studyName ? `Global (${log.studyName})` : 'Global (Registry)'}
-                            >
-                              <Globe size={10} />
-                              Global ({log.studyName || 'Registry'})
-                            </span>
-                          )}
-
-                          {log.editable !== false && (
-                            <div className="participant-grid__row-actions inline-flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditModal(log)}
-                                className="participant-grid__row-action custom-tooltip-btn"
-                                data-tooltip="Edit consent log"
-                                aria-label="Edit consent log"
-                              >
-                                <Pencil size={13} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLog(log)}
-                                className="participant-grid__row-action participant-grid__row-action--danger custom-tooltip-btn tooltip-align-right"
-                                data-tooltip="Delete consent log"
-                                aria-label="Delete consent log"
-                              >
-                                <Trash2 size={13} aria-hidden="true" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap text-gray-700">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-medium">
-                          {log.consentType}
-                        </span>
-                      </td>
-
-                      <td className="px-3.5 py-2.5 font-medium text-gray-900 max-w-xs truncate">
-                        {log.consentTitle}
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap overflow-visible" onClick={(e) => e.stopPropagation()}>
-                        {log.fileAttached && log.downloadUrl ? (
-                          <a
-                            href={log.downloadUrl}
-                            download={log.fileName || 'attachment'}
-                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline max-w-[150px] truncate custom-tooltip-btn"
-                            data-tooltip={`Download ${log.fileName || 'attachment'}`}
-                            aria-label={`Download ${log.fileName || 'attachment'}`}
-                          >
-                            <FileText size={12} />
-                            <span className="truncate">{log.fileName || 'Attachment'}</span>
-                          </a>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap text-right overflow-visible">
-                        <div className="comment-avatar-wrap inline-flex items-center justify-center cursor-pointer">
-                          <span>{avatarInitials}</span>
-                          <div className="comment-avatar-tooltip tooltip-align-right" role="tooltip">
-                            {authorName}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Expandable Details Row */}
-                    {isExpanded && (
-                      <tr className="bg-gray-50/70 border-b border-gray-200">
-                        <td colSpan={5} className="px-6 py-3 text-xs text-gray-700">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pb-2">
-                            {/* Version */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Version</span>
-                              <span className="text-gray-800">{log.version || '—'}</span>
-                            </div>
-
-                            {/* Consented By */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Consented By</span>
-                              <span className="text-gray-800">{log.consentedBy || '—'}</span>
-                            </div>
-
-                            {/* Expiration */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Expiration</span>
-                              <span className="text-gray-800">{formatDateOnly(log.expiration)}</span>
-                            </div>
-
-                            {/* Attachment Details */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Attachment</span>
-                              {log.fileAttached && log.downloadUrl ? (
-                                <a
-                                  href={log.downloadUrl}
-                                  download={log.fileName || 'attachment'}
-                                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                                >
-                                  <Download size={13} />
-                                  <span>{log.fileName || 'Download'}</span>
-                                  {log.fileSizeBytes && (
-                                    <span className="text-gray-400 text-[10px]">
-                                      ({Math.round(log.fileSizeBytes / 1024)} KB)
-                                    </span>
-                                  )}
-                                </a>
-                              ) : (
-                                <span className="text-gray-400">None</span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Comments */}
-                          {log.comments && (
-                            <div className="mt-2">
-                              <span className="font-semibold text-gray-500 block mb-0.5">Comments</span>
-                              <div className="bg-white p-2 rounded-md border border-gray-200 whitespace-pre-wrap text-gray-800">
-                                {log.comments}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Mark Consent As (Checkboxes) & Audit Info */}
-                          <div className="mt-3 pt-2.5 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
-                            <div className="flex items-center gap-4">
-                              <span className="font-semibold text-gray-600">Mark Consent As:</span>
-                              <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="form-checkbox h-3.5 w-3.5 text-blue-600 rounded-sm"
-                                  checked={log.sticky}
-                                  disabled={isToggling || log.pinnable === false}
-                                  onChange={() => handleTogglePin(log)}
-                                />
-                                <span className={log.sticky ? 'font-medium text-amber-700' : ''}>Pin Consent</span>
-                              </label>
-
-                              {log.global && (
-                                <span className="inline-flex items-center gap-1 text-indigo-700">
-                                  <Globe size={11} /> Global
-                                </span>
-                              )}
-
-                              {log.lastContact && (
-                                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
-                                  Date of Last Contact
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="text-gray-400">
-                              {log.createdByName && <span>Created by {log.createdByName} </span>}
-                              {log.updatedByName && log.updatedByName !== log.createdByName && (
-                                <span>&bull; Modified by {log.updatedByName}</span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          <DataGrid<ConsentLogItem>
+            wrapperClassName="participant-email-grid"
+            rowData={logs}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            quickFilterText={searchTerm}
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[5, 10, 20, 50]}
+            rowHeight={48}
+            headerHeight={42}
+            animateRows
+            suppressCellFocus
+            onRowClicked={(event) => {
+              const target = event.event?.target as HTMLElement | null;
+              if (!event.data || target?.closest('button, a')) return;
+              setSelectedLog(event.data ?? null);
+            }}
+            rowClass="cursor-pointer"
+            overlayNoRowsTemplate="<span class='text-slate-500'>No consents match your search.</span>"
+          />
         </div>
       )}
+
+      <Modal
+        isOpen={Boolean(selectedLog)}
+        onClose={() => setSelectedLog(null)}
+        title={selectedLog?.consentTitle || 'Consent details'}
+        size="wide"
+        className="consent-details-modal"
+      >
+        {selectedLog && (
+          <div className="consent-details-content">
+            <div className="consent-details-grid">
+              <div><span>Consent Type</span><p>{selectedLog.consentType || '—'}</p></div>
+              <div><span>Consent Date</span><p>{formatDateTime(selectedLog.consentDate) || '—'}</p></div>
+              <div><span>Consented By</span><p>{selectedLog.consentedBy || selectedLog.createdByName || '—'}</p></div>
+              <div><span>Version</span><p>{selectedLog.version || '—'}</p></div>
+              <div><span>Expiration</span><p>{formatDateOnly(selectedLog.expiration)}</p></div>
+              <div>
+                <span>Attachment</span>
+                {selectedLog.fileAttached && selectedLog.downloadUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => void handlePreviewAttachment(selectedLog)}
+                    className="consent-details-attachment"
+                  >
+                    <FileText size={15} />
+                    {selectedLog.fileName || 'Preview attachment'}
+                    {selectedLog.fileSizeBytes ? ` (${Math.round(selectedLog.fileSizeBytes / 1024)} KB)` : ''}
+                  </button>
+                ) : <p>None</p>}
+              </div>
+            </div>
+            <div className="consent-details-comments">
+              <span>Comments</span>
+              <p>{selectedLog.comments || 'No comments'}</p>
+            </div>
+            <div className="consent-details-meta">
+              {selectedLog.sticky && <span><Pin size={14} /> Pinned</span>}
+              {selectedLog.global && <span><Globe size={14} /> Global</span>}
+              {selectedLog.lastContact && <span>Date of Last Contact</span>}
+              {selectedLog.createdByName && <span>Created by {selectedLog.createdByName}</span>}
+              {selectedLog.updatedByName && selectedLog.updatedByName !== selectedLog.createdByName && (
+                <span>Modified by {selectedLog.updatedByName}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Add / Edit Consent Modal */}
       <RecordConsentModal

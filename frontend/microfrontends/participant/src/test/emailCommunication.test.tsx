@@ -2,7 +2,7 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { ParticipantEmailSection } from '../components/ParticipantEmailSection';
+import { getEmailPreviewDocument, ParticipantEmailSection } from '../components/ParticipantEmailSection';
 import { ComposeEmailModal, isEmailDesignEmpty } from '../components/ComposeEmailModal';
 
 describe('Email Communication History & Compose Modal', () => {
@@ -11,7 +11,14 @@ describe('Email Communication History & Compose Modal', () => {
     expect(isEmailDesignEmpty({ body: { rows: [{ columns: [{ contents: [{ type: 'text' }] }] }] } })).toBe(false);
   });
 
-  it('renders ParticipantEmailSection with dark blue table header and compose button', () => {
+  it('renders email HTML as a preview and escapes plain-text messages', () => {
+    expect(getEmailPreviewDocument('<p>Welcome</p>', true)).toBe('<p>Welcome</p>');
+    expect(getEmailPreviewDocument('<script>alert(1)</script>', false)).toContain(
+      '&lt;script&gt;alert(1)&lt;/script&gt;'
+    );
+  });
+
+  it('renders the email search and Add Email button without a history heading', () => {
     const html = renderToString(
       <ParticipantEmailSection
         participantId="part-1"
@@ -19,11 +26,14 @@ describe('Email Communication History & Compose Modal', () => {
       />
     );
 
-    expect(html).toContain('Email Communication History');
-    expect(html).toContain('Compose Email');
+    expect(html).not.toContain('Email Communication History');
+    expect(html).toContain('Add Email');
+    expect(html).toContain('Search emails...');
+    expect(html).toMatch(/class="flex items-center justify-between gap-3"><label class="relative block min-w-0 flex-1">[\s\S]*Search emails\.\.\.[\s\S]*<\/label><button/s);
+    expect(html).not.toContain('Compose Email');
   });
 
-  it('renders the legacy email fields and drag-and-drop message designer', () => {
+  it('renders the legacy email fields and message designer without attachment controls', () => {
     const html = renderToString(
       <ComposeEmailModal
         isOpen={true}
@@ -34,7 +44,10 @@ describe('Email Communication History & Compose Modal', () => {
       />
     );
 
-    expect(html).toContain('Add Participant Email — John Doe');
+    expect(html).toContain('Add Participant Email');
+    expect(html).not.toContain('Add Participant Email — John Doe');
+    expect(html).toContain('compose-email-form');
+    expect(html).toContain('compose-email-row');
     expect(html).toContain('To');
     expect(html).toContain('CC');
     expect(html).toContain('BCC');
@@ -43,11 +56,13 @@ describe('Email Communication History & Compose Modal', () => {
     expect(html).toContain('Subject');
     expect(html).toContain('Message');
     expect(html).toContain('email-design-editor');
-    expect(html).toContain('Attachments');
+    expect(html).not.toContain('Attachments');
+    expect(html).not.toContain('Attach Files');
     expect(html).toContain('Mark Email As:');
-    expect(html).toContain('Contact');
     expect(html).toContain('Pin Email');
-    expect(html).toContain('Global');
-    expect(html).toContain('Notify');
+    expect(html).not.toContain('>Contact</span>');
+    expect(html).not.toContain('>Global</span>');
+    expect(html).not.toContain('>Notify</span>');
+    expect(html).toContain('title="Pin current email to top of list."');
   });
 });

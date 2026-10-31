@@ -1,6 +1,8 @@
 package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.identity.services.InvitationEmailService;
+import com.enrollnow.identity.services.MailAttachment;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
@@ -12,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.server.ResponseStatusException;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -49,6 +52,8 @@ class ParticipantWorkflowServiceTest {
     private StudyRepository studyRepository;
     @Mock
     private AuditRecorder auditRecorder;
+    @Mock
+    private InvitationEmailService invitationEmailService;
 
     private ParticipantWorkflowService workflowService;
 
@@ -71,7 +76,9 @@ class ParticipantWorkflowServiceTest {
                 surveyAssignmentRepository,
                 surveyDefinitionRepository,
                 studyRepository,
-                auditRecorder
+                auditRecorder,
+                null,
+                invitationEmailService
         );
     }
 
@@ -130,6 +137,36 @@ class ParticipantWorkflowServiceTest {
         assertTrue(sent.isPinned());
         assertTrue(sent.isSticky());
         assertEquals(1, sent.getRecipients().size());
+        verify(invitationEmailService).sendParticipantEmail(
+                List.of("patient@example.com"),
+                List.of(),
+                List.of(),
+                null,
+                "Appointment Confirmation",
+                "Please arrive at 10 AM.",
+                false,
+                List.of()
+        );
+    }
+
+    @Test
+    void testSendEmail_doesNotRecordSentWhenDeliveryFails() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+        doThrow(new IllegalStateException("Microsoft Graph delivery failed"))
+                .when(invitationEmailService)
+                .sendParticipantEmail(any(), any(), any(), any(), any(), any(), anyBoolean(), any());
+
+        SendEmailRequest request = new SendEmailRequest();
+        request.setTo(List.of("patient@example.com"));
+        request.setSubject("Appointment Confirmation");
+        request.setBody("Please arrive at 10 AM.");
+
+        assertThrows(IllegalStateException.class,
+                () -> workflowService.sendEmail(tenantId, participantId, userId, "Dr. Bob", request));
+        verify(communicationRepository, never()).save(any(Communication.class));
     }
 
     @Test
@@ -150,6 +187,11 @@ class ParticipantWorkflowServiceTest {
         request.setSticky(true);
         request.setLastContact(true);
         request.setMessageIsHtml(true);
+        EmailAttachmentRequest attachment = new EmailAttachmentRequest();
+        attachment.setFileName("welcome.pdf");
+        attachment.setFileContentType("application/pdf");
+        attachment.setFileContentBase64("aGVsbG8=");
+        request.setAttachments(List.of(attachment));
 
         when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> {
             Communication c = inv.getArgument(0);
@@ -167,6 +209,20 @@ class ParticipantWorkflowServiceTest {
         assertTrue(sent.isLastContact());
         assertTrue(sent.isMessageIsHtml());
         assertEquals(3, sent.getRecipients().size());
+        verify(invitationEmailService).sendParticipantEmail(
+                List.of("recipient@example.com"),
+                List.of("cc@example.com"),
+                List.of("bcc@example.com"),
+                "replies@example.com",
+                "Study Welcome",
+                "Welcome to the study!",
+                true,
+                List.of(new MailAttachment("welcome.pdf", "application/pdf", "aGVsbG8="))
+        );
+        ArgumentCaptor<Communication> savedCommunication = ArgumentCaptor.forClass(Communication.class);
+        verify(communicationRepository).save(savedCommunication.capture());
+        assertTrue(savedCommunication.getValue().getMetadata().contains("welcome.pdf"));
+        assertFalse(savedCommunication.getValue().getMetadata().contains("aGVsbG8="));
     }
 
     @Test

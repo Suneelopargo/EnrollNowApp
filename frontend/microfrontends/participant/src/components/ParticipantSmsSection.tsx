@@ -1,10 +1,12 @@
 // frontend/microfrontends/participant/src/components/ParticipantSmsSection.tsx - Legacy Ripple Grid Style Text Messages
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Loader2, Pin, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Loader2, Pin, Search, X } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
 import { AuthUser } from '../../../../shared/contracts';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { ComposeSmsModal } from './ComposeSmsModal';
 
 export interface ParticipantSmsSectionProps {
@@ -15,9 +17,6 @@ export interface ParticipantSmsSectionProps {
   siteId?: string;
   currentUser?: AuthUser | null;
 }
-
-type SortField = 'date' | 'from' | 'to' | 'message';
-type SortDirection = 'asc' | 'desc';
 
 export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
   participantId,
@@ -32,11 +31,7 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [togglingPinId, setTogglingPinId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState<boolean>(false);
-  const [hoveredAvatarId, setHoveredAvatarId] = useState<string | null>(null);
-
-  // Sorting
-  const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchMessages = useCallback(async () => {
     if (!participantId) return;
@@ -72,15 +67,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
     }
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDir(field === 'date' ? 'desc' : 'asc');
-    }
-  };
-
   const getRecipientString = (msg: CommunicationItem) => {
     if (msg.recipients && msg.recipients.length > 0) {
       return msg.recipients.map((r) => r.recipientValue).join(', ');
@@ -95,13 +81,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
     if (parts.length > 0) return parts.join(' ');
     if (currentUser?.username) return currentUser.username.trim();
     return 'Suneel Kumar';
-  };
-
-  const getInitials = (nameStr: string) => {
-    const parts = nameStr.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return 'CU';
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
   const formatDate = (dateStr?: string) => {
@@ -125,55 +104,152 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
       if (a.pinned !== b.pinned) {
         return a.pinned ? -1 : 1;
       }
-      let cmp = 0;
-      if (sortField === 'date') {
-        const timeA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
-        const timeB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
-        cmp = timeA - timeB;
-      } else if (sortField === 'from') {
-        cmp = getSenderName(a).localeCompare(getSenderName(b));
-      } else if (sortField === 'to') {
-        cmp = getRecipientString(a).localeCompare(getRecipientString(b));
-      } else if (sortField === 'message') {
-        cmp = (a.body || '').localeCompare(b.body || '');
-      }
-      return sortDir === 'asc' ? cmp : -cmp;
+      const timeA = new Date(a.sentAt || 0).getTime();
+      const timeB = new Date(b.sentAt || 0).getTime();
+      return timeB - timeA;
     });
-  }, [messages, sortField, sortDir]);
+  }, [messages]);
 
-  const renderSortIndicator = (field: SortField) => {
-    if (sortField !== field) {
-      return <ArrowUpDown size={12} className="inline ml-1 text-gray-400 opacity-60" />;
-    }
-    return sortDir === 'asc' ? (
-      <ArrowUp size={12} className="inline ml-1 text-gray-700" />
-    ) : (
-      <ArrowDown size={12} className="inline ml-1 text-gray-700" />
-    );
-  };
+  const columnDefs = useMemo<ColDef<CommunicationItem>[]>(() => [
+    {
+      colId: 'sentAt',
+      headerName: 'Date',
+      minWidth: 290,
+      flex: 1,
+      filter: false,
+      floatingFilter: false,
+      valueGetter: (params) => params.data?.sentAt || params.data?.createdAt || '',
+      getQuickFilterText: (params) => {
+        const message = params.data;
+        if (!message) return '';
+        return `${formatDate(message.sentAt || message.createdAt)} ${message.global ? 'Global Registry' : ''}`;
+      },
+      comparator: (a, b) => new Date(a || 0).getTime() - new Date(b || 0).getTime(),
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const message = params.data;
+        if (!message) return null;
+        return (
+          <div className="flex items-center gap-2 whitespace-nowrap py-1">
+            <span className="shrink-0 text-xs text-gray-800">
+              {formatDate(message.sentAt || message.createdAt)}
+            </span>
+            {message.global && (
+              <span
+                title="Global (Registry)"
+                style={{
+                  display: 'inline-block',
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  backgroundColor: '#0284c7',
+                  borderRadius: '9999px',
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}
+              >
+                Global (Registry)
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      colId: 'from',
+      headerName: 'From',
+      minWidth: 150,
+      valueGetter: (params) => params.data ? getSenderName(params.data) : '',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      colId: 'to',
+      headerName: 'To',
+      minWidth: 170,
+      valueGetter: (params) => params.data ? getRecipientString(params.data) : '',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      field: 'body',
+      headerName: 'Message',
+      minWidth: 220,
+      flex: 1,
+      tooltipValueGetter: (params) => params.value,
+      cellStyle: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    },
+    {
+      colId: 'pin',
+      headerName: 'Pin',
+      width: 76,
+      minWidth: 76,
+      maxWidth: 76,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const message = params.data;
+        if (!message) return null;
+        const isUpdating = togglingPinId === message.id;
+        const label = message.pinned ? 'Unpin text' : 'Pin text';
+        return (
+          <TooltipButton
+            label={label}
+            disabled={isUpdating}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleTogglePin(message);
+            }}
+            className="flex h-full w-full items-center justify-center disabled:cursor-not-allowed"
+            style={{ color: message.pinned ? '#b45309' : '#94a3b8' }}
+          >
+            {isUpdating ? <Loader2 size={15} className="animate-spin" /> : (
+              <Pin size={15} fill={message.pinned ? 'currentColor' : 'none'} />
+            )}
+          </TooltipButton>
+        );
+      },
+    },
+  ], [togglingPinId, currentUser, handleTogglePin]);
+
+  const defaultColDef = useMemo<ColDef<CommunicationItem>>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+  }), []);
 
   return (
     <div className="space-y-3">
-      {/* Top action row matching Image 2 */}
-      <div className="flex items-center justify-between pb-1">
-        <button
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search text messages..."
+            aria-label="Search text messages"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear text message search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <TooltipButton
+          label="Add Text"
           id="add-text-log-modal-button"
-          type="button"
           onClick={() => setIsComposeOpen(true)}
-          className="btn btn-primary flex items-center gap-1.5 custom-tooltip-btn"
-          data-tooltip="Add Text"
-          style={{
-            backgroundColor: '#1d4ed8',
-            color: '#ffffff',
-            fontWeight: 600,
-            fontSize: '13px',
-            padding: '7px 18px',
-            borderRadius: '4px',
-            border: 'none',
-          }}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
         >
           <Plus size={15} /> Add Text
-        </button>
+        </TooltipButton>
       </div>
 
       {/* Loading state */}
@@ -194,173 +270,23 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
         </div>
       )}
 
-      {/* Legacy Table / Grid View */}
       {!isLoading && (
-        <div className="border border-gray-200 rounded overflow-x-auto bg-white shadow-xs">
-          <table className="w-full border-collapse text-xs text-left min-w-[500px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 font-semibold select-none">
-                <th
-                  scope="col"
-                  className="py-2.5 px-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                  style={{ width: '25%' }}
-                  onClick={() => handleSort('date')}
-                >
-                  Date/Time Sent {renderSortIndicator('date')}
-                </th>
-                <th
-                  scope="col"
-                  className="py-2.5 px-2 cursor-pointer hover:bg-gray-100 transition-colors"
-                  style={{ width: '10%' }}
-                  onClick={() => handleSort('from')}
-                >
-                  From {renderSortIndicator('from')}
-                </th>
-                <th
-                  scope="col"
-                  className="py-2.5 px-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                  style={{ width: '20%' }}
-                  onClick={() => handleSort('to')}
-                >
-                  To {renderSortIndicator('to')}
-                </th>
-                <th
-                  scope="col"
-                  className="py-2.5 px-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                  style={{ width: '40%' }}
-                  onClick={() => handleSort('message')}
-                >
-                  Message {renderSortIndicator('message')}
-                </th>
-                <th scope="col" className="py-2.5 px-2 text-right" style={{ width: '5%' }}>
-                  &nbsp;
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {sortedMessages.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-gray-400 italic">
-                    No text messages logged yet.
-                  </td>
-                </tr>
-              ) : (
-                sortedMessages.map((msg) => {
-                  const sender = getSenderName(msg);
-                  const initials = getInitials(sender);
-                  const recipients = getRecipientString(msg);
-
-                  return (
-                    <tr
-                      key={msg.id}
-                      className={`group hover:bg-gray-50 transition-colors ${
-                        msg.pinned ? 'bg-amber-50/40' : ''
-                      }`}
-                    >
-                      {/* Date / Time Sent column */}
-                      <td className="py-2.5 px-3 text-gray-800 align-top">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {msg.pinned && (
-                            <Pin
-                              size={13}
-                              className="fill-gray-900 text-gray-900 -rotate-45 flex-shrink-0"
-                              aria-label="Pinned"
-                            />
-                          )}
-                          <span className="font-medium text-gray-900">
-                            {formatDate(msg.sentAt || (msg as any).createdAt)}
-                          </span>
-                          <span
-                            className="badge-global-comment"
-                            style={{
-                              display: 'inline-block',
-                              padding: '2px 8px',
-                              fontSize: '11px',
-                              fontWeight: 'bold',
-                              color: '#ffffff',
-                              backgroundColor: '#0070ba',
-                              borderRadius: '10px',
-                              lineHeight: '1.4',
-                            }}
-                          >
-                            Global (Registry)
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* From column: Initials box + custom tooltip */}
-                      <td className="py-2.5 px-3 align-top">
-                        <div
-                          className="comment-avatar-wrap inline-block"
-                          onMouseEnter={() => setHoveredAvatarId(msg.id)}
-                          onMouseLeave={() => setHoveredAvatarId(null)}
-                        >
-                          <div
-                            style={{
-                              width: '26px',
-                              height: '26px',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid #d1d5db',
-                              borderRadius: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              color: '#374151',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                            }}
-                          >
-                            {initials}
-                          </div>
-                          {hoveredAvatarId === msg.id && (
-                            <div className="comment-avatar-tooltip is-visible" role="tooltip">
-                              {sender}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* To column */}
-                      <td className="py-2.5 px-3 text-gray-800 font-medium align-top">
-                        {recipients}
-                      </td>
-
-                      {/* Message column */}
-                      <td className="py-2.5 px-3 text-gray-700 align-top whitespace-pre-wrap leading-relaxed">
-                        {msg.body}
-                      </td>
-
-                      {/* Actions / Pin column */}
-                      <td className="py-2.5 px-2 align-top text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePin(msg)}
-                          disabled={togglingPinId === msg.id}
-                          data-tooltip={msg.pinned ? 'Unpin text' : 'Pin text'}
-                          aria-label={msg.pinned ? 'Unpin text' : 'Pin text'}
-                          className={`p-1 rounded transition-colors custom-tooltip-btn tooltip-align-right ${
-                            msg.pinned
-                              ? 'text-gray-900 hover:bg-gray-200 opacity-100'
-                              : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100 opacity-0 group-hover:opacity-100 focus:opacity-100'
-                          }`}
-                        >
-                          {togglingPinId === msg.id ? (
-                            <Loader2 size={13} className="animate-spin inline" />
-                          ) : (
-                            <Pin
-                              size={13}
-                              className={msg.pinned ? 'fill-gray-900 text-gray-900 -rotate-45' : ''}
-                            />
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          <DataGrid<CommunicationItem>
+            wrapperClassName="participant-email-grid"
+            rowData={sortedMessages}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            quickFilterText={searchTerm}
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[5, 10, 20, 50]}
+            rowHeight={48}
+            headerHeight={42}
+            animateRows
+            suppressCellFocus
+            overlayNoRowsTemplate="<span class='text-slate-500'>No text messages match your search.</span>"
+          />
         </div>
       )}
 

@@ -181,6 +181,24 @@ describe('Consent Log API Client Integration', () => {
     const url = participantApi.getConsentAttachmentUrl(participantId, logId);
     expect(url).toContain(`/api/v1/participants/${participantId}/consent-logs/${logId}/attachment`);
   });
+
+  it('loads consent attachments through the authenticated API client', async () => {
+    const file = new Blob(['consent document'], { type: 'application/pdf' });
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({ data: file } as any);
+
+    const result = await participantApi.getConsentAttachment(participantId, logId, { tenantId: 'tenant-1' });
+
+    expect(getSpy).toHaveBeenCalledWith(
+      `/api/v1/participants/${participantId}/consent-logs/${logId}/attachment`,
+      expect.objectContaining({
+        params: { tenantId: 'tenant-1' },
+        responseType: 'blob',
+        skipToast: true,
+      })
+    );
+    expect(result).toBe(file);
+    getSpy.mockRestore();
+  });
 });
 
 describe('RecordConsentModal UI Component Rendering', () => {
@@ -200,6 +218,8 @@ describe('RecordConsentModal UI Component Rendering', () => {
     // Field order & labels matching legacy Ripple:
     // Consent Title (required)
     expect(html).toContain('Consent Title');
+    expect(html).toContain('consent-record-form');
+    expect(html).toContain('consent-form-row');
     // Consent Date / Time (required)
     expect(html).toContain('Consent Date');
     // Consent Type (required)
@@ -217,10 +237,11 @@ describe('RecordConsentModal UI Component Rendering', () => {
     expect(html).toContain('Comments');
     // Checkboxes / Mark Consent As
     expect(html).toContain('Mark Consent As');
-    expect(html).toContain('Contact');
     expect(html).toContain('Pin Consent');
-    expect(html).toContain('Notify');
-    expect(html).toContain('Global');
+    expect(html).not.toContain('>Contact</span>');
+    expect(html).not.toContain('>Notify</span>');
+    expect(html).not.toContain('>Global</span>');
+    expect((html.match(/type="checkbox"/g) || [])).toHaveLength(1);
     // Save button
     expect(html).toContain('Save');
   });

@@ -1,5 +1,5 @@
 // frontend/microfrontends/participant/src/components/ParticipantContactLogs.tsx - Participant Contact Log History
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus,
   Pin,
@@ -12,8 +12,8 @@ import {
   MessageSquare,
   Globe,
   RefreshCw,
-  ChevronDown,
-  ChevronRight,
+  Search,
+  X,
 } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
@@ -22,6 +22,8 @@ import {
   participantApi,
   ContactLogItem,
 } from '../../../../shared/api/participantApi';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { AddContactLogModal } from './AddContactLogModal';
 
 export interface ParticipantContactLogsProps {
@@ -45,8 +47,8 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Expandable row state
-  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
+  const [selectedLog, setSelectedLog] = useState<ContactLogItem | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -75,18 +77,6 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
     fetchContactLogs();
   }, [fetchContactLogs]);
 
-  const toggleRowExpansion = (logId: string) => {
-    setExpandedLogIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(logId)) {
-        next.delete(logId);
-      } else {
-        next.add(logId);
-      }
-      return next;
-    });
-  };
-
   const handleOpenAddModal = () => {
     setSelectedLogForEdit(null);
     setIsModalOpen(true);
@@ -112,6 +102,7 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
     const newSticky = !log.sticky;
     try {
       await participantApi.pinContactLog(participantId, log.id, newSticky, { tenantId, siteId });
+      setSelectedLog((current) => current?.id === log.id ? { ...current, sticky: newSticky } : current);
       toast.success(newSticky ? 'Contact log pinned' : 'Contact log unpinned');
       await fetchContactLogs();
     } catch (err: any) {
@@ -135,6 +126,7 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
       onConfirm: async () => {
         try {
           await participantApi.deleteContactLog(participantId, log.id, { tenantId, siteId });
+          setSelectedLog((current) => current?.id === log.id ? null : current);
           toast.success('Contact log deleted successfully');
           await fetchContactLogs();
           onParticipantUpdated?.();
@@ -182,30 +174,127 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
     return 'bg-blue-100 text-blue-800 border-blue-200';
   };
 
+  const columnDefs = useMemo<ColDef<ContactLogItem>[]>(() => [
+    {
+      field: 'dateTimeOfContact',
+      headerName: 'Date/Time',
+      minWidth: 175,
+      valueFormatter: (params) => formatDateTime(params.value),
+    },
+    { field: 'contactType', headerName: 'Contact Type', minWidth: 140 },
+    {
+      field: 'outcome',
+      headerName: 'Outcome',
+      minWidth: 150,
+      cellRenderer: (params: ICellRendererParams<ContactLogItem>) => params.data ? (
+        <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${getOutcomeBadgeStyle(params.data.outcome)}`}>
+          {params.data.outcome}
+        </span>
+      ) : null,
+    },
+    {
+      colId: 'contactedBy',
+      headerName: 'Contacted By',
+      minWidth: 160,
+      valueGetter: (params) => params.data?.contactedByName || params.data?.contactedBy || 'Unknown User',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      colId: 'actions',
+      headerName: 'Actions',
+      width: 132,
+      minWidth: 132,
+      maxWidth: 132,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<ContactLogItem>) => {
+        const log = params.data;
+        if (!log) return null;
+        return (
+          <div className="participant-grid__row-actions">
+            <TooltipButton
+              label={log.sticky ? 'Unpin contact' : 'Pin contact'}
+              disabled={togglingPinId === log.id || log.pinnable === false}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleTogglePin(log);
+              }}
+              className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
+            >
+              {togglingPinId === log.id
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
+            </TooltipButton>
+            {log.editable !== false && (
+              <>
+                <TooltipButton
+                  label="Edit contact log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenEditModal(log);
+                  }}
+                  className="participant-grid__row-action"
+                >
+                  <Pencil size={14} />
+                </TooltipButton>
+                <TooltipButton
+                  label="Delete contact log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDeleteLog(log);
+                  }}
+                  className="participant-grid__row-action participant-grid__row-action--danger"
+                >
+                  <Trash2 size={14} />
+                </TooltipButton>
+              </>
+            )}
+          </div>
+        );
+      },
+    },
+  ], [togglingPinId, handleTogglePin, handleOpenEditModal, handleDeleteLog]);
+
+  const defaultColDef = useMemo<ColDef<ContactLogItem>>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+  }), []);
+
   return (
     <div className="space-y-4">
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <Clock size={16} className="text-blue-600" />
-          <div>
-            <h4 className="text-sm font-semibold text-gray-800">Contact History</h4>
-            <p className="text-xs text-gray-500">
-              Audit log of participant outreach attempts, screening outcomes, and follow-ups.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-            id="add-contact-log-btn"
-          >
-            <Plus size={14} /> Add Contact
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search contact history..."
+            aria-label="Search contact history"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear contact search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <TooltipButton
+          label="Add Contact"
+          id="add-contact-log-btn"
+          onClick={handleOpenAddModal}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Plus size={14} /> Add Contact
+        </TooltipButton>
       </div>
 
       {/* Loading state */}
@@ -241,228 +330,54 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
           <p className="text-xs text-gray-500 max-w-sm mb-4">
             No outreach attempts or communications have been logged for {participantName} yet.
           </p>
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-          >
-            <Plus size={14} /> Add Contact
-          </button>
         </div>
       )}
 
-      {/* Legacy Footable-style Contact History Table */}
       {!isLoading && logs.length > 0 && (
-        <div className="table-container bg-white border border-gray-200 rounded-lg shadow-xs overflow-visible">
-          <table className="min-w-full divide-y divide-gray-200 text-left text-xs" id="contact-log-list">
-            <thead className="bg-gray-50 font-semibold text-gray-600">
-              <tr>
-                <th scope="col" className="px-3.5 py-2.5">Date/Time of Contact</th>
-                <th scope="col" className="px-3.5 py-2.5">Contact Type</th>
-                <th scope="col" className="px-3.5 py-2.5">Outcome</th>
-                <th scope="col" className="px-3.5 py-2.5">Contacted By</th>
-                <th scope="col" className="px-3.5 py-2.5 text-right">&nbsp;</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {logs.map((log) => {
-                const isExpanded = expandedLogIds.has(log.id);
-                const isToggling = togglingPinId === log.id;
-                const formattedDate = formatDateTime(log.dateTimeOfContact);
-                const authorName = log.updatedByName || log.contactedByName || log.createdByName || 'User';
-                const avatarInitials = log.updatedByInitials || log.createdByInitials || 'SK';
-
-                return (
-                  <React.Fragment key={log.id}>
-                    {/* Primary Row */}
-                    <tr
-                      className={`hover:bg-gray-50/80 transition-colors cursor-pointer ${
-                        log.sticky ? 'bg-amber-50/40' : ''
-                      }`}
-                      onClick={() => toggleRowExpansion(log.id)}
-                    >
-                      <td className="px-3.5 py-2.5 whitespace-nowrap overflow-visible">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="p-0.5 text-gray-400 hover:text-gray-700 focus:outline-none"
-                            aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRowExpansion(log.id);
-                            }}
-                          >
-                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-
-                          {log.sticky && (
-                            <span
-                              className="inline-flex text-amber-600 custom-tooltip-btn cursor-default"
-                              data-tooltip="Pinned to top"
-                              aria-label="Pinned Contact"
-                            >
-                              <Pin size={13} className="fill-amber-500" />
-                            </span>
-                          )}
-
-                          <span className="font-semibold text-gray-800">{formattedDate}</span>
-
-                          {log.global && (
-                            <span
-                              className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-0.5 custom-tooltip-btn cursor-default"
-                              data-tooltip={log.studyName ? `Global (${log.studyName})` : 'Global (Registry)'}
-                              aria-label={log.studyName ? `Global (${log.studyName})` : 'Global (Registry)'}
-                            >
-                              <Globe size={10} />
-                              Global ({log.studyName || 'Registry'})
-                            </span>
-                          )}
-
-                          {log.editable !== false && (
-                            <div className="participant-grid__row-actions inline-flex items-center gap-1 ml-2" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditModal(log)}
-                                className="participant-grid__row-action custom-tooltip-btn"
-                                data-tooltip="Edit contact log"
-                                aria-label="Edit contact log"
-                              >
-                                <Pencil size={13} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLog(log)}
-                                className="participant-grid__row-action participant-grid__row-action--danger custom-tooltip-btn tooltip-align-right"
-                                data-tooltip="Delete contact log"
-                                aria-label="Delete contact log"
-                              >
-                                <Trash2 size={13} aria-hidden="true" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap text-gray-700">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-medium">
-                          {log.contactType}
-                        </span>
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-medium border ${getOutcomeBadgeStyle(
-                            log.outcome
-                          )}`}
-                        >
-                          {log.outcome}
-                        </span>
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap text-gray-700">
-                        <span className="flex items-center gap-1 font-medium">
-                          <User size={12} className="text-gray-400" />
-                          {log.contactedByName || log.contactedBy || 'Unknown User'}
-                        </span>
-                      </td>
-
-                      <td className="px-3.5 py-2.5 whitespace-nowrap text-right overflow-visible">
-                        <div className="comment-avatar-wrap inline-flex items-center justify-center cursor-pointer">
-                          <span>{avatarInitials}</span>
-                          <div className="comment-avatar-tooltip tooltip-align-right" role="tooltip">
-                            {authorName}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-
-                    {/* Expandable Details Row */}
-                    {isExpanded && (
-                      <tr className="bg-gray-50/70 border-b border-gray-200">
-                        <td colSpan={5} className="px-6 py-3 text-xs text-gray-700">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-2">
-                            {/* Spoke To */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Spoke To</span>
-                              <span className="text-gray-800">{log.spokeTo || '—'}</span>
-                            </div>
-
-                            {/* Method */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Method</span>
-                              <span className="text-gray-800">{log.contactMethod || '—'}</span>
-                            </div>
-
-                            {/* Outcome Details */}
-                            <div>
-                              <span className="font-semibold text-gray-500 block mb-0.5">Outcome</span>
-                              <span className="text-gray-800">{log.outcome || '—'}</span>
-                            </div>
-                          </div>
-
-                          {/* Regarding */}
-                          {log.regarding && (
-                            <div className="mt-2">
-                              <span className="font-semibold text-gray-500 block mb-0.5">Regarding</span>
-                              <div className="bg-white p-2 rounded-md border border-gray-200 whitespace-pre-wrap text-gray-800">
-                                {log.regarding}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Comments */}
-                          {log.comments && (
-                            <div className="mt-2">
-                              <span className="font-semibold text-gray-500 block mb-0.5">Comments</span>
-                              <div className="bg-white p-2 rounded-md border border-gray-200 whitespace-pre-wrap text-gray-800">
-                                {log.comments}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Mark Contact As (Checkboxes) & Audit Info */}
-                          <div className="mt-3 pt-2.5 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 text-[11px] text-gray-500">
-                            <div className="flex items-center gap-4">
-                              <span className="font-semibold text-gray-600">Mark Contact As:</span>
-                              <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="form-checkbox h-3.5 w-3.5 text-blue-600 rounded-sm"
-                                  checked={log.sticky}
-                                  disabled={isToggling || log.pinnable === false}
-                                  onChange={() => handleTogglePin(log)}
-                                />
-                                <span className={log.sticky ? 'font-medium text-amber-700' : ''}>Pin Contact</span>
-                              </label>
-
-                              {log.global && (
-                                <span className="inline-flex items-center gap-1 text-indigo-700">
-                                  <Globe size={11} /> Global
-                                </span>
-                              )}
-
-                              {log.lastContact && (
-                                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
-                                  Date of Last Contact
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="text-gray-400">
-                              {log.createdByName && <span>Created by {log.createdByName} </span>}
-                              {log.updatedByName && log.updatedByName !== log.createdByName && (
-                                <span>&bull; Modified by {log.updatedByName}</span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          <DataGrid<ContactLogItem>
+            wrapperClassName="participant-email-grid"
+            rowData={logs}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            quickFilterText={searchTerm}
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[5, 10, 20, 50]}
+            rowHeight={48}
+            headerHeight={42}
+            animateRows
+            suppressCellFocus
+            onRowClicked={(event) => {
+              const target = event.event?.target as HTMLElement | null;
+              if (!event.data || target?.closest('button, a')) return;
+              setSelectedLog((current) => current?.id === event.data?.id ? null : event.data ?? null);
+            }}
+            rowClass="cursor-pointer"
+            overlayNoRowsTemplate="<span class='text-slate-500'>No contact logs match your search.</span>"
+          />
+          {selectedLog && (
+            <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm" aria-label="Contact log details">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div><h5 className="font-semibold text-slate-800">{selectedLog.contactType} ? {selectedLog.outcome}</h5><p className="text-xs text-slate-500">{formatDateTime(selectedLog.dateTimeOfContact)}</p></div>
+                <button type="button" onClick={() => setSelectedLog(null)} aria-label="Close contact details" className="text-xs text-slate-500 hover:text-slate-800">Close</button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div><span className="block text-xs font-medium text-slate-500">Spoke To</span><span>{selectedLog.spokeTo || '—'}</span></div>
+                <div><span className="block text-xs font-medium text-slate-500">Method</span><span>{selectedLog.contactMethod || '—'}</span></div>
+                <div><span className="block text-xs font-medium text-slate-500">Contacted By</span><span>{selectedLog.contactedByName || selectedLog.contactedBy || '—'}</span></div>
+                <div><span className="block text-xs font-medium text-slate-500">Study</span><span>{selectedLog.studyName || 'General Registry'}</span></div>
+              </div>
+              {selectedLog.regarding && <div className="mt-3"><span className="block text-xs font-medium text-slate-500">Regarding</span><p className="mt-1 whitespace-pre-wrap rounded border border-slate-200 bg-white p-2">{selectedLog.regarding}</p></div>}
+              {selectedLog.comments && <div className="mt-3"><span className="block text-xs font-medium text-slate-500">Comments</span><p className="mt-1 whitespace-pre-wrap rounded border border-slate-200 bg-white p-2">{selectedLog.comments}</p></div>}
+              <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-3 text-xs text-slate-600">
+                <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(selectedLog.sticky)} disabled={togglingPinId === selectedLog.id || selectedLog.pinnable === false} onChange={() => void handleTogglePin(selectedLog)} />Pin Contact</label>
+                {selectedLog.global && <span className="inline-flex items-center gap-1"><Globe size={12} />Global</span>}
+                {selectedLog.lastContact && <span>Date of Last Contact</span>}
+                <span>{selectedLog.createdByName ? 'Created by ' + selectedLog.createdByName : ''}{selectedLog.updatedByName && selectedLog.updatedByName !== selectedLog.createdByName ? ' ? Modified by ' + selectedLog.updatedByName : ''}</span>
+              </div>
+            </section>
+          )}
         </div>
       )}
 
