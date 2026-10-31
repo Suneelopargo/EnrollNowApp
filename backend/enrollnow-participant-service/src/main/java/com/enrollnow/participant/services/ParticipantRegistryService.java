@@ -546,7 +546,7 @@ public class ParticipantRegistryService {
         ParticipantPreference pref = new ParticipantPreference();
         pref.setTenantId(tenantId);
         pref.setParticipantId(saved.getId());
-        pref.setDoNotContact(request.getContactForFutureStudies() != null ? !request.getContactForFutureStudies() : false);
+        pref.setDoNotContact(!Boolean.TRUE.equals(request.getContactForFutureStudies()));
         pref.setPreferredLanguage(request.getPrimaryLanguage() != null && !request.getPrimaryLanguage().isBlank()
                 ? request.getPrimaryLanguage().trim() : "English");
         if (request.getTimezone() != null) {
@@ -1097,7 +1097,7 @@ public class ParticipantRegistryService {
         dto.setStudies(studyItems);
 
         // Contactability & Availability
-        boolean contactForFuture = pref == null || !pref.isDoNotContact();
+        boolean contactForFuture = pref != null && !pref.isDoNotContact();
         dto.setContactForFutureStudies(contactForFuture);
         dto.setAvailableToAddStudy(canParticipateInOtherStudies);
 
@@ -1252,6 +1252,17 @@ public class ParticipantRegistryService {
             log.warn("Database native tag aggregation query failed, falling back to in-memory aggregation: {}", ex.getMessage());
         }
         return getParticipantTagsFallback(tenantId, siteId, cleanSearch, safeLimit);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, List<String>> getRegistryFilterOptions(UUID tenantId, UUID siteId) {
+        Map<String, List<String>> options = new LinkedHashMap<>();
+        options.put("tags", participantRepository.findDistinctParticipantTagsByTenantAndSite(tenantId, siteId));
+        options.put("cities", addressRepository.findDistinctCitiesByTenantAndSite(tenantId, siteId));
+        options.put("states", addressRepository.findDistinctStatesByTenantAndSite(tenantId, siteId));
+        options.put("zipcodes", addressRepository.findDistinctZipcodesByTenantAndSite(tenantId, siteId));
+        options.put("statuses", participantRepository.findDistinctRegistryStatusesByTenantAndSite(tenantId, siteId));
+        return options;
     }
 
     List<String> getParticipantTagsFallback(UUID tenantId, UUID siteId, String search, int limit) {
