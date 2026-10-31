@@ -20,8 +20,7 @@ import { ComposeEmailModal } from '../components/ComposeEmailModal';
 import { ParticipantSmsSection } from '../components/ParticipantSmsSection';
 import { ComposeSmsModal } from '../components/ComposeSmsModal';
 import { ParticipantContactManagement } from '../components/ParticipantContactManagement';
-import { AddContactModal } from '../components/AddContactModal';
-import { AddAddressModal } from '../components/AddAddressModal';
+import { ParticipantContactModal } from '../components/ParticipantContactModal';
 import { ParticipantConsentSection } from '../components/ParticipantConsentSection';
 import { RecordConsentModal } from '../components/RecordConsentModal';
 import { ParticipantFormsSection } from '../components/ParticipantFormsSection';
@@ -445,43 +444,32 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(html).toContain('rows="8"');
   });
 
-  it('renders ParticipantContactManagement with Contact Persons and Addresses', () => {
+  it('renders the legacy Contacts list and unified add action', () => {
     const html = renderToStaticMarkup(
       <ParticipantContactManagement
         participantId="p-100"
         participantName="Emily Davis"
       />
     );
-    expect(html).toContain('Contact Methods &amp; Authorized Contacts');
-    expect(html).toContain('Participant Addresses');
+    expect(html).toContain('Contacts');
     expect(html).toContain('Add Contact');
-    expect(html).toContain('Add Address');
+    expect(html).not.toContain('Add Address');
   });
 
-  it('renders AddContactModal and AddAddressModal', () => {
+  it('renders one contact editor containing contact methods and addresses', () => {
     const contactModal = renderToStaticMarkup(
-      <AddContactModal
+      <ParticipantContactModal
         isOpen={true}
         onClose={() => {}}
         participantId="p-100"
         participantName="Emily Davis"
-        onContactAdded={() => {}}
+        addresses={[]}
+        onSaved={() => {}}
       />
     );
     expect(contactModal).toContain('Add Contact Method');
+    expect(contactModal).toContain('Add Address');
     expect(contactModal).toContain('Relationship');
-
-    const addressModal = renderToStaticMarkup(
-      <AddAddressModal
-        isOpen={true}
-        onClose={() => {}}
-        participantId="p-100"
-        participantName="Emily Davis"
-        onAddressAdded={() => {}}
-      />
-    );
-    expect(addressModal).toContain('Add Address');
-    expect(addressModal).toContain('Street Address');
   });
 
   it('renders ParticipantConsentSection and RecordConsentModal', () => {
@@ -720,6 +708,34 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
       })
     );
     expect(tags).toEqual(['ADRC', 'Pediatric', 'Cardio']);
+    getSpy.mockRestore();
+  });
+
+  it('loads registry dropdown filter options for tags, locations, and statuses', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: {
+        tags: ['Cardio'],
+        cities: ['Chicago'],
+        states: ['IL'],
+        zipcodes: ['60603'],
+        statuses: ['ACTIVE'],
+      },
+    } as any);
+
+    const options = await participantApi.getRegistryFilterOptions({
+      tenantId: 't-1',
+      siteId: 's-1',
+    });
+
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/registry/filter-options',
+      expect.objectContaining({
+        params: { tenantId: 't-1', siteId: 's-1' },
+        skipToast: true,
+      })
+    );
+    expect(options.cities).toEqual(['Chicago']);
+    expect(options.statuses).toEqual(['ACTIVE']);
     getSpy.mockRestore();
   });
 

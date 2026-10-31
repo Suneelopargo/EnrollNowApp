@@ -39,7 +39,7 @@ public class ParticipantPreference {
     private boolean allowPhone = true;
 
     @Column(name = "do_not_contact", nullable = false)
-    private boolean doNotContact = false;
+    private boolean doNotContact = true;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "configuration", columnDefinition = "jsonb")

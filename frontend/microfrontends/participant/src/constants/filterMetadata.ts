@@ -62,6 +62,13 @@ export const ALL_NUMERIC_OPERATORS = [
   'not between',
 ];
 
+const CUSTOM_NUMERIC_OPERATORS = [
+  'equal to',
+  'not equal to',
+  'greater than',
+  'less than',
+];
+
 export const ALL_DATE_OPERATORS = [
   'equal to',
   'not equal to',
@@ -114,6 +121,7 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
     label: 'Tags',
     placeholder: 'Select or enter tag...',
     type: 'multiselect',
+    options: [],
   },
   {
     id: 'ethnicity',
@@ -132,20 +140,23 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
   {
     id: 'city',
     label: 'City',
-    placeholder: 'e.g. Philadelphia, Chicago',
-    type: 'text',
+    placeholder: 'Select city...',
+    type: 'multiselect',
+    options: [],
   },
   {
     id: 'state',
     label: 'State',
-    placeholder: 'e.g. PA, IL, WA',
-    type: 'text',
+    placeholder: 'Select state...',
+    type: 'multiselect',
+    options: [],
   },
   {
     id: 'zipcode',
     label: 'Zipcode',
-    placeholder: 'e.g. 19104, 60603',
-    type: 'text',
+    placeholder: 'Select zipcode...',
+    type: 'multiselect',
+    options: [],
   },
   {
     id: 'phone',
@@ -195,6 +206,65 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
 
 let dynamicCustomFields: FilterFieldOption[] = [];
 let dynamicStudyFilterOptions: FilterOptionItem[] = [...DEFAULT_STUDY_FILTER_OPTIONS];
+
+const optionsFromValues = (values: string[] | undefined): FilterOptionItem[] => {
+  const options = new Map<string, FilterOptionItem>();
+  (values || []).forEach((rawValue) => {
+    const value = String(rawValue ?? '').trim();
+    if (value && !options.has(value.toLocaleLowerCase())) {
+      options.set(value.toLocaleLowerCase(), { value, label: value });
+    }
+  });
+  return Array.from(options.values());
+};
+
+export function registerDemographicFilterOptions(options: {
+  sex?: string[];
+  gender?: string[];
+  ethnicity?: string[];
+  race?: string[];
+}): void {
+  const mappings: Array<[string, string[] | undefined]> = [
+    ['gender', options.gender?.length ? options.gender : options.sex],
+    ['ethnicity', options.ethnicity],
+    ['race', options.race],
+  ];
+  const defaults: Record<string, FilterOptionItem[]> = {
+    gender: GENDER_OPTIONS,
+    ethnicity: ETHNICITY_OPTIONS,
+    race: RACE_OPTIONS,
+  };
+  mappings.forEach(([fieldId, values]) => {
+    const field = REGISTRY_FILTER_FIELDS.find((item) => item.id === fieldId);
+    const dynamicOptions = optionsFromValues(values);
+    if (field) field.options = dynamicOptions.length > 0 ? dynamicOptions : defaults[fieldId];
+  });
+}
+
+export function registerRegistryFilterOptions(options: {
+  tags?: string[];
+  cities?: string[];
+  states?: string[];
+  zipcodes?: string[];
+  statuses?: string[];
+}): void {
+  const mappings: Array<[string, string[] | undefined]> = [
+    ['tags', options.tags],
+    ['city', options.cities],
+    ['state', options.states],
+    ['zipcode', options.zipcodes],
+    ['status', options.statuses],
+  ];
+  mappings.forEach(([fieldId, values]) => {
+    const field = REGISTRY_FILTER_FIELDS.find((item) => item.id === fieldId);
+    const dynamicOptions = optionsFromValues(values);
+    if (field) {
+      field.options = fieldId === 'status' && dynamicOptions.length === 0
+        ? STATUS_OPTIONS
+        : dynamicOptions;
+    }
+  });
+}
 
 export function registerStudyFilterOptions(options: FilterOptionItem[]): void {
   const seen = new Set<string>(['NONE']);
@@ -254,9 +324,10 @@ export function getOperatorsForField(fieldId: string): string[] {
   switch (fieldDef.type) {
     case 'number':
       return isCustom
-        ? [...ALL_NUMERIC_OPERATORS, 'has any value', 'has no value']
+        ? [...CUSTOM_NUMERIC_OPERATORS, 'has any value', 'has no value']
         : ALL_NUMERIC_OPERATORS;
     case 'date':
+    case 'datetime':
       return isCustom
         ? [...ALL_DATE_OPERATORS, 'has any value', 'has no value']
         : ALL_DATE_OPERATORS;
@@ -265,13 +336,17 @@ export function getOperatorsForField(fieldId: string): string[] {
       return isCustom
         ? [...CATEGORICAL_OPERATORS, 'has any value', 'has no value']
         : CATEGORICAL_OPERATORS;
+    case 'textarea':
+      return isCustom
+        ? [...CATEGORICAL_OPERATORS, 'has any value', 'has no value']
+        : TEXT_OPERATORS;
     case 'text':
     default:
       if (['firstName', 'lastName', 'phone'].includes(fieldDef.id)) {
         return ['equal to'];
       }
       if (isCustom) {
-        return ['equal to', 'not equal to', 'contains', 'has any value', 'has no value'];
+        return [...CATEGORICAL_OPERATORS, 'has any value', 'has no value'];
       }
       return TEXT_OPERATORS;
   }
@@ -305,15 +380,18 @@ export function validateFilterRule(rule: CustomFilterRule): { isValid: boolean; 
     }
     const def = getFieldDefinition(rule.field);
     if (def.type === 'number') {
-      const minNum = parseFloat(min);
-      const maxNum = parseFloat(max);
+      const parseNumeric = def.id.toLowerCase() === 'age' ? parseAgeValueToYears : parseNumberValue;
+      const minNum = parseNumeric(min);
+      const maxNum = parseNumeric(max);
       if (isNaN(minNum) || isNaN(maxNum)) {
-        return { isValid: false, error: 'Range boundaries must be valid numbers' };
+        return { isValid: false, error: def.id.toLowerCase() === 'age'
+          ? 'Age ranges must use a valid age such as 1y6m or 18mo'
+          : 'Range boundaries must be valid numbers' };
       }
       if (minNum > maxNum) {
         return { isValid: false, error: 'Minimum value cannot be greater than maximum value' };
       }
-    } else if (def.type === 'date') {
+    } else if (def.type === 'date' || def.type === 'datetime') {
       if (min > max) {
         return { isValid: false, error: 'Start date cannot be after end date' };
       }
@@ -321,15 +399,54 @@ export function validateFilterRule(rule: CustomFilterRule): { isValid: boolean; 
     return { isValid: true };
   }
   const def = getFieldDefinition(rule.field);
-  if (def.type === 'multiselect') {
+  if (def.type === 'multiselect' || def.type === 'select') {
     const hasValues = (rule.values && rule.values.length > 0) || (rule.value && rule.value.trim().length > 0);
     if (!hasValues) {
       return { isValid: false, error: `At least one option must be selected for ${def.label}` };
     }
     return { isValid: true };
   }
+
+  function parseNumberValue(value: string): number {
+    return value.trim() ? Number(value) : Number.NaN;
+  }
+
+  function parseAgeValueToYears(value: string): number {
+    const input = value.trim();
+    if (!input) return Number.NaN;
+    const numeric = Number(input);
+    if (Number.isFinite(numeric)) return numeric;
+
+    const match = input.match(/^(?:(\d+(?:\.\d+)?)\s*y(?:ears?)?)?\s*(?:(\d+(?:\.\d+)?)\s*m(?:onths?|o)?)?$/i);
+    if (!match || (!match[1] && !match[2])) return Number.NaN;
+    return Number(match[1] || 0) + Number(match[2] || 0) / 12;
+  }
   if (!rule.value || rule.value.trim().length === 0) {
     return { isValid: false, error: `Value is required for ${def.label}` };
+  }
+  const value = rule.value.trim();
+  if (def.type === 'number') {
+    const parseNumeric = def.id.toLowerCase() === 'age' ? parseAgeValueToYears : parseNumberValue;
+    if (Number.isNaN(parseNumeric(value))) {
+      return {
+        isValid: false,
+        error: def.id.toLowerCase() === 'age'
+          ? 'Enter a valid age such as 1y6m or 18mo'
+          : 'Enter a valid number',
+      };
+    }
+  }
+  const normalizedFieldId = rule.field.toLowerCase();
+  const isCustom = rule.field.startsWith('custom_')
+    || dynamicCustomFields.some((field) => field.id.toLowerCase() === normalizedFieldId);
+  if (['firstname', 'lastname'].includes(normalizedFieldId) && value.length < 2) {
+    return { isValid: false, error: `Enter at least 2 characters for ${def.label}` };
+  }
+  if (normalizedFieldId === 'phone' && value.replace(/\D/g, '').length < 2) {
+    return { isValid: false, error: 'Enter at least 2 digits for Phone Number' };
+  }
+  if (isCustom && (def.type === 'text' || def.type === 'textarea') && value.length < 2) {
+    return { isValid: false, error: 'Enter at least 2 characters for this custom field' };
   }
   return { isValid: true };
 }

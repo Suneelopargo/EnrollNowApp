@@ -345,6 +345,7 @@ class ParticipantWorkflowServiceTest {
         addressReq.setCity("Philadelphia");
         addressReq.setStateRegion("PA");
         addressReq.setPostalCode("19104");
+        addressReq.setActive(false);
 
         when(addressRepository.save(any(ParticipantAddress.class))).thenAnswer(inv -> {
             ParticipantAddress a = inv.getArgument(0);
@@ -356,6 +357,34 @@ class ParticipantWorkflowServiceTest {
         assertNotNull(addr);
         assertEquals("123 Main St", addr.getAddressLine1());
         assertEquals("Philadelphia", addr.getCity());
+        assertFalse(addr.isActive());
+    }
+
+    @Test
+    void testCreateContactWithoutContactMethod() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(inv -> {
+            ParticipantContact saved = inv.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        CreateContactPersonRequest request = new CreateContactPersonRequest();
+        request.setContactName("Test Contact");
+        request.setRelationship("Friend");
+
+        ParticipantContactDto result = workflowService.createContact(tenantId, participantId, userId, request);
+
+        ArgumentCaptor<ParticipantContact> contactCaptor = ArgumentCaptor.forClass(ParticipantContact.class);
+        verify(contactRepository).save(contactCaptor.capture());
+        assertNull(contactCaptor.getValue().getContactType());
+        assertNull(contactCaptor.getValue().getContactValue());
+        assertEquals("Test Contact", result.getContactName());
+        assertEquals("", result.getContactType());
+        assertEquals("", result.getContactValue());
     }
 
     @Test

@@ -596,7 +596,7 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(numDef.type).toBe('number');
     const numOps = getOperatorsForField('custom_bp');
     expect(numOps).toContain('greater than');
-    expect(numOps).toContain('between');
+    expect(numOps).not.toContain('between');
 
     const catDef = getFieldDefinition('custom_handedness');
     expect(catDef.type).toBe('multiselect');
@@ -606,6 +606,126 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(catOps).toContain('not equal to');
     expect(catOps).toContain('has any value');
     expect(catOps).toContain('has no value');
+  });
+
+  it('preserves custom-variable single, multi, long-text, and date-time control types', async () => {
+    const { registerDynamicFilterFields, getFieldDefinition, getOperatorsForField } =
+      await import('../constants/filterMetadata');
+
+    registerDynamicFilterFields([
+      {
+        id: 'custom_single',
+        label: 'Single Choice',
+        placeholder: 'Choose one',
+        type: 'select',
+        options: [{ value: 'one', label: 'One' }, { value: 'two', label: 'Two' }],
+      },
+      {
+        id: 'custom_notes',
+        label: 'Notes',
+        placeholder: 'Enter notes',
+        type: 'textarea',
+      },
+      {
+        id: 'custom_time',
+        label: 'Date and time',
+        placeholder: 'Choose date and time',
+        type: 'datetime',
+      },
+    ]);
+
+    expect(getFieldDefinition('custom_single').type).toBe('select');
+    expect(getFieldDefinition('custom_notes').type).toBe('textarea');
+    expect(getFieldDefinition('custom_time').type).toBe('datetime');
+    expect(getOperatorsForField('custom_time')).toContain('between');
+
+    const { FilterCard } = await import('../components/FilterCard');
+    const singleHtml = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter: { id: 'single-filter', field: 'custom_single', operator: 'equal to', value: 'one' },
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+    expect(singleHtml).toContain('<select');
+    expect(singleHtml).toContain('<option value="one" selected="">One</option>');
+
+    const textAreaHtml = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter: { id: 'notes-filter', field: 'custom_notes', operator: 'equal to', value: 'Notes' },
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+    expect(textAreaHtml).toContain('<textarea');
+
+    const dateTimeHtml = renderToStaticMarkup(
+      React.createElement(FilterCard, {
+        filter: { id: 'time-filter', field: 'custom_time', operator: 'equal to', value: '' },
+        index: 0,
+        onUpdate: vi.fn(),
+        onRemove: vi.fn(),
+      })
+    );
+    expect(dateTimeHtml).toContain('type="datetime-local"');
+  });
+
+  it('registers runtime dropdown options for locations and demographics', async () => {
+    const {
+      getFieldDefinition,
+      getOperatorsForField,
+      registerDemographicFilterOptions,
+      registerRegistryFilterOptions,
+    } = await import('../constants/filterMetadata');
+
+    registerDemographicFilterOptions({
+      sex: ['Female', 'Nonbinary'],
+      ethnicity: ['Latino'],
+      race: ['Asian'],
+    });
+    registerRegistryFilterOptions({
+      tags: ['Cardio'],
+      cities: ['Chicago'],
+      states: ['IL'],
+      zipcodes: ['60603'],
+      statuses: ['ACTIVE'],
+    });
+
+    expect(getFieldDefinition('gender').options?.map((option) => option.value)).toContain('Nonbinary');
+    expect(getFieldDefinition('city').type).toBe('multiselect');
+    expect(getFieldDefinition('city').options?.[0].value).toBe('Chicago');
+    expect(getFieldDefinition('tags').options?.[0].value).toBe('Cardio');
+    expect(getFieldDefinition('status').options?.[0].value).toBe('ACTIVE');
+    expect(getOperatorsForField('city')).toEqual(['equal to', 'not equal to']);
+  });
+
+  it('validates semantic age ranges using year and month values', async () => {
+    const { validateFilterRule } = await import('../constants/filterMetadata');
+
+    expect(validateFilterRule({
+      id: 'age-range',
+      field: 'age',
+      operator: 'between',
+      minValue: '18mo',
+      maxValue: '2y',
+    }).isValid).toBe(true);
+
+    expect(validateFilterRule({
+      id: 'invalid-age-range',
+      field: 'age',
+      operator: 'between',
+      minValue: '2y',
+      maxValue: '18mo',
+    }).isValid).toBe(false);
+
+    expect(validateFilterRule({
+      id: 'invalid-age',
+      field: 'age',
+      operator: 'equal to',
+      value: 'not an age',
+    }).isValid).toBe(false);
   });
 
   it('only includes global custom variables when global is checked and excludes unchecked variables', async () => {

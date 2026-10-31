@@ -3,7 +3,12 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { getEmailPreviewDocument, ParticipantEmailSection } from '../components/ParticipantEmailSection';
-import { ComposeEmailModal, isEmailDesignEmpty } from '../components/ComposeEmailModal';
+import {
+  ComposeEmailModal,
+  formatEmailRecipientOption,
+  isEmailDesignEmpty,
+  mapEmailRecipientOptions,
+} from '../components/ComposeEmailModal';
 
 describe('Email Communication History & Compose Modal', () => {
   it('detects an empty email design and a design containing content', () => {
@@ -64,5 +69,48 @@ describe('Email Communication History & Compose Modal', () => {
     expect(html).not.toContain('>Global</span>');
     expect(html).not.toContain('>Notify</span>');
     expect(html).toContain('title="Pin current email to top of list."');
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-label="To recipient"');
+    expect(html).toContain('aria-label="CC recipient"');
+    expect(html).toContain('aria-label="BCC recipient"');
+    expect(html).toContain('aria-label="Choose another email for To recipient"');
+    expect(html).toContain('aria-label="Choose another email for CC recipient"');
+    expect(html).toContain('aria-label="Choose another email for BCC recipient"');
+  });
+
+  it('builds unique recipient options from active email contacts and direct email addresses', () => {
+    const options = mapEmailRecipientOptions(
+      [
+        {
+          contactType: 'EMAIL',
+          contactValue: '  jane@example.com ',
+          contactName: 'Jane Doe',
+          active: true,
+          isPreferred: true,
+        },
+        {
+          contactType: 'EMAIL',
+          contactValue: 'inactive@example.com',
+          contactName: 'Inactive Contact',
+          active: false,
+          isPreferred: false,
+        },
+        {
+          contactType: 'PHONE',
+          contactValue: '5551234567',
+          contactName: 'Phone Contact',
+          active: true,
+          isPreferred: false,
+        },
+      ],
+      ['JANE@example.com', 'team@example.com']
+    );
+
+    expect(options).toEqual([
+      { email: 'jane@example.com', contactName: 'Jane Doe', isPreferred: true },
+      { email: 'team@example.com' },
+    ]);
+    expect(formatEmailRecipientOption(options[0])).toBe('jane@example.com (Jane Doe)');
+    expect(formatEmailRecipientOption(options[1])).toBe('team@example.com');
   });
 });

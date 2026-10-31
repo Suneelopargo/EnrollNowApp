@@ -90,6 +90,29 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void getRegistryFilterOptionsReturnsTenantAndSiteScopedValues() {
+        when(participantRepository.findDistinctParticipantTagsByTenantAndSite(tenantId, siteId))
+                .thenReturn(List.of("Cardio"));
+        when(addressRepository.findDistinctCitiesByTenantAndSite(tenantId, siteId))
+                .thenReturn(List.of("Chicago"));
+        when(addressRepository.findDistinctStatesByTenantAndSite(tenantId, siteId))
+                .thenReturn(List.of("IL"));
+        when(addressRepository.findDistinctZipcodesByTenantAndSite(tenantId, siteId))
+                .thenReturn(List.of("60603"));
+        when(participantRepository.findDistinctRegistryStatusesByTenantAndSite(tenantId, siteId))
+                .thenReturn(List.of("ACTIVE"));
+
+        Map<String, List<String>> options = service.getRegistryFilterOptions(tenantId, siteId);
+
+        assertThat(options)
+                .containsEntry("tags", List.of("Cardio"))
+                .containsEntry("cities", List.of("Chicago"))
+                .containsEntry("states", List.of("IL"))
+                .containsEntry("zipcodes", List.of("60603"))
+                .containsEntry("statuses", List.of("ACTIVE"));
+    }
+
+    @Test
     void searchParticipants_filtersBySearchTerm() {
         Participant p1 = createMockParticipant(UUID.randomUUID(), "Alice", "Smith", LocalDate.of(1990, 5, 12), "ACTIVE");
         Participant p2 = createMockParticipant(UUID.randomUUID(), "Bob", "Jones", LocalDate.of(1985, 3, 20), "ACTIVE");
@@ -328,6 +351,7 @@ class ParticipantRegistryServiceTest {
         request.setCity("Philadelphia");
         request.setState("PA");
         request.setPostalCode("19104");
+        request.setContactForFutureStudies(true);
 
         UUID generatedId = UUID.randomUUID();
         when(participantRepository.save(any(Participant.class))).thenAnswer(invocation -> {
@@ -346,13 +370,17 @@ class ParticipantRegistryServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getFirstName()).isEqualTo("Charlie");
         verify(identifierRepository).save(any(ParticipantIdentifier.class));
-        verify(contactRepository, times(2)).save(any(ParticipantContact.class));
+        verify(contactRepository, times(2)).save(argThat(contact ->
+                "Charlie Brown".equals(contact.getContactName())
+                        && "Self".equals(contact.getRelationship())
+                        && !contact.isCanLeaveMessage()
+        ));
         verify(addressRepository).save(any(ParticipantAddress.class));
-        verify(preferenceRepository).save(any(ParticipantPreference.class));
+        verify(preferenceRepository).save(argThat(pref -> !pref.isDoNotContact()));
     }
 
     @Test
-    void createParticipant_minimalRequiredFields_persistsAuthoritativeMetadataAndNoOptionalEntities() {
+    void createParticipant_minimalRequiredFields_persistsSelfContactAndAuthoritativeMetadata() {
         CreateParticipantRequest request = new CreateParticipantRequest();
         request.setFirstName("Alice");
         request.setLastName("Wonderland");
@@ -387,6 +415,7 @@ class ParticipantRegistryServiceTest {
         assertThat(result.getStudies()).isEmpty();
         assertThat(result.getTags()).isEmpty();
         assertThat(result.getPhone()).isEmpty();
+        assertThat(result.getContactForFutureStudies()).isFalse();
 
         // Verify mandatory entities
         verify(identifierRepository).save(argThat(i ->
@@ -395,21 +424,28 @@ class ParticipantRegistryServiceTest {
                 i.isPrimaryIdentifier()
         ));
         verify(preferenceRepository).save(argThat(pref ->
-                !pref.isDoNotContact() &&
+                pref.isDoNotContact() &&
                 "English".equals(pref.getPreferredLanguage()) &&
                 pref.isAllowEmail() &&
                 pref.isAllowSms() &&
                 pref.isAllowPhone()
         ));
 
-        // Verify NO optional entities saved
-        verify(contactRepository, never()).save(any(ParticipantContact.class));
+        verify(contactRepository).save(argThat(contact ->
+                generatedId.equals(contact.getParticipantId())
+                        && "Alice Wonderland".equals(contact.getContactName())
+                        && "Self".equals(contact.getRelationship())
+                        && contact.getContactType() == null
+                        && contact.getContactValue() == null
+                        && contact.isActive()
+                        && !contact.isCanLeaveMessage()
+        ));
         verify(addressRepository, never()).save(any(ParticipantAddress.class));
         verify(candidateRepository, never()).save(any(StudyCandidate.class));
     }
 
     @Test
-    void createParticipant_withMiddleName_persistsMiddleNameAndFullName() {
+    void createParticipant_withMiddleName_persistsMiddleNameAndSelfContactNameWithoutMiddleName() {
         CreateParticipantRequest request = new CreateParticipantRequest();
         request.setFirstName("John");
         request.setMiddleName("Quincy");
@@ -438,6 +474,10 @@ class ParticipantRegistryServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getName()).isEqualTo("John Quincy Adams");
         assertThat(result.getMiddleName()).isEqualTo("Quincy");
+        verify(contactRepository).save(argThat(contact ->
+                "John Adams".equals(contact.getContactName())
+                        && "Self".equals(contact.getRelationship())
+        ));
     }
 
     @Test
@@ -1017,6 +1057,7 @@ class ParticipantRegistryServiceTest {
 
         assertThat(dtoOpt).isPresent();
         assertThat(dtoOpt.get().getTimezone()).isNull();
+        assertThat(dtoOpt.get().getContactForFutureStudies()).isFalse();
     }
 
     @Test
@@ -1059,6 +1100,24 @@ class ParticipantRegistryServiceTest {
         service.updateParticipant(tenantId, partId, userId, req);
 
         verify(preferenceRepository).save(argThat(savedPref -> "America/Chicago".equals(savedPref.getTimezone())));
+    }
+
+    @Test
+    void updateParticipant_withTimezoneAndNoExistingPreference_defaultsToDoNotContact() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+        when(identifierRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Collections.emptyList());
+        when(preferenceRepository.findByTenantIdAndParticipantId(tenantId, partId)).thenReturn(Optional.empty());
+
+        UpdateParticipantRequest req = new UpdateParticipantRequest();
+        req.setTimezone("America/Chicago");
+
+        service.updateParticipant(tenantId, partId, userId, req);
+
+        verify(preferenceRepository).save(argThat(savedPref ->
+                savedPref.isDoNotContact() && "America/Chicago".equals(savedPref.getTimezone())
+        ));
     }
 
     @Test

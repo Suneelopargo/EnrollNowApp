@@ -78,9 +78,10 @@ public class ParticipantSpecifications {
                 predicates.add(cb.equal(root.get("siteId"), siteId));
             }
 
-            // 3. Search Term (Full Text / Across Name, Phone, Address, Identifiers)
+            // 3. Search Term (Full Text / Across Name, Demographics, Contacts, Address, Identifiers)
             if (searchTerm != null && !searchTerm.trim().isEmpty()) {
-                String term = "%" + searchTerm.trim().toLowerCase() + "%";
+                String normalizedSearchTerm = searchTerm.trim().toLowerCase(Locale.ROOT);
+                String term = "%" + normalizedSearchTerm + "%";
                 String rawDigits = searchTerm.replaceAll("[^0-9]", "");
                 List<Predicate> searchOr = new ArrayList<>();
 
@@ -88,6 +89,29 @@ public class ParticipantSpecifications {
                 searchOr.add(cb.like(cb.lower(root.get("lastName")), term));
                 Expression<String> fullName = cb.concat(cb.concat(cb.lower(root.get("firstName")), " "), cb.lower(root.get("lastName")));
                 searchOr.add(cb.like(fullName, term));
+
+                Expression<String> sexAtBirth = cb.lower(root.get("sexAtBirth"));
+                Expression<String> genderIdentity = cb.lower(root.get("genderIdentity"));
+                if ("male".equals(normalizedSearchTerm)) {
+                    searchOr.add(cb.or(new Predicate[]{
+                            cb.equal(sexAtBirth, "male"),
+                            cb.equal(genderIdentity, "male"),
+                            cb.equal(sexAtBirth, "m"),
+                            cb.equal(genderIdentity, "m")
+                    }));
+                } else if ("female".equals(normalizedSearchTerm)) {
+                    searchOr.add(cb.or(new Predicate[]{
+                            cb.equal(sexAtBirth, "female"),
+                            cb.equal(genderIdentity, "female"),
+                            cb.equal(sexAtBirth, "f"),
+                            cb.equal(genderIdentity, "f")
+                    }));
+                } else {
+                    searchOr.add(cb.or(new Predicate[]{
+                            cb.like(sexAtBirth, term),
+                            cb.like(genderIdentity, term)
+                    }));
+                }
 
                 // Subquery: Contacts (Phone / Email)
                 Subquery<UUID> contactSub = query.subquery(UUID.class);
@@ -132,7 +156,12 @@ public class ParticipantSpecifications {
                 searchOr.add(cb.exists(idSub));
 
                 // Custom attributes text
-                searchOr.add(cb.like(cb.lower(root.get("customAttributes")), term));
+                Expression<String> customAttributesText = cb.function(
+                        "jsonb_pretty",
+                        String.class,
+                        root.get("customAttributes")
+                );
+                searchOr.add(cb.like(cb.lower(customAttributesText), term));
 
                 predicates.add(cb.or(searchOr.toArray(new Predicate[0])));
             }
@@ -276,7 +305,7 @@ public class ParticipantSpecifications {
                 return buildDatePredicate(op, rawVal, minVal, maxVal, root.get("createdAt"), cb);
 
             case "lastcontact":
-                return buildDatePredicate(op, rawVal, minVal, maxVal, root.get("updatedAt"), cb);
+                return buildDatePredicate(op, rawVal, minVal, maxVal, root.get("globalLastContactDate"), cb);
 
             case "gender":
             case "sex":
@@ -822,14 +851,26 @@ public class ParticipantSpecifications {
         List<String> options = !values.isEmpty() ? values : (rawVal.isBlank() ? Collections.emptyList() : Arrays.asList(rawVal.split(",")));
         if (options.isEmpty()) return null;
 
-        List<Predicate> orPreds = new ArrayList<>();
+        List<Predicate> matches = new ArrayList<>();
         for (String opt : options) {
-            String term = "%" + opt.trim().toLowerCase() + "%";
-            orPreds.add(cb.like(cb.lower(root.get("customAttributes")), term));
+            String safeValue = opt.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+            String path = "$." + arrayName + "[*] ? (@ == \"" + safeValue + "\")";
+            Expression<Boolean> found = cb.function(
+                    "jsonb_path_exists",
+                    Boolean.class,
+                    root.get("customAttributes"),
+                    cb.literal(path)
+            );
+            matches.add("equal".equals(op) ? cb.isTrue(found) : cb.isFalse(found));
         }
 
-        Predicate combined = cb.or(orPreds.toArray(new Predicate[0]));
-        return "equal".equals(op) ? combined : cb.not(combined);
+        if ("equal".equals(op)) {
+            return cb.or(matches.toArray(new Predicate[0]));
+        }
+        if ("not_equal".equals(op)) {
+            return cb.and(matches.toArray(new Predicate[0]));
+        }
+        return null;
     }
 
     private static Predicate buildJsonbFieldPredicate(

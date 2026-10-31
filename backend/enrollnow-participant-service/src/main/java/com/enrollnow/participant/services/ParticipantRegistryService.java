@@ -477,14 +477,36 @@ public class ParticipantRegistryService {
         identifier.setPrimaryIdentifier(true);
         identifierRepository.save(identifier);
 
-        // Save Contact only if explicitly provided (no synthetic defaults)
+        String selfContactName = saved.getFirstName() + " " + saved.getLastName();
+
+        // Ripple creates a self contact for every registry participant.
+        boolean hasContactMethod = (request.getPrimaryEmail() != null && !request.getPrimaryEmail().isBlank())
+                || (request.getPhone() != null && !request.getPhone().isBlank());
+        if (!hasContactMethod) {
+            ParticipantContact selfContact = new ParticipantContact();
+            selfContact.setTenantId(tenantId);
+            selfContact.setParticipantId(saved.getId());
+            selfContact.setContactName(selfContactName);
+            selfContact.setRelationship("Self");
+            selfContact.setCanLeaveMessage(false);
+            selfContact.setActive(true);
+            selfContact.setCreatedBy(userId);
+            selfContact.setUpdatedBy(userId);
+            contactRepository.save(selfContact);
+        }
+
         if (request.getPrimaryEmail() != null && !request.getPrimaryEmail().isBlank()) {
             ParticipantContact emailContact = new ParticipantContact();
             emailContact.setTenantId(tenantId);
             emailContact.setParticipantId(saved.getId());
             emailContact.setContactType("EMAIL");
             emailContact.setContactValue(request.getPrimaryEmail().trim());
+            emailContact.setContactName(selfContactName);
+            emailContact.setRelationship("Self");
+            emailContact.setCanLeaveMessage(false);
             emailContact.setPrimaryContact(true);
+            emailContact.setCreatedBy(userId);
+            emailContact.setUpdatedBy(userId);
             contactRepository.save(emailContact);
         }
 
@@ -494,7 +516,12 @@ public class ParticipantRegistryService {
             phoneContact.setParticipantId(saved.getId());
             phoneContact.setContactType("PHONE");
             phoneContact.setContactValue(request.getPhone().trim());
+            phoneContact.setContactName(selfContactName);
+            phoneContact.setRelationship("Self");
+            phoneContact.setCanLeaveMessage(false);
             phoneContact.setPrimaryContact(request.getPrimaryEmail() == null || request.getPrimaryEmail().isBlank());
+            phoneContact.setCreatedBy(userId);
+            phoneContact.setUpdatedBy(userId);
             contactRepository.save(phoneContact);
         }
 
@@ -519,7 +546,7 @@ public class ParticipantRegistryService {
         ParticipantPreference pref = new ParticipantPreference();
         pref.setTenantId(tenantId);
         pref.setParticipantId(saved.getId());
-        pref.setDoNotContact(request.getContactForFutureStudies() != null ? !request.getContactForFutureStudies() : false);
+        pref.setDoNotContact(!Boolean.TRUE.equals(request.getContactForFutureStudies()));
         pref.setPreferredLanguage(request.getPrimaryLanguage() != null && !request.getPrimaryLanguage().isBlank()
                 ? request.getPrimaryLanguage().trim() : "English");
         if (request.getTimezone() != null) {
@@ -1070,7 +1097,7 @@ public class ParticipantRegistryService {
         dto.setStudies(studyItems);
 
         // Contactability & Availability
-        boolean contactForFuture = pref == null || !pref.isDoNotContact();
+        boolean contactForFuture = pref != null && !pref.isDoNotContact();
         dto.setContactForFutureStudies(contactForFuture);
         dto.setAvailableToAddStudy(canParticipateInOtherStudies);
 
@@ -1225,6 +1252,17 @@ public class ParticipantRegistryService {
             log.warn("Database native tag aggregation query failed, falling back to in-memory aggregation: {}", ex.getMessage());
         }
         return getParticipantTagsFallback(tenantId, siteId, cleanSearch, safeLimit);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, List<String>> getRegistryFilterOptions(UUID tenantId, UUID siteId) {
+        Map<String, List<String>> options = new LinkedHashMap<>();
+        options.put("tags", participantRepository.findDistinctParticipantTagsByTenantAndSite(tenantId, siteId));
+        options.put("cities", addressRepository.findDistinctCitiesByTenantAndSite(tenantId, siteId));
+        options.put("states", addressRepository.findDistinctStatesByTenantAndSite(tenantId, siteId));
+        options.put("zipcodes", addressRepository.findDistinctZipcodesByTenantAndSite(tenantId, siteId));
+        options.put("statuses", participantRepository.findDistinctRegistryStatusesByTenantAndSite(tenantId, siteId));
+        return options;
     }
 
     List<String> getParticipantTagsFallback(UUID tenantId, UUID siteId, String search, int limit) {

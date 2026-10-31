@@ -3,9 +3,12 @@ import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { calculateCurrentAge, formatDobForDateInput, ParticipantDetailModal } from '../components/ParticipantDetailModal';
-import { ParticipantContactManagement } from '../components/ParticipantContactManagement';
-import { AddContactModal } from '../components/AddContactModal';
-import { AddAddressModal } from '../components/AddAddressModal';
+import {
+  getContactRelationshipLabel,
+  groupContactMethods,
+  ParticipantContactManagement,
+} from '../components/ParticipantContactManagement';
+import { getContactActiveState, ParticipantContactModal } from '../components/ParticipantContactModal';
 import { RecordConsentModal } from '../components/RecordConsentModal';
 import { AddContactLogModal } from '../components/AddContactLogModal';
 import { ParticipantContactLogs } from '../components/ParticipantContactLogs';
@@ -127,7 +130,56 @@ describe('Contact Methods and Related Contacts Components', () => {
     createdAt: new Date().toISOString(),
   };
 
-  it('renders ParticipantContactManagement with Contact Methods and Addresses sections', () => {
+  it('defaults new contacts to active and preserves archived edit state', () => {
+    expect(getContactActiveState(false, [])).toBe(true);
+    expect(getContactActiveState(true, [])).toBe(false);
+    expect(getContactActiveState(true, [{ ...dummyContact, active: false }])).toBe(false);
+    expect(getContactActiveState(true, [{ ...dummyContact, active: true }])).toBe(true);
+  });
+
+  it('groups a new person’s methods even when their relationship is left blank', () => {
+    const otherMethod: ParticipantContactDetail = {
+      ...dummyContact,
+      id: 'contact-uuid-2',
+      contactType: 'EMAIL',
+      contactValue: 'jane@example.com',
+      relationship: '',
+      primaryContact: false,
+      isPreferred: false,
+    };
+    const firstMethod = { ...dummyContact, relationship: '', primaryContact: false };
+
+    expect(groupContactMethods([firstMethod, otherMethod])).toHaveLength(1);
+    expect(groupContactMethods([firstMethod, otherMethod])[0].methods).toHaveLength(2);
+  });
+
+  it('groups self contact methods even when primary contact flags differ', () => {
+    const selfEmail = {
+      ...dummyContact,
+      relationship: 'Self',
+      contactType: 'EMAIL',
+      contactValue: 'john@example.com',
+      primaryContact: true,
+    };
+    const selfPhone = {
+      ...dummyContact,
+      id: 'contact-uuid-2',
+      relationship: 'Self',
+      primaryContact: false,
+    };
+
+    expect(groupContactMethods([selfEmail, selfPhone])).toHaveLength(1);
+    expect(groupContactMethods([selfEmail, selfPhone])[0].methods).toHaveLength(2);
+  });
+
+  it('uses the legacy Participant label only for self contacts', () => {
+    expect(getContactRelationshipLabel('Jane Doe', '', 'John Doe')).toBe('');
+    expect(getContactRelationshipLabel('John Doe', '', 'John Doe')).toBe('Participant');
+    expect(getContactRelationshipLabel('Jane Doe', 'Self', 'John Doe')).toBe('Participant');
+    expect(getContactRelationshipLabel('Jane Doe', 'Mother', 'John Doe')).toBe('Mother');
+  });
+
+  it('renders the legacy Contacts list and unified add action', () => {
     const html = renderToStaticMarkup(
       <ParticipantContactManagement
         participantId="part-uuid-1"
@@ -135,77 +187,152 @@ describe('Contact Methods and Related Contacts Components', () => {
       />
     );
 
-    expect(html).toContain('Contact Methods &amp; Authorized Contacts');
-    expect(html).toContain('Participant Addresses');
+    expect(html).toContain('Contacts');
     expect(html).toContain('Add Contact');
-    expect(html).toContain('Add Address');
+    expect(html).not.toContain('Add Address');
   });
 
-  it('renders AddContactModal in Add mode', () => {
+  it('renders the unified legacy contact editor in edit mode', () => {
     const html = renderToStaticMarkup(
-      <AddContactModal
-        isOpen={true}
-        onClose={vi.fn()}
-        participantId="part-uuid-1"
-        participantName="John Doe"
-        onContactAdded={vi.fn()}
-      />
-    );
-
-    expect(html).toContain('Add Contact Method — John Doe');
-    expect(html).toContain('Relationship to Participant');
-    expect(html).toContain('Can Leave Message?');
-    expect(html).toContain('Preferred Method');
-  });
-
-  it('renders AddContactModal in Edit mode with prefilled contact details', () => {
-    const html = renderToStaticMarkup(
-      <AddContactModal
+      <ParticipantContactModal
         isOpen={true}
         onClose={vi.fn()}
         participantId="part-uuid-1"
         participantName="John Doe"
         contactToEdit={dummyContact}
-        onContactAdded={vi.fn()}
+        contactMethods={[dummyContact]}
+        addresses={[dummyAddress]}
+        onSaved={vi.fn()}
       />
     );
 
-    expect(html).toContain('Edit Contact Methods — John Doe');
+    expect(html).toContain('Edit Contact');
+    expect(html).toContain('Contact Methods');
+    expect(html).toContain('Address');
+    expect(html).toContain('Delete');
     expect(html).toContain('Archive Contact');
-    expect(html).toContain('Save Updates');
   });
 
-  it('renders AddAddressModal in Add mode', () => {
+  it('keeps empty method and address rows for an other contact', () => {
+    const emptyMethod: ParticipantContactDetail = {
+      ...dummyContact,
+      contactValue: '',
+    };
+    const emptyAddress: ParticipantAddressDetail = {
+      ...dummyAddress,
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      stateRegion: '',
+      postalCode: '',
+    };
     const html = renderToStaticMarkup(
-      <AddAddressModal
+      <ParticipantContactModal
+        isOpen
+        onClose={vi.fn()}
+        participantId="part-uuid-1"
+        participantName="John Doe"
+        contactToEdit={emptyMethod}
+        contactMethods={[emptyMethod]}
+        addresses={[emptyAddress]}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(html).toContain('aria-label="Contact method type"');
+    expect(html).toContain('aria-label="Address 1"');
+    expect(html).toContain('Add Contact Method');
+    expect(html).toContain('Add Address');
+  });
+
+  it('uses the participant legacy layout and hides empty method and address rows', () => {
+    const participantContact: ParticipantContactDetail = {
+      ...dummyContact,
+      contactName: 'John Doe',
+      relationship: 'Participant',
+      contactValue: '',
+    };
+    const emptyAddress: ParticipantAddressDetail = {
+      ...dummyAddress,
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      stateRegion: '',
+      postalCode: '',
+    };
+    const html = renderToStaticMarkup(
+      <ParticipantContactModal
+        isOpen
+        onClose={vi.fn()}
+        participantId="part-uuid-1"
+        participantName="John Doe"
+        contactToEdit={participantContact}
+        contactMethods={[participantContact]}
+        addresses={[emptyAddress]}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(html).toContain('Edit Contact Methods');
+    expect(html).toContain('Preferred Name');
+    expect(html).not.toContain('Relationship to Participant');
+    expect(html).not.toContain('aria-label="Contact method type"');
+    expect(html).not.toContain('aria-label="Address 1"');
+  });
+
+  it('keeps an explicit non-participant relationship when the contact has the participant name', () => {
+    const sameNameContact: ParticipantContactDetail = {
+      ...dummyContact,
+      contactName: 'John Doe',
+      relationship: 'Mother',
+    };
+    const html = renderToStaticMarkup(
+      <ParticipantContactModal
+        isOpen
+        onClose={vi.fn()}
+        participantId="part-uuid-1"
+        participantName="John Doe"
+        contactToEdit={sameNameContact}
+        contactMethods={[sameNameContact]}
+        addresses={[]}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(html).toContain('Contact Name');
+    expect(html).toContain('Relationship to Participant');
+    expect(html).not.toContain('Preferred Name');
+  });
+
+  it('renders the unified legacy contact editor with methods and addresses together', () => {
+    const html = renderToStaticMarkup(
+      <ParticipantContactModal
         isOpen={true}
         onClose={vi.fn()}
         participantId="part-uuid-1"
         participantName="John Doe"
-        onAddressAdded={vi.fn()}
+        addresses={[]}
+        onSaved={vi.fn()}
       />
     );
 
-    expect(html).toContain('Add Address — John Doe');
-    expect(html).toContain('Street Address Line 1');
-    expect(html).toContain('Address Type');
-  });
-
-  it('renders AddAddressModal in Edit mode with prefilled address details', () => {
-    const html = renderToStaticMarkup(
-      <AddAddressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        participantId="part-uuid-1"
-        participantName="John Doe"
-        addressToEdit={dummyAddress}
-        onAddressAdded={vi.fn()}
-      />
-    );
-
-    expect(html).toContain('Edit Address — John Doe');
-    expect(html).toContain('Archive Address');
-    expect(html).toContain('Save Updates');
+    expect(html).toContain('Add Contact');
+    expect(html).toContain('modal-header');
+    expect(html).toContain('data-tooltip="Archive Contact"');
+    expect(html).not.toContain('data-tooltip="Restore Contact"');
+    expect(html).toContain('Show Archived Methods');
+    expect(html).toContain('Add Contact Method');
+    expect(html).toContain('Add Address');
+    expect(html).not.toContain('Add at least one contact method');
+    expect(html).toContain('*required');
+    expect(html).not.toContain('aria-label="Contact method type"');
+    expect(html).not.toContain('aria-label="Address 1"');
+    expect(html).toContain('Contact Name');
+    expect(html).toContain('Relationship to Participant');
+    expect(html).toContain('Can Leave a Message');
+    expect(html).toContain('Contact Methods');
+    expect(html).toContain('Add Contact Method');
+    expect(html).toContain('Add Address');
   });
 
   it('renders contact history search and Add Contact controls in one row', () => {
@@ -223,21 +350,13 @@ describe('Contact Methods and Related Contacts Components', () => {
 
   it('does not preselect contact, address, consent, or contact-log dropdown values', () => {
     const contactHtml = renderToStaticMarkup(
-      <AddContactModal
+      <ParticipantContactModal
         isOpen
         onClose={vi.fn()}
         participantId="part-uuid-1"
         participantName="John Doe"
-        onContactAdded={vi.fn()}
-      />
-    );
-    const addressHtml = renderToStaticMarkup(
-      <AddAddressModal
-        isOpen
-        onClose={vi.fn()}
-        participantId="part-uuid-1"
-        participantName="John Doe"
-        onAddressAdded={vi.fn()}
+        addresses={[]}
+        onSaved={vi.fn()}
       />
     );
     const consentHtml = renderToStaticMarkup(
@@ -257,9 +376,7 @@ describe('Contact Methods and Related Contacts Components', () => {
       />
     );
 
-    expect(contactHtml).toContain('Select relationship...');
-    expect(contactHtml).toContain('Select contact type...');
-    expect(addressHtml).toContain('Select address type...');
+    expect(contactHtml).toContain('value="" selected="">Relationship</option>');
     expect(consentHtml).toContain('Select...');
     expect(contactLogHtml).toContain('Select contact type...');
     expect(contactLogHtml).toContain('Select who contacted the participant...');

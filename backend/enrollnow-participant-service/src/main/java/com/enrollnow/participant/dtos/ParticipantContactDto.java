@@ -1,5 +1,9 @@
 package com.enrollnow.participant.dtos;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -40,8 +44,20 @@ public class ParticipantContactDto {
     public void setNotes(String notes) { this.notes = notes; }
     public boolean isPrimaryContact() { return primaryContact; }
     public void setPrimaryContact(boolean primaryContact) { this.primaryContact = primaryContact; }
+
+    @JsonIgnore
     public boolean isPreferred() { return isPreferred; }
+
+    @JsonIgnore
     public void setPreferred(boolean preferred) { isPreferred = preferred; }
+
+    @JsonProperty("isPreferred")
+    public boolean getIsPreferred() { return isPreferred; }
+
+    @JsonProperty("isPreferred")
+    @JsonAlias({"preferred"})
+    public void setIsPreferred(boolean preferred) { isPreferred = preferred; }
+
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
