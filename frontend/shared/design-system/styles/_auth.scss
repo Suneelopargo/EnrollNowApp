@@ -699,27 +699,6 @@
   &[aria-invalid='true'] {
     border-color: #dc2626;
 
-    &::placeholder {
-      color: #dc2626;
-      opacity: 1;
-      font-weight: 500;
-    }
-    &::-webkit-input-placeholder {
-      color: #dc2626;
-      opacity: 1;
-      font-weight: 500;
-    }
-    &::-moz-placeholder {
-      color: #dc2626;
-      opacity: 1;
-      font-weight: 500;
-    }
-    &:-ms-input-placeholder {
-      color: #dc2626;
-      opacity: 1;
-      font-weight: 500;
-    }
-
     &:focus {
       border-color: #dc2626;
       box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);

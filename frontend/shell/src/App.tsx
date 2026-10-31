@@ -11,6 +11,10 @@ import { ToasterContainer, toast } from '../../shared/toaster';
 import { ConfirmationContainer } from '../../shared/confirmation';
 import { LoaderContainer } from '../../shared/loader';
 import { SkipLink } from '../../shared/accessibility/SkipLink';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
 import '../../shared/design-system/tooltip';
 import '../../shared/design-system/styles/index.scss';
 

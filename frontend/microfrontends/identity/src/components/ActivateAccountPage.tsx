@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { Footer } from '../../../../shared/design-system/components/Footer';
+import { AuthFooterWave } from './AuthFooterWave';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
@@ -192,7 +193,7 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
   const isButtonDisabled = loading || Boolean(successMessage) || !isFormValid;
 
   return (
-    <div className="enl-activation-page">
+    <div className="enl-activation-page enl-user-activation-page">
       <div className="enl-activation-card">
         {/* Top Header Card with Brand Logo */}
         <div className="enl-activation-header">
@@ -290,8 +291,12 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
         </button>
       </div>
 
+      <div className="enl-user-activation-wave-container">
+        <AuthFooterWave />
+      </div>
+
       {/* Footer Below Card */}
-      <Footer variant="auth-card" />
+      <Footer variant="auth" />
     </div>
   );
 };
