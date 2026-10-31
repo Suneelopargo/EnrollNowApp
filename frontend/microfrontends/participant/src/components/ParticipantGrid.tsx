@@ -223,6 +223,9 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
 }) => {
   const [gridApi, setGridApi] = useState<GridApi<ParticipantRecord> | null>(null);
   const [gridSearchTerm, setGridSearchTerm] = useState(searchTerm || '');
+  const gridSearchTermRef = useRef(searchTerm || '');
+  const previousSearchTermRef = useRef(searchTerm || '');
+  const [gridSearchResultCount, setGridSearchResultCount] = useState(participants.length);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
   const [studyToAssign, setStudyToAssign] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -250,31 +253,53 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     return keys;
   }, [studies]);
 
-  // Synchronize internal quick-filter text if external searchTerm changes (e.g. clear filters)
+  // Keep the grid quick filter synchronized with saved-search and clear-filter changes.
   useEffect(() => {
-    if (searchTerm !== undefined && searchTerm !== gridSearchTerm) {
-      setGridSearchTerm(searchTerm);
-      gridApi?.setGridOption('quickFilterText', searchTerm);
+    const nextSearchTerm = searchTerm || '';
+    if (nextSearchTerm === previousSearchTermRef.current) return;
+    previousSearchTermRef.current = nextSearchTerm;
+    if (nextSearchTerm !== gridSearchTermRef.current) {
+      gridSearchTermRef.current = nextSearchTerm;
+      setGridSearchTerm(nextSearchTerm);
+      gridApi?.setGridOption('quickFilterText', nextSearchTerm);
+      if (gridApi) {
+        gridApi.paginationGoToFirstPage();
+        setGridSearchResultCount(gridApi.getDisplayedRowCount());
+      }
     }
   }, [searchTerm, gridApi]);
 
+  useEffect(() => {
+    gridApi?.paginationGoToFirstPage();
+  }, [participants, gridApi]);
+
   const handleSearchChange = (value: string) => {
+    gridSearchTermRef.current = value;
     setGridSearchTerm(value);
+    setSearchTerm?.(value);
     gridApi?.setGridOption('quickFilterText', value);
+    if (gridApi) {
+      gridApi.paginationGoToFirstPage();
+      setGridSearchResultCount(gridApi.getDisplayedRowCount());
+    }
   };
 
   const handleClearSearch = () => {
+    gridSearchTermRef.current = '';
     setGridSearchTerm('');
-    gridApi?.setGridOption('quickFilterText', '');
     setSearchTerm?.('');
+    gridApi?.setGridOption('quickFilterText', '');
+    if (gridApi) {
+      gridApi.paginationGoToFirstPage();
+      setGridSearchResultCount(gridApi.getDisplayedRowCount());
+    }
   };
 
   const onGridReady = useCallback((params: { api: GridApi<ParticipantRecord> }) => {
     setGridApi(params.api);
-    if (gridSearchTerm) {
-      params.api.setGridOption('quickFilterText', gridSearchTerm);
-    }
-  }, [gridSearchTerm]);
+    params.api.setGridOption('quickFilterText', gridSearchTermRef.current);
+    setGridSearchResultCount(params.api.getDisplayedRowCount());
+  }, []);
 
   const availableStudyList = useMemo(() => {
     const list = new Set<string>();
@@ -408,10 +433,10 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     );
   };
 
-  const columnDefs = useMemo<ColDef[]>(() => [
+  const columnDefs = useMemo<ColDef<ParticipantRecord>[]>(() => [
     {
       headerName: 'Select',
-      field: 'select',
+      colId: 'select',
       width: 72,
       minWidth: 68,
       maxWidth: 76,
@@ -430,6 +455,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       sortable: true,
       filter: 'agTextColumnFilter',
       cellClass: 'flex items-center font-normal text-xs text-gray-900',
+      getQuickFilterText: (params) => params.data?.searchableText || params.value || '',
     },
     {
       headerComponent: StudiesFilterHeader,
@@ -478,7 +504,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     },
     {
       headerName: 'Actions',
-      field: 'actions',
+      colId: 'actions',
       width: 96,
       minWidth: 88,
       maxWidth: 100,
@@ -630,7 +656,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <div className="flex items-center gap-2 mr-2">
             <h3 className="sub-heading text-lg font-semibold text-gray-800 flex items-center gap-1.5 mb-0 whitespace-nowrap" id="registry-table-heading">
               <span>{duplicatesOnly ? 'Potential Duplicate Participants' : 'All Participants'}</span>
-              <span className="text-gray-500 font-normal">({totalCount ?? participants.length})</span>
+              <span className="text-gray-500 font-normal">({gridSearchTerm.trim() ? gridSearchResultCount : totalCount ?? participants.length})</span>
             </h3>
             <button
               id="bulk-actions-toggle"
@@ -951,7 +977,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           rowData={participants}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
-          quickFilterText={gridSearchTerm}
           context={{ onOpenDetail, onDeleteParticipant, onNavigateToStudy, archivedStudyKeys }}
           onCellClicked={(params) => {
             if (params.column?.getColId() === 'expand' && params.data) {
@@ -975,6 +1000,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
           onSelectionChanged={onSelectionChanged}
           onGridReady={onGridReady}
+          onFilterChanged={(event) => setGridSearchResultCount(event.api.getDisplayedRowCount())}
+          onModelUpdated={(event) => setGridSearchResultCount(event.api.getDisplayedRowCount())}
           rowHeight={64}
           headerHeight={44}
           pagination={true}

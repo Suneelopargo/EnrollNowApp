@@ -49,13 +49,16 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
   const handleOperatorChange = (newOp: string) => {
     const wasRange = isRangeOperator(filter.operator);
     const willBeRange = isRangeOperator(newOp);
+    const wasNoValue = isNoValueOperator(filter.operator || '');
+    const willBeNoValue = isNoValueOperator(newOp);
+    const clearValue = wasRange !== willBeRange || wasNoValue || willBeNoValue;
 
     onUpdate(index, {
       ...filter,
       operator: newOp,
-      // If transitioning between range and single value, clean values safely
-      ...(wasRange && !willBeRange ? { minValue: '', maxValue: '' } : {}),
-      ...(!wasRange && willBeRange ? { value: '' } : {}),
+      ...(clearValue
+        ? { value: '', values: [], minValue: '', maxValue: '' }
+        : {}),
     });
   };
 
@@ -94,21 +97,24 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
 
     if (isRange) {
       const isDate = currentFieldDef.type === 'date';
+      const isDateTime = currentFieldDef.type === 'datetime';
+      const isAge = currentField.toLowerCase() === 'age';
+      const inputType = isDate ? 'date' : isDateTime ? 'datetime-local' : isAge ? 'text' : 'number';
       return (
         <div className="grid grid-cols-2 gap-2 filter-card-range-inputs">
           <input
-            type={isDate ? 'date' : 'number'}
+            type={inputType}
             value={filter.minValue || ''}
             onChange={(e) => handleMinChange(e.target.value)}
-            placeholder={isDate ? 'Start Date' : 'Min'}
+            placeholder={isDate || isDateTime ? 'Start Date' : isAge ? 'Min age' : 'Min'}
             aria-label={`Filter rule ${index + 1} minimum value`}
             className="filter-card-value-input text-xs"
           />
           <input
-            type={isDate ? 'date' : 'number'}
+            type={inputType}
             value={filter.maxValue || ''}
             onChange={(e) => handleMaxChange(e.target.value)}
-            placeholder={isDate ? 'End Date' : 'Max'}
+            placeholder={isDate || isDateTime ? 'End Date' : isAge ? 'Max age' : 'Max'}
             aria-label={`Filter rule ${index + 1} maximum value`}
             className="filter-card-value-input text-xs"
           />
@@ -116,13 +122,13 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
       );
     }
 
-    if (currentFieldDef.type === 'date') {
+    if (currentFieldDef.type === 'date' || currentFieldDef.type === 'datetime') {
       return (
         <input
-          type="date"
+          type={currentFieldDef.type === 'datetime' ? 'datetime-local' : 'date'}
           value={filter.value || ''}
           onChange={(e) => handleValueChange(e.target.value)}
-          aria-label={`Filter rule ${index + 1} date value`}
+          aria-label={`Filter rule ${index + 1} ${currentFieldDef.type === 'datetime' ? 'date and time' : 'date'} value`}
           className="filter-card-value-input text-xs"
         />
       );
@@ -133,11 +139,13 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
         ? studyOptions
         : currentFieldDef.options;
 
-    if (currentFieldDef.type === 'multiselect' && effectiveOptions && effectiveOptions.length > 0) {
-      const selected = filter.values || (filter.value ? filter.value.split(',').map((s) => s.trim()) : []);
+    if (currentFieldDef.type === 'multiselect') {
+      const selected = filter.values?.length
+        ? filter.values
+        : (filter.value ? filter.value.split(',').map((s) => s.trim()) : []);
       return (
         <SearchableMultiSelect
-          options={effectiveOptions}
+          options={effectiveOptions || []}
           selectedValues={selected}
           onChange={(values) => onUpdate(index, { ...filter, values, value: values.join(',') })}
           placeholder={currentFieldDef.placeholder || 'Select options...'}
@@ -145,15 +153,44 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
         />
       );
     }
+    if (currentFieldDef.type === 'select') {
+      const selected = filter.values?.[0] || filter.value || '';
+      return (
+        <select
+          value={selected}
+          onChange={(event) => handleValueChange(event.target.value)}
+          aria-label={`Filter rule ${index + 1} value`}
+          className="filter-card-value-input text-xs"
+        >
+          <option value="">{currentFieldDef.placeholder || 'Select an option...'}</option>
+          {(effectiveOptions || []).map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      );
+    }
     if (currentFieldDef.type === 'number') {
       return (
         <input
-          type="text"
+          type={currentField.toLowerCase() === 'age' ? 'text' : 'number'}
           value={filter.value || ''}
           onChange={(e) => handleValueChange(e.target.value)}
           placeholder={currentFieldDef.placeholder || 'Enter age or number...'}
           aria-label={`Filter rule ${index + 1} numeric value`}
           className="filter-card-value-input text-xs"
+        />
+      );
+    }
+
+    if (currentFieldDef.type === 'textarea') {
+      return (
+        <textarea
+          value={filter.value || ''}
+          onChange={(e) => handleValueChange(e.target.value)}
+          placeholder={currentFieldDef.placeholder || 'Enter value...'}
+          aria-label={`Filter rule ${index + 1} text value`}
+          className="filter-card-value-input text-xs"
+          rows={3}
         />
       );
     }

@@ -96,9 +96,10 @@ export interface ParticipantRecord {
   demographics?: Demographics;
   family?: FamilyInfo;
   variables?: ParticipantVariable[];
+  searchableText?: string;
 }
 
-export type FilterFieldType = 'text' | 'number' | 'select' | 'multiselect' | 'date';
+export type FilterFieldType = 'text' | 'textarea' | 'number' | 'select' | 'multiselect' | 'date' | 'datetime';
 
 export interface FilterOptionItem {
   value: string;

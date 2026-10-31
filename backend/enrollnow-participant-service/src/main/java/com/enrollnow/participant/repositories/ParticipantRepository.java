@@ -53,4 +53,38 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID>,
             @Param("search") String search,
             @Param("limit") int limit
     );
+
+    @Query(value = """
+        SELECT DISTINCT t.tag
+        FROM (
+            SELECT jsonb_array_elements_text(p.custom_attributes->'tags') AS tag
+            FROM enrollnow.participants p
+            WHERE p.tenant_id = :tenantId
+              AND (p.status IS NULL OR UPPER(p.status) <> 'DELETED')
+              AND p.custom_attributes IS NOT NULL
+              AND jsonb_typeof(p.custom_attributes->'tags') = 'array'
+              AND (:siteId IS NULL OR p.site_id = :siteId)
+        ) t
+        WHERE TRIM(t.tag) <> ''
+        ORDER BY t.tag
+        """, nativeQuery = true)
+    List<String> findDistinctParticipantTagsByTenantAndSite(
+            @Param("tenantId") UUID tenantId,
+            @Param("siteId") UUID siteId
+    );
+
+    @Query(value = """
+        SELECT DISTINCT p.status
+        FROM enrollnow.participants p
+        WHERE p.tenant_id = :tenantId
+          AND (p.status IS NULL OR UPPER(p.status) <> 'DELETED')
+          AND p.status IS NOT NULL
+          AND TRIM(p.status) <> ''
+          AND (:siteId IS NULL OR p.site_id = :siteId)
+        ORDER BY p.status
+        """, nativeQuery = true)
+    List<String> findDistinctRegistryStatusesByTenantAndSite(
+            @Param("tenantId") UUID tenantId,
+            @Param("siteId") UUID siteId
+    );
 }

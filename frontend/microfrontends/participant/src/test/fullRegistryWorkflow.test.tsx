@@ -711,6 +711,34 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     getSpy.mockRestore();
   });
 
+  it('loads registry dropdown filter options for tags, locations, and statuses', async () => {
+    const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: {
+        tags: ['Cardio'],
+        cities: ['Chicago'],
+        states: ['IL'],
+        zipcodes: ['60603'],
+        statuses: ['ACTIVE'],
+      },
+    } as any);
+
+    const options = await participantApi.getRegistryFilterOptions({
+      tenantId: 't-1',
+      siteId: 's-1',
+    });
+
+    expect(getSpy).toHaveBeenCalledWith(
+      '/api/v1/registry/filter-options',
+      expect.objectContaining({
+        params: { tenantId: 't-1', siteId: 's-1' },
+        skipToast: true,
+      })
+    );
+    expect(options.cities).toEqual(['Chicago']);
+    expect(options.statuses).toEqual(['ACTIVE']);
+    getSpy.mockRestore();
+  });
+
   it('renders ParticipantTagSelect with pills, remove buttons, and input', () => {
     const htmlWithPills = renderToStaticMarkup(
       <ParticipantTagSelect

@@ -7,6 +7,14 @@ export interface DemographicOptions {
   sex?: string[];
   gender?: string[];
 }
+
+export interface RegistryFilterOptions {
+  tags: string[];
+  cities: string[];
+  states: string[];
+  zipcodes: string[];
+  statuses: string[];
+}
 export interface Participant {
   id?: string | number;
   participantId?: string;
@@ -485,6 +493,23 @@ export const participantApi = {
     return {
       ethnicity: Array.isArray(data.ethnicity) ? data.ethnicity : [],
       race: Array.isArray(data.race) ? data.race : [],
+      sex: Array.isArray(data.sex) ? data.sex : [],
+      gender: Array.isArray(data.gender) ? data.gender : [],
+    };
+  },
+
+  async getRegistryFilterOptions(options?: { tenantId?: string; siteId?: string }): Promise<RegistryFilterOptions> {
+    const res = await apiClient.get('/api/v1/registry/filter-options', {
+      params: options,
+      skipToast: true,
+    } as any);
+    const data = res.data?.data ?? res.data ?? {};
+    return {
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      cities: Array.isArray(data.cities) ? data.cities : [],
+      states: Array.isArray(data.states) ? data.states : [],
+      zipcodes: Array.isArray(data.zipcodes) ? data.zipcodes : [],
+      statuses: Array.isArray(data.statuses) ? data.statuses : [],
     };
   },
 

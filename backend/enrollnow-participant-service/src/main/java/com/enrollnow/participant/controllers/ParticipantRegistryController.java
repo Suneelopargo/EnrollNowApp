@@ -270,6 +270,17 @@ public class ParticipantRegistryController {
         return ResponseEntity.ok(registryService.getDemographicOptions(resolvedTenantId));
     }
 
+    @GetMapping("/registry/filter-options")
+    public ResponseEntity<Map<String, List<String>>> getRegistryFilterOptions(
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId) {
+
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        return ResponseEntity.ok(registryService.getRegistryFilterOptions(resolvedTenantId, siteId));
+    }
+
     @GetMapping("/registry/relationship-options")
     public ResponseEntity<List<String>> getRelationshipOptions(
             @RequestParam(required = false) UUID tenantId,

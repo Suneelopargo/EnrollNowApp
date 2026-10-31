@@ -34,6 +34,7 @@ class ParticipantSpecificationsTest {
     @Mock private Path<LocalDate> dobPath;
     @Mock private Path<OffsetDateTime> createdAtPath;
     @Mock private Path<OffsetDateTime> updatedAtPath;
+    @Mock private Path<OffsetDateTime> globalLastContactDatePath;
     @Mock private Path<String> sexAtBirthPath;
     @Mock private Path<String> genderIdentityPath;
     @Mock private Path<String> statusPath;
@@ -57,6 +58,7 @@ class ParticipantSpecificationsTest {
         lenient().when(root.<LocalDate>get("dateOfBirth")).thenReturn(dobPath);
         lenient().when(root.<OffsetDateTime>get("createdAt")).thenReturn(createdAtPath);
         lenient().when(root.<OffsetDateTime>get("updatedAt")).thenReturn(updatedAtPath);
+        lenient().when(root.<OffsetDateTime>get("globalLastContactDate")).thenReturn(globalLastContactDatePath);
         lenient().when(root.<String>get("sexAtBirth")).thenReturn(sexAtBirthPath);
         lenient().when(root.<String>get("genderIdentity")).thenReturn(genderIdentityPath);
         lenient().when(root.<String>get("status")).thenReturn(statusPath);
@@ -86,6 +88,7 @@ class ParticipantSpecificationsTest {
         lenient().when(cb.exists(any())).thenReturn(mockPredicate);
         lenient().when(cb.literal(any())).thenReturn(mock(Expression.class));
         lenient().when(cb.function(eq("jsonb_path_exists"), eq(Boolean.class), any(), any())).thenReturn(mock(Expression.class));
+        lenient().when(cb.function(eq("jsonb_pretty"), eq(String.class), any())).thenReturn(lowerExpr);
         lenient().when(cb.disjunction()).thenReturn(mockPredicate);
         lenient().when(cb.function(eq("month"), eq(Integer.class), any())).thenReturn(monthExpr);
         lenient().when(monthExpr.in(anyCollection())).thenReturn(mockPredicate);
@@ -176,6 +179,21 @@ class ParticipantSpecificationsTest {
     }
 
     @Test
+    void buildSpecification_filtersLastContactByGlobalLastContactDate() {
+        CustomFilterRuleDto dateRule = new CustomFilterRuleDto("1", "lastContact", "equal to", "2026-10-31", "");
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(dateRule)
+        );
+
+        spec.toPredicate(root, query, cb);
+
+        verify(root).get("globalLastContactDate");
+        verify(cb, atLeastOnce()).greaterThanOrEqualTo(eq(globalLastContactDatePath), any(OffsetDateTime.class));
+        verify(cb, atLeastOnce()).lessThanOrEqualTo(eq(globalLastContactDatePath), any(OffsetDateTime.class));
+        verify(root, never()).get("updatedAt");
+    }
+
+    @Test
     void buildSpecification_handlesGenderMultiSelect() {
         CustomFilterRuleDto genderRule = new CustomFilterRuleDto("1", "gender", "equal to", "", "", "", List.of("Male", "Female"), "");
         Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
@@ -224,6 +242,31 @@ class ParticipantSpecificationsTest {
     }
 
     @Test
+    void buildSpecificationSearchesCustomAttributesAsJsonText() {
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, "rerw", "all", "all", null, Collections.emptyList()
+        );
+
+        spec.toPredicate(root, query, cb);
+
+        verify(cb).function("jsonb_pretty", String.class, customAttributesPath);
+    }
+
+    @Test
+    void buildSpecificationSearchesGenderLabelsAndCommonCodes() {
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, "male", "all", "all", null, Collections.emptyList()
+        );
+
+        spec.toPredicate(root, query, cb);
+
+        verify(cb).lower(sexAtBirthPath);
+        verify(cb).lower(genderIdentityPath);
+        verify(cb, times(2)).equal(lowerExpr, "male");
+        verify(cb, times(2)).equal(lowerExpr, "m");
+    }
+
+    @Test
     void buildSpecification_handlesDateNotBetweenAndReversedDateRange() {
         // Reversed range: min > max (2026-12-31 to 2026-01-01)
         CustomFilterRuleDto reversedDateRule = new CustomFilterRuleDto("1", "dateCreated", "not between", "", "2026-12-31", "2026-01-01", null, "");
@@ -253,6 +296,21 @@ class ParticipantSpecificationsTest {
         );
         notEqSpec.toPredicate(root, query, cb);
         verify(cb, atLeastOnce()).not(any(Predicate.class));
+    }
+
+    @Test
+    void buildSpecification_matchesTagsAsExactJsonArrayValues() {
+        CustomFilterRuleDto tagRule = new CustomFilterRuleDto(
+                "1", "tags", "equal to", "", "", "", List.of("Heart"), ""
+        );
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(tagRule)
+        );
+
+        spec.toPredicate(root, query, cb);
+
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("$.tags[*]") && path.toString().contains("@ == \"Heart\"")));
     }
 
     @Test

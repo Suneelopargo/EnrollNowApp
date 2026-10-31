@@ -16,6 +16,8 @@ import { ParticipantRecord, CustomFilterRule, SavedSearch, FilterFieldOption, Fi
 import {
   validateFilterRule,
   registerDynamicFilterFields,
+  registerDemographicFilterOptions,
+  registerRegistryFilterOptions,
   registerStudyFilterOptions,
   DEFAULT_STUDY_FILTER_OPTIONS,
   isRangeOperator,
@@ -53,6 +55,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [globalVariables, setGlobalVariables] = useState<GlobalVariableDefinition[]>([]);
   const [demographicOptions, setDemographicOptions] = useState<DemographicOptions>({ ethnicity: [], race: [] });
   const [isLoadingDemographicOptions, setIsLoadingDemographicOptions] = useState<boolean>(true);
+  const [, setRegistryFilterOptionsVersion] = useState(0);
   const [availableStudies, setAvailableStudies] = useState<Study[]>([]);
   const [userStudyIds, setUserStudyIds] = useState<Set<string>>(() => new Set());
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
@@ -116,7 +119,6 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const fetchParticipants = useCallback(async (quiet = false, overrideFilters?: {
     contactFilter?: 'all' | 'yes' | 'no';
     availableFilter?: 'all' | 'yes' | 'no';
-    searchTerm?: string;
     selectedStudies?: string[];
     customFilters?: CustomFilterRule[];
     duplicatesOnly?: boolean;
@@ -125,7 +127,6 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     try {
       const activeContact = overrideFilters?.contactFilter ?? filterStateRef.current.contactFilter;
       const activeAvailable = overrideFilters?.availableFilter ?? filterStateRef.current.availableFilter;
-      const activeSearch = overrideFilters?.searchTerm ?? filterStateRef.current.searchTerm;
       const activeStudies = overrideFilters?.selectedStudies ?? filterStateRef.current.selectedStudies;
       const activeCustom = (overrideFilters?.customFilters ?? filterStateRef.current.customFilters)
         .filter(hasFilterCriteria);
@@ -136,7 +137,6 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       const params: RegistrySearchParams = {
         tenantId,
         siteId,
-        searchTerm: activeSearch.trim() || undefined,
         contactFilter: activeContact,
         availableFilter: activeAvailable,
         studies: activeStudies.length > 0 ? activeStudies : undefined,
@@ -148,14 +148,29 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         sortDirection: 'desc',
       };
 
-      const res: any = await participantApi.getParticipants(params);
-      const rawList = Array.isArray(res)
-        ? res
-        : Array.isArray(res?.items)
-        ? res.items
-        : Array.isArray(res?.data)
-        ? res.data
+      const getPageItems = (response: any): any[] => Array.isArray(response)
+        ? response
+        : Array.isArray(response?.items)
+        ? response.items
+        : Array.isArray(response?.data)
+        ? response.data
         : [];
+      const firstPage: any = await participantApi.getParticipants(params);
+      const rawList = getPageItems(firstPage);
+      const totalPages = Array.isArray(firstPage)
+        ? 1
+        : typeof firstPage?.totalPages === 'number'
+        ? firstPage.totalPages
+        : typeof firstPage?.totalCount === 'number'
+        ? Math.ceil(firstPage.totalCount / params.pageSize!)
+        : 1;
+
+      for (let page = 1; page < totalPages; page += 1) {
+        const nextPage: any = await participantApi.getParticipants({ ...params, page });
+        const nextItems = getPageItems(nextPage);
+        if (nextItems.length === 0) break;
+        rawList.push(...nextItems);
+      }
 
       const mapped: ParticipantRecord[] = rawList.map((p: any) => ({
         id: String(p.id ?? p.participantId ?? ''),
@@ -202,19 +217,41 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           members: Array.isArray(p.family?.members) ? p.family.members : [],
         },
         variables: Array.isArray(p.variables) ? p.variables : [],
+        searchableText: [
+          p.name, p.firstName, p.middleName, p.lastName, p.status,
+          p.gender, p.sexAtBirth, p.genderIdentity, p.age, p.dateOfBirth,
+          p.lastContact, p.globalDateOfLastContact, p.dateCreated, p.birthMonth,
+          p.phone, p.email, p.city, p.state, p.zipcode, p.postalCode,
+          p.address, p.addressLine1, p.globalId, p.familyId,
+          p.contactMethods?.primaryEmail, p.contactMethods?.secondaryEmail,
+          p.contactMethods?.phone, p.contactMethods?.address,
+          ...(Array.isArray(p.identifiers)
+            ? p.identifiers.flatMap((identifier: any) => [identifier?.identifierValue, identifier?.value])
+            : []),
+          ...(Array.isArray(p.tags) ? p.tags : []),
+          ...(Array.isArray(p.studies) ? p.studies.map((study: any) => study?.name) : []),
+          ...(Array.isArray(p.variables)
+            ? p.variables.flatMap((variable: any) => [variable?.name, variable?.value])
+            : []),
+          p.customAttributes == null
+            ? ''
+            : typeof p.customAttributes === 'string'
+            ? p.customAttributes
+            : JSON.stringify(p.customAttributes),
+        ].filter((value) => value !== null && value !== undefined).map(String).join(' '),
       }));
 
       setParticipants(mapped);
-      const rawCount = typeof res?.totalCount === 'number'
-        ? res.totalCount
-        : typeof res?.totalElements === 'number'
-        ? res.totalElements
+      const rawCount = typeof firstPage?.totalCount === 'number'
+        ? firstPage.totalCount
+        : typeof firstPage?.totalElements === 'number'
+        ? firstPage.totalElements
         : mapped.length;
       setServerTotalCount(rawCount);
       setError(null);
 
       // Keep baseline for study list dropdown when unfiltered
-      const isUnfiltered = !activeSearch && activeContact === 'all' && activeAvailable === 'all' && activeStudies.length === 0 && activeCustom.length === 0;
+      const isUnfiltered = activeContact === 'all' && activeAvailable === 'all' && activeStudies.length === 0 && activeCustom.length === 0;
       setAllParticipants((prev) => (isUnfiltered || prev.length === 0 ? mapped : prev));
       setSelectedParticipantId((prev) => prev || (mapped.length > 0 ? mapped[0].id : ''));
       setDetailModalState((prev) => {
@@ -235,8 +272,11 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
 
   const fetchDemographicOptions = useCallback(async () => {
     setIsLoadingDemographicOptions(true);
+    registerDemographicFilterOptions({});
+    setRegistryFilterOptionsVersion((version) => version + 1);
     try {
       const options = await participantApi.getDemographicOptions({ params: { tenantId, siteId } });
+      registerDemographicFilterOptions(options);
       setDemographicOptions({
         ethnicity: options.ethnicity || [],
         race: options.race || [],
@@ -249,6 +289,19 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       setDemographicOptions({ ethnicity: [], race: [], sex: [], gender: [] });
     } finally {
       setIsLoadingDemographicOptions(false);
+    }
+  }, [tenantId, siteId]);
+
+  const fetchRegistryFilterOptions = useCallback(async () => {
+    registerRegistryFilterOptions({});
+    setRegistryFilterOptionsVersion((version) => version + 1);
+    try {
+      const options = await participantApi.getRegistryFilterOptions({ tenantId, siteId });
+      registerRegistryFilterOptions(options);
+      setRegistryFilterOptionsVersion((version) => version + 1);
+    } catch (err) {
+      console.warn('Failed to load registry filter options:', err);
+      toast.error(getApiErrorMessage(err, 'Failed to load registry filter options.'));
     }
   }, [tenantId, siteId]);
 
@@ -276,10 +329,14 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           const customFieldLabel = /^custom\s*[-:]/i.test(variableLabel)
             ? variableLabel
             : `Custom - ${variableLabel}`;
+          const variableType = String(m.type || 'short').toLowerCase();
           let fieldType: FilterFieldOption['type'] = 'text';
-          if (m.type === 'number') fieldType = 'number';
-          else if (m.type === 'date' || m.type === 'dateTime') fieldType = 'date';
-          else if (m.type === 'single' || m.type === 'multi') fieldType = 'multiselect';
+          if (variableType === 'number') fieldType = 'number';
+          else if (variableType === 'date') fieldType = 'date';
+          else if (variableType === 'datetime') fieldType = 'datetime';
+          else if (variableType === 'single') fieldType = 'select';
+          else if (variableType === 'multi') fieldType = 'multiselect';
+          else if (variableType === 'long') fieldType = 'textarea';
 
           const options: FilterOptionItem[] = Array.isArray(m.options)
             ? m.options.map((opt: any) => ({
@@ -368,8 +425,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     fetchSavedSearches();
     fetchFilterMetadata();
     fetchDemographicOptions();
+    fetchRegistryFilterOptions();
     fetchStudies();
-  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata, fetchDemographicOptions, fetchStudies]);
+  }, [fetchParticipants, fetchSavedSearches, fetchFilterMetadata, fetchDemographicOptions, fetchRegistryFilterOptions, fetchStudies]);
 
   const selectedParticipant = useMemo(() => {
     return participants.find((p) => p.id === selectedParticipantId) || participants[0] || null;
@@ -478,7 +536,6 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     setSelectedStudies([]);
     setCustomFilters([]);
     fetchParticipants(false, {
-      searchTerm: '',
       contactFilter: 'all',
       availableFilter: 'all',
       selectedStudies: [],
@@ -558,7 +615,6 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     fetchParticipants(false, {
       contactFilter: nextContact,
       availableFilter: nextAvailable,
-      searchTerm: nextSearch,
       selectedStudies: nextStudies,
       customFilters: nextCustom.filter(hasFilterCriteria),
     });
@@ -574,7 +630,19 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         return;
       }
     }
-    fetchParticipants(false, { customFilters: applicableFilters });
+    fetchParticipants(false, {
+      customFilters: applicableFilters,
+    });
+  };
+
+  const handleContactFilterChange = (value: 'all' | 'yes' | 'no') => {
+    setContactFilter(value);
+    fetchParticipants(false, { contactFilter: value });
+  };
+
+  const handleAvailableFilterChange = (value: 'all' | 'yes' | 'no') => {
+    setAvailableFilter(value);
+    fetchParticipants(false, { availableFilter: value });
   };
 
   const handleOpenDetail = (participant: ParticipantRecord) => {
@@ -709,9 +777,9 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           contactFilter={contactFilter}
-          setContactFilter={setContactFilter}
+          setContactFilter={handleContactFilterChange}
           availableFilter={availableFilter}
-          setAvailableFilter={setAvailableFilter}
+          setAvailableFilter={handleAvailableFilterChange}
           customFilters={customFilters}
           onAddFilter={handleAddFilter}
           onUpdateFilter={handleUpdateFilter}
@@ -719,7 +787,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           onAddParticipant={() => setIsAddModalOpen(true)}
           onClearFilters={handleClearFilters}
           onSaveFilter={handleOpenSaveModal}
-          onSearch={handleSearch}
+          onSearch={() => handleSearch()}
           savedSearches={savedSearches}
           onSelectSavedSearch={handleSelectSavedSearch}
           onDeleteRequest={handleOpenDeleteModal}
