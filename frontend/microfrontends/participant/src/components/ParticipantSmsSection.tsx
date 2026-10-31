@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '../../../../shared/api-client';
 import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
 import { AuthUser } from '../../../../shared/contracts';
 import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { ComposeSmsModal } from './ComposeSmsModal';
 
 export interface ParticipantSmsSectionProps {
@@ -112,10 +113,47 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
   const columnDefs = useMemo<ColDef<CommunicationItem>[]>(() => [
     {
       colId: 'sentAt',
-      headerName: 'Date/Time Sent',
-      minWidth: 180,
+      headerName: 'Date',
+      minWidth: 290,
+      flex: 1,
+      filter: false,
+      floatingFilter: false,
       valueGetter: (params) => params.data?.sentAt || params.data?.createdAt || '',
-      valueFormatter: (params) => formatDate(params.value),
+      getQuickFilterText: (params) => {
+        const message = params.data;
+        if (!message) return '';
+        return `${formatDate(message.sentAt || message.createdAt)} ${message.global ? 'Global Registry' : ''}`;
+      },
+      comparator: (a, b) => new Date(a || 0).getTime() - new Date(b || 0).getTime(),
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const message = params.data;
+        if (!message) return null;
+        return (
+          <div className="flex items-center gap-2 whitespace-nowrap py-1">
+            <span className="shrink-0 text-xs text-gray-800">
+              {formatDate(message.sentAt || message.createdAt)}
+            </span>
+            {message.global && (
+              <span
+                title="Global (Registry)"
+                style={{
+                  display: 'inline-block',
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  backgroundColor: '#0284c7',
+                  borderRadius: '9999px',
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}
+              >
+                Global (Registry)
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       colId: 'from',
@@ -130,12 +168,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
       minWidth: 170,
       valueGetter: (params) => params.data ? getRecipientString(params.data) : '',
       tooltipValueGetter: (params) => params.value,
-    },
-    {
-      colId: 'scope',
-      headerName: 'Scope',
-      minWidth: 125,
-      valueGetter: (params) => params.data?.global ? 'Global Registry' : '',
     },
     {
       field: 'body',
@@ -158,11 +190,10 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
         const message = params.data;
         if (!message) return null;
         const isUpdating = togglingPinId === message.id;
+        const label = message.pinned ? 'Unpin text' : 'Pin text';
         return (
-          <button
-            type="button"
-            aria-label={message.pinned ? 'Unpin text' : 'Pin text'}
-            title={message.pinned ? 'Unpin text' : 'Pin text'}
+          <TooltipButton
+            label={label}
             disabled={isUpdating}
             onClick={(event) => {
               event.stopPropagation();
@@ -174,7 +205,7 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
             {isUpdating ? <Loader2 size={15} className="animate-spin" /> : (
               <Pin size={15} fill={message.pinned ? 'currentColor' : 'none'} />
             )}
-          </button>
+          </TooltipButton>
         );
       },
     },
@@ -189,26 +220,36 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Top action row matching Image 2 */}
-      <div className="flex items-center justify-between pb-1">
-        <button
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search text messages..."
+            aria-label="Search text messages"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear text message search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <TooltipButton
+          label="Add Text"
           id="add-text-log-modal-button"
-          type="button"
           onClick={() => setIsComposeOpen(true)}
-          className="btn btn-primary flex items-center gap-1.5 custom-tooltip-btn"
-          data-tooltip="Add Text"
-          style={{
-            backgroundColor: '#1d4ed8',
-            color: '#ffffff',
-            fontWeight: 600,
-            fontSize: '13px',
-            padding: '7px 18px',
-            borderRadius: '4px',
-            border: 'none',
-          }}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
         >
           <Plus size={15} /> Add Text
-        </button>
+        </TooltipButton>
       </div>
 
       {/* Loading state */}
@@ -231,27 +272,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
 
       {!isLoading && (
         <div className="space-y-3">
-          <label className="relative block max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search text messages..."
-              aria-label="Search text messages"
-              className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                aria-label="Clear text message search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </label>
           <DataGrid<CommunicationItem>
             wrapperClassName="participant-email-grid"
             rowData={sortedMessages}

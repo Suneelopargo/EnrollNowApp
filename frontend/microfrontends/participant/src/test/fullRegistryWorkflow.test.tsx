@@ -419,6 +419,9 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
       />
     );
     expect(html).toContain('Add Text');
+    expect(html).toContain('Search text messages...');
+    expect(html).toContain('min-h-[46px]');
+    expect(html).toContain('aria-label="Add Text"');
   });
 
   it('renders ComposeSmsModal when open', () => {
@@ -434,6 +437,8 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(html).toContain('Add Participant Text');
     expect(html).toContain('Send Text');
     expect(html).toContain('Message');
+    expect(html.indexOf('Message')).toBeLessThan(html.indexOf('Mark Text As'));
+    expect(html.indexOf('Mark Text As')).toBeLessThan(html.indexOf('Pin Text'));
   });
 
   it('renders ParticipantContactManagement with Contact Persons and Addresses', () => {

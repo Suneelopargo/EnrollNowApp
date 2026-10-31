@@ -391,22 +391,20 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
           </div>
 
           {/* MARK TEXT AS */}
-          <div className="form-group grid grid-cols-12 gap-3 items-center pt-1">
-            <span className="col-span-12 sm:col-span-2 text-sm text-gray-700 font-normal">
+          <div className="form-group flex items-center gap-8 pt-1">
+            <span className="text-sm text-gray-700 font-normal">
               Mark Text As
             </span>
-            <div className="col-span-12 sm:col-span-10 flex items-center gap-2">
-              <label className="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isPinned}
-                  onChange={(e) => setIsPinned(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  disabled={isSending}
-                />
-                <span>Pin Text</span>
-              </label>
-            </div>
+            <label className="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isPinned}
+                onChange={(e) => setIsPinned(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                disabled={isSending}
+              />
+              <span>Pin Text</span>
+            </label>
           </div>
 
           {/* FOOTER BUTTON */}
