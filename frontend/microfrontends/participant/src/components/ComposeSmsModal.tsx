@@ -234,15 +234,16 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
         isOpen={isOpen}
         onClose={onClose}
         title="Add Participant Text"
+        className="compose-text-modal"
       >
         <div className="compose-text-message-container relative">
-          <form onSubmit={handleSend} className="space-y-4">
+          <form onSubmit={handleSend} className="compose-text-form space-y-4">
           {/* TO FIELD */}
-          <div className="form-group grid grid-cols-12 gap-3 items-start">
-            <label className="col-span-12 sm:col-span-2 text-sm text-gray-700 font-normal pt-1.5" htmlFor="text-to-phone">
+          <div className="form-group compose-text-row">
+            <label className="compose-text-label text-sm text-gray-700 font-normal" htmlFor="text-to-phone">
               To
             </label>
-            <div className="col-span-12 sm:col-span-10">
+            <div className="compose-text-control">
               <div
                 ref={containerRef}
                 className={`relative min-h-[38px] border rounded bg-white flex items-center flex-wrap gap-1 px-2 py-1 transition-colors cursor-text ${
@@ -357,14 +358,14 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
           </div>
 
           {/* MESSAGE FIELD */}
-          <div className="form-group grid grid-cols-12 gap-3 items-start">
-            <label className="col-span-12 sm:col-span-2 text-sm text-gray-700 font-normal pt-1.5" htmlFor="text-msg-input">
+          <div className="form-group compose-text-row">
+            <label className="compose-text-label text-sm text-gray-700 font-normal" htmlFor="text-msg-input">
               Message
             </label>
-            <div className="col-span-12 sm:col-span-10">
+            <div className="compose-text-control">
               <textarea
                 id="text-msg-input"
-                rows={6}
+                rows={8}
                 value={message}
                 onChange={(e) => {
                   setMessage(e.target.value);
@@ -391,11 +392,11 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
           </div>
 
           {/* MARK TEXT AS */}
-          <div className="form-group flex items-center gap-8 pt-1">
-            <span className="text-sm text-gray-700 font-normal">
+          <div className="form-group compose-text-row compose-text-options pt-1">
+            <span className="compose-text-label text-sm text-gray-700 font-normal">
               Mark Text As
             </span>
-            <label className="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+            <label className="compose-text-control inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={isPinned}
@@ -408,7 +409,7 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
           </div>
 
           {/* FOOTER BUTTON */}
-          <div className="pt-3">
+          <div className="compose-text-submit">
             <button
               type="submit"
               disabled={isSending}

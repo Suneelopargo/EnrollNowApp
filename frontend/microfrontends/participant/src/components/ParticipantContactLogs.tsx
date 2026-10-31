@@ -23,6 +23,7 @@ import {
   ContactLogItem,
 } from '../../../../shared/api/participantApi';
 import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { AddContactLogModal } from './AddContactLogModal';
 
 export interface ParticipantContactLogsProps {
@@ -199,11 +200,11 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
       tooltipValueGetter: (params) => params.value,
     },
     {
-      colId: 'pin',
-      headerName: 'Pin',
-      width: 74,
-      minWidth: 74,
-      maxWidth: 74,
+      colId: 'actions',
+      headerName: 'Actions',
+      width: 132,
+      minWidth: 132,
+      maxWidth: 132,
       sortable: false,
       filter: false,
       floatingFilter: false,
@@ -211,63 +212,44 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
         const log = params.data;
         if (!log) return null;
         return (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleTogglePin(log);
-            }}
-            disabled={togglingPinId === log.id || log.pinnable === false}
-            aria-label={log.sticky ? 'Unpin contact' : 'Pin contact'}
-            title={log.sticky ? 'Unpin contact' : 'Pin contact'}
-            className="flex h-full w-full items-center justify-center disabled:cursor-not-allowed"
-            style={{ color: log.sticky ? '#b45309' : '#94a3b8' }}
-          >
-            {togglingPinId === log.id
-              ? <Loader2 size={14} className="animate-spin" />
-              : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
-          </button>
-        );
-      },
-    },
-    {
-      colId: 'actions',
-      headerName: 'Actions',
-      width: 90,
-      minWidth: 90,
-      maxWidth: 90,
-      sortable: false,
-      filter: false,
-      floatingFilter: false,
-      cellRenderer: (params: ICellRendererParams<ContactLogItem>) => {
-        const log = params.data;
-        if (!log || log.editable === false) return null;
-        return (
-          <div className="flex h-full items-center justify-center gap-2">
-            <button
-              type="button"
+          <div className="participant-grid__row-actions">
+            <TooltipButton
+              label={log.sticky ? 'Unpin contact' : 'Pin contact'}
+              disabled={togglingPinId === log.id || log.pinnable === false}
               onClick={(event) => {
                 event.stopPropagation();
-                handleOpenEditModal(log);
+                void handleTogglePin(log);
               }}
-              aria-label="Edit contact log"
-              title="Edit contact log"
-              className="text-gray-600 hover:text-blue-700"
+              className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
             >
-              <Pencil size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleDeleteLog(log);
-              }}
-              aria-label="Delete contact log"
-              title="Delete contact log"
-              className="text-red-600 hover:text-red-800"
-            >
-              <Trash2 size={14} />
-            </button>
+              {togglingPinId === log.id
+                ? <Loader2 size={14} className="animate-spin" />
+                : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
+            </TooltipButton>
+            {log.editable !== false && (
+              <>
+                <TooltipButton
+                  label="Edit contact log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenEditModal(log);
+                  }}
+                  className="participant-grid__row-action"
+                >
+                  <Pencil size={14} />
+                </TooltipButton>
+                <TooltipButton
+                  label="Delete contact log"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDeleteLog(log);
+                  }}
+                  className="participant-grid__row-action participant-grid__row-action--danger"
+                >
+                  <Trash2 size={14} />
+                </TooltipButton>
+              </>
+            )}
           </div>
         );
       },
@@ -283,19 +265,36 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
-        
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-            id="add-contact-log-btn"
-          >
-            <Plus size={14} /> Add Contact
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search contact history..."
+            aria-label="Search contact history"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear contact search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <TooltipButton
+          label="Add Contact"
+          id="add-contact-log-btn"
+          onClick={handleOpenAddModal}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Plus size={14} /> Add Contact
+        </TooltipButton>
       </div>
 
       {/* Loading state */}
@@ -331,23 +330,11 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
           <p className="text-xs text-gray-500 max-w-sm mb-4">
             No outreach attempts or communications have been logged for {participantName} yet.
           </p>
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-          >
-            <Plus size={14} /> Add Contact
-          </button>
         </div>
       )}
 
       {!isLoading && logs.length > 0 && (
         <div className="space-y-3">
-          <label className="relative block max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search contact history..." aria-label="Search contact history" className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
-            {searchTerm && <button type="button" onClick={() => setSearchTerm('')} aria-label="Clear contact search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"><X size={14} /></button>}
-          </label>
           <DataGrid<ContactLogItem>
             wrapperClassName="participant-email-grid"
             rowData={logs}

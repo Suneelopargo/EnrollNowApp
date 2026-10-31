@@ -76,10 +76,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
   const [comments, setComments] = useState<string>(logToEdit?.comments || '');
 
   // Checkboxes
-  const [lastContact, setLastContact] = useState<boolean>(logToEdit?.lastContact ?? true);
   const [sticky, setSticky] = useState<boolean>(Boolean(logToEdit?.sticky));
-  const [notify, setNotify] = useState<boolean>(Boolean(logToEdit?.notify));
-  const [global, setGlobal] = useState<boolean>(logToEdit?.global ?? true);
 
   // Dynamic Options
   const [contactTypeOptions, setContactTypeOptions] = useState<ContactTypeOption[]>([]);
@@ -108,9 +105,6 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
       setRegarding(logToEdit.regarding || '');
       setComments(logToEdit.comments || '');
       setSticky(Boolean(logToEdit.sticky));
-      setNotify(Boolean(logToEdit.notify));
-      setGlobal(Boolean(logToEdit.global));
-      setLastContact(Boolean(logToEdit.lastContact));
 
       if (logToEdit.dateTimeOfContact) {
         try {
@@ -141,10 +135,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
       setOutcome('');
       setOtherOutcome('');
       setComments('');
-      setLastContact(true);
       setSticky(false);
-      setNotify(false);
-      setGlobal(true);
       setContactedBy('');
     }
   }, [logToEdit, outcomeOptions, teamMembers]);
@@ -240,9 +231,6 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           outcome: effectiveOutcome,
           comments: comments.trim() || undefined,
           sticky,
-          notify,
-          global,
-          lastContact,
         };
 
         const updated = await participantApi.updateContactLog(participantId, logToEdit.id, payload, {
@@ -265,9 +253,6 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           outcome: effectiveOutcome,
           comments: comments.trim() || undefined,
           sticky,
-          notify,
-          global,
-          lastContact,
         };
 
         const created = await participantApi.createContactLog(participantId, payload, {
@@ -294,7 +279,8 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={isEditMode ? 'Edit Participant Contact' : 'Add Participant Contact'}
-      size="default"
+      size="wide"
+      className="contact-log-modal"
       footer={
         <div className="flex items-center justify-between w-full">
           <button
@@ -327,59 +313,60 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
       <form
         id="addParticipantContactForm"
         onSubmit={handleSubmit}
-        className="form space-y-4"
+        className="form contact-log-form space-y-3"
         noValidate
       >
         {/* Contact Type */}
         <div className="form-group" data-error={Boolean(errors.contactType)}>
-          <div className="flex items-center justify-between">
-            <label className="form-label" htmlFor="contact-type-select">
+          <label className="form-label" htmlFor="contact-type-select">
               Contact Type <span className="text-red-500">*</span>
-            </label>
-            <button
-              type="button"
-              className="text-xs text-blue-600 hover:underline cursor-pointer"
-              onClick={() => {
-                setIsCreatingCustomType(!isCreatingCustomType);
-                if (!isCreatingCustomType) setCustomContactType('');
-              }}
-            >
-              {isCreatingCustomType ? 'Select from list' : '+ Add custom type'}
-            </button>
+          </label>
+          <div className="min-w-0">
+            <div className="mb-1 flex justify-end">
+              <button
+                type="button"
+                className="text-xs text-blue-600 hover:underline cursor-pointer"
+                onClick={() => {
+                  setIsCreatingCustomType(!isCreatingCustomType);
+                  if (!isCreatingCustomType) setCustomContactType('');
+                }}
+              >
+                {isCreatingCustomType ? 'Select from list' : '+ Add custom type'}
+              </button>
+            </div>
+            {isCreatingCustomType ? (
+              <input
+                id="contact-type-custom"
+                type="text"
+                value={customContactType}
+                onChange={(e) => setCustomContactType(e.target.value)}
+                placeholder="Enter new contact type..."
+                className={`form-input ${errors.contactType ? 'border-red-500' : ''}`}
+                aria-invalid={Boolean(errors.contactType)}
+                autoFocus
+              />
+            ) : (
+              <select
+                id="contact-type-select"
+                value={contactType}
+                onChange={(e) => setContactType(e.target.value)}
+                className={`form-select ${errors.contactType ? 'border-red-500' : ''}`}
+                aria-invalid={Boolean(errors.contactType)}
+              >
+                <option value="">Select contact type...</option>
+                {contactTypeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {errors.contactType && (
+              <span className="text-xs text-red-500 block mt-1" role="alert">
+                {errors.contactType}
+              </span>
+            )}
           </div>
-
-          {isCreatingCustomType ? (
-            <input
-              id="contact-type-custom"
-              type="text"
-              value={customContactType}
-              onChange={(e) => setCustomContactType(e.target.value)}
-              placeholder="Enter new contact type..."
-              className={`form-input ${errors.contactType ? 'border-red-500' : ''}`}
-              aria-invalid={Boolean(errors.contactType)}
-              autoFocus
-            />
-          ) : (
-            <select
-              id="contact-type-select"
-              value={contactType}
-              onChange={(e) => setContactType(e.target.value)}
-              className={`form-select ${errors.contactType ? 'border-red-500' : ''}`}
-              aria-invalid={Boolean(errors.contactType)}
-            >
-              <option value="">Select contact type...</option>
-              {contactTypeOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {errors.contactType && (
-            <span className="text-xs text-red-500 block mt-1" role="alert">
-              {errors.contactType}
-            </span>
-          )}
         </div>
 
         {/* Contact Date/Time */}
@@ -387,19 +374,21 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           <label className="form-label" htmlFor="contact-datetime">
             Contact Date/Time <span className="text-red-500">*</span>
           </label>
-          <input
-            id="contact-datetime"
-            type="datetime-local"
-            value={dateTimeOfContact}
-            onChange={(e) => setDateTimeOfContact(e.target.value)}
-            className={`form-input ${errors.dateTimeOfContact ? 'border-red-500' : ''}`}
-            aria-invalid={Boolean(errors.dateTimeOfContact)}
-          />
-          {errors.dateTimeOfContact && (
-            <span className="text-xs text-red-500 block mt-1" role="alert">
-              {errors.dateTimeOfContact}
-            </span>
-          )}
+          <div className="min-w-0">
+            <input
+              id="contact-datetime"
+              type="datetime-local"
+              value={dateTimeOfContact}
+              onChange={(e) => setDateTimeOfContact(e.target.value)}
+              className={`form-input ${errors.dateTimeOfContact ? 'border-red-500' : ''}`}
+              aria-invalid={Boolean(errors.dateTimeOfContact)}
+            />
+            {errors.dateTimeOfContact && (
+              <span className="text-xs text-red-500 block mt-1" role="alert">
+                {errors.dateTimeOfContact}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Contacted By */}
@@ -407,69 +396,70 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           <label className="form-label" htmlFor="contacted-by-select">
             Contacted By <span className="text-red-500">*</span>
           </label>
-          <select
-            id="contacted-by-select"
-            value={contactedBy}
-            onChange={(e) => setContactedBy(e.target.value)}
-            className={`form-select ${errors.contactedBy ? 'border-red-500' : ''}`}
-            aria-invalid={Boolean(errors.contactedBy)}
-          >
-            <option value="">Select who contacted the participant...</option>
-            {teamMembers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} {m.email ? `(${m.email})` : ''}
-              </option>
-            ))}
-          </select>
-          {errors.contactedBy && (
-            <span className="text-xs text-red-500 block mt-1" role="alert">
-              {errors.contactedBy}
-            </span>
-          )}
+          <div className="min-w-0">
+            <select
+              id="contacted-by-select"
+              value={contactedBy}
+              onChange={(e) => setContactedBy(e.target.value)}
+              className={`form-select ${errors.contactedBy ? 'border-red-500' : ''}`}
+              aria-invalid={Boolean(errors.contactedBy)}
+            >
+              <option value="">Select who contacted the participant...</option>
+              {teamMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} {m.email ? `(${m.email})` : ''}
+                </option>
+              ))}
+            </select>
+            {errors.contactedBy && (
+              <span className="text-xs text-red-500 block mt-1" role="alert">
+                {errors.contactedBy}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Method */}
         <div className="form-group">
-          <div className="flex items-center justify-between">
-            <label className="form-label" htmlFor="contact-method-select">
-              Method
-            </label>
-            <button
-              type="button"
-              className="text-xs text-blue-600 hover:underline cursor-pointer"
-              onClick={() => {
-                setIsCreatingCustomMethod(!isCreatingCustomMethod);
-                if (!isCreatingCustomMethod) setCustomContactMethod('');
-              }}
-            >
-              {isCreatingCustomMethod ? 'Select known method' : '+ Add custom method'}
-            </button>
+          <label className="form-label" htmlFor="contact-method-select">Method</label>
+          <div className="min-w-0">
+            <div className="mb-1 flex justify-end">
+              <button
+                type="button"
+                className="text-xs text-blue-600 hover:underline cursor-pointer"
+                onClick={() => {
+                  setIsCreatingCustomMethod(!isCreatingCustomMethod);
+                  if (!isCreatingCustomMethod) setCustomContactMethod('');
+                }}
+              >
+                {isCreatingCustomMethod ? 'Select known method' : '+ Add custom method'}
+              </button>
+            </div>
+            {isCreatingCustomMethod ? (
+              <input
+                id="contact-method-custom"
+                type="text"
+                value={customContactMethod}
+                onChange={(e) => setCustomContactMethod(e.target.value)}
+                placeholder="Enter contact method (e.g. Work Phone)..."
+                className="form-input"
+              />
+            ) : (
+              <select
+                id="contact-method-select"
+                value={contactMethod}
+                onChange={(e) => setContactMethod(e.target.value)}
+                className="form-select"
+              >
+                <option value="">Select contact method...</option>
+                {contactMethodOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label} {opt.isPreferred ? '★ (Preferred)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-
-          {isCreatingCustomMethod ? (
-            <input
-              id="contact-method-custom"
-              type="text"
-              value={customContactMethod}
-              onChange={(e) => setCustomContactMethod(e.target.value)}
-              placeholder="Enter contact method (e.g. Work Phone)..."
-              className="form-input"
-            />
-          ) : (
-            <select
-              id="contact-method-select"
-              value={contactMethod}
-              onChange={(e) => setContactMethod(e.target.value)}
-              className="form-select"
-            >
-              <option value="">Select contact method...</option>
-              {contactMethodOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label} {opt.isPreferred ? '★ (Preferred)' : ''}
-                </option>
-              ))}
-            </select>
-          )}
         </div>
 
         {/* Spoke To */}
@@ -477,14 +467,16 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           <label className="form-label" htmlFor="spoke-to-input">
             Spoke To
           </label>
-          <input
-            id="spoke-to-input"
-            type="text"
-            value={spokeTo}
-            onChange={(e) => setSpokeTo(e.target.value)}
-            placeholder="e.g. Participant, Mother, Spouse..."
-            className="form-input"
-          />
+          <div className="min-w-0">
+            <input
+              id="spoke-to-input"
+              type="text"
+              value={spokeTo}
+              onChange={(e) => setSpokeTo(e.target.value)}
+              placeholder="e.g. Participant, Mother, Spouse..."
+              className="form-input"
+            />
+          </div>
         </div>
 
         {/* Regarding */}
@@ -492,14 +484,16 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           <label className="form-label" htmlFor="regarding-textarea">
             Regarding
           </label>
-          <textarea
-            id="regarding-textarea"
-            rows={2}
-            value={regarding}
-            onChange={(e) => setRegarding(e.target.value)}
-            placeholder="Contact subject or topic..."
-            className="form-textarea"
-          />
+          <div className="min-w-0">
+            <textarea
+              id="regarding-textarea"
+              rows={2}
+              value={regarding}
+              onChange={(e) => setRegarding(e.target.value)}
+              placeholder="Contact subject or topic..."
+              className="form-textarea"
+            />
+          </div>
         </div>
 
         {/* Outcome */}
@@ -507,52 +501,54 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           <label className="form-label" htmlFor="outcome-select">
             Outcome <span className="text-red-500">*</span>
           </label>
-          <select
-            id="outcome-select"
-            value={outcome}
-            onChange={(e) => {
-              setOutcome(e.target.value);
-              if (e.target.value !== 'Other') setOtherOutcome('');
-            }}
-            className={`form-select ${errors.outcome ? 'border-red-500' : ''}`}
-            aria-invalid={Boolean(errors.outcome)}
-          >
-            <option value="">Select contact outcome...</option>
-            {outcomeOptions.map((o) => (
-              <option key={o.id || o.outcome} value={o.outcome}>
-                {o.outcome}
-              </option>
-            ))}
-            <option value="Other">Other</option>
-          </select>
-          {errors.outcome && (
-            <span className="text-xs text-red-500 block mt-1" role="alert">
-              {errors.outcome}
-            </span>
-          )}
+          <div className="min-w-0">
+            <select
+              id="outcome-select"
+              value={outcome}
+              onChange={(e) => {
+                setOutcome(e.target.value);
+                if (e.target.value !== 'Other') setOtherOutcome('');
+              }}
+              className={`form-select ${errors.outcome ? 'border-red-500' : ''}`}
+              aria-invalid={Boolean(errors.outcome)}
+            >
+              <option value="">Select contact outcome...</option>
+              {outcomeOptions.map((o) => (
+                <option key={o.id || o.outcome} value={o.outcome}>
+                  {o.outcome}
+                </option>
+              ))}
+              <option value="Other">Other</option>
+            </select>
+            {errors.outcome && (
+              <span className="text-xs text-red-500 block mt-1" role="alert">
+                {errors.outcome}
+              </span>
+            )}
 
-          {outcome === 'Other' && (
-            <div className="mt-2" data-error={Boolean(errors.otherOutcome)}>
-              <label className="form-label text-xs" htmlFor="other-outcome-input">
-                Specify Other Outcome <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="other-outcome-input"
-                type="text"
-                value={otherOutcome}
-                onChange={(e) => setOtherOutcome(e.target.value)}
-                placeholder="Enter outcome..."
-                className={`form-input ${errors.otherOutcome ? 'border-red-500' : ''}`}
-                aria-invalid={Boolean(errors.otherOutcome)}
-                autoFocus
-              />
-              {errors.otherOutcome && (
-                <span className="text-xs text-red-500 block mt-1" role="alert">
-                  {errors.otherOutcome}
-                </span>
-              )}
-            </div>
-          )}
+            {outcome === 'Other' && (
+              <div className="mt-2" data-error={Boolean(errors.otherOutcome)}>
+                <label className="form-label text-xs" htmlFor="other-outcome-input">
+                  Specify Other Outcome <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="other-outcome-input"
+                  type="text"
+                  value={otherOutcome}
+                  onChange={(e) => setOtherOutcome(e.target.value)}
+                  placeholder="Enter outcome..."
+                  className={`form-input ${errors.otherOutcome ? 'border-red-500' : ''}`}
+                  aria-invalid={Boolean(errors.otherOutcome)}
+                  autoFocus
+                />
+                {errors.otherOutcome && (
+                  <span className="text-xs text-red-500 block mt-1" role="alert">
+                    {errors.otherOutcome}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Comments */}
@@ -560,32 +556,24 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
           <label className="form-label" htmlFor="comments-textarea">
             Comments
           </label>
-          <textarea
-            id="comments-textarea"
-            rows={3}
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            placeholder="Detailed notes or follow-up instructions..."
-            className="form-textarea"
-          />
+          <div className="min-w-0">
+            <textarea
+              id="comments-textarea"
+              rows={3}
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="Detailed notes or follow-up instructions..."
+              className="form-textarea"
+            />
+          </div>
         </div>
 
         {/* Checkboxes: Mark Contact As */}
-        <div className="pt-2 border-t border-gray-100">
-          <span className="form-label font-medium text-xs text-gray-700 block mb-2">
+        <div className="contact-log-form-options pt-2 border-t border-gray-100">
+          <span className="form-label font-medium text-xs text-gray-700">
             Mark Contact As:
           </span>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={lastContact}
-                onChange={(e) => setLastContact(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-              />
-              <span>Date of Last Contact</span>
-            </label>
-
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -594,26 +582,6 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
                 className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
               />
               <span>Pin Contact</span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={notify}
-                onChange={(e) => setNotify(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-              />
-              <span>Notify Team</span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={global}
-                onChange={(e) => setGlobal(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
-              />
-              <span>Global Registry Record</span>
             </label>
           </div>
         </div>

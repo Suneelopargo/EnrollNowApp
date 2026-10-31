@@ -439,6 +439,10 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(html).toContain('Message');
     expect(html.indexOf('Message')).toBeLessThan(html.indexOf('Mark Text As'));
     expect(html.indexOf('Mark Text As')).toBeLessThan(html.indexOf('Pin Text'));
+    expect(html).toContain('compose-text-modal');
+    expect(html).toContain('compose-text-form');
+    expect(html).toContain('compose-text-row');
+    expect(html).toContain('rows="8"');
   });
 
   it('renders ParticipantContactManagement with Contact Persons and Addresses', () => {

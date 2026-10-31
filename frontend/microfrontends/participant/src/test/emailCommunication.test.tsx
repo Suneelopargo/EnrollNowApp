@@ -44,7 +44,10 @@ describe('Email Communication History & Compose Modal', () => {
       />
     );
 
-    expect(html).toContain('Add Participant Email — John Doe');
+    expect(html).toContain('Add Participant Email');
+    expect(html).not.toContain('Add Participant Email — John Doe');
+    expect(html).toContain('compose-email-form');
+    expect(html).toContain('compose-email-row');
     expect(html).toContain('To');
     expect(html).toContain('CC');
     expect(html).toContain('BCC');

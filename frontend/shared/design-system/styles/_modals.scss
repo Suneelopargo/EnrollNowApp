@@ -53,6 +53,124 @@ body.enl-body-freeze {
 
 .modal-container--wide { max-width: 1200px; }
 
+.modal-container.compose-text-modal {
+  width: min(670px, calc(100vw - 32px));
+  max-width: 670px;
+}
+
+.compose-text-form > .compose-text-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 18px;
+  margin-bottom: 0;
+}
+
+.compose-text-label {
+  margin: 0;
+  padding-top: 9px;
+}
+
+.compose-text-control {
+  min-width: 0;
+}
+
+.compose-text-control textarea {
+  min-height: 238px;
+}
+
+.compose-text-options {
+  border-top: 0;
+}
+
+.compose-text-submit {
+  padding-top: 8px;
+  padding-left: 18px;
+}
+
+@media (max-width: 640px) {
+  .compose-text-form > .compose-text-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .compose-text-label {
+    padding-top: 0;
+  }
+}
+
+.modal-container.contact-log-modal {
+  max-width: min(760px, 94vw);
+}
+
+.contact-log-form > .form-group {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 16px;
+  margin-bottom: 0;
+
+  > .form-label {
+    margin: 0;
+    padding-top: 9px;
+  }
+}
+
+.contact-log-form-options {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 8px 16px;
+
+  > .form-label {
+    margin: 0;
+    padding-top: 2px;
+  }
+}
+
+@media (max-width: 640px) {
+  .contact-log-form > .form-group,
+  .contact-log-form-options {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .contact-log-form > .form-group > .form-label {
+    padding-top: 0;
+  }
+}
+
+.compose-email-form .compose-email-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 24px;
+  margin-bottom: 12px;
+}
+
+.compose-email-form .compose-email-label {
+  margin: 0;
+  padding-top: 9px;
+}
+
+.compose-email-control {
+  min-width: 0;
+}
+
+.compose-email-control > .form-input {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .compose-email-form .compose-email-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .compose-email-form .compose-email-label {
+    padding-top: 0;
+  }
+}
+
 .participant-email-preview-layout {
   display: grid;
   grid-template-columns: minmax(220px, 0.32fr) minmax(0, 1fr);

@@ -321,7 +321,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Add Participant Email — ${participantName}`}
+      title="Add Participant Email"
       size="wide"
       footer={
         <div className="flex items-center justify-between w-full">
@@ -347,7 +347,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         </div>
       }
     >
-      <form id="composeEmailForm" onSubmit={handleSend} className="space-y-3.5 text-xs">
+      <form id="composeEmailForm" onSubmit={handleSend} className="compose-email-form space-y-3.5 text-xs">
         {errors.generic && (
           <div className="p-2.5 rounded bg-red-50 border border-red-200 text-red-700 flex items-center gap-2">
             <AlertCircle size={14} className="shrink-0" />
@@ -356,12 +356,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         )}
 
         {/* To Recipients */}
-        <div className="form-group" data-error={Boolean(errors.to)}>
-          <div className="flex items-center justify-between mb-1">
-            <label className="form-label font-semibold text-gray-700" htmlFor="to-input">
-              To <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-2 text-[11px] text-blue-600">
+        <div className="form-group compose-email-row" data-error={Boolean(errors.to)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="to-input">
+            To <span className="text-red-500">*</span>
+          </label>
+          <div className="compose-email-control">
+            <div className="flex items-center justify-end gap-2 mb-1 text-[11px] text-blue-600">
               {!showCc && (
                 <button type="button" onClick={() => setShowCc(true)} className="hover:underline">
                   + CC
@@ -378,10 +378,9 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 </button>
               )}
             </div>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
-            {toRecipients.map((email) => (
+            <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
+              {toRecipients.map((email) => (
               <span
                 key={email}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 text-xs"
@@ -396,65 +395,67 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                   <X size={12} />
                 </button>
               </span>
-            ))}
+              ))}
 
-            <input
-              id="to-input"
-              type="email"
-              value={newToInput}
-              onChange={(e) => setNewToInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ',') {
-                  e.preventDefault();
-                  handleAddRecipient('TO', newToInput, setNewToInput, toRecipients, setToRecipients);
-                }
-              }}
-              placeholder={toRecipients.length === 0 ? 'Enter recipient email...' : 'Add another...'}
-              className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
-            />
-          </div>
-
-          {/* Known participant emails with preferred star */}
-          {knownRecipients.length > 0 && (
-            <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
-              <span>Participant emails:</span>
-              {knownRecipients.map((item) => {
-                const isSelected = toRecipients.includes(item.email);
-                return (
-                  <button
-                    key={item.email}
-                    type="button"
-                    onClick={() => {
-                      if (!isSelected) setToRecipients([...toRecipients, item.email]);
-                    }}
-                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                      isSelected
-                        ? 'bg-blue-100 text-blue-800 cursor-default'
-                        : 'bg-gray-100 text-blue-600 hover:bg-gray-200 cursor-pointer'
-                    }`}
-                  >
-                    {item.isPreferred && <Star size={10} className="fill-amber-400 text-amber-500" />}
-                    <span>{item.email}</span>
-                    {item.label && <span className="text-gray-400">· {item.label}</span>}
-                  </button>
-                );
-              })}
+              <input
+                id="to-input"
+                type="email"
+                value={newToInput}
+                onChange={(e) => setNewToInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    handleAddRecipient('TO', newToInput, setNewToInput, toRecipients, setToRecipients);
+                  }
+                }}
+                placeholder={toRecipients.length === 0 ? 'Enter recipient email...' : 'Add another...'}
+                className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
+              />
             </div>
-          )}
-          {isLoadingRecipients && (
-            <span className="mt-1 block text-[11px] text-gray-500">Loading participant email addresses...</span>
-          )}
 
-          {errors.to && <span className="text-red-500 text-xs block mt-1">{errors.to}</span>}
+            {/* Known participant emails with preferred star */}
+            {knownRecipients.length > 0 && (
+              <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
+                <span>Participant emails:</span>
+                {knownRecipients.map((item) => {
+                  const isSelected = toRecipients.includes(item.email);
+                  return (
+                    <button
+                      key={item.email}
+                      type="button"
+                      onClick={() => {
+                        if (!isSelected) setToRecipients([...toRecipients, item.email]);
+                      }}
+                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                        isSelected
+                          ? 'bg-blue-100 text-blue-800 cursor-default'
+                          : 'bg-gray-100 text-blue-600 hover:bg-gray-200 cursor-pointer'
+                      }`}
+                    >
+                      {item.isPreferred && <Star size={10} className="fill-amber-400 text-amber-500" />}
+                      <span>{item.email}</span>
+                      {item.label && <span className="text-gray-400">· {item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {isLoadingRecipients && (
+              <span className="mt-1 block text-[11px] text-gray-500">Loading participant email addresses...</span>
+            )}
+
+            {errors.to && <span className="text-red-500 text-xs block mt-1">{errors.to}</span>}
+          </div>
         </div>
 
         {/* CC */}
         {showCc && (
-          <div className="form-group" data-error={Boolean(errors.cc)}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label font-semibold text-gray-700" htmlFor="cc-input">
-                CC
-              </label>
+          <div className="form-group compose-email-row" data-error={Boolean(errors.cc)}>
+            <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="cc-input">
+              CC
+            </label>
+            <div className="compose-email-control">
+              <div className="mb-1 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -499,16 +500,18 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               />
             </div>
             {errors.cc && <span className="text-red-500 text-xs block mt-1">{errors.cc}</span>}
+            </div>
           </div>
         )}
 
         {/* BCC */}
         {showBcc && (
-          <div className="form-group" data-error={Boolean(errors.bcc)}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label font-semibold text-gray-700" htmlFor="bcc-input">
-                BCC
-              </label>
+          <div className="form-group compose-email-row" data-error={Boolean(errors.bcc)}>
+            <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="bcc-input">
+              BCC
+            </label>
+            <div className="compose-email-control">
+              <div className="mb-1 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -553,16 +556,18 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               />
             </div>
             {errors.bcc && <span className="text-red-500 text-xs block mt-1">{errors.bcc}</span>}
+            </div>
           </div>
         )}
 
         {/* Reply-To Address */}
         {showReplyTo && (
-          <div className="form-group" data-error={Boolean(errors.replyTo)}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="form-label font-semibold text-gray-700" htmlFor="reply-to-input">
-                Reply To Address
-              </label>
+          <div className="form-group compose-email-row" data-error={Boolean(errors.replyTo)}>
+            <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="reply-to-input">
+              Reply To Address
+            </label>
+            <div className="compose-email-control">
+              <div className="mb-1 flex justify-end">
               <button
                 type="button"
                 onClick={() => {
@@ -583,14 +588,15 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               className={`form-input ${errors.replyTo ? 'border-red-500' : ''}`}
             />
             {errors.replyTo && <span className="text-red-500 text-xs block mt-1">{errors.replyTo}</span>}
+            </div>
           </div>
         )}
 
-        <div className="space-y-3">
-          <div className="form-group" data-error={Boolean(errors.senderName)}>
-            <label className="form-label font-semibold text-gray-700" htmlFor="sender-name">
-              Sender Name <span className="text-red-500">*</span>
-            </label>
+        <div className="form-group compose-email-row" data-error={Boolean(errors.senderName)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="sender-name">
+            Sender Name <span className="text-red-500">*</span>
+          </label>
+          <div className="compose-email-control">
             <input
               id="sender-name"
               type="text"
@@ -603,10 +609,11 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           </div>
         </div>
 
-        <div className="form-group" data-error={Boolean(errors.subject)}>
-          <label className="form-label font-semibold text-gray-700" htmlFor="email-subject">
+        <div className="form-group compose-email-row" data-error={Boolean(errors.subject)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700" htmlFor="email-subject">
             Subject <span className="text-red-500">*</span>
           </label>
+          <div className="compose-email-control">
           <input
             id="email-subject"
             type="text"
@@ -616,16 +623,16 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
             className={`form-input ${errors.subject ? 'border-red-500' : ''}`}
           />
           {errors.subject && <span className="text-red-500 text-xs block mt-1">{errors.subject}</span>}
+          </div>
         </div>
 
         {/* Drag-and-drop email builder */}
-        <div className="form-group" data-error={Boolean(errors.body)}>
-          <div className="flex items-center justify-between mb-1">
-            <label className="form-label font-semibold text-gray-700">
-              Message <span className="text-red-500">*</span>
-            </label>
-          </div>
-          <div data-testid="email-design-editor" aria-label="Email message designer" className="relative overflow-hidden rounded-md border border-gray-200">
+        <div className="form-group compose-email-row" data-error={Boolean(errors.body)}>
+          <label className="form-label compose-email-label font-semibold text-gray-700">
+            Message <span className="text-red-500">*</span>
+          </label>
+          <div className="compose-email-control">
+            <div data-testid="email-design-editor" aria-label="Email message designer" className="relative overflow-hidden rounded-md border border-gray-200">
             {!isEditorReady && !editorError && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50 text-sm text-gray-500">
                 Loading email designer...
@@ -637,15 +644,16 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               onReady={handleEditorReady}
               options={{ displayMode: 'email', appearance: { theme: 'light' } }}
             />
+            </div>
+            {editorError && <span className="text-red-600 text-xs block mt-1" role="alert">{editorError}</span>}
+            {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
           </div>
-          {editorError && <span className="text-red-600 text-xs block mt-1" role="alert">{editorError}</span>}
-          {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
         </div>
 
         {/* Mark Email As (Matching Legacy Ripple Checkboxes) */}
-        <div className="mt-1 border-t border-slate-200 pt-3">
+        <div className="compose-email-row mt-1 border-t border-slate-200 pt-3">
+          <span className="font-semibold text-gray-700">Mark Email As:</span>
           <div className="flex flex-wrap items-center gap-5 text-xs">
-            <span className="font-semibold text-gray-700">Mark Email As:</span>
             <label
               className="flex items-center gap-2 cursor-pointer text-gray-700"
               title="Pin current email to top of list."
