@@ -3,6 +3,7 @@ package com.enrollnow.participant.controllers;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.services.ParticipantWorkflowService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -181,6 +182,47 @@ class ParticipantWorkflowControllerTest {
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(res.getBody().getContactValue()).isEqualTo("+15551234567");
         assertThat(res.getBody().isPreferred()).isTrue();
+    }
+
+    @Test
+    void preferredContactFlag_serializesWithIsPreferredJsonName() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ParticipantContactDto dto = new ParticipantContactDto();
+        dto.setIsPreferred(true);
+        String serialized = mapper.writeValueAsString(dto);
+        assertThat(serialized).contains("\"isPreferred\":true");
+
+        CreateContactPersonRequest request = mapper.readValue(
+                "{\"contactType\":\"EMAIL\",\"contactValue\":\"person@example.com\",\"isPreferred\":true,\"active\":false}",
+                CreateContactPersonRequest.class
+        );
+
+        assertThat(request.getIsPreferred()).isTrue();
+        assertThat(request.isActive()).isFalse();
+    }
+
+    @Test
+    void createAddressRequest_acceptsActiveFlag() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        CreateAddressRequest defaultRequest = mapper.readValue(
+                "{\"addressLine1\":\"123 Main St\"}",
+                CreateAddressRequest.class
+        );
+        CreateAddressRequest request = mapper.readValue(
+                "{\"addressLine1\":\"123 Main St\",\"active\":false}",
+                CreateAddressRequest.class
+        );
+        UpdateAddressRequest updateRequest = mapper.readValue(
+                "{\"active\":false}",
+                UpdateAddressRequest.class
+        );
+
+        assertThat(defaultRequest.isActive()).isTrue();
+        assertThat(request.getAddressLine1()).isEqualTo("123 Main St");
+        assertThat(request.isActive()).isFalse();
+        assertThat(updateRequest.getActive()).isFalse();
     }
 
     @Test

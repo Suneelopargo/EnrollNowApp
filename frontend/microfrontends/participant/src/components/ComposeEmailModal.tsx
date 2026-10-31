@@ -4,15 +4,20 @@ import {
   Send,
   Loader2,
   X,
-  Star,
   AlertCircle,
+  ChevronDown,
 } from 'lucide-react';
 import EmailEditor from 'react-email-editor';
 import type { Design, EditorRef, HtmlExport } from 'react-email-editor';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage, getStoredAuthUser } from '../../../../shared/api-client';
-import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
+import {
+  participantApi,
+  CommunicationItem,
+  ParticipantContactDetail,
+} from '../../../../shared/api/participantApi';
 import type { AuthUser } from '../../../../shared/contracts';
 
 export interface ComposeEmailModalProps {
@@ -29,10 +34,141 @@ export interface ComposeEmailModalProps {
 interface KnownRecipient {
   email: string;
   isPreferred?: boolean;
-  label?: string;
+  contactName?: string;
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const mapEmailRecipientOptions = (
+  contacts: Array<Pick<ParticipantContactDetail, 'contactType' | 'contactValue' | 'contactName' | 'active' | 'isPreferred'>>,
+  directEmails: string[],
+): KnownRecipient[] => {
+  const recipients = new Map<string, KnownRecipient>();
+
+  contacts.forEach((contact) => {
+    const email = contact.contactValue.trim();
+    if (!contact.active || contact.contactType.toUpperCase() !== 'EMAIL' || !email) return;
+    const key = email.toLowerCase();
+    const existing = recipients.get(key);
+    recipients.set(key, {
+      email,
+      contactName: contact.contactName?.trim() || existing?.contactName,
+      isPreferred: Boolean(contact.isPreferred || existing?.isPreferred),
+    });
+  });
+
+  directEmails.forEach((value) => {
+    const email = value.trim();
+    if (!email) return;
+    const key = email.toLowerCase();
+    if (!recipients.has(key)) recipients.set(key, { email });
+  });
+
+  return Array.from(recipients.values());
+};
+
+export const formatEmailRecipientOption = (recipient: KnownRecipient): string =>
+  recipient.contactName ? `${recipient.email} (${recipient.contactName})` : recipient.email;
+
+interface EmailRecipientInputProps {
+  id: string;
+  label: string;
+  value: string;
+  options: KnownRecipient[];
+  placeholder: string;
+  hasError: boolean;
+  onChange: (value: string) => void;
+}
+
+const EmailRecipientInput: React.FC<EmailRecipientInputProps> = ({
+  id,
+  label,
+  value,
+  options,
+  placeholder,
+  hasError,
+  onChange,
+}) => {
+  const listId = `${id}-options`;
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div
+      style={{ position: 'relative', width: '100%' }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsOpen(false);
+      }}
+    >
+      <input
+        id={id}
+        type="email"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => setIsOpen(options.length > 0)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' && options.length > 0) setIsOpen(true);
+          if (event.key === 'Escape') setIsOpen(false);
+        }}
+        placeholder={placeholder}
+        className={`form-input ${hasError ? 'border-red-500' : ''}`}
+        style={{ paddingRight: 40 }}
+        aria-label={label}
+        aria-invalid={hasError}
+        aria-autocomplete="list"
+        aria-expanded={isOpen}
+        aria-controls={listId}
+        role="combobox"
+        autoComplete="off"
+      />
+      <TooltipButton
+        label={`Choose another email for ${label}`}
+        onClick={() => setIsOpen((open) => !open)}
+        disabled={options.length === 0}
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 36,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+        }}
+        className="text-gray-500 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <ChevronDown size={16} aria-hidden="true" />
+      </TooltipButton>
+      {isOpen && options.length > 0 && (
+        <div
+          id={listId}
+          role="listbox"
+          aria-label={`${label} options`}
+          className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0 }}
+        >
+          {options.map((option) => (
+            <button
+              key={option.email.toLowerCase()}
+              type="button"
+              role="option"
+              aria-selected={value.toLowerCase() === option.email.toLowerCase()}
+              onClick={() => {
+                onChange(option.email);
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+            >
+              <span className="min-w-0 truncate">{formatEmailRecipientOption(option)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const isEmailDesignEmpty = (design: Design): boolean => {
   const rows = Array.isArray(design.body?.rows) ? design.body.rows : [];
@@ -60,16 +196,13 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   siteId,
   onEmailSent,
 }) => {
-  const [toRecipients, setToRecipients] = useState<string[]>([]);
-  const [newToInput, setNewToInput] = useState('');
+  const [toRecipient, setToRecipient] = useState('');
   const [knownRecipients, setKnownRecipients] = useState<KnownRecipient[]>([]);
 
-  const [ccRecipients, setCcRecipients] = useState<string[]>([]);
-  const [newCcInput, setNewCcInput] = useState('');
+  const [ccRecipient, setCcRecipient] = useState('');
   const [showCc, setShowCc] = useState(true);
 
-  const [bccRecipients, setBccRecipients] = useState<string[]>([]);
-  const [newBccInput, setNewBccInput] = useState('');
+  const [bccRecipient, setBccRecipient] = useState('');
   const [showBcc, setShowBcc] = useState(true);
 
   const [replyTo, setReplyTo] = useState('');
@@ -99,16 +232,13 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     if (isOpen && participantId) {
       setIsEditorReady(false);
       setEditorError('');
-      setCcRecipients([]);
-      setBccRecipients([]);
+      setCcRecipient('');
+      setBccRecipient('');
       setShowCc(true);
       setShowBcc(true);
       setShowReplyTo(true);
-      setToRecipients([]);
-      setNewToInput('');
+      setToRecipient('');
       setKnownRecipients([]);
-      setNewCcInput('');
-      setNewBccInput('');
       setSenderName(defaultSenderName);
       setIsLoadingRecipients(true);
       Promise.allSettled([
@@ -117,26 +247,10 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
       ])
         .then(([emailsRes, contactsRes]) => {
           const directEmails = emailsRes.status === 'fulfilled' && Array.isArray(emailsRes.value) ? emailsRes.value : [];
-          const contacts = contactsRes.status === 'fulfilled' && Array.isArray(contactsRes.value) ? contactsRes.value : [];
-
-          const known: KnownRecipient[] = [];
-          contacts.forEach((c: any) => {
-            if (c.email && !known.some((k) => k.email.toLowerCase() === c.email.toLowerCase())) {
-              known.push({
-                email: c.email,
-                isPreferred: !!c.preferred,
-                label: c.relationshipType ? `${c.firstName || ''} (${c.relationshipType})` : undefined,
-              });
-            }
-          });
-
-          directEmails.forEach((e: string) => {
-            if (!known.some((k) => k.email.toLowerCase() === e.toLowerCase())) {
-              known.push({ email: e });
-            }
-          });
-
-          setKnownRecipients(known);
+          const contacts = contactsRes.status === 'fulfilled' && Array.isArray(contactsRes.value)
+            ? contactsRes.value
+            : [];
+          setKnownRecipients(mapEmailRecipientOptions(contacts, directEmails));
         })
         .catch((err) => {
           console.warn('Failed to load email recipients:', err);
@@ -163,38 +277,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     return () => window.clearTimeout(timeoutId);
   }, [isOpen, isEditorReady]);
 
-  const handleAddRecipient = (
-    type: 'TO' | 'CC' | 'BCC',
-    val: string,
-    setVal: React.Dispatch<React.SetStateAction<string>>,
-    list: string[],
-    setList: React.Dispatch<React.SetStateAction<string[]>>
-  ) => {
-    const trimmed = val.trim();
-    if (!trimmed) return;
-    if (!EMAIL_REGEX.test(trimmed)) {
-      setErrors((prev) => ({ ...prev, [type.toLowerCase()]: 'Email is not valid.' }));
-      return;
-    }
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next[type.toLowerCase()];
-      return next;
-    });
-    if (!list.includes(trimmed)) {
-      setList([...list, trimmed]);
-    }
-    setVal('');
-  };
-
-  const handleRemoveRecipient = (
-    email: string,
-    list: string[],
-    setList: React.Dispatch<React.SetStateAction<string[]>>
-  ) => {
-    setList(list.filter((e) => e !== email));
-  };
-
   const handleEditorReady = useCallback(() => {
     const editor = emailEditorRef.current?.editor;
     if (!editor) return;
@@ -214,14 +296,9 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     if (isSending) return;
     const newErrors: Record<string, string> = {};
 
-    let effectiveTo = [...toRecipients];
-    if (newToInput.trim()) {
-      if (!EMAIL_REGEX.test(newToInput.trim())) {
-        newErrors.to = 'Email is not valid.';
-      } else if (!effectiveTo.includes(newToInput.trim())) {
-        effectiveTo.push(newToInput.trim());
-      }
-    }
+    const effectiveTo = toRecipient.trim() ? [toRecipient.trim()] : [];
+    const effectiveCc = ccRecipient.trim() ? [ccRecipient.trim()] : [];
+    const effectiveBcc = bccRecipient.trim() ? [bccRecipient.trim()] : [];
 
     if (effectiveTo.length === 0) {
       newErrors.to = 'To is required';
@@ -238,11 +315,11 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
       if (!EMAIL_REGEX.test(em)) newErrors.to = 'Email is not valid.';
       allEmails.push(em.trim().toLowerCase());
     });
-    ccRecipients.forEach((em) => {
+    effectiveCc.forEach((em) => {
       if (!EMAIL_REGEX.test(em)) newErrors.cc = 'Email is not valid.';
       allEmails.push(em.trim().toLowerCase());
     });
-    bccRecipients.forEach((em) => {
+    effectiveBcc.forEach((em) => {
       if (!EMAIL_REGEX.test(em)) newErrors.bcc = 'Email is not valid.';
       allEmails.push(em.trim().toLowerCase());
     });
@@ -288,8 +365,8 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         participantId,
         {
           to: effectiveTo,
-          cc: ccRecipients.length > 0 ? ccRecipients : undefined,
-          bcc: bccRecipients.length > 0 ? bccRecipients : undefined,
+          cc: effectiveCc.length > 0 ? effectiveCc : undefined,
+          bcc: effectiveBcc.length > 0 ? effectiveBcc : undefined,
           replyTo: replyTo.trim() || undefined,
           senderName: senderName.trim(),
           subject: subject.trim(),
@@ -379,67 +456,15 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
-              {toRecipients.map((email) => (
-              <span
-                key={email}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 text-xs"
-              >
-                {email}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveRecipient(email, toRecipients, setToRecipients)}
-                  className="hover:text-red-600"
-                  aria-label={`Remove ${email}`}
-                >
-                  <X size={12} />
-                </button>
-              </span>
-              ))}
-
-              <input
-                id="to-input"
-                type="email"
-                value={newToInput}
-                onChange={(e) => setNewToInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault();
-                    handleAddRecipient('TO', newToInput, setNewToInput, toRecipients, setToRecipients);
-                  }
-                }}
-                placeholder={toRecipients.length === 0 ? 'Enter recipient email...' : 'Add another...'}
-                className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
-              />
-            </div>
-
-            {/* Known participant emails with preferred star */}
-            {knownRecipients.length > 0 && (
-              <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-gray-500">
-                <span>Participant emails:</span>
-                {knownRecipients.map((item) => {
-                  const isSelected = toRecipients.includes(item.email);
-                  return (
-                    <button
-                      key={item.email}
-                      type="button"
-                      onClick={() => {
-                        if (!isSelected) setToRecipients([...toRecipients, item.email]);
-                      }}
-                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                        isSelected
-                          ? 'bg-blue-100 text-blue-800 cursor-default'
-                          : 'bg-gray-100 text-blue-600 hover:bg-gray-200 cursor-pointer'
-                      }`}
-                    >
-                      {item.isPreferred && <Star size={10} className="fill-amber-400 text-amber-500" />}
-                      <span>{item.email}</span>
-                      {item.label && <span className="text-gray-400">· {item.label}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <EmailRecipientInput
+              id="to-input"
+              label="To recipient"
+              value={toRecipient}
+              onChange={setToRecipient}
+              options={knownRecipients}
+              placeholder="To"
+              hasError={Boolean(errors.to)}
+            />
             {isLoadingRecipients && (
               <span className="mt-1 block text-[11px] text-gray-500">Loading participant email addresses...</span>
             )}
@@ -460,45 +485,22 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 type="button"
                 onClick={() => {
                   setShowCc(false);
-                  setCcRecipients([]);
+                  setCcRecipient('');
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600"
               >
                 Hide
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
-              {ccRecipients.map((email) => (
-                <span
-                  key={email}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs"
-                >
-                  {email}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveRecipient(email, ccRecipients, setCcRecipients)}
-                    className="hover:text-red-600"
-                    aria-label={`Remove ${email}`}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-              <input
-                id="cc-input"
-                type="email"
-                value={newCcInput}
-                onChange={(e) => setNewCcInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault();
-                    handleAddRecipient('CC', newCcInput, setNewCcInput, ccRecipients, setCcRecipients);
-                  }
-                }}
-                placeholder="Enter CC email..."
-                className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
-              />
-            </div>
+            <EmailRecipientInput
+              id="cc-input"
+              label="CC recipient"
+              value={ccRecipient}
+              onChange={setCcRecipient}
+              options={knownRecipients}
+              placeholder="Cc"
+              hasError={Boolean(errors.cc)}
+            />
             {errors.cc && <span className="text-red-500 text-xs block mt-1">{errors.cc}</span>}
             </div>
           </div>
@@ -516,45 +518,22 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 type="button"
                 onClick={() => {
                   setShowBcc(false);
-                  setBccRecipients([]);
+                  setBccRecipient('');
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600"
               >
                 Hide
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 p-2 border rounded-md bg-white min-h-[38px]">
-              {bccRecipients.map((email) => (
-                <span
-                  key={email}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs"
-                >
-                  {email}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveRecipient(email, bccRecipients, setBccRecipients)}
-                    className="hover:text-red-600"
-                    aria-label={`Remove ${email}`}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-              <input
+            <EmailRecipientInput
                 id="bcc-input"
-                type="email"
-                value={newBccInput}
-                onChange={(e) => setNewBccInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault();
-                    handleAddRecipient('BCC', newBccInput, setNewBccInput, bccRecipients, setBccRecipients);
-                  }
-                }}
-                placeholder="Enter BCC email..."
-                className="flex-1 min-w-[140px] border-none outline-none text-xs p-0 focus:ring-0"
+                label="BCC recipient"
+                value={bccRecipient}
+                onChange={setBccRecipient}
+                options={knownRecipients}
+                placeholder="Bcc"
+                hasError={Boolean(errors.bcc)}
               />
-            </div>
             {errors.bcc && <span className="text-red-500 text-xs block mt-1">{errors.bcc}</span>}
             </div>
           </div>

@@ -346,13 +346,17 @@ class ParticipantRegistryServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getFirstName()).isEqualTo("Charlie");
         verify(identifierRepository).save(any(ParticipantIdentifier.class));
-        verify(contactRepository, times(2)).save(any(ParticipantContact.class));
+        verify(contactRepository, times(2)).save(argThat(contact ->
+                "Charlie Brown".equals(contact.getContactName())
+                        && "Self".equals(contact.getRelationship())
+                        && !contact.isCanLeaveMessage()
+        ));
         verify(addressRepository).save(any(ParticipantAddress.class));
         verify(preferenceRepository).save(any(ParticipantPreference.class));
     }
 
     @Test
-    void createParticipant_minimalRequiredFields_persistsAuthoritativeMetadataAndNoOptionalEntities() {
+    void createParticipant_minimalRequiredFields_persistsSelfContactAndAuthoritativeMetadata() {
         CreateParticipantRequest request = new CreateParticipantRequest();
         request.setFirstName("Alice");
         request.setLastName("Wonderland");
@@ -402,14 +406,21 @@ class ParticipantRegistryServiceTest {
                 pref.isAllowPhone()
         ));
 
-        // Verify NO optional entities saved
-        verify(contactRepository, never()).save(any(ParticipantContact.class));
+        verify(contactRepository).save(argThat(contact ->
+                generatedId.equals(contact.getParticipantId())
+                        && "Alice Wonderland".equals(contact.getContactName())
+                        && "Self".equals(contact.getRelationship())
+                        && contact.getContactType() == null
+                        && contact.getContactValue() == null
+                        && contact.isActive()
+                        && !contact.isCanLeaveMessage()
+        ));
         verify(addressRepository, never()).save(any(ParticipantAddress.class));
         verify(candidateRepository, never()).save(any(StudyCandidate.class));
     }
 
     @Test
-    void createParticipant_withMiddleName_persistsMiddleNameAndFullName() {
+    void createParticipant_withMiddleName_persistsMiddleNameAndSelfContactNameWithoutMiddleName() {
         CreateParticipantRequest request = new CreateParticipantRequest();
         request.setFirstName("John");
         request.setMiddleName("Quincy");
@@ -438,6 +449,10 @@ class ParticipantRegistryServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getName()).isEqualTo("John Quincy Adams");
         assertThat(result.getMiddleName()).isEqualTo("Quincy");
+        verify(contactRepository).save(argThat(contact ->
+                "John Adams".equals(contact.getContactName())
+                        && "Self".equals(contact.getRelationship())
+        ));
     }
 
     @Test

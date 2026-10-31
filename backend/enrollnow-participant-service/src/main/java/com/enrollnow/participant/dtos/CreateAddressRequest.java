@@ -9,6 +9,7 @@ public class CreateAddressRequest {
     private String postalCode;
     private String countryCode = "USA";
     private boolean primaryAddress = false;
+    private boolean active = true;
 
     public CreateAddressRequest() {}
 
@@ -28,4 +29,6 @@ public class CreateAddressRequest {
     public void setCountryCode(String countryCode) { this.countryCode = countryCode; }
     public boolean isPrimaryAddress() { return primaryAddress; }
     public void setPrimaryAddress(boolean primaryAddress) { this.primaryAddress = primaryAddress; }
+    public boolean isActive() { return active; }
+    public void setActive(boolean active) { this.active = active; }
 }

@@ -144,6 +144,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         duplicatesOnly: activeDuplicatesOnly ? true : undefined,
         page: 0,
         pageSize: 500,
+        sortBy: 'dateCreated',
+        sortDirection: 'desc',
       };
 
       const res: any = await participantApi.getParticipants(params);

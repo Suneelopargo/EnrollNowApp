@@ -1,5 +1,8 @@
 package com.enrollnow.participant.models;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -26,10 +29,10 @@ public class ParticipantContact {
     @Column(name = "participant_id", nullable = false)
     private UUID participantId;
 
-    @Column(name = "contact_type", nullable = false, length = 30)
+    @Column(name = "contact_type", length = 30)
     private String contactType;
 
-    @Column(name = "contact_value", nullable = false, length = 320)
+    @Column(name = "contact_value", length = 320)
     private String contactValue;
 
     @Column(name = "label", length = 50)
@@ -178,11 +181,24 @@ public class ParticipantContact {
         this.notes = notes;
     }
 
+    @JsonIgnore
     public boolean isPreferred() {
         return isPreferred;
     }
 
+    @JsonIgnore
     public void setPreferred(boolean preferred) {
+        isPreferred = preferred;
+    }
+
+    @JsonProperty("isPreferred")
+    public boolean getIsPreferred() {
+        return isPreferred;
+    }
+
+    @JsonProperty("isPreferred")
+    @JsonAlias({"preferred"})
+    public void setIsPreferred(boolean preferred) {
         isPreferred = preferred;
     }
 

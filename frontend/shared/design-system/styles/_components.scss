@@ -1998,3 +1998,225 @@
   overflow: visible !important;
   z-index: 55 !important;
 }
+
+.participant-contact-list__grid {
+  height: auto !important;
+  min-height: 0 !important;
+
+  .ag-root-wrapper {
+    height: auto !important;
+    min-height: 0;
+  }
+
+  .ag-row { cursor: pointer; }
+}
+
+.participant-contact-list__name {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1769d2;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+  &:focus-visible { outline: 2px solid #1769d2; outline-offset: 2px; }
+}
+
+.participant-contact-list__method {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+
+  > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.participant-contact-list__note,
+.participant-contact-list__status {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: #1769d2;
+}
+
+.participant-contact-list__add {
+  width: 48px;
+  min-width: 48px;
+  justify-content: center;
+}
+
+.participant-contact-modal {
+  width: min(1000px, calc(100vw - 32px));
+  max-width: 1000px;
+
+  .modal-header {
+    background: #fff;
+    border-bottom: 1px solid #dce5eb;
+    padding: 16px 28px;
+
+    h3 {
+      color: #355a78;
+      font-size: 20px;
+      font-weight: 400;
+    }
+
+    .btn {
+      border: 0;
+      background: transparent;
+      color: #6b7280;
+      box-shadow: none;
+    }
+  }
+
+  .modal-body {
+    overflow-y: auto;
+    padding: 20px 28px;
+  }
+}
+
+.participant-contact-modal__section {
+  display: grid;
+  gap: 12px;
+}
+
+.participant-contact-modal__row {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 500px) 36px 36px;
+  align-items: start;
+  gap: 12px;
+
+  > label {
+    padding-top: 9px;
+    color: #24445b;
+  }
+
+  > input[type='checkbox'] {
+    margin: 12px 0 0;
+    justify-self: start;
+  }
+
+  > div { min-width: 0; }
+}
+
+.participant-contact-modal__required {
+  display: block;
+  margin-top: 4px;
+  color: #111827;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.participant-contact-modal__item {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, 1.5fr) repeat(3, 32px);
+  align-items: start;
+  gap: 8px;
+}
+
+.participant-contact-modal__collection {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 620px);
+  gap: 12px;
+
+  > h4 {
+    margin: 0;
+    padding-top: 4px;
+    color: #24445b;
+    font-size: 14px;
+    font-weight: 400;
+  }
+}
+
+.participant-contact-modal__collection-content {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.participant-contact-modal__add-action {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1672cc;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+}
+
+.participant-contact-modal__add-action--after-items {
+  justify-self: end;
+}
+
+.participant-contact-modal__address {
+  display: grid;
+  grid-template-columns: minmax(0, 498px) 32px 32px;
+  gap: 8px;
+
+  > div:first-child { min-width: 0; }
+}
+
+.participant-contact-modal__address-line2,
+.participant-contact-modal__address-fields {
+  grid-column: 1;
+}
+
+.participant-contact-modal__address-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 158px));
+  gap: 12px;
+
+  > input { min-width: 0; }
+}
+
+.participant-contact-modal__icon {
+  display: inline-flex;
+  min-width: 32px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  color: #e88719;
+}
+
+@media (max-width: 700px) {
+  .participant-contact-modal .modal-body { padding: 18px; }
+
+  .participant-contact-modal__row {
+    grid-template-columns: minmax(0, 1fr) 36px 36px;
+
+    > label,
+    > div { grid-column: 1 / -1; }
+  }
+
+  .participant-contact-modal__collection {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .participant-contact-modal__item {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 32px);
+
+    select,
+    > div { grid-column: 1 / -1; }
+  }
+
+  .participant-contact-modal__address {
+    grid-template-columns: minmax(0, 1fr) 32px 32px;
+
+    > div:first-child { grid-column: 1; }
+  }
+
+  .participant-contact-modal__address-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

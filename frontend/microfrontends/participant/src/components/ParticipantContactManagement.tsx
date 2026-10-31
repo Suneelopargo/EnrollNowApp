@@ -1,29 +1,14 @@
-// frontend/microfrontends/participant/src/components/ParticipantContactManagement.tsx - Full Contact Management
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  Phone,
-  Mail,
-  MapPin,
-  Plus,
-  Trash2,
-  Loader2,
-  Star,
-  Pencil,
-  Archive,
-  RotateCcw,
-  MessageSquare,
-  FolderArchive,
-} from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Folder, Loader2, MessageSquare, Plus, Star } from 'lucide-react';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
-import { requestConfirmation } from '../../../../shared/confirmation';
 import {
   participantApi,
-  ParticipantContactDetail,
   ParticipantAddressDetail,
+  ParticipantContactDetail,
 } from '../../../../shared/api/participantApi';
-import { AddContactModal } from './AddContactModal';
-import { AddAddressModal } from './AddAddressModal';
+import { ParticipantContactModal } from './ParticipantContactModal';
 
 export interface ParticipantContactManagementProps {
   participantId: string;
@@ -32,6 +17,67 @@ export interface ParticipantContactManagementProps {
   siteId?: string;
   onUpdated?: () => void;
 }
+
+interface ContactPersonRow {
+  id: string;
+  contactName: string;
+  relationship: string;
+  preferredMethod: string;
+  preferred: boolean;
+  archived: boolean;
+  notes: string;
+  methods: ParticipantContactDetail[];
+}
+
+export const groupContactMethods = (contacts: ParticipantContactDetail[]): ContactPersonRow[] => {
+  const grouped = new Map<string, ParticipantContactDetail[]>();
+
+  contacts.forEach((contact) => {
+    // The current REST contract stores one method per row; common person fields identify legacy contact groups.
+    const contactName = contact.contactName?.trim().toLocaleLowerCase() ?? '';
+    const relationship = contact.relationship?.trim().toLocaleLowerCase() ?? '';
+    const isSelfContact = relationship === 'self' || relationship === 'participant';
+    const groupKey = contactName
+      ? JSON.stringify([
+        contactName,
+        relationship,
+        contact.notes ?? '',
+        contact.canLeaveMessage,
+        isSelfContact ? undefined : contact.primaryContact,
+      ])
+      : contact.id;
+    grouped.set(groupKey, [...(grouped.get(groupKey) ?? []), contact]);
+  });
+
+  return Array.from(grouped.values()).map((methods) => {
+    const activeMethods = methods.filter((method) => method.active);
+    const preferredMethod = activeMethods.find((method) => method.isPreferred) ?? activeMethods[0];
+    const representative = methods[0];
+    return {
+      id: representative.id,
+      contactName: representative.contactName ?? '',
+      relationship: representative.relationship ?? '',
+      preferredMethod: preferredMethod?.contactValue ?? '',
+      preferred: methods.some((method) => method.primaryContact),
+      archived: activeMethods.length === 0,
+      notes: representative.notes ?? '',
+      methods,
+    };
+  });
+};
+
+export const getContactRelationshipLabel = (
+  contactName: string,
+  relationship: string,
+  participantName: string,
+): string => {
+  const normalizedRelationship = relationship.trim().toLocaleLowerCase();
+  if (normalizedRelationship === 'self' || normalizedRelationship === 'participant') return 'Participant';
+  if (relationship.trim()) return relationship;
+  return contactName.trim().toLocaleLowerCase() === participantName.trim().toLocaleLowerCase()
+    ? 'Participant'
+    : '';
+};
 
 export const ParticipantContactManagement: React.FC<ParticipantContactManagementProps> = ({
   participantId,
@@ -42,467 +88,236 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
 }) => {
   const [contacts, setContacts] = useState<ParticipantContactDetail[]>([]);
   const [addresses, setAddresses] = useState<ParticipantAddressDetail[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [isAddContactOpen, setIsAddContactOpen] = useState(false);
-  const [editingContact, setEditingContact] = useState<ParticipantContactDetail | null>(null);
-
-  const [isAddAddressOpen, setIsAddAddressOpen] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<ParticipantAddressDetail | null>(null);
-
-  const [showArchivedContacts, setShowArchivedContacts] = useState(false);
-  const [showArchivedAddresses, setShowArchivedAddresses] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [editingMethods, setEditingMethods] = useState<ParticipantContactDetail[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const fetchContactDetails = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const [cData, aData] = await Promise.all([
+      const [contactRecords, addressRecords] = await Promise.all([
         participantApi.getContacts(participantId, { tenantId, siteId }),
         participantApi.getAddresses(participantId, { tenantId, siteId }),
       ]);
-      setContacts(Array.isArray(cData) ? cData : []);
-      setAddresses(Array.isArray(aData) ? aData : []);
-    } catch (err: any) {
-      const msg = getApiErrorMessage(err, 'Failed to load contact information');
-      setError(msg);
+      setContacts(contactRecords);
+      setAddresses(addressRecords);
+    } catch (requestError: unknown) {
+      const message = getApiErrorMessage(requestError, 'Failed to load contact information');
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   }, [participantId, tenantId, siteId]);
 
   useEffect(() => {
-    fetchContactDetails();
+    void fetchContactDetails();
   }, [fetchContactDetails]);
 
-  // Legacy Ripple sorting: Unarchived first, preferred first, self second, others by name
-  const sortedContacts = useMemo(() => {
-    const list = [...contacts];
-    return list.sort((a, b) => {
-      const aArchived = a.active === false ? 1 : 0;
-      const bArchived = b.active === false ? 1 : 0;
-      if (aArchived !== bArchived) return aArchived - bArchived;
+  const allContactRows = useMemo(() => groupContactMethods(contacts), [contacts]);
+  const sortedContactRows = useMemo(() => [...allContactRows].sort((a, b) => {
+    if (a.archived !== b.archived) return Number(a.archived) - Number(b.archived);
+    const aIsParticipant = getContactRelationshipLabel(a.contactName, a.relationship, participantName) === 'Participant';
+    const bIsParticipant = getContactRelationshipLabel(b.contactName, b.relationship, participantName) === 'Participant';
+    const aPriority = a.preferred ? 0 : (aIsParticipant ? 1 : 2);
+    const bPriority = b.preferred ? 0 : (bIsParticipant ? 1 : 2);
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    return a.contactName.localeCompare(b.contactName, undefined, { sensitivity: 'base' });
+  }), [allContactRows]);
+  const displayedContactRows = useMemo(
+    () => showArchived ? sortedContactRows : sortedContactRows.filter((row) => !row.archived),
+    [showArchived, sortedContactRows],
+  );
+  const hasArchivedContacts = allContactRows.some((row) => row.archived);
 
-      const aPriority = a.isPreferred ? 1 : (a.relationship?.toLowerCase() === 'self' ? 2 : 3);
-      const bPriority = b.isPreferred ? 1 : (b.relationship?.toLowerCase() === 'self' ? 2 : 3);
-      if (aPriority !== bPriority) return aPriority - bPriority;
-
-      const aName = (a.contactName || '').toUpperCase();
-      const bName = (b.contactName || '').toUpperCase();
-      return aName.localeCompare(bName);
-    });
-  }, [contacts]);
-
-  const displayedContacts = useMemo(() => {
-    if (showArchivedContacts) return sortedContacts;
-    return sortedContacts.filter((c) => c.active !== false);
-  }, [showArchivedContacts, sortedContacts]);
-
-  const hasArchivedContacts = useMemo(() => {
-    return contacts.some((c) => c.active === false);
-  }, [contacts]);
-
-  const displayedAddresses = useMemo(() => {
-    if (showArchivedAddresses) return addresses;
-    return addresses.filter((a) => a.active !== false);
-  }, [showArchivedAddresses, addresses]);
-
-  const hasArchivedAddresses = useMemo(() => {
-    return addresses.some((a) => a.active === false);
-  }, [addresses]);
-
-  const handleOpenEditContact = (c: ParticipantContactDetail) => {
-    setEditingContact(c);
-    setIsAddContactOpen(true);
+  const openNewContact = () => {
+    setEditingMethods([]);
+    setIsContactModalOpen(true);
   };
 
-  const handleOpenEditAddress = (a: ParticipantAddressDetail) => {
-    setEditingAddress(a);
-    setIsAddAddressOpen(true);
+  const openEditContact = (row: ContactPersonRow) => {
+    setEditingMethods(row.methods);
+    setIsContactModalOpen(true);
   };
 
-  const handleToggleContactActive = async (c: ParticipantContactDetail, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    try {
-      const newActive = c.active === false;
-      await participantApi.toggleContactActive(participantId, c.id, newActive, { tenantId, siteId });
-      toast.success(newActive ? 'Contact restored' : 'Contact archived');
-      await fetchContactDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      toast.error(getApiErrorMessage(err, 'Failed to update contact status'));
-    }
+  const closeContactModal = () => {
+    setIsContactModalOpen(false);
+    setEditingMethods([]);
   };
 
-  const handleToggleAddressActive = async (a: ParticipantAddressDetail, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    try {
-      const newActive = a.active === false;
-      await participantApi.toggleAddressActive(participantId, a.id, newActive, { tenantId, siteId });
-      toast.success(newActive ? 'Address restored' : 'Address archived');
-      await fetchContactDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      toast.error(getApiErrorMessage(err, 'Failed to update address status'));
-    }
-  };
-
-  const handleDeleteContact = (c: ParticipantContactDetail, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    void requestConfirmation({
-      entityName: c.contactValue,
-      intent: 'danger',
-      confirmText: 'Delete Contact',
-      loadingText: 'Deleting contact...',
-      title: 'Delete Contact',
-      message: `Delete contact "${c.contactValue}" (${c.contactName || c.relationship})?`,
-      confirmWord: 'DELETE',
-      onConfirm: async () => {
-        try {
-          await participantApi.deleteContact(participantId, c.id, { tenantId, siteId });
-          toast.success('Contact deleted');
-          await fetchContactDetails();
-          onUpdated?.();
-        } catch (err: any) {
-          const msg = getApiErrorMessage(err, 'Failed to delete contact');
-          toast.error(msg);
-        }
-      },
-    });
-  };
-
-  const handleDeleteAddress = (a: ParticipantAddressDetail, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    void requestConfirmation({
-      entityName: a.addressLine1 || 'Address',
-      intent: 'danger',
-      confirmText: 'Delete Address',
-      loadingText: 'Deleting address...',
-      title: 'Delete Address',
-      message: `Delete address "${a.addressLine1}"?`,
-      confirmWord: 'DELETE',
-      onConfirm: async () => {
-        try {
-          await participantApi.deleteAddress(participantId, a.id, { tenantId, siteId });
-          toast.success('Address deleted');
-          await fetchContactDetails();
-          onUpdated?.();
-        } catch (err: any) {
-          const msg = getApiErrorMessage(err, 'Failed to delete address');
-          toast.error(msg);
-        }
-      },
-    });
-  };
+  const columnDefs = useMemo<ColDef<ContactPersonRow>[]>(() => [
+    {
+      field: 'contactName',
+      headerName: 'Name',
+      flex: 1,
+      minWidth: 140,
+      cellRenderer: (params: ICellRendererParams<ContactPersonRow>) => (
+        <button
+          type="button"
+          className="participant-contact-list__name"
+          onClick={() => params.data && openEditContact(params.data)}
+          aria-label={`Edit contact ${params.data?.contactName ?? ''}`}
+        >
+          {params.value || participantName}
+        </button>
+      ),
+    },
+    {
+      field: 'relationship',
+      headerName: 'Relationship',
+      flex: 1,
+      minWidth: 145,
+      valueGetter: (params) => params.data
+        ? getContactRelationshipLabel(params.data.contactName, params.data.relationship, participantName)
+        : '',
+    },
+    {
+      field: 'preferredMethod',
+      headerName: 'Preferred Contact Method',
+      flex: 1.5,
+      minWidth: 200,
+      cellRenderer: (params: ICellRendererParams<ContactPersonRow>) => (
+        <div className="participant-contact-list__method">
+          <span title={params.value ?? ''}>{params.value ?? ''}</span>
+          {params.data?.notes && (
+            <span
+              className="custom-tooltip-btn participant-contact-list__note"
+              data-tooltip={params.data.notes}
+              aria-label="Contact notes"
+              role="img"
+              tabIndex={0}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MessageSquare size={15} aria-hidden="true" />
+            </span>
+          )}
+          {params.data?.preferred && (
+            <span
+              className="custom-tooltip-btn participant-contact-list__status"
+              data-tooltip="Preferred Contact"
+              aria-label="Preferred contact"
+              role="img"
+              tabIndex={0}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Star size={15} fill="currentColor" aria-hidden="true" />
+            </span>
+          )}
+          {params.data?.archived && (
+            <span
+              className="custom-tooltip-btn participant-contact-list__status"
+              data-tooltip="Archived Contact"
+              aria-label="Archived contact"
+              role="img"
+              tabIndex={0}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Folder size={15} aria-hidden="true" />
+            </span>
+          )}
+        </div>
+      ),
+    },
+  ], [participantName]);
 
   return (
     <div className="space-y-6">
-      {/* SECTION 1: CONTACT METHODS & PERSONS */}
-      <section className="card record-detail__panel">
+      <section className="card record-detail__panel participant-contact-list">
         <div className="card-header flex items-center justify-between">
-          <div>
-            <h3>Contact Methods & Authorized Contacts</h3>
-            <p>Phone numbers, emails, and relationships for outreach.</p>
-          </div>
+          <h3>Contacts</h3>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                setEditingContact(null);
-                setIsAddContactOpen(true);
-              }}
-              className="btn btn-sm btn-primary flex items-center gap-1.5"
+              onClick={openNewContact}
+              className="btn btn-sm btn-primary participant-contact-list__add custom-tooltip-btn"
+              data-tooltip="Add Contact"
+              aria-label="Add Contact"
               id="add-contact-person-btn"
             >
-              <Plus size={14} /> Add Contact
+              <Plus size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsExpanded((expanded) => !expanded)}
+              className="btn btn-ghost btn-sm custom-tooltip-btn"
+              data-tooltip={isExpanded ? 'Collapse Contacts' : 'Expand Contacts'}
+              aria-label={isExpanded ? 'Collapse Contacts' : 'Expand Contacts'}
+              aria-expanded={isExpanded}
+            >
+              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
           </div>
         </div>
-
-        <div className="record-detail__panel-content">
-          {isLoading && contacts.length === 0 && (
-            <div className="p-6 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
-              <Loader2 size={20} className="animate-spin text-blue-600" />
-              <span className="text-xs">Loading contact methods...</span>
+        {isExpanded && <div className="record-detail__panel-content">
+          {isLoading && contacts.length === 0 ? (
+            <div className="p-6 text-center text-gray-500 flex items-center justify-center gap-2">
+              <Loader2 size={18} className="animate-spin text-blue-600" />
+              <span className="text-sm">Loading contacts...</span>
             </div>
-          )}
-
-          {!isLoading && displayedContacts.length === 0 && (
-            <div className="p-6 text-center text-xs text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-              {contacts.length > 0 && !showArchivedContacts
-                ? 'All contact methods are currently archived. Click "Show Archived Contacts" below to view them.'
-                : 'No contacts recorded yet. Click "Add Contact" to register phone numbers or email addresses.'}
+          ) : error && contacts.length === 0 ? (
+            <div className="p-4 text-sm text-red-600" role="alert">
+              {error}
+              <button type="button" className="ml-2 underline" onClick={() => void fetchContactDetails()}>
+                Retry
+              </button>
             </div>
-          )}
-
-          {!isLoading && displayedContacts.length > 0 && (
-            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-              {displayedContacts.map((c) => {
-                const isArchived = c.active === false;
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => handleOpenEditContact(c)}
-                    className={`p-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      isArchived ? 'bg-gray-50/60 opacity-75' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <span className={`mt-0.5 p-1.5 rounded-full ${isArchived ? 'bg-gray-200 text-gray-500' : 'bg-blue-50 text-blue-700'}`}>
-                        {c.contactType === 'EMAIL' ? <Mail size={14} /> : <Phone size={14} />}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <strong className="text-xs text-gray-900 font-semibold">{c.contactValue}</strong>
-                          {c.isPreferred && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5">
-                              <Star size={10} className="fill-amber-500" /> Preferred
-                            </span>
-                          )}
-                          {c.primaryContact && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                              Primary
-                            </span>
-                          )}
-                          {isArchived && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
-                              <FolderArchive size={10} /> Archived
-                            </span>
-                          )}
-                          {c.label && <span className="badge badge-neutral text-[10px]">{c.label}</span>}
-                        </div>
-
-                        <div className="text-[11px] text-gray-500 mt-0.5">
-                          <span className="font-medium text-gray-700">{c.contactName || participantName}</span>
-                          {c.relationship && ` • ${c.relationship}`}
-                          {c.canLeaveMessage ? ' • Can Leave Voicemail' : ' • Do Not Leave Message'}
-                        </div>
-
-                        {c.notes && (
-                          <p className="text-[11px] text-gray-600 bg-gray-50 p-1.5 rounded mt-1 border border-gray-100 flex items-start gap-1">
-                            <MessageSquare size={12} className="text-gray-400 mt-0.5 shrink-0" />
-                            <span>{c.notes}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditContact(c)}
-                        className="btn btn-ghost btn-xs text-gray-500 hover:text-blue-600 p-1 custom-tooltip-btn tooltip-align-right"
-                        data-tooltip="Edit contact"
-                        aria-label={`Edit contact ${c.contactValue}`}
-                      >
-                        <Pencil size={13} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleContactActive(c, e)}
-                        className={`btn btn-ghost btn-xs p-1 custom-tooltip-btn tooltip-align-right ${
-                          isArchived ? 'text-emerald-600 hover:text-emerald-700' : 'text-gray-400 hover:text-amber-600'
-                        }`}
-                        data-tooltip={isArchived ? 'Restore contact' : 'Archive contact'}
-                        aria-label={isArchived ? 'Restore contact' : 'Archive contact'}
-                      >
-                        {isArchived ? <RotateCcw size={13} /> : <Archive size={13} />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteContact(c, e)}
-                        className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
-                        data-tooltip="Delete contact"
-                        aria-label={`Delete contact ${c.contactValue}`}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+          ) : displayedContactRows.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500">
+              {allContactRows.length > 0
+                ? 'All contacts are archived. Use Show Archived Contacts to view them.'
+                : 'No contacts recorded yet. Select + to add a contact.'}
             </div>
+          ) : (
+            <DataGrid<ContactPersonRow>
+              rowData={displayedContactRows}
+              columnDefs={columnDefs}
+              getRowId={(params) => params.data.id}
+              onRowClicked={(event) => {
+                if (event.data) openEditContact(event.data);
+              }}
+              rowHeight={50}
+              headerHeight={48}
+              domLayout="autoHeight"
+              pagination
+              paginationPageSize={10}
+              paginationPageSizeSelector={[5, 10, 20, 50]}
+              animateRows
+              suppressCellFocus
+              suppressMovableColumns
+              wrapperClassName="participant-contact-list__grid"
+            />
           )}
-
           {hasArchivedContacts && (
             <div className="mt-3 text-right">
               <button
                 type="button"
-                onClick={() => setShowArchivedContacts(!showArchivedContacts)}
-                className="text-xs font-medium text-blue-600 hover:text-blue-800 underline transition-colors"
-                id="toggle-archived-contacts-btn"
+                onClick={() => setShowArchived((show) => !show)}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 underline"
               >
-                {showArchivedContacts ? 'Hide Archived Contacts' : 'Show Archived Contacts'}
+                {showArchived ? 'Hide Archived Contacts' : 'Show Archived Contacts'}
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </section>
 
-      {/* SECTION 2: PARTICIPANT ADDRESSES */}
-      <section className="card record-detail__panel">
-        <div className="card-header flex items-center justify-between">
-          <div>
-            <h3>Participant Addresses</h3>
-            <p>Mailing and residential addresses associated with this record.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingAddress(null);
-              setIsAddAddressOpen(true);
-            }}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-            id="add-address-btn"
-          >
-            <Plus size={14} /> Add Address
-          </button>
-        </div>
-
-        <div className="record-detail__panel-content">
-          {isLoading && addresses.length === 0 && (
-            <div className="p-6 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
-              <Loader2 size={20} className="animate-spin text-blue-600" />
-              <span className="text-xs">Loading addresses...</span>
-            </div>
-          )}
-
-          {!isLoading && displayedAddresses.length === 0 && (
-            <div className="p-6 text-center text-xs text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-              {addresses.length > 0 && !showArchivedAddresses
-                ? 'All addresses are currently archived. Click "Show Archived Addresses" below to view them.'
-                : 'No addresses recorded. Click "Add Address" to add residential or mailing addresses.'}
-            </div>
-          )}
-
-          {!isLoading && displayedAddresses.length > 0 && (
-            <div className="divide-y divide-gray-100 border border-gray-200 rounded-lg overflow-hidden">
-              {displayedAddresses.map((a) => {
-                const isArchived = a.active === false;
-                return (
-                  <div
-                    key={a.id}
-                    onClick={() => handleOpenEditAddress(a)}
-                    className={`p-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer ${
-                      isArchived ? 'bg-gray-50/60 opacity-75' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <span className={`mt-0.5 p-1.5 rounded-full ${isArchived ? 'bg-gray-200 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>
-                        <MapPin size={14} />
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <strong className="text-xs text-gray-900 font-semibold">{a.addressLine1}</strong>
-                          {a.addressLine2 && <span className="text-xs text-gray-600">{a.addressLine2}</span>}
-                          {a.primaryAddress && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              Primary
-                            </span>
-                          )}
-                          {isArchived && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
-                              <FolderArchive size={10} /> Archived
-                            </span>
-                          )}
-                          <span className="badge badge-neutral text-[10px]">{a.addressType}</span>
-                        </div>
-
-                        <div className="text-[11px] text-gray-500 mt-0.5">
-                          {[a.city, a.stateRegion, a.postalCode, a.countryCode].filter(Boolean).join(', ')}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditAddress(a)}
-                        className="btn btn-ghost btn-xs text-gray-500 hover:text-blue-600 p-1 custom-tooltip-btn tooltip-align-right"
-                        data-tooltip="Edit address"
-                        aria-label={`Edit address ${a.addressLine1}`}
-                      >
-                        <Pencil size={13} />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleAddressActive(a, e)}
-                        className={`btn btn-ghost btn-xs p-1 custom-tooltip-btn tooltip-align-right ${
-                          isArchived ? 'text-emerald-600 hover:text-emerald-700' : 'text-gray-400 hover:text-amber-600'
-                        }`}
-                        data-tooltip={isArchived ? 'Restore address' : 'Archive address'}
-                        aria-label={isArchived ? 'Restore address' : 'Archive address'}
-                      >
-                        {isArchived ? <RotateCcw size={13} /> : <Archive size={13} />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteAddress(a, e)}
-                        className="btn btn-ghost btn-xs text-gray-400 hover:text-red-600 p-1 custom-tooltip-btn tooltip-align-right"
-                        data-tooltip="Delete address"
-                        aria-label={`Delete address ${a.addressLine1}`}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {hasArchivedAddresses && (
-            <div className="mt-3 text-right">
-              <button
-                type="button"
-                onClick={() => setShowArchivedAddresses(!showArchivedAddresses)}
-                className="text-xs font-medium text-blue-600 hover:text-blue-800 underline transition-colors"
-                id="toggle-archived-addresses-btn"
-              >
-                {showArchivedAddresses ? 'Hide Archived Addresses' : 'Show Archived Addresses'}
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Modals */}
-      <AddContactModal
-        isOpen={isAddContactOpen}
-        onClose={() => {
-          setIsAddContactOpen(false);
-          setEditingContact(null);
-        }}
+      <ParticipantContactModal
+        isOpen={isContactModalOpen}
+        onClose={closeContactModal}
         participantId={participantId}
         participantName={participantName}
-        contactToEdit={editingContact}
+        contactToEdit={editingMethods[0] ?? null}
+        contactMethods={editingMethods}
+        addresses={addresses}
         tenantId={tenantId}
         siteId={siteId}
-        onContactAdded={() => {
-          fetchContactDetails();
-          onUpdated?.();
-        }}
-      />
-
-      <AddAddressModal
-        isOpen={isAddAddressOpen}
-        onClose={() => {
-          setIsAddAddressOpen(false);
-          setEditingAddress(null);
-        }}
-        participantId={participantId}
-        participantName={participantName}
-        addressToEdit={editingAddress}
-        tenantId={tenantId}
-        siteId={siteId}
-        onAddressAdded={() => {
-          fetchContactDetails();
+        onSaved={() => {
+          void fetchContactDetails();
           onUpdated?.();
         }}
       />

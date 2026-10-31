@@ -762,6 +762,15 @@ public class ParticipantWorkflowService {
     @Transactional
     public ParticipantContactDto createContact(UUID tenantId, UUID participantId, UUID userId, CreateContactPersonRequest request) {
         verifyParticipantExists(tenantId, participantId);
+        String contactType = request.getContactType() == null || request.getContactType().isBlank()
+                ? null
+                : request.getContactType().trim().toUpperCase();
+        String contactValue = request.getContactValue() == null || request.getContactValue().isBlank()
+                ? null
+                : request.getContactValue().trim();
+        if ((contactType == null) != (contactValue == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contact type and value must be provided together");
+        }
 
         if (request.isPreferred()) {
             List<ParticipantContact> existingContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
@@ -776,8 +785,8 @@ public class ParticipantWorkflowService {
         ParticipantContact contact = new ParticipantContact();
         contact.setTenantId(tenantId);
         contact.setParticipantId(participantId);
-        contact.setContactType(request.getContactType().toUpperCase());
-        contact.setContactValue(request.getContactValue().trim());
+        contact.setContactType(contactType);
+        contact.setContactValue(contactValue);
         contact.setLabel(request.getLabel());
         contact.setContactName(request.getContactName());
         contact.setRelationship(request.getRelationship());
@@ -785,7 +794,7 @@ public class ParticipantWorkflowService {
         contact.setNotes(request.getNotes());
         contact.setPrimaryContact(request.isPrimaryContact());
         contact.setPreferred(request.isPreferred());
-        contact.setActive(true);
+        contact.setActive(request.isActive());
         contact.setCreatedBy(userId);
         contact.setUpdatedBy(userId);
         contact.setCreatedAt(OffsetDateTime.now());
@@ -803,11 +812,11 @@ public class ParticipantWorkflowService {
         ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
 
-        if (request.getContactType() != null && !request.getContactType().isBlank()) {
-            contact.setContactType(request.getContactType().toUpperCase().trim());
+        if (request.getContactType() != null) {
+            contact.setContactType(request.getContactType().isBlank() ? null : request.getContactType().toUpperCase().trim());
         }
-        if (request.getContactValue() != null && !request.getContactValue().isBlank()) {
-            contact.setContactValue(request.getContactValue().trim());
+        if (request.getContactValue() != null) {
+            contact.setContactValue(request.getContactValue().isBlank() ? null : request.getContactValue().trim());
         }
         if (request.getLabel() != null) {
             contact.setLabel(request.getLabel().trim());
@@ -888,8 +897,8 @@ public class ParticipantWorkflowService {
         ParticipantContactDto dto = new ParticipantContactDto();
         dto.setId(c.getId());
         dto.setParticipantId(c.getParticipantId());
-        dto.setContactType(c.getContactType());
-        dto.setContactValue(c.getContactValue());
+        dto.setContactType(c.getContactType() == null ? "" : c.getContactType());
+        dto.setContactValue(c.getContactValue() == null ? "" : c.getContactValue());
         dto.setLabel(c.getLabel());
         dto.setContactName(c.getContactName());
         dto.setRelationship(c.getRelationship());
@@ -926,7 +935,7 @@ public class ParticipantWorkflowService {
         address.setPostalCode(request.getPostalCode());
         address.setCountryCode(request.getCountryCode() != null ? request.getCountryCode() : "USA");
         address.setPrimaryAddress(request.isPrimaryAddress());
-        address.setActive(true);
+        address.setActive(request.isActive());
         address.setCreatedBy(userId);
         address.setUpdatedBy(userId);
         address.setCreatedAt(OffsetDateTime.now());

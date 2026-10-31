@@ -29,6 +29,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
+import { requestConfirmation } from '../../../../shared/confirmation';
 
 export interface StudySettingsEmailAndTextProps {
   studyId: string;
@@ -136,12 +137,6 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
   const [textScheduleBeforeAfter, setTextScheduleBeforeAfter] = useState<string>('before');
   const [textScheduleDateType, setTextScheduleDateType] = useState<string>('scheduled');
   const [textModalError, setTextModalError] = useState<string | null>(null);
-
-  // Confirm Modal state (Archive, Restore, Delete)
-  const [confirmModalOpen, setConfirmModalOpen] = useState<boolean>(false);
-  const [confirmAction, setConfirmAction] = useState<'archive' | 'restore' | 'delete' | null>(null);
-  const [confirmKind, setConfirmKind] = useState<'email' | 'text' | null>(null);
-  const [targetTemplate, setTargetTemplate] = useState<StudyEmailTemplate | StudyTextTemplate | null>(null);
 
   const emailTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -527,15 +522,33 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
     e: React.MouseEvent
   ) => {
     e.stopPropagation();
-    setTargetTemplate(template);
-    setConfirmKind(kind);
-    setConfirmAction(action);
-    setConfirmModalOpen(true);
+    const typeLabel = kind === 'email' ? 'Email' : 'Text';
+    const title = `${action === 'delete' ? 'Delete' : action === 'archive' ? 'Archive' : 'Restore'} ${typeLabel} Template`;
+    const message = action === 'archive'
+      ? `Are you sure you want to archive "${template.name}"? It will no longer be active for scheduled automation until restored.`
+      : action === 'restore'
+        ? `Are you sure you want to restore "${template.name}" to active templates?`
+        : `Are you sure you want to permanently delete "${template.name}"?`;
+
+    void requestConfirmation({
+      title,
+      message,
+      details: action === 'delete'
+        ? ['This will also remove any associated scheduled actions.', 'This action cannot be undone.']
+        : undefined,
+      intent: action === 'delete' ? 'danger' : 'warning',
+      confirmText: `${action === 'delete' ? 'Delete' : action === 'archive' ? 'Archive' : 'Restore'} Template`,
+      cancelText: 'Cancel',
+      loadingText: `${action === 'delete' ? 'Deleting' : action === 'archive' ? 'Archiving' : 'Restoring'}...`,
+      onConfirm: () => handleExecuteConfirm(template, kind, action),
+    });
   };
 
-  const handleExecuteConfirm = async () => {
-    if (!targetTemplate || !confirmKind || !confirmAction) return;
-
+  const handleExecuteConfirm = async (
+    targetTemplate: StudyEmailTemplate | StudyTextTemplate,
+    confirmKind: 'email' | 'text',
+    confirmAction: 'archive' | 'restore' | 'delete'
+  ) => {
     try {
       setSubmitting(true);
       let updated: StudyEmailTextSettingsData;
@@ -567,10 +580,6 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
       }
 
       updateSnapshot(updated);
-      setConfirmModalOpen(false);
-    } catch (err: unknown) {
-      const maybeErr = err as { message?: string };
-      toast.error(maybeErr?.message || `Failed to ${confirmAction} template.`);
     } finally {
       setSubmitting(false);
     }
@@ -1568,83 +1577,6 @@ export const StudySettingsEmailAndText: React.FC<StudySettingsEmailAndTextProps>
         </div>
       )}
 
-      {/* ================= MODAL: CONFIRM ACTION (Archive / Restore / Delete) ================= */}
-      {confirmModalOpen && targetTemplate && confirmAction && confirmKind && (
-        <div
-          className="study-settings-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-action-modal-title"
-          data-testid="confirm-template-action-modal"
-        >
-          <div className="study-settings-modal study-settings-modal--sm">
-            <header className="study-settings-modal__header">
-              <h3 id="confirm-action-modal-title" className="study-settings-modal__title">
-                {confirmAction === 'archive' && `Archive ${confirmKind === 'email' ? 'Email' : 'Text'} Template`}
-                {confirmAction === 'restore' && `Restore ${confirmKind === 'email' ? 'Email' : 'Text'} Template`}
-                {confirmAction === 'delete' && `Delete ${confirmKind === 'email' ? 'Email' : 'Text'} Template`}
-              </h3>
-              <button
-                type="button"
-                className="study-settings-icon-btn"
-                onClick={() => setConfirmModalOpen(false)}
-                aria-label="Close modal"
-              >
-                <X size={18} />
-              </button>
-            </header>
-
-            <div className="study-settings-modal__body">
-              {confirmAction === 'archive' && (
-                <p>
-                  Are you sure you want to archive <strong>"{targetTemplate.name}"</strong>? It will no longer be active for scheduled automation until restored.
-                </p>
-              )}
-              {confirmAction === 'restore' && (
-                <p>
-                  Are you sure you want to restore <strong>"{targetTemplate.name}"</strong> to active templates?
-                </p>
-              )}
-              {confirmAction === 'delete' && (
-                <p className="study-text-danger">
-                  Are you sure you want to permanently delete <strong>"{targetTemplate.name}"</strong>? This will also remove any associated scheduled actions. This action cannot be undone.
-                </p>
-              )}
-            </div>
-
-            <footer className="study-settings-modal__footer">
-              <button
-                type="button"
-                className="study-settings-btn study-settings-btn--secondary"
-                onClick={() => setConfirmModalOpen(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className={`study-settings-btn ${confirmAction === 'delete' ? 'study-settings-btn--danger' : 'study-settings-btn--primary'}`}
-                onClick={handleExecuteConfirm}
-                disabled={submitting}
-                data-testid="confirm-action-submit-btn"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 size={14} className="study-settings-spinner" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <span>
-                    {confirmAction === 'archive' && 'Archive Template'}
-                    {confirmAction === 'restore' && 'Restore Template'}
-                    {confirmAction === 'delete' && 'Delete Template'}
-                  </span>
-                )}
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

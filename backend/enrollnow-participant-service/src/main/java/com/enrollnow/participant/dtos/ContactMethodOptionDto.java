@@ -1,5 +1,9 @@
 package com.enrollnow.participant.dtos;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class ContactMethodOptionDto {
 
     private String label;
@@ -31,11 +35,24 @@ public class ContactMethodOptionDto {
         this.value = value;
     }
 
+    @JsonIgnore
     public boolean isPreferred() {
         return isPreferred;
     }
 
+    @JsonIgnore
     public void setPreferred(boolean preferred) {
+        isPreferred = preferred;
+    }
+
+    @JsonProperty("isPreferred")
+    public boolean getIsPreferred() {
+        return isPreferred;
+    }
+
+    @JsonProperty("isPreferred")
+    @JsonAlias({"preferred"})
+    public void setIsPreferred(boolean preferred) {
         isPreferred = preferred;
     }
 }
