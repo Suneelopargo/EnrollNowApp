@@ -783,18 +783,90 @@
 
 .record-detail__study-info { overflow: visible; }
 
-.record-detail__study-table-wrap { overflow-x: auto; }
-
-.record-detail__study-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: $font-size-sm;
-
-  th, td { padding: $spacing-3; border-bottom: 1px solid $border-color; text-align: left; }
-  th { background: $bg-surface-secondary; font-weight: $font-weight-semibold; }
+.record-detail__study-search {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 14px 10px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #64748b;
 }
 
-.record-detail__study-empty,
+.record-detail__study-search:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.record-detail__study-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #334155;
+  font-size: 13px;
+}
+
+.record-detail__study-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.record-detail__study-search button:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.enl-ag-grid.ag-theme-quartz.record-detail__study-grid {
+  height: 330px;
+  min-height: 300px;
+}
+
+.enl-ag-grid.ag-theme-quartz.participant-forms-grid {
+  height: clamp(320px, calc(100vh - 420px), 620px);
+  min-height: 280px;
+}
+
+.participant-form-survey {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1.2;
+}
+
+.participant-form-survey > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participant-form-study-badge {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #0876c9;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .record-detail__inline-error { padding: $spacing-4; color: $text-secondary; }
 
 .record-detail__inline-error { color: $color-danger; }

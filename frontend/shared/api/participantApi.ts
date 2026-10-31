@@ -374,6 +374,9 @@ export interface SurveyAssignmentItem {
   assignedAt: string;
   dueAt?: string;
   completedAt?: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  submittedByName?: string;
 }
 
 export interface SurveyOptionItem {
@@ -845,6 +848,15 @@ export const participantApi = {
     if (options?.siteId) params.append('siteId', options.siteId);
     const qs = params.toString();
     return `/api/v1/participants/${participantId}/consent-logs/${logId}/attachment${qs ? '?' + qs : ''}`;
+  },
+
+  async getConsentAttachment(participantId: string, logId: string, options?: { tenantId?: string; siteId?: string }): Promise<Blob> {
+    const res = await apiClient.get(this.getConsentAttachmentUrl(participantId, logId), {
+      params: options,
+      responseType: 'blob',
+      skipToast: true,
+    } as any);
+    return res.data;
   },
 
   // 5. Forms

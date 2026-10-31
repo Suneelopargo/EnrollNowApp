@@ -491,8 +491,8 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         participantName="Emily Davis"
       />
     );
-    expect(consentSection).toContain('Study Consents');
-    expect(consentSection).toContain('Record Consent');
+    expect(consentSection).toContain('Search consents...');
+    expect(consentSection).toContain('aria-label="Add Consent"');
 
     const consentModal = renderToStaticMarkup(
       <RecordConsentModal
@@ -506,14 +506,16 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(consentModal).toContain('Record Consent Decision');
   });
 
-  it('renders ParticipantFormsSection and AssignFormModal', () => {
+  it('renders the participant forms grid without an Assign Form action', () => {
     const formsSection = renderToStaticMarkup(
       <ParticipantFormsSection
         participantId="p-100"
         participantName="Emily Davis"
       />
     );
-    expect(formsSection).toContain('Forms &amp; Surveys');
+    expect(formsSection).toContain('Search forms...');
+    expect(formsSection).toContain('participant-forms-grid');
+    expect(formsSection).not.toContain('Assign Form');
 
     const assignModal = renderToStaticMarkup(
       <AssignFormModal
@@ -556,6 +558,8 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(modalHtml).toContain('Contact');
     expect(modalHtml).toContain('Consent');
     expect(modalHtml).toContain('Forms');
+    expect(modalHtml).toContain('Search studies');
+    expect(modalHtml).toContain('record-detail__study-grid');
   });
 
   // 7. Potential Duplicate Participants Workflow
