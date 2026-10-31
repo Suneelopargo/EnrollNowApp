@@ -636,7 +636,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditMode ? `Edit ${userToEdit?.name} User` : 'Add User'}
+      title={isEditMode ? `Edit user ${userToEdit?.name}` : 'Add User'}
       footer={modalFooter}
       className="site-admin-add-user-modal"
     >

@@ -10,7 +10,6 @@ import {
   EyeOff,
   ArrowRight,
   AlertCircle,
-  ShieldCheck,
 } from 'lucide-react';
 import { authApi } from '../../../shared/api/authApi';
 import { toast } from '../../../shared/toaster';
@@ -27,6 +26,8 @@ import { FeatureHighlights } from './components/FeatureHighlights';
 import { FeatureHighlightCard } from './components/FeatureHighlightCard';
 import { FloatingInfoCard } from './components/FloatingInfoCard';
 import { LoginStatistics } from './components/LoginStatistics';
+import { AuthFooterWave } from './components/AuthFooterWave';
+import { AuthComplianceNotice } from './components/AuthComplianceNotice';
 import { loginContent, defaultStatistics } from './data/loginContent';
 
 import { ActivateAccountPage } from './components/ActivateAccountPage';
@@ -60,7 +61,6 @@ export interface IdentityModuleProps {
 export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [usernameError, setUsernameError] = useState('');
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -103,7 +103,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
 
     let hasError = false;
     if (emailValidationError) {
-      setUsernameError(emailValidationError);
       setUsernameTouched(true);
       hasError = true;
     }
@@ -113,7 +112,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
     }
 
     if (hasError || !isFormValid) {
-      toast.warning('Please enter your email and password.');
       return;
     }
 
@@ -235,16 +233,14 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       id="email-input"
                       type="email"
                       className={`enl-field-input${usernameTouched && emailValidationError ? ' is-invalid' : ''}`}
-                      placeholder={usernameError && !username ? usernameError : 'Enter your email address'}
+                      placeholder="Enter your email address"
                       value={username}
                       onChange={(e) => {
                         setUsername(e.target.value);
                         setUsernameTouched(true);
-                        setUsernameError('');
                       }}
                       onBlur={() => {
                         setUsernameTouched(true);
-                        setUsernameError(emailValidationError);
                       }}
                       autoComplete="username"
                       required
@@ -254,7 +250,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     />
                   </div>
                   {usernameTouched && emailValidationError && (
-                    <div id="email-input-error" className="mt-1 text-xs text-red-600" role="alert">
+                    <div id="email-input-error" className="enl-field-error" role="alert">
                       {emailValidationError}
                     </div>
                   )}
@@ -271,7 +267,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       id="password-input"
                       type={showPassword ? 'text' : 'password'}
                       className="enl-field-input"
-                      placeholder={passwordError && !password ? passwordError : 'Enter your password'}
+                      placeholder="Enter your password"
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
@@ -299,7 +295,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     </button>
                   </div>
                   {passwordError && (
-                    <div id="password-input-error" className="sr-only" role="alert">
+                    <div id="password-input-error" className="enl-field-error" role="alert">
                       {passwordError}
                     </div>
                   )}
@@ -344,28 +340,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 {/* Divider */}
                 <div className="enl-card-divider" />
 
-                {/* Authorized use and monitoring notice */}
-                <div className="enl-compliance-notice">
-                  <div className="enl-compliance-header">
-                    <ShieldCheck size={14} className="enl-compliance-icon" />
-                    <span className="enl-compliance-title">Authorized Use and Monitoring Notice</span>
-                  </div>
-                  <p className="enl-compliance-text">
-                    This application contains confidential information, including protected
-                    health information (PHI) and/or regulated electronic records. Access is
-                    restricted to authorized users for approved purposes.
-                  </p>
-                  <p className="enl-compliance-text">
-                    Your access and activity may be monitored, logged, and reviewed. Do not
-                    share your account or credentials, or access, use, or disclose information
-                    beyond your authorization. Unauthorized use may result in disciplinary
-                    action and/or civil or criminal penalties.
-                  </p>
-                  <p className="enl-compliance-text">
-                    By continuing, you acknowledge this notice and agree to use the application
-                    in accordance with applicable laws and organizational policies.
-                  </p>
-                </div>
+                <AuthComplianceNotice />
               </form>
             </div>
           </section>
@@ -375,21 +350,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
         {/* 4. BOTTOM OCEAN WAVE WITH DYNAMIC STATISTICS                    */}
         {/* =============================================================== */}
         <div className="enl-wave-container">
-          <svg
-            className="enl-wave-svg"
-            viewBox="0 0 1440 180"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M 0 112 C 270 75, 500 126, 760 104 C 1030 82, 1240 119, 1440 91 L 1440 180 L 0 180 Z"
-              fill="#FFCB05"
-            />
-            <path
-              d="M 0 130 C 260 99, 520 145, 790 126 C 1060 108, 1260 143, 1440 120 L 1440 180 L 0 180 Z"
-              fill="#00274C"
-            />
-          </svg>
+          <AuthFooterWave />
           <div className="enl-wave-stats-wrapper">
             <LoginStatistics statistics={defaultStatistics} />
           </div>

@@ -177,4 +177,44 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     );
     expect(html).not.toContain('This system should only be accessed by authorized users.');
   });
+
+  it('renders the login footer on password recovery without the login notice', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const React = await import('react');
+    const { MemoryRouter } = await import('react-router-dom');
+    const html = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(RecoverPasswordPage)
+      )
+    );
+
+    expect(html).toContain('enl-recovery-page');
+    expect(html).toContain('enl-recovery-wave-container');
+    expect(html).toContain('enl-login-strong-footer');
+    expect(html).toContain('© 2016 - 2027');
+    expect(html).toContain('Terms of Service');
+    expect(html).toContain('Support Center');
+    expect(html).not.toContain('Authorized Use and Monitoring Notice');
+  });
+
+  it('renders the login footer on password reset', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const React = await import('react');
+    const { MemoryRouter } = await import('react-router-dom');
+    const html = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(ResetPasswordPage)
+      )
+    );
+
+    expect(html).toContain('enl-reset-password-page');
+    expect(html).toContain('enl-reset-password-wave-container');
+    expect(html).toContain('enl-login-strong-footer');
+    expect(html).toContain('© 2016 - 2027');
+    expect(html).not.toContain('© 2016 - 2026');
+  });
 });
