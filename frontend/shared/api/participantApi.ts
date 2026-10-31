@@ -303,7 +303,7 @@ export interface CommunicationItem {
   messageIsHtml?: boolean;
   lastContact?: boolean;
   notify?: boolean;
-  attachments?: Array<{ fileName: string; fileUploadId?: string; fileContentBase64?: string }>;
+  attachments?: string[];
   recipients: CommunicationRecipientItem[];
 }
 
@@ -659,7 +659,7 @@ export const participantApi = {
       lastContact?: boolean;
       global?: boolean;
       notify?: boolean;
-      attachments?: Array<{ fileName: string; fileUploadId?: string; fileContentBase64?: string }>;
+      attachments?: Array<{ fileName: string; fileUploadId?: string; fileContentType?: string; fileContentBase64?: string }>;
     },
     options?: { tenantId?: string; siteId?: string }
   ): Promise<CommunicationItem> {

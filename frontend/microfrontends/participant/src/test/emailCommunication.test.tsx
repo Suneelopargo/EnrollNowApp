@@ -2,13 +2,20 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { ParticipantEmailSection } from '../components/ParticipantEmailSection';
+import { getEmailPreviewDocument, ParticipantEmailSection } from '../components/ParticipantEmailSection';
 import { ComposeEmailModal, isEmailDesignEmpty } from '../components/ComposeEmailModal';
 
 describe('Email Communication History & Compose Modal', () => {
   it('detects an empty email design and a design containing content', () => {
     expect(isEmailDesignEmpty({ body: { rows: [{ columns: [{ contents: [] }] }] } })).toBe(true);
     expect(isEmailDesignEmpty({ body: { rows: [{ columns: [{ contents: [{ type: 'text' }] }] }] } })).toBe(false);
+  });
+
+  it('renders email HTML as a preview and escapes plain-text messages', () => {
+    expect(getEmailPreviewDocument('<p>Welcome</p>', true)).toBe('<p>Welcome</p>');
+    expect(getEmailPreviewDocument('<script>alert(1)</script>', false)).toContain(
+      '&lt;script&gt;alert(1)&lt;/script&gt;'
+    );
   });
 
   it('renders ParticipantEmailSection with dark blue table header and compose button', () => {
@@ -45,9 +52,10 @@ describe('Email Communication History & Compose Modal', () => {
     expect(html).toContain('email-design-editor');
     expect(html).toContain('Attachments');
     expect(html).toContain('Mark Email As:');
-    expect(html).toContain('Contact');
     expect(html).toContain('Pin Email');
-    expect(html).toContain('Global');
-    expect(html).toContain('Notify');
+    expect(html).not.toContain('>Contact</span>');
+    expect(html).not.toContain('>Global</span>');
+    expect(html).not.toContain('>Notify</span>');
+    expect(html).toContain('data-tooltip="Pin current email to top of list."');
   });
 });

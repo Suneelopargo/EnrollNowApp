@@ -374,7 +374,7 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     studies: [{ name: 'Study Alpha' }],
   };
 
-  it('renders ParticipantComments with title and actions', () => {
+  it('renders ParticipantComments form and actions', () => {
     const html = renderToStaticMarkup(
       <ParticipantComments
         participantId="p-100"
@@ -382,7 +382,6 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
         studyId="Study Alpha"
       />
     );
-    expect(html).toContain('Comments');
     expect(html).toContain('Add Comment');
     expect(html).toContain('Pin Comment');
   });

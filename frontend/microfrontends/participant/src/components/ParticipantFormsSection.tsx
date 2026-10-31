@@ -1,9 +1,10 @@
 // frontend/microfrontends/participant/src/components/ParticipantFormsSection.tsx - Participant Forms / Surveys List & Assignment
-import React, { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, Plus, RefreshCw, CheckCircle2, Clock, PlayCircle, AlertCircle, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ClipboardList, Plus, RefreshCw, CheckCircle2, Clock, PlayCircle, Search, X } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { participantApi, SurveyAssignmentItem } from '../../../../shared/api/participantApi';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { AssignFormModal } from './AssignFormModal';
 
 export interface ParticipantFormsSectionProps {
@@ -26,6 +27,7 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
   const [error, setError] = useState<string | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchForms = useCallback(async () => {
     if (!participantId) return;
@@ -111,20 +113,108 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
     }
   };
 
+  const columnDefs = useMemo<ColDef<SurveyAssignmentItem>[]>(() => [
+    {
+      colId: 'formName',
+      headerName: 'Form Name',
+      minWidth: 200,
+      flex: 1,
+      valueGetter: (params) => [
+        params.data?.surveyName || 'Survey Assessment',
+        params.data?.surveyCode,
+      ].filter(Boolean).join(' '),
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      field: 'studyName',
+      headerName: 'Study',
+      minWidth: 150,
+      valueGetter: (params) => params.data?.studyName || 'General Registry',
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      minWidth: 140,
+      cellRenderer: (params: ICellRendererParams<SurveyAssignmentItem>) => params.data
+        ? getStatusBadge(params.data.status)
+        : null,
+    },
+    {
+      field: 'assignedAt',
+      headerName: 'Assigned Date',
+      minWidth: 140,
+      valueFormatter: (params) => formatDate(params.value),
+    },
+    {
+      field: 'dueAt',
+      headerName: 'Due Date',
+      minWidth: 130,
+      valueFormatter: (params) => formatDate(params.value),
+    },
+    {
+      colId: 'actions',
+      headerName: 'Actions',
+      minWidth: 180,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<SurveyAssignmentItem>) => {
+        const form = params.data;
+        if (!form) return null;
+        if (updatingId === form.id) {
+          return (
+            <span className="flex h-full items-center gap-1 text-gray-400">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Saving...
+            </span>
+          );
+        }
+        if (form.status === 'COMPLETED') {
+          return (
+            <span className="flex h-full items-center text-xs font-medium text-emerald-600">
+              Completed {formatDate(form.completedAt)}
+            </span>
+          );
+        }
+        return (
+          <div className="flex h-full items-center gap-2">
+            {form.status !== 'IN_PROGRESS' && (
+              <button
+                type="button"
+                onClick={() => void handleStatusChange(form.id, 'IN_PROGRESS')}
+                className="text-xs font-medium text-blue-600 hover:text-blue-800"
+              >
+                Start
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void handleStatusChange(form.id, 'COMPLETED')}
+              className="rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-100"
+            >
+              Mark Completed
+            </button>
+          </div>
+        );
+      },
+    },
+  ], [updatingId, handleStatusChange, getStatusBadge, formatDate]);
+
+  const defaultColDef = useMemo<ColDef<SurveyAssignmentItem>>(
+    () => ({
+      sortable: true,
+      resizable: true,
+      filter: true,
+      floatingFilter: true,
+    }),
+    []
+  );
+
   return (
     <div className="flex flex-col h-full bg-slate-50/50 p-6 space-y-4">
       {/* Header with Title */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-indigo-600" />
-          <div>
-            <h4 className="text-sm font-semibold text-gray-800">Forms & Surveys</h4>
-            <p className="text-xs text-gray-500">
-              Participant surveys, intake questionnaires, and screening assessments for {participantName}.
-            </p>
-          </div>
-        </div>
-
+        
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -165,80 +255,43 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
             </p>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 text-left text-sm">
-              <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <tr>
-                  <th scope="col" className="px-4 py-3">Form Name</th>
-                  <th scope="col" className="px-4 py-3">Study</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
-                  <th scope="col" className="px-4 py-3">Assigned Date</th>
-                  <th scope="col" className="px-4 py-3">Due Date</th>
-                  <th scope="col" className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {forms.map((form) => (
-                  <tr key={form.id} className="hover:bg-gray-50/70 transition-colors">
-                    <td className="px-4 py-3.5 font-medium text-gray-900">
-                      <div>
-                        <span>{form.surveyName || 'Survey Assessment'}</span>
-                        {form.surveyCode && (
-                          <span className="ml-2 text-xs font-mono text-gray-400">({form.surveyCode})</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-gray-700 text-xs">
-                      {form.studyName || 'General Registry'}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      {getStatusBadge(form.status)}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-gray-600 text-xs">
-                      {formatDate(form.assignedAt)}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-gray-600 text-xs">
-                      {form.dueAt ? (
-                        <span className="inline-flex items-center gap-1 text-slate-700">
-                          <Calendar className="w-3 h-3 text-gray-400" />
-                          {formatDate(form.dueAt)}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-right text-xs">
-                      {updatingId === form.id ? (
-                        <span className="text-gray-400 flex items-center justify-end gap-1">
-                          <RefreshCw className="w-3 h-3 animate-spin" /> Saving...
-                        </span>
-                      ) : form.status !== 'COMPLETED' ? (
-                        <div className="flex items-center justify-end gap-2">
-                          {form.status !== 'IN_PROGRESS' && (
-                            <button
-                              onClick={() => handleStatusChange(form.id, 'IN_PROGRESS')}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                            >
-                              Start
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleStatusChange(form.id, 'COMPLETED')}
-                            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200"
-                          >
-                            Mark Completed
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-emerald-600 font-medium">
-                          Completed {formatDate(form.completedAt)}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            <label className="relative block max-w-sm">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search forms..."
+                aria-label="Search forms"
+                className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  aria-label="Clear forms search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </label>
+            <DataGrid<SurveyAssignmentItem>
+              wrapperClassName="participant-email-grid"
+              rowData={forms}
+              columnDefs={columnDefs}
+              defaultColDef={defaultColDef}
+              quickFilterText={searchTerm}
+              pagination
+              paginationPageSize={10}
+              paginationPageSizeSelector={[5, 10, 20, 50]}
+              rowHeight={48}
+              headerHeight={42}
+              animateRows
+              suppressCellFocus
+              overlayNoRowsTemplate="<span class='text-slate-500'>No forms match your search.</span>"
+            />
           </div>
         )}
       </div>

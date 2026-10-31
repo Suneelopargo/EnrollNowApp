@@ -6,15 +6,29 @@ import {
   Pin,
   Loader2,
   AlertCircle,
-  ChevronDown,
-  ChevronRight,
-  Globe,
-  Paperclip,
+  Search,
+  X,
 } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { Modal } from '../../../../shared/design-system/components/Modal';
 import { ComposeEmailModal } from './ComposeEmailModal';
+
+const formatEmailDate = (dateStr?: string) => {
+  if (!dateStr) return '';
+  try {
+    const date = new Date(dateStr);
+    return (
+      date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ', ' +
+      date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    );
+  } catch {
+    return dateStr;
+  }
+};
 
 export interface ParticipantEmailSectionProps {
   participantId: string;
@@ -23,6 +37,87 @@ export interface ParticipantEmailSectionProps {
   tenantId?: string;
   siteId?: string;
 }
+
+export const getEmailPreviewDocument = (body: string, isHtml: boolean): string => {
+  if (isHtml) return body;
+
+  const escapedBody = body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  return `<!doctype html><html><body style="font-family:Arial,sans-serif;white-space:pre-wrap;overflow-wrap:anywhere">${escapedBody}</body></html>`;
+};
+
+interface EmailPreviewContentProps {
+  email: CommunicationItem;
+  participantName: string;
+}
+
+const EmailPreviewContent: React.FC<EmailPreviewContentProps> = ({
+  email,
+  participantName,
+}) => {
+  const recipients = email.recipients || [];
+  const to = recipients
+    .filter((recipient) => recipient.recipientType === 'TO')
+    .map((recipient) => recipient.recipientValue || recipient.recipientName)
+    .join(', ');
+  const cc = recipients
+    .filter((recipient) => recipient.recipientType === 'CC')
+    .map((recipient) => recipient.recipientValue || recipient.recipientName)
+    .join(', ');
+  const bcc = recipients
+    .filter((recipient) => recipient.recipientType === 'BCC')
+    .map((recipient) => recipient.recipientValue || recipient.recipientName)
+    .join(', ');
+
+  return (
+    <div className="participant-email-preview-layout">
+      <div className="participant-email-preview-details">
+        <div>
+          <span className="font-semibold text-slate-600">From</span>
+          <p className="mt-1 break-all text-slate-800">{email.senderName || email.authorName || 'Study Coordinator'}</p>
+        </div>
+        <div>
+          <span className="font-semibold text-slate-600">To</span>
+          <p className="mt-1 break-all text-slate-800">{to || participantName}</p>
+        </div>
+        {cc && (
+          <div>
+            <span className="font-semibold text-slate-600">Cc</span>
+            <p className="mt-1 break-all text-slate-800">{cc}</p>
+          </div>
+        )}
+        {bcc && (
+          <div>
+            <span className="font-semibold text-slate-600">Bcc</span>
+            <p className="mt-1 break-all text-slate-800">{bcc}</p>
+          </div>
+        )}
+        {email.replyTo && (
+          <div>
+            <span className="font-semibold text-slate-600">Reply-To</span>
+            <p className="mt-1 break-all text-slate-800">{email.replyTo}</p>
+          </div>
+        )}
+        <div>
+          <span className="font-semibold text-slate-600">Sent</span>
+          <p className="mt-1 text-slate-800">{formatEmailDate(email.sentAt || email.createdAt)}</p>
+        </div>
+      </div>
+      <iframe
+        title={`Email preview: ${email.subject || 'No subject'}`}
+        srcDoc={getEmailPreviewDocument(email.body, Boolean(email.messageIsHtml))}
+        sandbox=""
+        referrerPolicy="no-referrer"
+        className="participant-email-preview-frame"
+      />
+    </div>
+  );
+};
 
 export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = ({
   participantId,
@@ -36,8 +131,9 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
   const [error, setError] = useState<string | null>(null);
 
   const [isComposeOpen, setIsComposeOpen] = useState<boolean>(false);
-  const [expandedEmailIds, setExpandedEmailIds] = useState<Set<string>>(new Set());
+  const [previewEmailId, setPreviewEmailId] = useState<string | null>(null);
   const [updatingFlagId, setUpdatingFlagId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchEmails = useCallback(async () => {
     if (!participantId) return;
@@ -58,38 +154,13 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
     fetchEmails();
   }, [fetchEmails]);
 
-  const toggleRowExpansion = (id: string) => {
-    setExpandedEmailIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const handleUpdateEmailFlag = async (
-    email: CommunicationItem,
-    flag: 'sticky' | 'global' | 'lastContact',
-    currentValue: boolean
-  ) => {
-    setUpdatingFlagId(`${email.id}-${flag}`);
-    const newValue = !currentValue;
+  const handlePinEmail = useCallback(async (email: CommunicationItem) => {
+    setUpdatingFlagId(`${email.id}-sticky`);
+    const isSticky = Boolean(email.sticky || email.pinned);
+    const newValue = !isSticky;
     try {
-      if (flag === 'sticky') {
-        await participantApi.pinEmail(participantId, email.id, newValue, { tenantId, siteId });
-        toast.success(newValue ? 'Email pinned to top' : 'Email unpinned');
-      } else {
-        await participantApi.updateEmailLog(
-          participantId,
-          email.id,
-          { [flag]: newValue },
-          { tenantId, siteId }
-        );
-        toast.success(`Updated email ${flag} status`);
-      }
+      await participantApi.pinEmail(participantId, email.id, newValue, { tenantId, siteId });
+      toast.success(newValue ? 'Email pinned to top' : 'Email unpinned');
       await fetchEmails();
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to update email flag');
@@ -97,21 +168,7 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
     } finally {
       setUpdatingFlagId(null);
     }
-  };
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    try {
-      const d = new Date(dateStr);
-      return (
-        d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-        ', ' +
-        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      );
-    } catch {
-      return dateStr;
-    }
-  };
+  }, [participantId, tenantId, siteId, fetchEmails]);
 
   // Sticky first sorter matching legacy Ripple stickyFirstSorter
   const sortedEmails = useMemo(() => {
@@ -127,12 +184,99 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
     });
   }, [emails]);
 
+  const columnDefs = useMemo<ColDef<CommunicationItem>[]>(() => [
+    {
+      field: 'sentAt',
+      headerName: 'Date/Time Sent',
+      minWidth: 175,
+      valueGetter: (params) => params.data?.sentAt || params.data?.createdAt || '',
+      valueFormatter: (params) => formatEmailDate(params.value),
+    },
+    {
+      colId: 'from',
+      headerName: 'From',
+      minWidth: 125,
+      valueGetter: (params) => params.data?.senderName || params.data?.authorName || 'Study Coordinator',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      field: 'subject',
+      headerName: 'Subject',
+      minWidth: 190,
+      flex: 1,
+      valueGetter: (params) => params.data?.subject || '(No Subject)',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      colId: 'recipients',
+      headerName: 'To',
+      minWidth: 180,
+      valueGetter: (params) => (params.data?.recipients || [])
+        .filter((recipient) => recipient.recipientType === 'TO')
+        .map((recipient) => recipient.recipientValue || recipient.recipientName)
+        .join(', '),
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      colId: 'attachments',
+      headerName: 'Attachments',
+      minWidth: 130,
+      valueGetter: (params) => params.data?.attachments?.join(', ') || '—',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      colId: 'pinned',
+      headerName: 'Pin',
+      width: 82,
+      minWidth: 82,
+      maxWidth: 92,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const email = params.data;
+        if (!email) return null;
+        const isSticky = Boolean(email.sticky || email.pinned);
+        const isUpdating = updatingFlagId === `${email.id}-sticky`;
+        return (
+          <button
+            type="button"
+            aria-label={isSticky ? 'Unpin email' : 'Pin email'}
+            aria-pressed={isSticky}
+            title={isSticky ? 'Unpin email' : 'Pin email to top'}
+            disabled={isUpdating}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handlePinEmail(email);
+            }}
+            className="flex h-full w-full items-center justify-center disabled:cursor-not-allowed"
+            style={{ color: isSticky ? '#b45309' : '#94a3b8' }}
+          >
+            <Pin size={16} fill={isSticky ? 'currentColor' : 'none'} strokeWidth={2.25} />
+          </button>
+        );
+      },
+    },
+  ], [updatingFlagId, handlePinEmail]);
+
+  const defaultColDef = useMemo<ColDef<CommunicationItem>>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+  }), []);
+
+  const previewEmail = useMemo(
+    () => sortedEmails.find((email) => email.id === previewEmailId) || null,
+    [sortedEmails, previewEmailId]
+  );
+
   return (
     <div className="space-y-4">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2">
-        
         <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-800">Email Communication History</h3>
           <button
             type="button"
             onClick={() => setIsComposeOpen(true)}
@@ -183,240 +327,65 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
         </div>
       )}
 
-      {/* Legacy Parity Email History Table with Dark Header #1a405f */}
+      {/* Email history grid */}
       {!isLoading && sortedEmails.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-gray-200 shadow-xs">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-[#1a405f] text-white">
-                <th className="py-2.5 px-3 font-semibold w-10 text-center"></th>
-                <th className="py-2.5 px-3 font-semibold w-[25%]">Date/Time Sent</th>
-                <th className="py-2.5 px-3 font-semibold w-[12%]">From</th>
-                <th className="py-2.5 px-3 font-semibold w-[43%]">Subject</th>
-                <th className="py-2.5 px-3 font-semibold w-[15%]">Attachment</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
-              {sortedEmails.map((email) => {
-                const isExpanded = expandedEmailIds.has(email.id);
-                const isSticky = Boolean(email.sticky || email.pinned);
-                const authorName = email.senderName || email.authorName || 'Study Coordinator';
-                const avatarInitials = email.authorInitials || 'SK';
-
-                const toList = (email.recipients || [])
-                  .filter((r) => r.recipientType === 'TO')
-                  .map((r) => r.recipientValue || r.recipientName)
-                  .join(', ');
-
-                const ccList = (email.recipients || [])
-                  .filter((r) => r.recipientType === 'CC')
-                  .map((r) => r.recipientValue || r.recipientName)
-                  .join(', ');
-
-                const bccList = (email.recipients || [])
-                  .filter((r) => r.recipientType === 'BCC')
-                  .map((r) => r.recipientValue || r.recipientName)
-                  .join(', ');
-
-                const attachmentsList = email.attachments || [];
-
-                return (
-                  <React.Fragment key={email.id}>
-                    {/* Primary Row */}
-                    <tr
-                      className={`hover:bg-gray-50/80 transition-colors cursor-pointer ${
-                        isSticky ? 'bg-amber-50/40' : ''
-                      }`}
-                      onClick={() => toggleRowExpansion(email.id)}
-                    >
-                      {/* Chevron Column */}
-                      <td className="py-2.5 px-3 text-center align-middle">
-                        <button
-                          type="button"
-                          className="p-0.5 text-gray-400 hover:text-gray-700 focus:outline-none"
-                          aria-label={isExpanded ? 'Collapse row details' : 'Expand row details'}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleRowExpansion(email.id);
-                          }}
-                        >
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
-                      </td>
-
-                      {/* Date/Time Sent */}
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        <div className="flex flex-col items-start gap-1">
-                          <div className="flex items-center gap-1.5">
-                            {isSticky && (
-                              <span
-                                className="inline-flex text-amber-600 custom-tooltip-btn cursor-default"
-                                data-tooltip="Pinned to top"
-                                aria-label="Pinned Email"
-                              >
-                                <Pin size={13} className="fill-amber-500" />
-                              </span>
-                            )}
-                            <span className="font-medium text-gray-800">
-                              {formatDate(email.sentAt || email.createdAt)}
-                            </span>
-                          </div>
-
-                          {email.global && (
-                            <span
-                              className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-0.5 custom-tooltip-btn cursor-default"
-                              data-tooltip={email.studyName ? `Global (${email.studyName})` : 'Global (Registry)'}
-                            >
-                              <Globe size={10} className="shrink-0" />
-                              <span>Global ({email.studyName || 'Registry'})</span>
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* From Column with Initials Avatar & Single Dark Tooltip */}
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle overflow-visible">
-                        <div className="comment-avatar-wrap inline-flex items-center justify-center cursor-pointer">
-                          <span>{avatarInitials}</span>
-                          <div className="comment-avatar-tooltip" role="tooltip">
-                            {authorName}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Subject */}
-                      <td className="py-2.5 px-3 text-gray-800 font-medium align-middle">
-                        <div className="truncate max-w-md">{email.subject || '(No Subject)'}</div>
-                      </td>
-
-                      {/* Attachment */}
-                      <td className="py-2.5 px-3 text-gray-700 align-middle">
-                        {attachmentsList.length > 0 ? (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {attachmentsList.map((att: any, idx: number) => (
-                              <span
-                                key={idx}
-                                className="inline-flex items-center gap-1 text-blue-600 max-w-[140px] truncate"
-                                title={att.fileName}
-                              >
-                                <Paperclip size={11} className="text-gray-400 shrink-0" />
-                                <span className="truncate">{att.fileName}</span>
-                                {idx < attachmentsList.length - 1 && <span>,</span>}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-
-                    {/* Expandable Details Row (ExpandedRow matching Legacy Ripple) */}
-                    {isExpanded && (
-                      <tr className="bg-gray-50/80 border-b border-gray-200">
-                        <td colSpan={5} className="px-6 py-4 text-xs text-gray-700">
-                          <div className="space-y-3">
-                            {/* Message */}
-                            <div>
-                              <span className="font-semibold text-gray-800 block mb-1">Message:</span>
-                              <div className="p-3 bg-white rounded border border-gray-200 text-gray-800 whitespace-pre-wrap leading-relaxed">
-                                {email.body}
-                              </div>
-                            </div>
-
-                            {/* Recipients Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-                              <div>
-                                <span className="font-semibold text-gray-800">To: </span>
-                                <span className="text-gray-600">{toList || participantName}</span>
-                              </div>
-
-                              {ccList && (
-                                <div>
-                                  <span className="font-semibold text-gray-800">Cc: </span>
-                                  <span className="text-gray-600">{ccList}</span>
-                                </div>
-                              )}
-
-                              {bccList && (
-                                <div>
-                                  <span className="font-semibold text-gray-800">Bcc: </span>
-                                  <span className="text-gray-600">{bccList}</span>
-                                </div>
-                              )}
-
-                              {email.replyTo && (
-                                <div>
-                                  <span className="font-semibold text-gray-800">Reply-To: </span>
-                                  <span className="text-gray-600">{email.replyTo}</span>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Mark Email As Checkboxes matching legacy Ripple ExpandedRow */}
-                            <div className="pt-2 border-t border-gray-200 flex items-center gap-6 flex-wrap">
-                              <span className="font-semibold text-gray-800">Mark Email As:</span>
-
-                              {/* Contact checkbox */}
-                              <label
-                                className="flex items-center gap-1.5 cursor-pointer custom-tooltip-btn"
-                                data-tooltip="Mark as 'Date of Last Contact' for participant."
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(email.lastContact)}
-                                  disabled={updatingFlagId === `${email.id}-lastContact`}
-                                  onChange={() =>
-                                    handleUpdateEmailFlag(email, 'lastContact', Boolean(email.lastContact))
-                                  }
-                                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                                />
-                                <span>Contact</span>
-                              </label>
-
-                              {/* Pin Email checkbox */}
-                              <label
-                                className="flex items-center gap-1.5 cursor-pointer custom-tooltip-btn"
-                                data-tooltip="Pin current email to top of list."
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSticky}
-                                  disabled={updatingFlagId === `${email.id}-sticky`}
-                                  onChange={() => handleUpdateEmailFlag(email, 'sticky', isSticky)}
-                                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                                />
-                                <span>Pin Email</span>
-                              </label>
-
-                              {/* Global checkbox */}
-                              <label
-                                className="flex items-center gap-1.5 cursor-pointer custom-tooltip-btn"
-                                data-tooltip="Save contact log to global registry data."
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(email.global)}
-                                  disabled={updatingFlagId === `${email.id}-global`}
-                                  onChange={() =>
-                                    handleUpdateEmailFlag(email, 'global', Boolean(email.global))
-                                  }
-                                  className="w-4 h-4 text-blue-600 rounded border-gray-300"
-                                />
-                                <span>Global</span>
-                              </label>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          <label className="relative block max-w-sm">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search emails..."
+              aria-label="Search emails"
+              className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                aria-label="Clear email search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </label>
+          <DataGrid<CommunicationItem>
+            wrapperClassName="participant-email-grid"
+            rowData={sortedEmails}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            quickFilterText={searchTerm}
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[5, 10, 20, 50]}
+            rowHeight={48}
+            headerHeight={42}
+            animateRows
+            suppressCellFocus
+            onRowClicked={(event) => {
+              const target = event.event?.target as HTMLElement | null;
+              if (!event.data || target?.closest('button')) return;
+              setPreviewEmailId(event.data.id);
+            }}
+            rowClass="cursor-pointer"
+            overlayNoRowsTemplate="<span class='text-slate-500'>No emails match your search.</span>"
+          />
         </div>
       )}
+
+      <Modal
+        isOpen={Boolean(previewEmail)}
+        onClose={() => setPreviewEmailId(null)}
+        title={previewEmail?.subject || 'Email preview'}
+        size="wide"
+        className="email-preview-modal"
+      >
+        {previewEmail && (
+          <EmailPreviewContent email={previewEmail} participantName={participantName} />
+        )}
+      </Modal>
 
       {/* Compose / Add Email Modal */}
       <ComposeEmailModal

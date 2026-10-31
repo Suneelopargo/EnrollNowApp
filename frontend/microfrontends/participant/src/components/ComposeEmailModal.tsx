@@ -39,6 +39,7 @@ interface EmailAttachment {
   fileName: string;
   fileSize?: number;
   fileUploadId?: string;
+  fileContentType?: string;
   fileContentBase64?: string;
 }
 
@@ -223,6 +224,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           {
             fileName: file.name,
             fileSize: file.size,
+            fileContentType: file.type || 'application/octet-stream',
             fileContentBase64: base64,
           },
         ]);
@@ -356,6 +358,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           attachments: attachments.map((a) => ({
             fileName: a.fileName,
             fileUploadId: a.fileUploadId,
+            fileContentType: a.fileContentType,
             fileContentBase64: a.fileContentBase64,
           })),
         },
@@ -747,27 +750,13 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         </div>
 
         {/* Mark Email As (Matching Legacy Ripple Checkboxes) */}
-        <div className="pt-2 border-t border-gray-200">
-          <span className="font-semibold text-gray-700 block mb-1.5">Mark Email As:</span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-            {/* Contact */}
-            <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Mark as 'Date of Last Contact' for participant."
-            >
-              <input
-                type="checkbox"
-                checked={lastContact}
-                onChange={(e) => setLastContact(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <span>Contact</span>
-            </label>
-
-            {/* Pin Email */}
+        <div className="mt-1 border-t border-slate-200 pt-3">
+          <div className="flex flex-wrap items-center gap-5 text-xs">
+            <span className="font-semibold text-gray-700">Mark Email As:</span>
             <label
               className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
               data-tooltip="Pin current email to top of list."
+              title="Pin current email to top of list."
             >
               <input
                 type="checkbox"
@@ -776,33 +765,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 className="w-4 h-4 text-blue-600 rounded border-gray-300"
               />
               <span>Pin Email</span>
-            </label>
-
-            {/* Global */}
-            <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Save contact log to global registry data."
-            >
-              <input
-                type="checkbox"
-                checked={globalEmail}
-                onChange={(e) => setGlobalEmail(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <span>Global</span>
-            </label>
-
-            <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Notify the participant about this email."
-            >
-              <input
-                type="checkbox"
-                checked={notify}
-                onChange={(e) => setNotify(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300"
-              />
-              <span>Notify</span>
             </label>
           </div>
         </div>

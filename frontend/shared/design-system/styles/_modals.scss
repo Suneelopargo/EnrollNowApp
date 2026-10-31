@@ -53,6 +53,62 @@ body.enl-body-freeze {
 
 .modal-container--wide { max-width: 1200px; }
 
+.modal-container.email-preview-modal.modal-container--wide {
+  max-width: min(1500px, 96vw);
+}
+
+.participant-email-preview-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.participant-email-preview-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dbe3ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 14px;
+}
+
+.participant-email-preview-details p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: #1e293b;
+}
+
+.participant-email-preview-details span {
+  color: #475569;
+  font-weight: 600;
+}
+
+.participant-email-preview-frame {
+  display: block;
+  width: 100%;
+  height: min(68vh, 680px);
+  min-height: 360px;
+  border: 1px solid #dbe3ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+@media (max-width: 760px) {
+  .participant-email-preview-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .participant-email-preview-frame {
+    height: 55vh;
+    min-height: 320px;
+  }
+}
+
 .modal-title-bar {
   background: $color-table-header !important;
   border-bottom: 1px solid $color-table-header-border !important;
