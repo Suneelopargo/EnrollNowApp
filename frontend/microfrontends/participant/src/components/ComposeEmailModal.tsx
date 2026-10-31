@@ -4,11 +4,8 @@ import {
   Send,
   Loader2,
   X,
-  Plus,
-  Paperclip,
   Star,
   AlertCircle,
-  Trash2,
 } from 'lucide-react';
 import EmailEditor from 'react-email-editor';
 import type { Design, EditorRef, HtmlExport } from 'react-email-editor';
@@ -33,14 +30,6 @@ interface KnownRecipient {
   email: string;
   isPreferred?: boolean;
   label?: string;
-}
-
-interface EmailAttachment {
-  fileName: string;
-  fileSize?: number;
-  fileUploadId?: string;
-  fileContentType?: string;
-  fileContentBase64?: string;
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -102,10 +91,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   const [globalEmail, setGlobalEmail] = useState(true);
   const [notify, setNotify] = useState(false);
 
-  // Attachments
-  const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -162,7 +147,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
 
       setSubject('');
       setReplyTo('');
-      setAttachments([]);
       setLastContact(true);
       setSticky(false);
       setGlobalEmail(true);
@@ -209,43 +193,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
     setList: React.Dispatch<React.SetStateAction<string[]>>
   ) => {
     setList(list.filter((e) => e !== email));
-  };
-
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = typeof reader.result === 'string' ? reader.result.split(',')[1] : '';
-        setAttachments((prev) => [
-          ...prev,
-          {
-            fileName: file.name,
-            fileSize: file.size,
-            fileContentType: file.type || 'application/octet-stream',
-            fileContentBase64: base64,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleEditorReady = useCallback(() => {
@@ -355,12 +302,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           global: globalEmail,
           notify,
           messageIsHtml: true,
-          attachments: attachments.map((a) => ({
-            fileName: a.fileName,
-            fileUploadId: a.fileUploadId,
-            fileContentType: a.fileContentType,
-            fileContentBase64: a.fileContentBase64,
-          })),
         },
         { tenantId, siteId }
       );
@@ -701,61 +642,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
         </div>
 
-        {/* Attachments Section */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-semibold text-gray-700 flex items-center gap-1">
-              <Paperclip size={13} /> Attachments
-            </span>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFilesSelected}
-              multiple
-              className="hidden"
-              id="email-file-input"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-[11px] text-blue-600 hover:underline flex items-center gap-1"
-            >
-              <Plus size={11} /> Attach Files
-            </button>
-          </div>
-
-          {attachments.length > 0 && (
-            <div className="space-y-1 p-2 bg-gray-50 border rounded-md">
-              {attachments.map((att, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs text-gray-700">
-                  <span className="flex items-center gap-1.5 truncate max-w-sm">
-                    <Paperclip size={12} className="text-gray-400" />
-                    <span className="font-medium truncate">{att.fileName}</span>
-                    {att.fileSize && (
-                      <span className="text-[10px] text-gray-400">({formatFileSize(att.fileSize)})</span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveAttachment(idx)}
-                    className="text-gray-400 hover:text-red-600 p-0.5"
-                    aria-label={`Remove attachment ${att.fileName}`}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Mark Email As (Matching Legacy Ripple Checkboxes) */}
         <div className="mt-1 border-t border-slate-200 pt-3">
           <div className="flex flex-wrap items-center gap-5 text-xs">
             <span className="font-semibold text-gray-700">Mark Email As:</span>
             <label
-              className="flex items-center gap-2 cursor-pointer text-gray-700 custom-tooltip-btn"
-              data-tooltip="Pin current email to top of list."
+              className="flex items-center gap-2 cursor-pointer text-gray-700"
               title="Pin current email to top of list."
             >
               <input

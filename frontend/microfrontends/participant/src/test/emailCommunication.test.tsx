@@ -18,7 +18,7 @@ describe('Email Communication History & Compose Modal', () => {
     );
   });
 
-  it('renders ParticipantEmailSection with dark blue table header and compose button', () => {
+  it('renders the email search and Add Email button without a history heading', () => {
     const html = renderToString(
       <ParticipantEmailSection
         participantId="part-1"
@@ -26,11 +26,14 @@ describe('Email Communication History & Compose Modal', () => {
       />
     );
 
-    expect(html).toContain('Email Communication History');
-    expect(html).toContain('Compose Email');
+    expect(html).not.toContain('Email Communication History');
+    expect(html).toContain('Add Email');
+    expect(html).toContain('Search emails...');
+    expect(html).toMatch(/class="flex items-center justify-between gap-3"><label class="relative block min-w-0 flex-1">[\s\S]*Search emails\.\.\.[\s\S]*<\/label><button/s);
+    expect(html).not.toContain('Compose Email');
   });
 
-  it('renders the legacy email fields and drag-and-drop message designer', () => {
+  it('renders the legacy email fields and message designer without attachment controls', () => {
     const html = renderToString(
       <ComposeEmailModal
         isOpen={true}
@@ -50,12 +53,13 @@ describe('Email Communication History & Compose Modal', () => {
     expect(html).toContain('Subject');
     expect(html).toContain('Message');
     expect(html).toContain('email-design-editor');
-    expect(html).toContain('Attachments');
+    expect(html).not.toContain('Attachments');
+    expect(html).not.toContain('Attach Files');
     expect(html).toContain('Mark Email As:');
     expect(html).toContain('Pin Email');
     expect(html).not.toContain('>Contact</span>');
     expect(html).not.toContain('>Global</span>');
     expect(html).not.toContain('>Notify</span>');
-    expect(html).toContain('data-tooltip="Pin current email to top of list."');
+    expect(html).toContain('title="Pin current email to top of list."');
   });
 });

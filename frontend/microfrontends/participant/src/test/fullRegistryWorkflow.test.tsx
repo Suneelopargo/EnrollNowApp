@@ -386,15 +386,15 @@ describe('Full Registry Workflow - React Components Static Rendering', () => {
     expect(html).toContain('Pin Comment');
   });
 
-  it('renders ParticipantEmailSection with compose trigger', () => {
+  it('renders ParticipantEmailSection with Add Email trigger', () => {
     const html = renderToStaticMarkup(
       <ParticipantEmailSection
         participantId="p-100"
         participantName="Emily Davis"
       />
     );
-    expect(html).toContain('Email Communication History');
-    expect(html).toContain('Compose Email');
+    expect(html).not.toContain('Email Communication History');
+    expect(html).toContain('Add Email');
   });
 
   it('renders ComposeEmailModal when open', () => {

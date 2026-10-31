@@ -53,10 +53,6 @@ body.enl-body-freeze {
 
 .modal-container--wide { max-width: 1200px; }
 
-.modal-container.email-preview-modal.modal-container--wide {
-  max-width: min(1500px, 96vw);
-}
-
 .participant-email-preview-layout {
   display: grid;
   grid-template-columns: minmax(220px, 0.32fr) minmax(0, 1fr);

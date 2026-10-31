@@ -14,6 +14,7 @@ import { getApiErrorMessage } from '../../../../shared/api-client';
 import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
 import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { ComposeEmailModal } from './ComposeEmailModal';
 
 const formatEmailDate = (dateStr?: string) => {
@@ -218,13 +219,6 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
       tooltipValueGetter: (params) => params.value,
     },
     {
-      colId: 'attachments',
-      headerName: 'Attachments',
-      minWidth: 130,
-      valueGetter: (params) => params.data?.attachments?.join(', ') || '—',
-      tooltipValueGetter: (params) => params.value,
-    },
-    {
       colId: 'pinned',
       headerName: 'Pin',
       width: 82,
@@ -238,12 +232,12 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
         if (!email) return null;
         const isSticky = Boolean(email.sticky || email.pinned);
         const isUpdating = updatingFlagId === `${email.id}-sticky`;
+        const label = isSticky ? 'Unpin email' : 'Pin email to top';
         return (
-          <button
+          <TooltipButton
+            label={label}
             type="button"
-            aria-label={isSticky ? 'Unpin email' : 'Pin email'}
             aria-pressed={isSticky}
-            title={isSticky ? 'Unpin email' : 'Pin email to top'}
             disabled={isUpdating}
             onClick={(event) => {
               event.stopPropagation();
@@ -253,7 +247,7 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
             style={{ color: isSticky ? '#b45309' : '#94a3b8' }}
           >
             <Pin size={16} fill={isSticky ? 'currentColor' : 'none'} strokeWidth={2.25} />
-          </button>
+          </TooltipButton>
         );
       },
     },
@@ -273,19 +267,35 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
 
   return (
     <div className="space-y-4">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-slate-800">Email Communication History</h3>
-          <button
-            type="button"
-            onClick={() => setIsComposeOpen(true)}
-            className="btn btn-sm btn-primary flex items-center gap-1.5 custom-tooltip-btn"
-            data-tooltip="Compose Email"
-          >
-            <Plus size={14} /> Compose Email
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search emails..."
+            aria-label="Search emails"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear email search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <button
+          type="button"
+          onClick={() => setIsComposeOpen(true)}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Plus size={14} /> Add Email
+        </button>
       </div>
 
       {/* Loading */}
@@ -314,43 +324,15 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
         <div className="p-8 text-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
           <Mail size={32} className="text-gray-400 mb-2" />
           <h5 className="text-sm font-medium text-gray-700 mb-1">No emails logged</h5>
-          <p className="text-xs text-gray-500 max-w-sm mb-4">
+          <p className="text-xs text-gray-500 max-w-sm">
             No outbound emails have been logged for {participantName} yet.
           </p>
-          <button
-            type="button"
-            onClick={() => setIsComposeOpen(true)}
-            className="btn btn-sm btn-primary flex items-center gap-1.5"
-          >
-            <Plus size={14} /> Add First Email
-          </button>
         </div>
       )}
 
       {/* Email history grid */}
       {!isLoading && sortedEmails.length > 0 && (
         <div className="space-y-3">
-          <label className="relative block max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search emails..."
-              aria-label="Search emails"
-              className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                aria-label="Clear email search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </label>
           <DataGrid<CommunicationItem>
             wrapperClassName="participant-email-grid"
             rowData={sortedEmails}
