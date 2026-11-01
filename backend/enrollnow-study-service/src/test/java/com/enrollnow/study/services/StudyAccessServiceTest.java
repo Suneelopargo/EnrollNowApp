@@ -28,16 +28,11 @@ import org.springframework.security.authentication.InsufficientAuthenticationExc
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-
-import com.enrollnow.common.audit.AuditEventCommand;
-import com.enrollnow.common.audit.AuditOperation;
-import com.enrollnow.common.audit.AuditRecorder;
 
 import org.mockito.ArgumentCaptor;
 
@@ -59,9 +54,7 @@ class StudyAccessServiceTest {
     @Mock
     private StudyRepository studyRepository;
     
-    @Mock
-    private AuditRecorder auditRecorder;
-
+   
     @Mock
     private SitePermissionService sitePermissionService;
 
@@ -83,8 +76,8 @@ class StudyAccessServiceTest {
                 studyMemberRepository,
                 studyRepository,
                 sitePermissionService,
-                siteAuthorizationService,
-                auditRecorder
+                siteAuthorizationService
+                
         );
 
         SiteAuthorizationService.CallerIdentity caller = new SiteAuthorizationService.CallerIdentity(userId, tenantId);
@@ -185,54 +178,33 @@ class StudyAccessServiceTest {
 
         verify(studyMemberRepository, times(1)).save(any(StudyMember.class));
         
-        ArgumentCaptor<AuditEventCommand> auditCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
+        ArgumentCaptor<StudyMember> memberCaptor =
+                ArgumentCaptor.forClass(StudyMember.class);
 
-        verify(auditRecorder).record(auditCaptor.capture());
+        verify(studyMemberRepository)
+                .save(memberCaptor.capture());
 
-        AuditEventCommand command = auditCaptor.getValue();
+        StudyMember savedMember =
+                memberCaptor.getValue();
 
-        assertEquals("STUDY_ACCESS_GRANTED", command.action());
-        assertEquals("USER", command.entityType());
-        assertEquals(userId, command.entityId());
-        assertEquals(tenantId, command.tenantId());
+        assertEquals(studyId, savedMember.getId().getStudyId());
+        assertEquals(userId, savedMember.getId().getUserId());
+        assertEquals("Study Coordinator", savedMember.getStudyRole());
+        assertTrue(savedMember.isActive());
 
-        assertEquals(
-                studyId,
-                command.beforeData().get("studyId")
-        );
+        ArgumentCaptor<UserRoleAssignment> assignmentCaptor =
+                ArgumentCaptor.forClass(UserRoleAssignment.class);
 
-        assertEquals(
-                "NONE",
-                command.beforeData().get("studyPermission")
-        );
+        verify(userRoleAssignmentRepository)
+                .save(assignmentCaptor.capture());
 
-        assertEquals(
-                studyId,
-                command.afterData().get("studyId")
-        );
+        UserRoleAssignment savedAssignment =
+                assignmentCaptor.getValue();
 
-        assertEquals(
-                "STUDY_ADMIN",
-                command.afterData().get("studyPermission")
-        );
-
-        assertEquals(1, command.changes().size());
-
-        assertEquals(
-                "studyPermission",
-                command.changes().get(0).fieldName()
-        );
-
-        assertEquals(
-                "NONE",
-                command.changes().get(0).previousValue()
-        );
-
-        assertEquals(
-                "STUDY_ADMIN",
-                command.changes().get(0).newValue()
-        );
+        assertEquals(userId, savedAssignment.getUserId());
+        assertEquals(studyId, savedAssignment.getStudyId());
+        assertEquals(role.getId(), savedAssignment.getRoleId());
+        assertTrue(savedAssignment.isActive());
     }
 
     @Test
@@ -248,7 +220,7 @@ class StudyAccessServiceTest {
     }
     
     @Test
-    void grantStudyAccess_AuditsPermissionChange_WhenStudyPermissionChanges() {
+    void grantStudyAccess_UpdatesExistingStudyPermission() {
 
         GrantStudyAccessRequest request = new GrantStudyAccessRequest();
         request.setStudyRole("Study Coordinator");
@@ -315,64 +287,27 @@ class StudyAccessServiceTest {
         verify(userRoleAssignmentRepository)
                 .saveAndFlush(existingAssignment);
 
-        ArgumentCaptor<AuditEventCommand> auditCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
+       
 
-        verify(auditRecorder).record(auditCaptor.capture());
+        verify(userRoleAssignmentRepository)
+        .saveAndFlush(existingAssignment);
 
-        AuditEventCommand command = auditCaptor.getValue();
+assertEquals(
+        newRole.getId(),
+        existingAssignment.getRoleId()
+);
 
-        assertEquals(
-                "STUDY_PERMISSION_CHANGED",
-                command.action()
-        );
-
-        assertEquals("USER", command.entityType());
-        assertEquals(userId, command.entityId());
-        assertEquals(tenantId, command.tenantId());
-
-        assertEquals(
-                "STUDY_RA",
-                command.beforeData().get("studyPermission")
-        );
-
-        assertEquals(
-                "STUDY_ADMIN",
-                command.afterData().get("studyPermission")
-        );
-
-        assertEquals(
-                studyId,
-                command.afterData().get("studyId")
-        );
-
-        assertEquals(
-                "studyPermission",
-                command.changes().get(0).fieldName()
-        );
-
-        assertEquals(
-                "STUDY_RA",
-                command.changes().get(0).previousValue()
-        );
-
-        assertEquals(
-                "STUDY_ADMIN",
-                command.changes().get(0).newValue()
-        );
+assertTrue(existingAssignment.isActive());
     }
     
     @Test
-    void removeStudyAccess_AuditsPermissionRemoval() {
+    void removeStudyAccess_DeactivatesMembershipAndAssignment() {
 
         Study study = new Study();
         User user = new User();
 
         Role existingRole = new Role();
         existingRole.setId(UUID.randomUUID());
-        existingRole.setCode("STUDY_ADMIN");
-        existingRole.setScopeType("STUDY");
-
         StudyMember existingMember = new StudyMember();
         existingMember.setId(new StudyMemberId(studyId, userId));
         existingMember.setTenantId(tenantId);
@@ -410,9 +345,7 @@ class StudyAccessServiceTest {
                 ))
                 .thenReturn(List.of(existingAssignment));
 
-        when(roleRepository.findById(existingRole.getId()))
-                .thenReturn(Optional.of(existingRole));
-
+        
         studyAccessService.removeStudyAccess(
                 tenantId,
                 studyId,
@@ -425,47 +358,7 @@ class StudyAccessServiceTest {
         verify(studyMemberRepository).save(existingMember);
         verify(userRoleAssignmentRepository).save(existingAssignment);
 
-        ArgumentCaptor<AuditEventCommand> auditCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
-
-        verify(auditRecorder).record(auditCaptor.capture());
-
-        AuditEventCommand command = auditCaptor.getValue();
-
-        assertEquals("STUDY_ACCESS_REMOVED", command.action());
-        assertEquals("USER", command.entityType());
-        assertEquals(userId, command.entityId());
-        assertEquals(tenantId, command.tenantId());
-
-        assertEquals(
-                studyId,
-                command.beforeData().get("studyId")
-        );
-
-        assertEquals(
-                "STUDY_ADMIN",
-                command.beforeData().get("studyPermission")
-        );
-
-        assertEquals(
-                "NONE",
-                command.afterData().get("studyPermission")
-        );
-
-        assertEquals(
-                "studyPermission",
-                command.changes().get(0).fieldName()
-        );
-
-        assertEquals(
-                "STUDY_ADMIN",
-                command.changes().get(0).previousValue()
-        );
-
-        assertEquals(
-                "NONE",
-                command.changes().get(0).newValue()
-        );
+        
     }
 
     @Test
@@ -520,104 +413,5 @@ class StudyAccessServiceTest {
         verify(studyMemberRepository, never()).save(any());
     }
     
-    @Test
-    void removeStudyAccess_AddsChangeToAuditOperation_WhenOperationProvided() {
-
-        Study study = new Study();
-        User user = new User();
-
-        Role existingRole = new Role();
-        existingRole.setId(UUID.randomUUID());
-        existingRole.setCode("STUDY_ADMIN");
-        existingRole.setScopeType("STUDY");
-
-        StudyMember existingMember = new StudyMember();
-        existingMember.setId(new StudyMemberId(studyId, userId));
-        existingMember.setTenantId(tenantId);
-        existingMember.setActive(true);
-
-        UserRoleAssignment existingAssignment =
-                new UserRoleAssignment();
-
-        existingAssignment.setId(UUID.randomUUID());
-        existingAssignment.setTenantId(tenantId);
-        existingAssignment.setUserId(userId);
-        existingAssignment.setStudyId(studyId);
-        existingAssignment.setRoleId(existingRole.getId());
-        existingAssignment.setActive(true);
-
-        when(studyRepository.findByTenantIdAndId(tenantId, studyId))
-                .thenReturn(Optional.of(study));
-
-        when(userRepository.findByTenantIdAndId(tenantId, userId))
-                .thenReturn(Optional.of(user));
-
-        when(studyMemberRepository
-                .findByTenantIdAndIdStudyIdAndIdUserId(
-                        tenantId,
-                        studyId,
-                        userId
-                ))
-                .thenReturn(Optional.of(existingMember));
-
-        when(userRoleAssignmentRepository
-                .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
-                        tenantId,
-                        userId,
-                        studyId
-                ))
-                .thenReturn(List.of(existingAssignment));
-
-        when(roleRepository.findById(existingRole.getId()))
-                .thenReturn(Optional.of(existingRole));
-
-        AuditOperation auditOperation =
-                new AuditOperation(
-                        tenantId,
-                        "USER",
-                        userId,
-                        "USER_ACCESS_UPDATED",
-                        "User access updated",
-                        "API"
-                );
-
-        studyAccessService.removeStudyAccess(
-                tenantId,
-                studyId,
-                userId,
-                auditOperation
-        );
-
-        assertFalse(existingMember.isActive());
-        assertFalse(existingAssignment.isActive());
-
-        assertEquals(1, auditOperation.getChanges().size());
-
-        assertEquals(
-                "STUDY",
-                auditOperation.getChanges().get(0).entityType()
-        );
-
-        assertEquals(
-                studyId,
-                auditOperation.getChanges().get(0).entityId()
-        );
-
-        assertEquals(
-                "studyPermission",
-                auditOperation.getChanges().get(0).fieldName()
-        );
-
-        assertEquals(
-                "STUDY_ADMIN",
-                auditOperation.getChanges().get(0).previousValue()
-        );
-
-        assertEquals(
-                "NONE",
-                auditOperation.getChanges().get(0).newValue()
-        );
-
-        verify(auditRecorder, never()).record(any());
-    }
+   
 }

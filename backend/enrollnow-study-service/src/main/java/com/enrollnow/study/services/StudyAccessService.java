@@ -1,9 +1,6 @@
 package com.enrollnow.study.services;
 
-import com.enrollnow.common.audit.AuditChange;
-import com.enrollnow.common.audit.AuditOperation;
-import com.enrollnow.common.audit.AuditEventCommand;
-import com.enrollnow.common.audit.AuditRecorder;
+
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.exceptions.InvalidRoleAssignmentException;
 import com.enrollnow.identity.exceptions.RoleNotFoundException;
@@ -45,7 +42,7 @@ public class StudyAccessService {
     private final StudyRepository studyRepository;
     private final SitePermissionService sitePermissionService;
     private final SiteAuthorizationService siteAuthorizationService;
-    private final AuditRecorder auditRecorder;
+   
 
     @Autowired
     public StudyAccessService(
@@ -55,8 +52,8 @@ public class StudyAccessService {
             StudyMemberRepository studyMemberRepository,
             StudyRepository studyRepository,
             SitePermissionService sitePermissionService,
-            SiteAuthorizationService siteAuthorizationService,
-            AuditRecorder auditRecorder
+            SiteAuthorizationService siteAuthorizationService
+           
     ) {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository must not be null");
         this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository must not be null");
@@ -65,7 +62,7 @@ public class StudyAccessService {
         this.studyRepository = Objects.requireNonNull(studyRepository, "studyRepository must not be null");
         this.sitePermissionService = Objects.requireNonNull(sitePermissionService, "sitePermissionService must not be null");
         this.siteAuthorizationService = Objects.requireNonNull(siteAuthorizationService, "siteAuthorizationService must not be null");
-        this.auditRecorder = Objects.requireNonNull(auditRecorder, "auditRecorder must not be null");
+       
     }
 
     @Transactional(readOnly = true)
@@ -136,43 +133,15 @@ public class StudyAccessService {
         throw new AccessDeniedException("Access denied: insufficient permissions to modify study access");
     }
 
+   
+
+      
     @Transactional
     public void grantStudyAccess(
             UUID tenantId,
             UUID studyId,
             UUID userId,
             GrantStudyAccessRequest request
-    ) {
-        grantStudyAccess(
-                tenantId,
-                studyId,
-                userId,
-                request,
-                null
-        );
-    }
-
-    @Transactional
-    public void removeStudyAccess(
-            UUID tenantId,
-            UUID studyId,
-            UUID userId
-    ) {
-        removeStudyAccess(
-                tenantId,
-                studyId,
-                userId,
-                null
-        );
-    }
-    
-    @Transactional
-    public void grantStudyAccess(
-            UUID tenantId,
-            UUID studyId,
-            UUID userId,
-            GrantStudyAccessRequest request,
-            AuditOperation auditOperation
     ) {
     	requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
@@ -265,49 +234,7 @@ public class StudyAccessService {
 
                 userRoleAssignmentRepository.saveAndFlush(targetAssignment);
 
-                if (auditOperation != null) {
-
-                    auditOperation.addChange(
-                            "STUDY",
-                            studyId,
-                            "studyPermission",
-                            previousRoleCode,
-                            role.getCode()
-                    );
-
-                } else if (auditRecorder != null) {
-
-                    auditRecorder.record(
-                            new AuditEventCommand(
-                                    tenantId,
-                                    null,
-                                    "USER",
-                                    userId,
-                                    "STUDY_PERMISSION_CHANGED",
-                                    "User study permission changed",
-                                    "API",
-                                    null,
-                                    null,
-                                    Map.of(
-                                            "studyId", studyId,
-                                            "studyName", study.getName() != null ? study.getName() : "",
-                                            "studyPermission", previousRoleCode
-                                    ),
-                                    Map.of(
-                                            "studyId", studyId,
-                                            "studyName", study.getName() != null ? study.getName() : "",
-                                            "studyPermission", role.getCode()
-                                    ),
-                                    List.of(
-                                            new AuditChange(
-                                                    "studyPermission",
-                                                    previousRoleCode,
-                                                    role.getCode()
-                                            )
-                                    )
-                            )
-                    );
-                }
+                
             }
 
         } else {
@@ -321,49 +248,7 @@ public class StudyAccessService {
 
             userRoleAssignmentRepository.save(assignment);
 
-            if (auditOperation != null) {
-
-                auditOperation.addChange(
-                        "STUDY",
-                        studyId,
-                        "studyPermission",
-                        "NONE",
-                        role.getCode()
-                );
-
-            } else if (auditRecorder != null) {
-
-                auditRecorder.record(
-                        new AuditEventCommand(
-                                tenantId,
-                                null,
-                                "USER",
-                                userId,
-                                "STUDY_ACCESS_GRANTED",
-                                "User granted access to study",
-                                "API",
-                                null,
-                                null,
-                                Map.of(
-                                        "studyId", studyId,
-                                        "studyName", study.getName() != null ? study.getName() : "",
-                                        "studyPermission", "NONE"
-                                ),
-                                Map.of(
-                                        "studyId", studyId,
-                                        "studyName", study.getName() != null ? study.getName() : "",
-                                        "studyPermission", role.getCode()
-                                ),
-                                List.of(
-                                        new AuditChange(
-                                                "studyPermission",
-                                                "NONE",
-                                                role.getCode()
-                                        )
-                                )
-                        )
-                );
-            }
+            
         }
     }
     
@@ -371,8 +256,8 @@ public class StudyAccessService {
     public void removeStudyAccess(
             UUID tenantId,
             UUID studyId,
-            UUID userId,
-            AuditOperation auditOperation
+            UUID userId
+            
     ) {
     	requireStudyAccessManageAuthorization(tenantId, studyId, userId);
 
@@ -405,61 +290,63 @@ public class StudyAccessService {
 
         for (UserRoleAssignment assignment : activeAssignments) {
 
-            String previousRoleCode = roleRepository
-                    .findById(assignment.getRoleId())
-                    .map(Role::getCode)
-                    .orElse("UNKNOWN");
-
             assignment.setActive(false);
             userRoleAssignmentRepository.save(assignment);
 
-            if (auditOperation != null) {
+            
+        }
+    }
+    
+    @Transactional(readOnly = true)
+    public Map<String, Object> getStudyAccessAuditSnapshot(
+            UUID tenantId,
+            UUID studyId,
+            UUID userId
+    ) {
 
-                auditOperation.addChange(
-                        "STUDY",
-                        studyId,
-                        "studyPermission",
-                        previousRoleCode,
-                        "NONE"
-                );
-
-            } else if (auditRecorder != null) {
-
-                auditRecorder.record(
-                        new AuditEventCommand(
+        List<UserRoleAssignment> assignments =
+                userRoleAssignmentRepository
+                        .findByTenantIdAndUserIdAndStudyIdAndActiveTrue(
                                 tenantId,
-                                null,
-                                "USER",
                                 userId,
-                                "STUDY_ACCESS_REMOVED",
-                                "User study access removed",
-                                "API",
-                                null,
-                                null,
-                                Map.of(
-                                        "studyId", studyId,
-                                        "studyName", study.getName() != null
-                                                ? study.getName()
-                                                : "",
-                                        "studyPermission", previousRoleCode
-                                ),
-                                Map.of(
-                                        "studyId", studyId,
-                                        "studyName", study.getName() != null
-                                                ? study.getName()
-                                                : "",
-                                        "studyPermission", "NONE"
-                                ),
-                                List.of(
-                                        new AuditChange(
-                                                "studyPermission",
-                                                previousRoleCode,
-                                                "NONE"
-                                        )
+                                studyId
+                        );
+
+        String studyPermission =
+                assignments.stream()
+                        .findFirst()
+                        .flatMap(assignment ->
+                                roleRepository.findById(
+                                        assignment.getRoleId()
                                 )
                         )
-                );
-            }
-        }
+                        .map(Role::getCode)
+                        .orElse("NONE");
+
+        String studyRole =
+                studyMemberRepository
+                        .findByTenantIdAndIdStudyIdAndIdUserId(
+                                tenantId,
+                                studyId,
+                                userId
+                        )
+                        .filter(StudyMember::isActive)
+                        .map(StudyMember::getStudyRole)
+                        .orElse(null);
+
+        Map<String, Object> snapshot =
+                new java.util.HashMap<>();
+
+        snapshot.put("studyId", studyId);
+        snapshot.put(
+                "studyPermission",
+                studyPermission
+        );
+        snapshot.put(
+                "studyRole",
+                studyRole
+        );
+
+        return snapshot;
     }
 }

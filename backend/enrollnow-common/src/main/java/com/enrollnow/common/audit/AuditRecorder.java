@@ -9,7 +9,13 @@ package com.enrollnow.common.audit;
  * Audit writes should participate in the caller's transaction so that
  * successful business changes and their audit records commit together.
  */
+
+
 public interface AuditRecorder {
 
+    // Existing API - keep for backward compatibility
     void record(AuditEventCommand command);
+
+    // New simplified API
+    void record(AuditRequest request);
 }

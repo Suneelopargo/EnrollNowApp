@@ -1,5 +1,7 @@
 package com.enrollnow.usermanagement.controllers;
 
+import com.enrollnow.identity.dtos.UserSummaryResponse;
+import com.enrollnow.usermanagement.dtos.CreateUserAccessRequest;
 import com.enrollnow.usermanagement.dtos.UpdateUserAccessRequest;
 import com.enrollnow.usermanagement.services.UserAccessOrchestrationService;
 
@@ -37,5 +39,22 @@ public class UserManagementController {
         );
 
         return ResponseEntity.noContent().build();
+    }
+    
+    @PostMapping("/with-access")
+    public ResponseEntity<UserSummaryResponse> createUserWithAccess(
+            @PathVariable UUID tenantId,
+            @Valid @RequestBody CreateUserAccessRequest request
+    ) {
+
+        UserSummaryResponse created =
+                orchestrationService.createUserWithAccess(
+                        tenantId,
+                        request
+                );
+
+        return ResponseEntity
+                .status(201)
+                .body(created);
     }
 }

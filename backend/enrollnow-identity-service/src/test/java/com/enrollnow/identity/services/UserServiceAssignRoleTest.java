@@ -24,11 +24,6 @@ import static org.mockito.Mockito.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
-
-import org.mockito.ArgumentCaptor;
-
-import com.enrollnow.common.audit.AuditEventCommand;
-import com.enrollnow.common.audit.AuditOperation;
 import com.enrollnow.common.audit.AuditRecorder;
 
 @ExtendWith(MockitoExtension.class)
@@ -120,53 +115,13 @@ class UserServiceAssignRoleTest {
         // Verify saveAndFlush was called on the existing assignment and NO insert save was made
         verify(userRoleAssignmentRepository).saveAndFlush(existingAssignment);
         verify(userRoleAssignmentRepository, never()).save(argThat(ura -> ura != existingAssignment));
-        
-        ArgumentCaptor<AuditEventCommand> auditCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
-
-        verify(auditRecorder).record(auditCaptor.capture());
-
-        AuditEventCommand command = auditCaptor.getValue();
-
-        assertEquals("SITE_PERMISSION_CHANGED", command.action());
-        assertEquals("USER", command.entityType());
-        assertEquals(userId, command.entityId());
-        assertEquals(tenantId, command.tenantId());
-
-        assertEquals(
-                oldRole.getCode(),
-                command.beforeData().get("sitePermission")
-        );
-
-        assertEquals(
-                newRole.getCode(),
-                command.afterData().get("sitePermission")
-        );
-
-        assertEquals(
-                siteId,
-                command.afterData().get("siteId")
-        );
-
-        assertEquals(
-                "sitePermission",
-                command.changes().get(0).fieldName()
-        );
-
-        assertEquals(
-                oldRole.getCode(),
-                command.changes().get(0).previousValue()
-        );
-
-        assertEquals(
-                newRole.getCode(),
-                command.changes().get(0).newValue()
-        );
+         
+    
     }
     
     @Test
     @DisplayName("assignRole adds new site permission to supplied audit operation")
-    void shouldAddNewSitePermissionToAuditOperation() {
+    void shouldCreateNewSitePermissionAssignment() {
 
         UUID tenantId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -213,54 +168,29 @@ class UserServiceAssignRoleTest {
                         siteId
                 );
 
-        AuditOperation auditOperation =
-                new AuditOperation(
-                        tenantId,
-                        "USER",
-                        userId,
-                        "USER_ACCESS_UPDATED",
-                        "User access updated",
-                        "API"
-                );
+        
 
         UserRoleAssignment result =
                 userService.assignRole(
                         tenantId,
                         userId,
-                        request,
-                        auditOperation
+                        request
+                        
                 );
 
         assertNotNull(result);
+        assertEquals(userId, result.getUserId());
+        assertEquals(siteId, result.getSiteId());
+        assertEquals(role.getId(), result.getRoleId());
+        assertTrue(result.isActive());
 
-        assertEquals(1, auditOperation.getChanges().size());
+        verify(userRoleAssignmentRepository)
+                .save(any(UserRoleAssignment.class));
+      
 
-        assertEquals(
-                "USER",
-                auditOperation.getChanges().get(0).entityType()
-        );
+       
 
-        assertEquals(
-                userId,
-                auditOperation.getChanges().get(0).entityId()
-        );
-
-        assertEquals(
-                "sitePermission",
-                auditOperation.getChanges().get(0).fieldName()
-        );
-
-        assertEquals(
-                "NONE",
-                auditOperation.getChanges().get(0).previousValue()
-        );
-
-        assertEquals(
-                "SITE_ADMIN",
-                auditOperation.getChanges().get(0).newValue()
-        );
-
-        verify(auditRecorder, never()).record(any());
+        
     }
 
     @Test
@@ -308,7 +238,7 @@ class UserServiceAssignRoleTest {
     }
     
     @Test
-    void shouldAuditSitePermissionRemoval() {
+    void shouldRemoveSitePermission() {
 
         UUID tenantId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -318,22 +248,20 @@ class UserServiceAssignRoleTest {
         user.setId(userId);
         user.setTenantId(tenantId);
 
-        Role oldRole = new Role();
-        oldRole.setId(UUID.randomUUID());
-        oldRole.setCode("SITE_MANAGER");
-        oldRole.setScopeType("SITE");
-        oldRole.setActive(true);
+        UserRoleAssignment assignment =
+                new UserRoleAssignment();
 
-        UserRoleAssignment assignment = new UserRoleAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setTenantId(tenantId);
         assignment.setUserId(userId);
-        assignment.setRoleId(oldRole.getId());
         assignment.setSiteId(siteId);
+        assignment.setRoleId(UUID.randomUUID());
         assignment.setActive(true);
 
-        when(userRepository.findByTenantIdAndId(tenantId, userId))
-                .thenReturn(Optional.of(user));
+        when(userRepository.findByTenantIdAndId(
+                tenantId,
+                userId
+        )).thenReturn(Optional.of(user));
 
         when(userRoleAssignmentRepository
                 .findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
@@ -343,55 +271,15 @@ class UserServiceAssignRoleTest {
                 ))
                 .thenReturn(List.of(assignment));
 
-        when(roleRepository.findById(oldRole.getId()))
-                .thenReturn(Optional.of(oldRole));
-
-        userService.removeSiteRole(tenantId, userId, siteId);
+        userService.removeSiteRole(
+                tenantId,
+                userId,
+                siteId
+        );
 
         assertFalse(assignment.isActive());
 
-        verify(userRoleAssignmentRepository).save(assignment);
-
-        ArgumentCaptor<AuditEventCommand> auditCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
-
-        verify(auditRecorder).record(auditCaptor.capture());
-
-        AuditEventCommand command = auditCaptor.getValue();
-
-        assertEquals("SITE_PERMISSION_REMOVED", command.action());
-        assertEquals("USER", command.entityType());
-        assertEquals(userId, command.entityId());
-        assertEquals(tenantId, command.tenantId());
-
-        assertEquals(
-                "SITE_MANAGER",
-                command.beforeData().get("sitePermission")
-        );
-
-        assertEquals(
-                "NONE",
-                command.afterData().get("sitePermission")
-        );
-
-        assertEquals(
-                siteId,
-                command.afterData().get("siteId")
-        );
-
-        assertEquals(
-                "sitePermission",
-                command.changes().get(0).fieldName()
-        );
-
-        assertEquals(
-                "SITE_MANAGER",
-                command.changes().get(0).previousValue()
-        );
-
-        assertEquals(
-                "NONE",
-                command.changes().get(0).newValue()
-        );
+        verify(userRoleAssignmentRepository)
+                .save(assignment);
     }
 }

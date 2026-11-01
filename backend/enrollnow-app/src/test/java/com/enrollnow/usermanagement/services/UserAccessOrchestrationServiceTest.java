@@ -1,12 +1,12 @@
 package com.enrollnow.usermanagement.services;
 
-import com.enrollnow.common.audit.AuditEventCommand;
-import com.enrollnow.common.audit.AuditOperation;
-import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.dtos.UpdateUserRequest;
 import com.enrollnow.identity.services.UserService;
 import com.enrollnow.study.services.StudyAccessService;
 import com.enrollnow.usermanagement.dtos.UpdateUserAccessRequest;
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,9 +49,6 @@ class UserAccessOrchestrationServiceTest {
                         auditRecorder
                 );
 
-        /*
-         * User profile
-         */
         UpdateUserRequest userRequest =
                 new UpdateUserRequest();
 
@@ -59,18 +57,12 @@ class UserAccessOrchestrationServiceTest {
         userRequest.setTitle("Manager");
         userRequest.setTimezone("Asia/Kolkata");
 
-        /*
-         * Site access
-         */
         UpdateUserAccessRequest.SiteAccessRequest siteAccess =
                 new UpdateUserAccessRequest.SiteAccessRequest();
 
         siteAccess.setSiteId(siteId);
         siteAccess.setSitePermission("SITE_ADMIN");
 
-        /*
-         * Study access
-         */
         UpdateUserAccessRequest.StudyAccessItemRequest studyAccess =
                 new UpdateUserAccessRequest.StudyAccessItemRequest();
 
@@ -86,78 +78,86 @@ class UserAccessOrchestrationServiceTest {
         request.setStudies(List.of(studyAccess));
 
         /*
-         * Simulate UserService contributing a parent USER change.
+         * USER before / after
          */
-        doAnswer(invocation -> {
-
-            AuditOperation operation =
-                    invocation.getArgument(3);
-
-            operation.addChange(
-                    "firstName",
-                    "John",
-                    "Jane"
-            );
-
-            return null;
-
-        }).when(userService).updateUser(
-                eq(tenantId),
-                eq(userId),
-                eq(userRequest),
-                any(AuditOperation.class)
+        when(userService.getUserAuditSnapshot(
+                tenantId,
+                userId
+        )).thenReturn(
+                Map.of(
+                        "firstName", "John",
+                        "lastName", "Smith",
+                        "title", "Coordinator",
+                        "timezone", "UTC"
+                ),
+                Map.of(
+                        "firstName", "Jane",
+                        "lastName", "Smith",
+                        "title", "Manager",
+                        "timezone", "Asia/Kolkata"
+                )
         );
 
         /*
-         * Simulate SITE role service contributing another USER change.
+         * SITE before / after
          */
-        doAnswer(invocation -> {
-
-            AuditOperation operation =
-                    invocation.getArgument(3);
-
-            operation.addChange(
-                    "USER",
-                    userId,
-                    "sitePermission",
-                    "SITE_MANAGER",
-                    "SITE_ADMIN"
-            );
-
-            return null;
-
-        }).when(userService).assignRole(
-                eq(tenantId),
-                eq(userId),
-                any(),
-                any(AuditOperation.class)
+        when(userService.getSiteAccessAuditSnapshot(
+                tenantId,
+                userId,
+                siteId
+        )).thenReturn(
+                Map.of(
+                        "siteId", siteId,
+                        "sitePermission", "SITE_MANAGER"
+                ),
+                Map.of(
+                        "siteId", siteId,
+                        "sitePermission", "SITE_ADMIN"
+                )
         );
 
         /*
-         * Simulate StudyAccessService contributing a STUDY child change.
+         * STUDY before / after
          */
-        doAnswer(invocation -> {
-
-            AuditOperation operation =
-                    invocation.getArgument(4);
-
-            operation.addChange(
-                    "STUDY",
-                    studyId,
-                    "studyPermission",
-                    "STUDY_RA",
-                    "STUDY_ADMIN"
-            );
-
-            return null;
-
-        }).when(studyAccessService).grantStudyAccess(
-                eq(tenantId),
-                eq(studyId),
-                eq(userId),
-                any(),
-                any(AuditOperation.class)
+        when(studyAccessService.getStudyAccessAuditSnapshot(
+                tenantId,
+                studyId,
+                userId
+        )).thenReturn(
+                Map.of(
+                        "studyId", studyId,
+                        "studyPermission", "STUDY_RA",
+                        "studyRole", "Research Assistant"
+                ),
+                Map.of(
+                        "studyId", studyId,
+                        "studyPermission", "STUDY_ADMIN",
+                        "studyRole", "Study Coordinator"
+                )
         );
+
+        /*
+         * Business methods themselves do not need special behavior here.
+         */
+        when(userService.updateUser(
+                tenantId,
+                userId,
+                request.getUser()
+        )).thenReturn(null);
+
+        when(userService.assignRole(
+                eq(tenantId),
+                eq(userId),
+                any()
+        )).thenReturn(null);
+
+        doNothing().when(studyAccessService)
+                .grantStudyAccess(
+                        eq(tenantId),
+                        eq(studyId),
+                        eq(userId),
+                        any()
+                );
 
         service.updateUserAccess(
                 tenantId,
@@ -166,74 +166,102 @@ class UserAccessOrchestrationServiceTest {
         );
 
         /*
-         * The orchestration layer must persist ONE event only.
+         * ONE business audit request.
          */
-        ArgumentCaptor<AuditEventCommand> commandCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
+        ArgumentCaptor<AuditRequest> captor =
+                ArgumentCaptor.forClass(AuditRequest.class);
 
         verify(auditRecorder, times(1))
-                .record(commandCaptor.capture());
+                .record(captor.capture());
 
-        AuditEventCommand command =
-                commandCaptor.getValue();
+        AuditRequest auditRequest =
+                captor.getValue();
 
-        assertEquals(
-                tenantId,
-                command.tenantId()
-        );
-
-        assertEquals(
-                "USER",
-                command.entityType()
-        );
-
-        assertEquals(
-                userId,
-                command.entityId()
-        );
-
+        assertEquals(tenantId, auditRequest.tenantId());
+        assertEquals("USER", auditRequest.entityType());
+        assertEquals(userId, auditRequest.entityId());
         assertEquals(
                 "USER_ACCESS_UPDATED",
-                command.action()
+                auditRequest.action()
         );
 
-        /*
-         * Three business changes were collected into the same event.
-         */
         assertEquals(
                 3,
-                command.changes().size()
-        );
-
-        assertEquals(
-                "firstName",
-                command.changes().get(0).fieldName()
-        );
-
-        assertEquals(
-                "sitePermission",
-                command.changes().get(1).fieldName()
-        );
-
-        assertEquals(
-                "studyPermission",
-                command.changes().get(2).fieldName()
+                auditRequest.entities().size()
         );
 
         /*
-         * Study change must retain its own child entity identity.
+         * USER snapshot
+         */
+        assertEquals(
+                "John",
+                auditRequest.entities()
+                        .get(0)
+                        .beforeData()
+                        .get("firstName")
+        );
+
+        assertEquals(
+                "Jane",
+                auditRequest.entities()
+                        .get(0)
+                        .afterData()
+                        .get("firstName")
+        );
+
+        /*
+         * SITE snapshot
+         */
+        assertEquals(
+                "SITE_MANAGER",
+                auditRequest.entities()
+                        .get(1)
+                        .beforeData()
+                        .get("sitePermission")
+        );
+
+        assertEquals(
+                "SITE_ADMIN",
+                auditRequest.entities()
+                        .get(1)
+                        .afterData()
+                        .get("sitePermission")
+        );
+
+        /*
+         * STUDY snapshot
          */
         assertEquals(
                 "STUDY",
-                command.changes().get(2).entityType()
+                auditRequest.entities()
+                        .get(2)
+                        .entityType()
         );
 
         assertEquals(
                 studyId,
-                command.changes().get(2).entityId()
+                auditRequest.entities()
+                        .get(2)
+                        .entityId()
+        );
+
+        assertEquals(
+                "STUDY_RA",
+                auditRequest.entities()
+                        .get(2)
+                        .beforeData()
+                        .get("studyPermission")
+        );
+
+        assertEquals(
+                "STUDY_ADMIN",
+                auditRequest.entities()
+                        .get(2)
+                        .afterData()
+                        .get("studyPermission")
         );
     }
-    
+
     @Test
     void updateUserAccess_DoesNotCreateAuditEvent_WhenNothingChanged() {
 
@@ -260,15 +288,26 @@ class UserAccessOrchestrationServiceTest {
 
         request.setUser(userRequest);
 
-        /*
-         * Mock UserService without adding anything
-         * to the supplied AuditOperation.
-         */
+        Map<String, Object> unchanged =
+                Map.of(
+                        "firstName", "John",
+                        "lastName", "Smith",
+                        "title", "Manager",
+                        "timezone", "Asia/Kolkata"
+                );
+
+        when(userService.getUserAuditSnapshot(
+                tenantId,
+                userId
+        )).thenReturn(
+                unchanged,
+                unchanged
+        );
+
         when(userService.updateUser(
-                eq(tenantId),
-                eq(userId),
-                eq(userRequest),
-                any(AuditOperation.class)
+                tenantId,
+                userId,
+                request.getUser()
         )).thenReturn(null);
 
         service.updateUserAccess(
@@ -277,7 +316,35 @@ class UserAccessOrchestrationServiceTest {
                 request
         );
 
-        verify(auditRecorder, never())
-                .record(any(AuditEventCommand.class));
+        /*
+         * Orchestration DOES call AuditRecorder.
+         * AuditRecorderImpl itself detects no differences
+         * and suppresses persistence.
+         *
+         * Since AuditRecorder is mocked here, we verify
+         * that one AuditRequest was sent.
+         */
+        ArgumentCaptor<AuditRequest> captor =
+                ArgumentCaptor.forClass(AuditRequest.class);
+
+        verify(auditRecorder, times(1))
+                .record(captor.capture());
+
+        AuditRequest auditRequest =
+                captor.getValue();
+
+        assertEquals(
+                unchanged,
+                auditRequest.entities()
+                        .get(0)
+                        .beforeData()
+        );
+
+        assertEquals(
+                unchanged,
+                auditRequest.entities()
+                        .get(0)
+                        .afterData()
+        );
     }
 }
