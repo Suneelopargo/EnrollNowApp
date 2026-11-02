@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditEventCommand;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -38,7 +40,8 @@ public class UserInvitationService {
     private final UserSecurityStateRepository userSecurityStateRepository;
     private final PasswordEncoder passwordEncoder;
     private PasswordPolicyValidator passwordPolicyValidator;
-
+    private final AuditRecorder auditRecorder;
+    
     @Autowired(required = false)
     public void setPasswordPolicyValidator(PasswordPolicyValidator passwordPolicyValidator) {
         this.passwordPolicyValidator = passwordPolicyValidator;
@@ -48,9 +51,30 @@ public class UserInvitationService {
             UserActionTokenRepository userActionTokenRepository,
             UserRepository userRepository,
             UserEmailRepository userEmailRepository,
-            InvitationEmailService invitationEmailService, 
-            UserSecurityStateRepository userSecurityStateRepository, 
+            InvitationEmailService invitationEmailService,
+            UserSecurityStateRepository userSecurityStateRepository,
             PasswordEncoder passwordEncoder) {
+
+        this(
+                userActionTokenRepository,
+                userRepository,
+                userEmailRepository,
+                invitationEmailService,
+                userSecurityStateRepository,
+                passwordEncoder,
+                null
+        );
+    }
+    
+    @Autowired
+    public UserInvitationService(
+            UserActionTokenRepository userActionTokenRepository,
+            UserRepository userRepository,
+            UserEmailRepository userEmailRepository,
+            InvitationEmailService invitationEmailService,
+            UserSecurityStateRepository userSecurityStateRepository,
+            PasswordEncoder passwordEncoder,
+            AuditRecorder auditRecorder) {
 
         this.userActionTokenRepository = userActionTokenRepository;
         this.userRepository = userRepository;
@@ -58,6 +82,7 @@ public class UserInvitationService {
         this.invitationEmailService = invitationEmailService;
         this.userSecurityStateRepository = userSecurityStateRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditRecorder = auditRecorder;
     }
 
     @Transactional
@@ -150,6 +175,25 @@ public class UserInvitationService {
                 tenantId.toString(),
                 rawToken
         );
+        
+        if (auditRecorder != null) {
+            auditRecorder.record(
+                    new AuditEventCommand(
+                            tenantId,
+                            null,
+                            "USER",
+                            userId,
+                            "USER_INVITATION_RESENT",
+                            "User enrollment invitation resent",
+                            "API",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null
+                    )
+            );
+        }  
     }
     
     @Transactional

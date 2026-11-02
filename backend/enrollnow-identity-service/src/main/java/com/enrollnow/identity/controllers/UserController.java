@@ -150,7 +150,10 @@ public class UserController {
         if (siteAuthorizationService != null) {
             siteAuthorizationService.requireUserManageAccess(tenantId, null);
         }
-        return userService.deactivateUser(tenantId, userId);
+        return userApplicationService.deactivateUser(
+                tenantId,
+                userId
+        );
     }
 
     @PutMapping("/{userId}/activate")
@@ -161,7 +164,10 @@ public class UserController {
         if (siteAuthorizationService != null) {
             siteAuthorizationService.requireUserManageAccess(tenantId, null);
         }
-        return userService.activateUser(tenantId, userId);
+        return userApplicationService.activateUser(
+                tenantId,
+                userId
+        );
     }
 
     @PostMapping("/{userId}/roles")

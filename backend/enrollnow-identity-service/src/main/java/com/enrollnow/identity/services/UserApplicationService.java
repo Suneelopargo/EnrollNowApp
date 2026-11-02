@@ -1,6 +1,7 @@
 package com.enrollnow.identity.services;
 
 import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.dtos.CreateUserRequest;
@@ -134,5 +135,108 @@ public class UserApplicationService {
         );
 
         return createdUser;
+    }
+    
+    @Transactional
+    public UserSummaryResponse deactivateUser(
+            UUID tenantId,
+            UUID userId
+    ) {
+
+        Map<String, Object> beforeSnapshot =
+                userService.getUserAuditSnapshot(
+                        tenantId,
+                        userId
+                );
+
+        UserSummaryResponse response =
+                userService.deactivateUser(
+                        tenantId,
+                        userId
+                );
+
+        Map<String, Object> afterSnapshot =
+                userService.getUserAuditSnapshot(
+                        tenantId,
+                        userId
+                );
+
+        Map<String, Object> beforeData = Map.of(
+                "status", beforeSnapshot.get("status")
+        );
+
+        Map<String, Object> afterData = Map.of(
+                "status", afterSnapshot.get("status")
+        );
+
+        auditRecorder.record(
+                new AuditEventCommand(
+                        tenantId,
+                        null,
+                        "USER",
+                        userId,
+                        "USER_DEACTIVATED",
+                        "User account deactivated",
+                        "API",
+                        null,
+                        null,
+                        beforeData,
+                        afterData,
+                        null
+                )
+        );
+        return response;
+    }
+
+    @Transactional
+    public UserSummaryResponse activateUser(
+            UUID tenantId,
+            UUID userId
+    ) {
+
+        Map<String, Object> beforeSnapshot =
+                userService.getUserAuditSnapshot(
+                        tenantId,
+                        userId
+                );
+
+        UserSummaryResponse response =
+                userService.activateUser(
+                        tenantId,
+                        userId
+                );
+
+        Map<String, Object> afterSnapshot =
+                userService.getUserAuditSnapshot(
+                        tenantId,
+                        userId
+                );
+
+        Map<String, Object> beforeData = Map.of(
+                "status", beforeSnapshot.get("status")
+        );
+
+        Map<String, Object> afterData = Map.of(
+                "status", afterSnapshot.get("status")
+        );
+
+        auditRecorder.record(
+                new AuditEventCommand(
+                        tenantId,
+                        null,
+                        "USER",
+                        userId,
+                        "USER_ACTIVATED",
+                        "User account activated",
+                        "API",
+                        null,
+                        null,
+                        beforeData,
+                        afterData,
+                        null
+                )
+        );
+
+        return response;
     }
 }
