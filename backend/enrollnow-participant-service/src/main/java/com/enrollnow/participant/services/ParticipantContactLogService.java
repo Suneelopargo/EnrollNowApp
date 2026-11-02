@@ -315,8 +315,8 @@ public class ParticipantContactLogService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact log not found"));
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
-        if (!callerUserId.equals(existing.getCreatedBy()) && !isUserAdminOrManager) {
-            throw new AccessDeniedException("Access denied: only the author or an administrator can edit this contact log");
+        if (!callerUserId.equals(existing.getCreatedBy())) {
+            throw new AccessDeniedException("Access denied: only the author can edit this contact log");
         }
 
         boolean wasLastContact = existing.isLastContact();
@@ -419,9 +419,8 @@ public class ParticipantContactLogService {
         ParticipantContactLog existing = contactLogRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, logId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact log not found"));
 
-        boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
-        if (!callerUserId.equals(existing.getCreatedBy()) && !isUserAdminOrManager) {
-            throw new AccessDeniedException("Access denied: only the author or an administrator can delete this contact log");
+        if (!callerUserId.equals(existing.getCreatedBy())) {
+            throw new AccessDeniedException("Access denied: only the author can delete this contact log");
         }
 
         boolean wasLastContact = existing.isLastContact();
@@ -610,7 +609,7 @@ public class ParticipantContactLogService {
         }
 
         boolean isAuthor = callerUserId != null && callerUserId.equals(logEntity.getCreatedBy());
-        dto.setEditable(isAuthor || isUserAdminOrManager);
+        dto.setEditable(isAuthor);
         dto.setPinnable(isAuthor || isUserAdminOrManager);
 
         return dto;

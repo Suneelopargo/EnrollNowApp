@@ -271,6 +271,31 @@ class ParticipantConsentLogServiceTest {
     }
 
     @Test
+    void updateConsentLog_adminCannotUpdateAnotherAuthorsLog() {
+        Participant p = new Participant();
+        p.setId(participantId);
+        p.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(p));
+
+        ParticipantConsentLog existing = new ParticipantConsentLog();
+        existing.setId(logId);
+        existing.setCreatedBy(otherUserId);
+        when(consentLogRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, logId))
+                .thenReturn(Optional.of(existing));
+
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setCanAccessSiteAdmin(true);
+        perms.setRoles(List.of("SITE_ADMIN"));
+        when(sitePermissionService.resolveEffectivePermissions(tenantId, userId, null)).thenReturn(perms);
+
+        UpdateConsentLogRequest req = new UpdateConsentLogRequest();
+        req.setConsentTitle("Unauthorized administrator edit");
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.updateConsentLog(tenantId, participantId, logId, userId, req, null));
+    }
+
+    @Test
     void pinConsentLog_author_togglesSticky() {
         ParticipantConsentLog existing = new ParticipantConsentLog();
         existing.setId(logId);
@@ -302,5 +327,23 @@ class ParticipantConsentLogServiceTest {
         service.deleteConsentLog(tenantId, participantId, logId, userId);
 
         verify(consentLogRepository).delete(existing);
+    }
+
+    @Test
+    void deleteConsentLog_nonAuthorCannotDelete() {
+        Participant p = new Participant();
+        p.setId(participantId);
+        p.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(p));
+
+        ParticipantConsentLog existing = new ParticipantConsentLog();
+        existing.setId(logId);
+        existing.setCreatedBy(otherUserId);
+        when(consentLogRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, logId))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.deleteConsentLog(tenantId, participantId, logId, userId));
+        verify(consentLogRepository, never()).delete(any());
     }
 }

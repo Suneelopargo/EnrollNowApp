@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   X,
+  Eye,
 } from 'lucide-react';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
@@ -24,6 +25,7 @@ import {
 } from '../../../../shared/api/participantApi';
 import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
+import { Modal } from '../../../../shared/design-system/components/Modal';
 import { AddContactLogModal } from './AddContactLogModal';
 
 export interface ParticipantContactLogsProps {
@@ -174,18 +176,38 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
     return 'bg-blue-100 text-blue-800 border-blue-200';
   };
 
+  const getScopeLabel = (log: ContactLogItem) => (
+    log.global ? `Global (${log.studyName || 'Registry'})` : log.studyName || 'Registry'
+  );
+
   const columnDefs = useMemo<ColDef<ContactLogItem>[]>(() => [
     {
+      colId: 'dateTimeAndScope',
       field: 'dateTimeOfContact',
-      headerName: 'Date/Time',
-      minWidth: 175,
-      valueFormatter: (params) => formatDateTime(params.value),
+      headerName: 'Date/Time & Scope',
+      minWidth: 205,
+      getQuickFilterText: (params) => params.data
+        ? `${formatDateTime(params.data.dateTimeOfContact)} ${getScopeLabel(params.data)}`
+        : '',
+      cellRenderer: (params: ICellRendererParams<ContactLogItem>) => {
+        const log = params.data;
+        if (!log) return null;
+        return (
+          <div className="flex flex-col items-start gap-1 leading-tight">
+            <span>{formatDateTime(log.dateTimeOfContact)}</span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">
+              {log.global && <Globe size={12} aria-hidden="true" />}
+              {getScopeLabel(log)}
+            </span>
+          </div>
+        );
+      },
     },
-    { field: 'contactType', headerName: 'Contact Type', minWidth: 140 },
+    { field: 'contactType', headerName: 'Contact Type', minWidth: 125 },
     {
       field: 'outcome',
       headerName: 'Outcome',
-      minWidth: 150,
+      minWidth: 130,
       cellRenderer: (params: ICellRendererParams<ContactLogItem>) => params.data ? (
         <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${getOutcomeBadgeStyle(params.data.outcome)}`}>
           {params.data.outcome}
@@ -195,16 +217,16 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
     {
       colId: 'contactedBy',
       headerName: 'Contacted By',
-      minWidth: 160,
+      minWidth: 145,
       valueGetter: (params) => params.data?.contactedByName || params.data?.contactedBy || 'Unknown User',
       tooltipValueGetter: (params) => params.value,
     },
     {
       colId: 'actions',
       headerName: 'Actions',
-      width: 132,
-      minWidth: 132,
-      maxWidth: 132,
+      width: 160,
+      minWidth: 160,
+      maxWidth: 160,
       sortable: false,
       filter: false,
       floatingFilter: false,
@@ -214,19 +236,31 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
         return (
           <div className="participant-grid__row-actions">
             <TooltipButton
-              label={log.sticky ? 'Unpin contact' : 'Pin contact'}
-              disabled={togglingPinId === log.id || log.pinnable === false}
+              label="View contact log details"
               onClick={(event) => {
                 event.stopPropagation();
-                void handleTogglePin(log);
+                setSelectedLog(log);
               }}
-              className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
+              className="participant-grid__row-action"
             >
-              {togglingPinId === log.id
-                ? <Loader2 size={14} className="animate-spin" />
-                : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
+              <Eye size={14} />
             </TooltipButton>
-            {log.editable !== false && (
+            {log.pinnable === true && (
+              <TooltipButton
+                label={log.sticky ? 'Unpin contact' : 'Pin contact'}
+                disabled={togglingPinId === log.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleTogglePin(log);
+                }}
+                className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
+              >
+                {togglingPinId === log.id
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
+              </TooltipButton>
+            )}
+            {log.editable === true && (
               <>
                 <TooltipButton
                   label="Edit contact log"
@@ -344,42 +378,73 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
             pagination
             paginationPageSize={10}
             paginationPageSizeSelector={[5, 10, 20, 50]}
-            rowHeight={48}
+            rowHeight={68}
             headerHeight={42}
             animateRows
             suppressCellFocus
             onRowClicked={(event) => {
               const target = event.event?.target as HTMLElement | null;
               if (!event.data || target?.closest('button, a')) return;
-              setSelectedLog((current) => current?.id === event.data?.id ? null : event.data ?? null);
+              setSelectedLog(event.data);
             }}
             rowClass="cursor-pointer"
             overlayNoRowsTemplate="<span class='text-slate-500'>No contact logs match your search.</span>"
           />
-          {selectedLog && (
-            <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm" aria-label="Contact log details">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div><h5 className="font-semibold text-slate-800">{selectedLog.contactType} ? {selectedLog.outcome}</h5><p className="text-xs text-slate-500">{formatDateTime(selectedLog.dateTimeOfContact)}</p></div>
-                <button type="button" onClick={() => setSelectedLog(null)} aria-label="Close contact details" className="text-xs text-slate-500 hover:text-slate-800">Close</button>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div><span className="block text-xs font-medium text-slate-500">Spoke To</span><span>{selectedLog.spokeTo || '—'}</span></div>
-                <div><span className="block text-xs font-medium text-slate-500">Method</span><span>{selectedLog.contactMethod || '—'}</span></div>
-                <div><span className="block text-xs font-medium text-slate-500">Contacted By</span><span>{selectedLog.contactedByName || selectedLog.contactedBy || '—'}</span></div>
-                <div><span className="block text-xs font-medium text-slate-500">Study</span><span>{selectedLog.studyName || 'General Registry'}</span></div>
-              </div>
-              {selectedLog.regarding && <div className="mt-3"><span className="block text-xs font-medium text-slate-500">Regarding</span><p className="mt-1 whitespace-pre-wrap rounded border border-slate-200 bg-white p-2">{selectedLog.regarding}</p></div>}
-              {selectedLog.comments && <div className="mt-3"><span className="block text-xs font-medium text-slate-500">Comments</span><p className="mt-1 whitespace-pre-wrap rounded border border-slate-200 bg-white p-2">{selectedLog.comments}</p></div>}
-              <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-3 text-xs text-slate-600">
-                <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(selectedLog.sticky)} disabled={togglingPinId === selectedLog.id || selectedLog.pinnable === false} onChange={() => void handleTogglePin(selectedLog)} />Pin Contact</label>
-                {selectedLog.global && <span className="inline-flex items-center gap-1"><Globe size={12} />Global</span>}
-                {selectedLog.lastContact && <span>Date of Last Contact</span>}
-                <span>{selectedLog.createdByName ? 'Created by ' + selectedLog.createdByName : ''}{selectedLog.updatedByName && selectedLog.updatedByName !== selectedLog.createdByName ? ' ? Modified by ' + selectedLog.updatedByName : ''}</span>
-              </div>
-            </section>
-          )}
         </div>
       )}
+
+      <Modal
+        isOpen={Boolean(selectedLog)}
+        onClose={() => setSelectedLog(null)}
+        title="Contact Log Details"
+        size="wide"
+        className="consent-details-modal"
+      >
+        {selectedLog && (
+          <div className="consent-details-content" aria-label="Contact log details">
+            <div className="consent-details-grid">
+              <div><span>Date/Time</span><p>{formatDateTime(selectedLog.dateTimeOfContact) || '—'}</p></div>
+              <div><span>Contact Type</span><p>{selectedLog.contactType || '—'}</p></div>
+              <div><span>Outcome</span><p>{selectedLog.outcome || '—'}</p></div>
+              <div><span>Spoke To</span><p>{selectedLog.spokeTo || '—'}</p></div>
+              <div><span>Contacted By</span><p>{selectedLog.contactedByName || selectedLog.contactedBy || '—'}</p></div>
+              <div><span>Created By</span><p>{selectedLog.createdByName || '—'}</p></div>
+              <div><span>Contact Method</span><p>{selectedLog.contactMethod || '—'}</p></div>
+              <div><span>Scope</span><p>{getScopeLabel(selectedLog)}</p></div>
+            </div>
+            {selectedLog.regarding && (
+              <div className="consent-details-comments">
+                <span>Regarding</span>
+                <p>{selectedLog.regarding}</p>
+              </div>
+            )}
+            {selectedLog.comments && (
+              <div className="consent-details-comments">
+                <span>Comments</span>
+                <p>{selectedLog.comments}</p>
+              </div>
+            )}
+            <div className="consent-details-meta">
+              {selectedLog.pinnable === true && (
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selectedLog.sticky)}
+                    disabled={togglingPinId === selectedLog.id}
+                    onChange={() => void handleTogglePin(selectedLog)}
+                  />
+                  Pin Contact
+                </label>
+              )}
+              {selectedLog.global && <span><Globe size={14} /> Global</span>}
+              {selectedLog.lastContact && <span>Date of Last Contact</span>}
+              {selectedLog.updatedByName && selectedLog.updatedByName !== selectedLog.createdByName && (
+                <span>Modified by {selectedLog.updatedByName}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Add / Edit Contact Modal */}
       <AddContactLogModal

@@ -91,8 +91,10 @@ public class ParticipantWorkflowController {
             @RequestParam(required = false) UUID siteId
     ) {
         UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
-        return ResponseEntity.ok(workflowService.getComments(resolvedTenantId, participantId));
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
+        return ResponseEntity.ok(workflowService.getComments(resolvedTenantId, participantId, userId, canAccessAdmin));
     }
 
     @PostMapping("/{participantId}/comments")
@@ -172,8 +174,10 @@ public class ParticipantWorkflowController {
             @RequestParam(required = false) UUID siteId
     ) {
         UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
-        return ResponseEntity.ok(workflowService.getEmails(resolvedTenantId, participantId));
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
+        return ResponseEntity.ok(workflowService.getEmails(resolvedTenantId, participantId, userId, canAccessAdmin));
     }
 
     @PostMapping("/{participantId}/emails")
@@ -202,8 +206,9 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(workflowService.pinCommunication(resolvedTenantId, participantId, emailId, userId, request.isSticky()));
+        return ResponseEntity.ok(workflowService.pinCommunication(resolvedTenantId, participantId, emailId, userId, canAccessAdmin, request.isSticky()));
     }
 
     @PatchMapping("/{participantId}/emails/{emailId}")
@@ -217,8 +222,9 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(workflowService.updateEmailLog(resolvedTenantId, participantId, emailId, userId, flags));
+        return ResponseEntity.ok(workflowService.updateEmailLog(resolvedTenantId, participantId, emailId, userId, canAccessAdmin, flags));
     }
 
     @GetMapping("/{participantId}/email-recipients")
@@ -239,8 +245,10 @@ public class ParticipantWorkflowController {
             @RequestParam(required = false) UUID siteId
     ) {
         UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
-        return ResponseEntity.ok(workflowService.getSms(resolvedTenantId, participantId));
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
+        return ResponseEntity.ok(workflowService.getSms(resolvedTenantId, participantId, userId, canAccessAdmin));
     }
 
     @PostMapping("/{participantId}/sms")
@@ -259,7 +267,7 @@ public class ParticipantWorkflowController {
     }
 
     @GetMapping("/{participantId}/sms-recipients")
-    public ResponseEntity<List<String>> getSmsRecipients(
+    public ResponseEntity<List<SmsRecipientDto>> getSmsRecipients(
             @PathVariable UUID participantId,
             @RequestParam(required = false) UUID tenantId,
             @RequestParam(required = false) UUID siteId
@@ -280,8 +288,9 @@ public class ParticipantWorkflowController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         UUID userId = resolveUserId();
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+        boolean canAccessAdmin = siteAuthorizationService.canAccessSiteAdmin(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(workflowService.pinCommunication(resolvedTenantId, participantId, smsId, userId, request.isSticky()));
+        return ResponseEntity.ok(workflowService.pinCommunication(resolvedTenantId, participantId, smsId, userId, canAccessAdmin, request.isSticky()));
     }
 
     @PostMapping("/sms/webhook")

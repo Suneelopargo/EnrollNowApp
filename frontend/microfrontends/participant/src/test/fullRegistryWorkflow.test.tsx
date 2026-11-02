@@ -18,7 +18,7 @@ import { ParticipantComments } from '../components/ParticipantComments';
 import { ParticipantEmailSection } from '../components/ParticipantEmailSection';
 import { ComposeEmailModal } from '../components/ComposeEmailModal';
 import { ParticipantSmsSection } from '../components/ParticipantSmsSection';
-import { ComposeSmsModal } from '../components/ComposeSmsModal';
+import { ComposeSmsModal, mapSmsRecipientOptions } from '../components/ComposeSmsModal';
 import { ParticipantContactManagement } from '../components/ParticipantContactManagement';
 import { ParticipantContactModal } from '../components/ParticipantContactModal';
 import { ParticipantConsentSection } from '../components/ParticipantConsentSection';
@@ -178,6 +178,20 @@ describe('Full Registry Workflow - API Client Integration', () => {
     expect(smsList[0].channel).toBe('SMS');
     getSpy.mockRestore();
 
+    const recipientSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: [{ phoneNumber: '+15551234567', contactName: 'Jane Doe' }],
+    } as any);
+    const smsRecipients = await participantApi.getSmsRecipients(participantId);
+    expect(smsRecipients).toEqual([{ phoneNumber: '+15551234567', contactName: 'Jane Doe' }]);
+    recipientSpy.mockRestore();
+
+    const legacyRecipientSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({
+      data: ['+15551234567'],
+    } as any);
+    const legacySmsRecipients = await participantApi.getSmsRecipients(participantId);
+    expect(legacySmsRecipients).toEqual([{ phoneNumber: '+15551234567' }]);
+    legacyRecipientSpy.mockRestore();
+
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: { id: 'sms-2', body: 'Thank you' },
     } as any);
@@ -204,6 +218,33 @@ describe('Full Registry Workflow - API Client Integration', () => {
       expect.anything()
     );
     pinSmsSpy.mockRestore();
+  });
+
+  it('shows SMS numbers with their contact names without defaulting to the participant name', () => {
+    expect(mapSmsRecipientOptions(
+      [
+        {
+          contactType: 'PHONE',
+          contactValue: '+15551234567',
+          contactName: 'Jane Doe',
+          active: true,
+        },
+        {
+          contactType: 'PHONE',
+          contactValue: '+15557654321',
+          contactName: 'Inactive Contact',
+          active: false,
+        },
+      ],
+      ['+15551234567', '+15557654321', {
+        phoneNumber: '+15559876543',
+        contactName: 'Participant Name',
+      }],
+    )).toEqual([
+      { phoneNumber: '+15551234567', contactName: 'Jane Doe' },
+      { phoneNumber: '+15557654321' },
+      { phoneNumber: '+15559876543' },
+    ]);
   });
 
   // 4. Contact & Address Management API

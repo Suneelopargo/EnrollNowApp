@@ -15,6 +15,8 @@ public class ParticipantCommentDto {
     private String authorName;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
+    private boolean editable;
+    private boolean pinnable;
 
     public ParticipantCommentDto() {}
 
@@ -40,4 +42,8 @@ public class ParticipantCommentDto {
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public boolean isEditable() { return editable; }
+    public void setEditable(boolean editable) { this.editable = editable; }
+    public boolean isPinnable() { return pinnable; }
+    public void setPinnable(boolean pinnable) { this.pinnable = pinnable; }
 }

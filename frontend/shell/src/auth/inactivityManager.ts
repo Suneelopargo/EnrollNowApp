@@ -37,6 +37,7 @@ export class InactivityManager {
   private broadcastChannel: any = null;
   private isRunning: boolean = false;
   private isCheckingServerSession: boolean = false;
+  private hasHandledLogout: boolean = false;
 
   private activityHandler = () => this.recordActivity();
   private storageHandler = (e: any) => this.handleStorageEvent(e);
@@ -100,6 +101,7 @@ export class InactivityManager {
 
     // 1. Fetch authoritative security policy from server
     await this.fetchServerPolicy();
+    if (!this.isRunning || !this.isAuthenticated) return;
 
     // 2. Attach DOM activity listeners
     this.attachListeners();
@@ -208,6 +210,8 @@ export class InactivityManager {
   }
 
   public triggerLogout(reason: string, message?: string): void {
+    if (!this.isRunning || this.hasHandledLogout) return;
+
     const now = Date.now();
 
     if (typeof localStorage !== 'undefined') {
@@ -232,7 +236,14 @@ export class InactivityManager {
       }
     }
 
+    this.handleLogout(reason, message);
+  }
+
+  private handleLogout(reason: string, message?: string): void {
+    if (!this.isRunning || this.hasHandledLogout) return;
+    this.hasHandledLogout = true;
     this.stop();
+
     if (message !== undefined) {
       this.onLogout(reason, message);
     } else {
@@ -256,12 +267,7 @@ export class InactivityManager {
       } catch {
         // ignore
       }
-      this.stop();
-      if (message !== undefined) {
-        this.onLogout(reason, message);
-      } else {
-        this.onLogout(reason);
-      }
+      this.handleLogout(reason, message);
     } else if (e.key === STORAGE_KEY_INACTIVITY_MINUTES && e.newValue) {
       const parsed = parseInt(e.newValue, 10);
       if (!isNaN(parsed) && parsed > 0) {
@@ -324,12 +330,7 @@ export class InactivityManager {
           if (data?.type === 'ACTIVITY' && typeof data.timestamp === 'number') {
             this.lastActivityTime = Math.max(this.lastActivityTime, data.timestamp);
           } else if (data?.type === 'LOGOUT') {
-            this.stop();
-            if (data.message !== undefined) {
-              this.onLogout(data.reason || 'INACTIVITY_TIMEOUT', data.message);
-            } else {
-              this.onLogout(data.reason || 'INACTIVITY_TIMEOUT');
-            }
+            this.handleLogout(data.reason || 'INACTIVITY_TIMEOUT', data.message);
           }
         };
       } catch {

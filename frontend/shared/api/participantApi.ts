@@ -279,6 +279,8 @@ export interface ParticipantCommentItem {
   authorName?: string;
   createdAt: string;
   updatedAt?: string;
+  editable?: boolean;
+  pinnable?: boolean;
 }
 
 export interface CommunicationRecipientItem {
@@ -286,6 +288,11 @@ export interface CommunicationRecipientItem {
   recipientType: 'TO' | 'CC' | 'BCC';
   recipientName?: string;
   recipientValue: string;
+}
+
+export interface SmsRecipientItem {
+  phoneNumber: string;
+  contactName?: string;
 }
 
 export interface CommunicationItem {
@@ -303,6 +310,7 @@ export interface CommunicationItem {
   createdAt?: string;
   pinned: boolean;
   sticky?: boolean;
+  pinnable?: boolean;
   senderName?: string;
   authorName?: string;
   authorInitials?: string;
@@ -720,7 +728,7 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async sendSms(participantId: string, payload: { toPhone?: string; toPhones?: string[]; body: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
+  async sendSms(participantId: string, payload: { toPhone: string; body: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
     const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, payload, { params: options });
     return res.data?.data ?? res.data;
   },
@@ -730,9 +738,32 @@ export const participantApi = {
     return res.data?.data ?? res.data;
   },
 
-  async getSmsRecipients(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+  async getSmsRecipients(participantId: string, options?: { tenantId?: string; siteId?: string }): Promise<SmsRecipientItem[]> {
     const res = await apiClient.get(`/api/v1/participants/${participantId}/sms-recipients`, { params: options, skipToast: true } as any);
-    return res.data?.data ?? res.data ?? [];
+    const recipients: unknown = res.data?.data ?? res.data ?? [];
+    if (!Array.isArray(recipients)) {
+      throw new Error('Unexpected SMS recipients response');
+    }
+
+    return recipients.map((recipient: unknown): SmsRecipientItem => {
+      if (typeof recipient === 'string') {
+        return { phoneNumber: recipient };
+      }
+      if (
+        typeof recipient === 'object'
+        && recipient !== null
+        && 'phoneNumber' in recipient
+        && typeof recipient.phoneNumber === 'string'
+      ) {
+        return {
+          phoneNumber: recipient.phoneNumber,
+          contactName: 'contactName' in recipient && typeof recipient.contactName === 'string'
+            ? recipient.contactName
+            : undefined,
+        };
+      }
+      throw new Error('Unexpected SMS recipient item');
+    });
   },
 
   // 3. Contact Management

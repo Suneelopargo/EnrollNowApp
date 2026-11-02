@@ -261,8 +261,8 @@ public class ParticipantConsentLogService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Consent log not found"));
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
-        if (!callerUserId.equals(existing.getCreatedBy()) && !isUserAdminOrManager) {
-            throw new AccessDeniedException("Access denied: only the author or an administrator can edit this consent log");
+        if (!callerUserId.equals(existing.getCreatedBy())) {
+            throw new AccessDeniedException("Access denied: only the author can edit this consent log");
         }
 
         boolean wasLastContact = existing.isLastContact();
@@ -379,9 +379,8 @@ public class ParticipantConsentLogService {
         ParticipantConsentLog existing = consentLogRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, logId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Consent log not found"));
 
-        boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
-        if (!callerUserId.equals(existing.getCreatedBy()) && !isUserAdminOrManager) {
-            throw new AccessDeniedException("Access denied: only the author or an administrator can delete this consent log");
+        if (!callerUserId.equals(existing.getCreatedBy())) {
+            throw new AccessDeniedException("Access denied: only the author can delete this consent log");
         }
 
         boolean wasLastContact = existing.isLastContact();
@@ -653,7 +652,7 @@ public class ParticipantConsentLogService {
         }
 
         boolean isAuthor = callerUserId != null && callerUserId.equals(logEntity.getCreatedBy());
-        dto.setEditable(isAuthor || isUserAdminOrManager);
+        dto.setEditable(isAuthor);
         dto.setPinnable(isAuthor || isUserAdminOrManager);
 
         return dto;

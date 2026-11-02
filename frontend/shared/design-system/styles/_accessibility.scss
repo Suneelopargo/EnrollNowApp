@@ -9,6 +9,11 @@
   outline-offset: 2px !important;
 }
 
+input[type='search']:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
 :focus:not(:focus-visible) {
   outline: none;
 }

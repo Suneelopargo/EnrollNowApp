@@ -31,6 +31,14 @@ const formatEmailDate = (dateStr?: string) => {
   }
 };
 
+const getEmailScopeLabel = (email: CommunicationItem) => {
+  if (email.studyName) {
+    return email.global ? `Global (${email.studyName})` : email.studyName;
+  }
+  if (email.global) return 'Global (Registry)';
+  return email.studyId ? 'Study' : '';
+};
+
 export interface ParticipantEmailSectionProps {
   participantId: string;
   participantName: string;
@@ -192,6 +200,44 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
       minWidth: 175,
       valueGetter: (params) => params.data?.sentAt || params.data?.createdAt || '',
       valueFormatter: (params) => formatEmailDate(params.value),
+      getQuickFilterText: (params) => {
+        const email = params.data;
+        if (!email) return '';
+        return `${formatEmailDate(email.sentAt || email.createdAt)} ${getEmailScopeLabel(email)}`;
+      },
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const email = params.data;
+        if (!email || email.pinnable !== true) return null;
+        const scopeLabel = getEmailScopeLabel(email);
+        return (
+          <div className="flex flex-col items-start gap-1 py-1">
+            <span className="text-xs text-gray-800">
+              {formatEmailDate(email.sentAt || email.createdAt)}
+            </span>
+            {scopeLabel && (
+              <span
+                title={scopeLabel}
+                style={{
+                  display: 'inline-block',
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  backgroundColor: '#0284c7',
+                  borderRadius: '9999px',
+                  lineHeight: 1.4,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {scopeLabel}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       colId: 'from',

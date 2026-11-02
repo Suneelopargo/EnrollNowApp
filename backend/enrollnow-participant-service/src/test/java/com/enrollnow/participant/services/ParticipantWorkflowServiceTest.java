@@ -274,6 +274,7 @@ class ParticipantWorkflowServiceTest {
         c.setTenantId(tenantId);
         c.setParticipantId(participantId);
         c.setChannel("EMAIL");
+        c.setInitiatedByUserId(userId);
         c.setPinned(false);
         c.setMetadata("{\"lastContact\":false}");
 
@@ -566,7 +567,7 @@ class ParticipantWorkflowServiceTest {
     }
 
     @Test
-    void testUpdateComment_authorOrAdminAllowed() {
+    void testUpdateComment_authorCanEdit() {
         ParticipantComment comment = new ParticipantComment();
         comment.setId(UUID.randomUUID());
         comment.setTenantId(tenantId);
@@ -586,6 +587,46 @@ class ParticipantWorkflowServiceTest {
     }
 
     @Test
+    void testUpdateComment_adminCannotEditAnotherAuthorsText() {
+        UUID authorId = UUID.randomUUID();
+        ParticipantComment comment = new ParticipantComment();
+        comment.setId(UUID.randomUUID());
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setAuthorId(authorId);
+        comment.setText("Original");
+
+        when(commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comment.getId()))
+                .thenReturn(Optional.of(comment));
+
+        UpdateCommentRequest updateReq = new UpdateCommentRequest();
+        updateReq.setText("Updated text");
+
+        assertThrows(AccessDeniedException.class, () ->
+                workflowService.updateComment(tenantId, participantId, comment.getId(), userId, true, updateReq));
+    }
+
+    @Test
+    void testPinComment_adminCanPinAnotherAuthorsComment() {
+        ParticipantComment comment = new ParticipantComment();
+        comment.setId(UUID.randomUUID());
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setAuthorId(UUID.randomUUID());
+
+        when(commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comment.getId()))
+                .thenReturn(Optional.of(comment));
+        when(commentRepository.save(any(ParticipantComment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ParticipantCommentDto pinned = workflowService.pinComment(
+                tenantId, participantId, comment.getId(), userId, true, true);
+
+        assertTrue(pinned.isPinned());
+        assertFalse(pinned.isEditable());
+        assertTrue(pinned.isPinnable());
+    }
+
+    @Test
     void testDeleteComment_unauthorizedThrowsAccessDenied() {
         UUID otherUserId = UUID.randomUUID();
         ParticipantComment comment = new ParticipantComment();
@@ -599,6 +640,21 @@ class ParticipantWorkflowServiceTest {
 
         assertThrows(AccessDeniedException.class, () ->
                 workflowService.deleteComment(tenantId, participantId, comment.getId(), userId, false));
+    }
+
+    @Test
+    void testDeleteComment_adminCannotDeleteAnotherAuthorsComment() {
+        ParticipantComment comment = new ParticipantComment();
+        comment.setId(UUID.randomUUID());
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setAuthorId(UUID.randomUUID());
+
+        when(commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comment.getId()))
+                .thenReturn(Optional.of(comment));
+
+        assertThrows(AccessDeniedException.class, () ->
+                workflowService.deleteComment(tenantId, participantId, comment.getId(), userId, true));
     }
 
     @Test
@@ -617,12 +673,57 @@ class ParticipantWorkflowServiceTest {
     }
 
     @Test
+    void testSendSms_rejectsMultipleRecipientPhones() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        SendSmsRequest listRequest = new SendSmsRequest();
+        listRequest.setToPhones(List.of("+12155550199", "+12155550200"));
+        listRequest.setBody("Reminder: visit tomorrow.");
+        SendSmsRequest delimitedRequest = new SendSmsRequest();
+        delimitedRequest.setToPhone("+12155550199, +12155550200");
+        delimitedRequest.setBody("Reminder: visit tomorrow.");
+
+        for (SendSmsRequest request : List.of(listRequest, delimitedRequest)) {
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                    workflowService.sendSms(tenantId, participantId, userId, "Dr. Bob", request));
+            assertEquals(org.springframework.http.HttpStatus.BAD_REQUEST, ex.getStatusCode());
+            assertTrue(ex.getReason().contains("Only one recipient phone number is allowed"));
+        }
+        verify(communicationRepository, never()).save(any(Communication.class));
+    }
+
+    @Test
+    void testGetSmsRecipients_includesContactName() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        ParticipantContact contact = new ParticipantContact();
+        contact.setContactType("PHONE");
+        contact.setContactValue("+12155550199");
+        contact.setContactName("Jane Doe");
+        contact.setActive(true);
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, participantId)).thenReturn(List.of(contact));
+
+        List<SmsRecipientDto> recipients = workflowService.getSmsRecipients(tenantId, participantId);
+
+        assertEquals(1, recipients.size());
+        assertEquals("+12155550199", recipients.get(0).getPhoneNumber());
+        assertEquals("Jane Doe", recipients.get(0).getContactName());
+    }
+
+    @Test
     void testPinCommunication() {
         Communication comm = new Communication();
         comm.setId(UUID.randomUUID());
         comm.setTenantId(tenantId);
         comm.setParticipantId(participantId);
         comm.setChannel("SMS");
+        comm.setInitiatedByUserId(userId);
         comm.setPinned(false);
 
         
@@ -633,6 +734,48 @@ class ParticipantWorkflowServiceTest {
         CommunicationDto pinned = workflowService.pinCommunication(tenantId, participantId, comm.getId(), userId, true);
         assertTrue(pinned.isPinned());
     }
+
+    @Test
+    void testPinCommunication_nonOwnerCannotPinWithoutAdminPermission() {
+        Communication comm = new Communication();
+        comm.setId(UUID.randomUUID());
+        comm.setTenantId(tenantId);
+        comm.setParticipantId(participantId);
+        comm.setInitiatedByUserId(UUID.randomUUID());
+
+        when(communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, comm.getId()))
+                .thenReturn(Optional.of(comm));
+
+        assertThrows(AccessDeniedException.class, () ->
+                workflowService.pinCommunication(tenantId, participantId, comm.getId(), userId, false));
+    }
+
+    @Test
+    void testUpdateEmailLog_adminCanOnlyChangePin() {
+        UUID ownerId = UUID.randomUUID();
+        UUID commId = UUID.randomUUID();
+        Communication comm = new Communication();
+        comm.setId(commId);
+        comm.setTenantId(tenantId);
+        comm.setParticipantId(participantId);
+        comm.setInitiatedByUserId(ownerId);
+        comm.setChannel("EMAIL");
+        comm.setPinned(false);
+
+        when(communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId))
+                .thenReturn(Optional.of(comm));
+        when(communicationRepository.save(any(Communication.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CommunicationDto pinned = workflowService.updateEmailLog(
+                tenantId, participantId, commId, userId, true, Map.of("sticky", true));
+
+        assertTrue(pinned.isPinned());
+        assertTrue(pinned.isPinnable());
+
+        assertThrows(AccessDeniedException.class, () ->
+                workflowService.updateEmailLog(tenantId, participantId, commId, userId, true, Map.of("global", true)));
+    }
+
     @Test
     void testSendSms_unconfiguredGatewayMarkedQueued() {
         Participant participant = new Participant();

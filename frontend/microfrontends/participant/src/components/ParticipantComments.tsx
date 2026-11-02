@@ -6,8 +6,81 @@ import { getStoredAuthUser, getApiErrorMessage } from '../../../../shared/api-cl
 import { toast } from '../../../../shared/toaster';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { participantApi, ParticipantCommentItem } from '../../../../shared/api/participantApi';
-import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { DataGrid, type ColDef, type GridApi, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { TooltipButton as CommentActionTooltipButton } from '../../../../shared/design-system/components/TooltipButton';
+
+interface CommentEditorProps {
+  commentId: string;
+  initialText: string;
+  initialPinned: boolean;
+  onCancel: () => void;
+  onSave: (commentId: string, text: string, pinned: boolean) => Promise<void>;
+}
+
+const CommentEditor: React.FC<CommentEditorProps> = ({
+  commentId,
+  initialText,
+  initialPinned,
+  onCancel,
+  onSave,
+}) => {
+  const [text, setText] = useState(initialText);
+  const [pinned, setPinned] = useState(initialPinned);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!text.trim() || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(commentId, text, pinned);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 py-2">
+      <textarea
+        rows={5}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        aria-label="Edit comment text"
+        className="min-h-[150px] w-full resize-y rounded border border-gray-300 p-2 text-xs"
+        disabled={isSaving}
+        autoFocus
+      />
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-gray-700">
+          <input
+            type="checkbox"
+            checked={pinned}
+            onChange={(event) => setPinned(event.target.checked)}
+            disabled={isSaving}
+          />
+          Pin Comment
+        </label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="btn btn-sm btn-secondary"
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            className="btn btn-sm btn-primary"
+            disabled={!text.trim() || isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export interface ParticipantCommentsProps {
   participantId: string;
@@ -39,9 +112,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
 
   // Inline editing state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
-  const [editIsPinned, setEditIsPinned] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [gridApi, setGridApi] = useState<GridApi<ParticipantCommentItem> | null>(null);
 
   // Determine effective current user
   const effectiveUser = useMemo(() => {
@@ -103,25 +174,6 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
     return Math.abs(updated - created) > 2000;
   };
 
-  const canEditOrDelete = useCallback(
-    (comment: ParticipantCommentItem) => {
-      if (!effectiveUser) return true;
-      if (effectiveUser.canAccessSiteAdmin || (effectiveUser as any).isAdmin || (effectiveUser as any).isFullSiteAdmin) return true;
-      if (
-        effectiveUser.roles &&
-        effectiveUser.roles.some((r: string) => r.toUpperCase().includes('ADMIN') || r.toUpperCase().includes('MANAGER'))
-      ) {
-        return true;
-      }
-      const effId = effectiveUser.id ? String(effectiveUser.id) : '';
-      if (comment.authorId && effId && comment.authorId === effId) return true;
-      const authorName = getCommentAuthorName(comment);
-      if (authorName && authorName === currentUserName) return true;
-      return false;
-    },
-    [effectiveUser, currentUserName]
-  );
-
   const fetchComments = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
@@ -170,7 +222,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
     }
   };
 
-  const handleTogglePin = async (comment: ParticipantCommentItem) => {
+  const handleTogglePin = useCallback(async (comment: ParticipantCommentItem) => {
     setTogglingPinId(comment.id);
     const newPinned = !comment.pinned;
     try {
@@ -183,49 +235,41 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
     } finally {
       setTogglingPinId(null);
     }
-  };
+  }, [participantId, fetchComments, tenantId, siteId]);
 
-  const startEditComment = (comment: ParticipantCommentItem) => {
+  const startEditComment = useCallback((comment: ParticipantCommentItem) => {
     setEditingCommentId(comment.id);
-    setEditText(comment.text);
-    setEditIsPinned(Boolean(comment.pinned));
-  };
+  }, []);
 
-  const cancelEditComment = () => {
+  const cancelEditComment = useCallback(() => {
     setEditingCommentId(null);
-    setEditText('');
-    setEditIsPinned(false);
-  };
+  }, []);
 
-  const handleSaveEdit = async (commentId: string) => {
-    if (!editText.trim() || isSavingEdit) return;
-    setIsSavingEdit(true);
+  const handleSaveEdit = useCallback(async (commentId: string, text: string, pinned: boolean) => {
+    if (!text.trim()) return;
     try {
       await participantApi.updateComment(
         participantId,
         commentId,
-        { text: editText.trim() },
+        { text: text.trim() },
         { tenantId, siteId }
       );
 
       const existingComment = comments.find((c) => c.id === commentId);
-      if (existingComment && Boolean(existingComment.pinned) !== editIsPinned) {
-        await participantApi.pinComment(participantId, commentId, editIsPinned, { tenantId, siteId });
+      if (existingComment && Boolean(existingComment.pinned) !== pinned) {
+        await participantApi.pinComment(participantId, commentId, pinned, { tenantId, siteId });
       }
 
       toast.success('Comment updated successfully');
       setEditingCommentId(null);
-      setEditText('');
       await fetchComments();
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to update comment');
       toast.error(msg);
-    } finally {
-      setIsSavingEdit(false);
     }
-  };
+  }, [participantId, tenantId, siteId, comments, fetchComments]);
 
-  const handleDeleteComment = (comment: ParticipantCommentItem) => {
+  const handleDeleteComment = useCallback((comment: ParticipantCommentItem) => {
     void requestConfirmation({
       entityName: 'comment',
       intent: 'danger',
@@ -245,7 +289,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
         }
       },
     });
-  };
+  }, [participantId, tenantId, siteId, fetchComments]);
 
 
   const columnDefs = useMemo<ColDef<ParticipantCommentItem>[]>(() => [
@@ -328,44 +372,13 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
         if (!comment) return null;
         if (editingCommentId === comment.id) {
           return (
-            <div className="space-y-2 py-2">
-              <textarea
-                rows={5}
-                value={editText}
-                onChange={(event) => setEditText(event.target.value)}
-                aria-label="Edit comment text"
-                className="min-h-[150px] w-full resize-y rounded border border-gray-300 p-2 text-xs"
-                disabled={isSavingEdit}
-              />
-              <div className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-1.5 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={editIsPinned}
-                    onChange={(event) => setEditIsPinned(event.target.checked)}
-                  />
-                  Pin Comment
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={cancelEditComment}
-                    className="btn btn-sm btn-secondary"
-                    disabled={isSavingEdit}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveEdit(comment.id)}
-                    className="btn btn-sm btn-primary"
-                    disabled={!editText.trim() || isSavingEdit}
-                  >
-                    {isSavingEdit ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <CommentEditor
+              commentId={comment.id}
+              initialText={comment.text}
+              initialPinned={Boolean(comment.pinned)}
+              onCancel={cancelEditComment}
+              onSave={handleSaveEdit}
+            />
           );
         }
         return (
@@ -389,20 +402,22 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
         if (!comment) return null;
         return (
           <div className="participant-grid__row-actions">
-            <CommentActionTooltipButton
-              label={comment.pinned ? 'Unpin comment' : 'Pin comment'}
-              disabled={togglingPinId === comment.id}
-              className="participant-grid__row-action"
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleTogglePin(comment);
-              }}
-            >
-              {togglingPinId === comment.id
-                ? <Loader2 size={14} className="animate-spin" />
-                : <Pin size={14} className={comment.pinned ? 'fill-amber-500 text-amber-600' : ''} />}
-            </CommentActionTooltipButton>
-            {canEditOrDelete(comment) && editingCommentId !== comment.id && (
+            {comment.pinnable === true && (
+              <CommentActionTooltipButton
+                label={comment.pinned ? 'Unpin comment' : 'Pin comment'}
+                disabled={togglingPinId === comment.id}
+                className="participant-grid__row-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleTogglePin(comment);
+                }}
+              >
+                {togglingPinId === comment.id
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Pin size={14} className={comment.pinned ? 'fill-amber-500 text-amber-600' : ''} />}
+              </CommentActionTooltipButton>
+            )}
+            {comment.editable === true && editingCommentId !== comment.id && (
               <>
                 <CommentActionTooltipButton
                   label="Edit comment"
@@ -430,7 +445,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
         );
       },
     },
-  ], [editingCommentId, editText, editIsPinned, isSavingEdit, togglingPinId, canEditOrDelete, startEditComment, cancelEditComment, handleSaveEdit, handleDeleteComment, handleTogglePin]);
+  ], [editingCommentId, togglingPinId, startEditComment, cancelEditComment, handleSaveEdit, handleDeleteComment, handleTogglePin]);
 
   const defaultColDef = useMemo<ColDef<ParticipantCommentItem>>(() => ({
     sortable: true,
@@ -438,6 +453,16 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
     filter: true,
     floatingFilter: true,
   }), []);
+  const handleGridReady = useCallback((params: { api: GridApi<ParticipantCommentItem> }) => {
+    setGridApi(params.api);
+  }, []);
+
+  useEffect(() => {
+    if (!gridApi) return;
+    gridApi.setGridOption('quickFilterText', searchTerm);
+    gridApi.paginationGoToFirstPage();
+  }, [gridApi, searchTerm]);
+
   return (
     <div className="space-y-4">
       {/* Add Comment Form - Legacy Ripple Style */}
@@ -458,7 +483,10 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
             <label className="text-xs font-normal text-gray-700" style={{ marginRight: '4px' }}>
               Mark Comment As:
             </label>
-            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700">
+            <label
+              className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-700"
+              data-tooltip="Pin Comment"
+            >
               <input
                 id="comment-checkbox-pin"
                 type="checkbox"
@@ -540,7 +568,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
             rowData={comments}
             columnDefs={columnDefs}
             defaultColDef={defaultColDef}
-            quickFilterText={searchTerm}
+            onGridReady={handleGridReady}
             pagination
             paginationPageSize={10}
             paginationPageSizeSelector={[5, 10, 20, 50]}

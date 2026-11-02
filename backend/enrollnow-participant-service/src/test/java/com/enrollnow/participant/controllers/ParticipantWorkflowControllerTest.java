@@ -44,7 +44,8 @@ class ParticipantWorkflowControllerTest {
     @Test
     void getComments_returnsComments() {
         mockAuth();
-        when(workflowService.getComments(tenantId, participantId)).thenReturn(List.of(new ParticipantCommentDto()));
+        when(siteAuthorizationService.canAccessSiteAdmin(tenantId, null)).thenReturn(false);
+        when(workflowService.getComments(tenantId, participantId, userId, false)).thenReturn(List.of(new ParticipantCommentDto()));
 
         ResponseEntity<List<ParticipantCommentDto>> res = controller.getComments(participantId, null, null);
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -155,7 +156,7 @@ class ParticipantWorkflowControllerTest {
 
         CommunicationDto dto = new CommunicationDto();
         dto.setPinned(true);
-        when(workflowService.pinCommunication(tenantId, participantId, smsId, userId, true)).thenReturn(dto);
+        when(workflowService.pinCommunication(tenantId, participantId, smsId, userId, false, true)).thenReturn(dto);
 
         ResponseEntity<CommunicationDto> res = controller.pinSms(participantId, smsId, req, null, null);
         assertThat(res.getStatusCode()).isEqualTo(HttpStatus.OK);

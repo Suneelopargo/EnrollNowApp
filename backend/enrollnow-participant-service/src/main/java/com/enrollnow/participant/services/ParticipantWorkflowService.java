@@ -128,10 +128,15 @@ public class ParticipantWorkflowService {
 
     @Transactional(readOnly = true)
     public List<ParticipantCommentDto> getComments(UUID tenantId, UUID participantId) {
+        return getComments(tenantId, participantId, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParticipantCommentDto> getComments(UUID tenantId, UUID participantId, UUID userId, boolean canAccessAdmin) {
         verifyParticipantExists(tenantId, participantId);
         return commentRepository.findByTenantIdAndParticipantIdOrderByPinnedDescCreatedAtDesc(tenantId, participantId)
                 .stream()
-                .map(this::mapCommentToDto)
+                .map(comment -> mapCommentToDto(comment, userId, canAccessAdmin))
                 .collect(Collectors.toList());
     }
 
@@ -159,7 +164,7 @@ public class ParticipantWorkflowService {
         ParticipantComment saved = commentRepository.save(comment);
         recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_CREATED", "ParticipantComment", saved.getId(), "Created comment on participant " + participantId);
 
-        return mapCommentToDto(saved);
+        return mapCommentToDto(saved, userId, false);
     }
 
     @Transactional
@@ -168,17 +173,14 @@ public class ParticipantWorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
 
         boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
-        if (!isAuthor && !canAccessAdmin) {
-            throw new AccessDeniedException("Only the author or an administrator can edit this comment");
+        if (!isAuthor) {
+            throw new AccessDeniedException("Only the author can edit this comment");
         }
 
         if (request.getText() != null) {
             comment.setText(request.getText().trim());
         }
         if (request.getPinned() != null) {
-            if (!canAccessAdmin && !isAuthor) {
-                throw new AccessDeniedException("Permission denied to change pinned state");
-            }
             comment.setPinned(request.getPinned());
         }
         comment.setUpdatedBy(userId);
@@ -187,7 +189,7 @@ public class ParticipantWorkflowService {
         ParticipantComment saved = commentRepository.save(comment);
         recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_UPDATED", "ParticipantComment", saved.getId(), "Updated comment on participant " + participantId);
 
-        return mapCommentToDto(saved);
+        return mapCommentToDto(saved, userId, canAccessAdmin);
     }
 
     @Transactional
@@ -205,7 +207,7 @@ public class ParticipantWorkflowService {
         comment.setUpdatedAt(OffsetDateTime.now());
 
         ParticipantComment saved = commentRepository.save(comment);
-        return mapCommentToDto(saved);
+        return mapCommentToDto(saved, userId, canAccessAdmin);
     }
 
     @Transactional
@@ -214,15 +216,15 @@ public class ParticipantWorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
 
         boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
-        if (!isAuthor && !canAccessAdmin) {
-            throw new AccessDeniedException("Only the author or an administrator can delete this comment");
+        if (!isAuthor) {
+            throw new AccessDeniedException("Only the author can delete this comment");
         }
 
         commentRepository.delete(comment);
         recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_DELETED", "ParticipantComment", commentId, "Deleted comment on participant " + participantId);
     }
 
-    private ParticipantCommentDto mapCommentToDto(ParticipantComment comment) {
+    private ParticipantCommentDto mapCommentToDto(ParticipantComment comment, UUID userId, boolean canAccessAdmin) {
         ParticipantCommentDto dto = new ParticipantCommentDto();
         dto.setId(comment.getId());
         dto.setParticipantId(comment.getParticipantId());
@@ -235,6 +237,9 @@ public class ParticipantWorkflowService {
         dto.setAuthorName(comment.getAuthorName());
         dto.setCreatedAt(comment.getCreatedAt());
         dto.setUpdatedAt(comment.getUpdatedAt());
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        dto.setEditable(isAuthor);
+        dto.setPinnable(isAuthor || canAccessAdmin);
         return dto;
     }
 
@@ -244,11 +249,16 @@ public class ParticipantWorkflowService {
 
     @Transactional(readOnly = true)
     public List<CommunicationDto> getEmails(UUID tenantId, UUID participantId) {
+        return getEmails(tenantId, participantId, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunicationDto> getEmails(UUID tenantId, UUID participantId, UUID userId, boolean canAccessAdmin) {
         verifyParticipantExists(tenantId, participantId);
         List<Communication> list = communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(
                 tenantId, participantId, "EMAIL");
 
-        return list.stream().map(this::mapCommunicationToDto).collect(Collectors.toList());
+        return list.stream().map(comm -> mapCommunicationToDto(comm, userId, canAccessAdmin)).collect(Collectors.toList());
     }
 
     private String computeInitials(String fullName) {
@@ -448,16 +458,21 @@ public class ParticipantWorkflowService {
 
         recordAudit(tenantId, userId, "EMAIL_SENT", "Communication", saved.getId(), "Sent email to participant " + participantId);
 
-        return mapCommunicationToDto(saved);
+        return mapCommunicationToDto(saved, userId, false);
     }
 
     @Transactional(readOnly = true)
     public List<CommunicationDto> getSms(UUID tenantId, UUID participantId) {
+        return getSms(tenantId, participantId, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunicationDto> getSms(UUID tenantId, UUID participantId, UUID userId, boolean canAccessAdmin) {
         verifyParticipantExists(tenantId, participantId);
         List<Communication> list = communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(
                 tenantId, participantId, "SMS");
 
-        return list.stream().map(this::mapCommunicationToDto).collect(Collectors.toList());
+        return list.stream().map(comm -> mapCommunicationToDto(comm, userId, canAccessAdmin)).collect(Collectors.toList());
     }
 
     @Transactional
@@ -501,6 +516,9 @@ public class ParticipantWorkflowService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is not valid for region. Try changing the phone number.");
             }
         }
+        if (normalizedPhones.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only one recipient phone number is allowed");
+        }
 
         // Duplicate SMS Protection:
         // Check if an identical outbound SMS was dispatched to this participant & phone within the past 15 seconds.
@@ -518,7 +536,7 @@ public class ParticipantWorkflowService {
                 if (recipientMatches) {
                     log.info("Duplicate SMS submission detected for participant {} to {}; returning existing communication record {}",
                             participantId, normalizedPhones, existing.getId());
-                    return mapCommunicationToDto(existing);
+                    return mapCommunicationToDto(existing, userId, false);
                 }
             }
         }
@@ -578,23 +596,48 @@ public class ParticipantWorkflowService {
         Communication saved = communicationRepository.save(comm);
         recordAudit(tenantId, userId, "SMS_" + comm.getStatus(), "Communication", saved.getId(), "Dispatched SMS to " + String.join(", ", normalizedPhones) + " with status: " + comm.getStatus());
 
-        return mapCommunicationToDto(saved);
+        return mapCommunicationToDto(saved, userId, false);
     }
 
     @Transactional
     public CommunicationDto pinCommunication(UUID tenantId, UUID participantId, UUID commId, UUID userId, boolean pinned) {
+        return pinCommunication(tenantId, participantId, commId, userId, false, pinned);
+    }
+
+    @Transactional
+    public CommunicationDto pinCommunication(UUID tenantId, UUID participantId, UUID commId, UUID userId, boolean canAccessAdmin, boolean pinned) {
         Communication comm = communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Communication record not found"));
 
+        boolean isAuthor = comm.getInitiatedByUserId() != null && comm.getInitiatedByUserId().equals(userId);
+        if (!isAuthor && !canAccessAdmin) {
+            throw new AccessDeniedException("Only the author or an administrator can pin/unpin this communication");
+        }
+
         comm.setPinned(pinned);
         Communication saved = communicationRepository.save(comm);
-        return mapCommunicationToDto(saved);
+        return mapCommunicationToDto(saved, userId, canAccessAdmin);
     }
 
     @Transactional
     public CommunicationDto updateEmailLog(UUID tenantId, UUID participantId, UUID commId, UUID userId, Map<String, Object> flags) {
+        return updateEmailLog(tenantId, participantId, commId, userId, false, flags);
+    }
+
+    @Transactional
+    public CommunicationDto updateEmailLog(UUID tenantId, UUID participantId, UUID commId, UUID userId, boolean canAccessAdmin, Map<String, Object> flags) {
         Communication comm = communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Communication record not found"));
+
+        if (flags == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email flags are required");
+        }
+        boolean isAuthor = comm.getInitiatedByUserId() != null && comm.getInitiatedByUserId().equals(userId);
+        boolean pinOnlyUpdate = !flags.isEmpty()
+                && flags.keySet().stream().allMatch(key -> "sticky".equals(key) || "pinned".equals(key));
+        if (!isAuthor && !(canAccessAdmin && pinOnlyUpdate)) {
+            throw new AccessDeniedException("Only the author can update email details; administrators may only pin or unpin");
+        }
 
         if (flags.containsKey("sticky") || flags.containsKey("pinned")) {
             boolean sticky = Boolean.TRUE.equals(flags.get("sticky")) || Boolean.TRUE.equals(flags.get("pinned"));
@@ -633,7 +676,7 @@ public class ParticipantWorkflowService {
         } catch (Exception ignored) {}
 
         Communication saved = communicationRepository.save(comm);
-        return mapCommunicationToDto(saved);
+        return mapCommunicationToDto(saved, userId, canAccessAdmin);
     }
 
     @Transactional(readOnly = true)
@@ -652,22 +695,34 @@ public class ParticipantWorkflowService {
     }
 
     @Transactional(readOnly = true)
-    public List<String> getSmsRecipients(UUID tenantId, UUID participantId) {
+    public List<SmsRecipientDto> getSmsRecipients(UUID tenantId, UUID participantId) {
         Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found"));
 
-        Set<String> phones = new LinkedHashSet<>();
+        Map<String, SmsRecipientDto> phonesByNumber = new LinkedHashMap<>();
         List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
         for (ParticipantContact c : contacts) {
             if (c.isActive() && ("PHONE".equalsIgnoreCase(c.getContactType()) || "SMS".equalsIgnoreCase(c.getContactType()))
                     && c.getContactValue() != null && !c.getContactValue().isBlank()) {
-                phones.add(c.getContactValue().trim());
+                String phoneNumber = c.getContactValue().trim();
+                SmsRecipientDto recipient = phonesByNumber.computeIfAbsent(
+                        phoneNumber,
+                        number -> new SmsRecipientDto(number, null)
+                );
+                if ((recipient.getContactName() == null || recipient.getContactName().isBlank())
+                        && c.getContactName() != null && !c.getContactName().isBlank()) {
+                    recipient.setContactName(c.getContactName().trim());
+                }
             }
         }
-        return new ArrayList<>(phones);
+        return new ArrayList<>(phonesByNumber.values());
     }
 
     private CommunicationDto mapCommunicationToDto(Communication comm) {
+        return mapCommunicationToDto(comm, null, false);
+    }
+
+    private CommunicationDto mapCommunicationToDto(Communication comm, UUID userId, boolean canAccessAdmin) {
         CommunicationDto dto = new CommunicationDto();
         dto.setId(comm.getId());
         dto.setParticipantId(comm.getParticipantId());
@@ -683,6 +738,7 @@ public class ParticipantWorkflowService {
         dto.setCreatedAt(comm.getCreatedAt() != null ? comm.getCreatedAt() : OffsetDateTime.now());
         dto.setPinned(comm.isPinned());
         dto.setSticky(comm.isPinned());
+        dto.setPinnable((comm.getInitiatedByUserId() != null && comm.getInitiatedByUserId().equals(userId)) || canAccessAdmin);
 
         if (comm.getMetadata() != null && !comm.getMetadata().isBlank()) {
             try {

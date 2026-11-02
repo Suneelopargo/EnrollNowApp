@@ -3,9 +3,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronDown, Loader2, AlertCircle } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { toast } from '../../../../shared/toaster';
 import { getApiErrorMessage } from '../../../../shared/api-client';
-import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
+import {
+  participantApi,
+  CommunicationItem,
+  ParticipantContactDetail,
+  SmsRecipientItem,
+} from '../../../../shared/api/participantApi';
 
 export interface ComposeSmsModalProps {
   isOpen: boolean;
@@ -18,18 +24,45 @@ export interface ComposeSmsModalProps {
   onSmsSent: (sms: CommunicationItem) => void;
 }
 
+export const mapSmsRecipientOptions = (
+  contacts: Array<Pick<ParticipantContactDetail, 'contactType' | 'contactValue' | 'contactName' | 'active'>>,
+  directRecipients: Array<SmsRecipientItem | string>,
+): SmsRecipientItem[] => {
+  const recipients = new Map<string, SmsRecipientItem>();
+
+  contacts.forEach((contact) => {
+    const phoneNumber = contact.contactValue.trim();
+    const contactType = contact.contactType.toUpperCase();
+    if (!contact.active || (contactType !== 'PHONE' && contactType !== 'SMS') || !phoneNumber) return;
+
+    const existing = recipients.get(phoneNumber);
+    recipients.set(phoneNumber, {
+      phoneNumber,
+      contactName: contact.contactName?.trim() || existing?.contactName,
+    });
+  });
+
+  directRecipients.forEach((recipient) => {
+    const phoneNumber = typeof recipient === 'string' ? recipient.trim() : recipient.phoneNumber.trim();
+    if (!phoneNumber) return;
+
+    if (!recipients.has(phoneNumber)) recipients.set(phoneNumber, { phoneNumber });
+  });
+
+  return Array.from(recipients.values());
+};
+
 export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
   isOpen,
   onClose,
   participantId,
-  participantName,
   studyId,
   tenantId,
   siteId,
   onSmsSent,
 }) => {
-  const [selectedPhones, setSelectedPhones] = useState<string[]>([]);
-  const [availablePhones, setAvailablePhones] = useState<string[]>([]);
+  const [selectedPhone, setSelectedPhone] = useState('');
+  const [availablePhones, setAvailablePhones] = useState<SmsRecipientItem[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [message, setMessage] = useState('');
@@ -44,15 +77,15 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
 
   useEffect(() => {
     if (isOpen && participantId) {
-      participantApi
-        .getSmsRecipients(participantId, { tenantId, siteId })
-        .then((phones) => {
-          setAvailablePhones(phones || []);
-          if (phones && phones.length > 0) {
-            setSelectedPhones([phones[0]]);
-          } else {
-            setSelectedPhones([]);
-          }
+      setSelectedPhone('');
+      setAvailablePhones([]);
+      setInputValue('');
+      Promise.all([
+        participantApi.getSmsRecipients(participantId, { tenantId, siteId }),
+        participantApi.getContacts(participantId, { tenantId, siteId }),
+      ])
+        .then(([phones, contacts]) => {
+          setAvailablePhones(mapSmsRecipientOptions(contacts, phones || []));
         })
         .catch((err) => {
           console.warn('Failed to load SMS phones:', err);
@@ -84,22 +117,16 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
   const handleAddPhone = (phone: string) => {
     const trimmed = phone.trim();
     if (!trimmed) return;
-    if (!selectedPhones.includes(trimmed)) {
-      setSelectedPhones((prev) => [...prev, trimmed]);
-    }
+    setSelectedPhone(trimmed);
     setInputValue('');
     setPhoneError(null);
     setBannerError(null);
     setIsDropdownOpen(false);
   };
 
-  const handleRemovePhone = (phoneToRemove: string) => {
-    setSelectedPhones((prev) => prev.filter((p) => p !== phoneToRemove));
-  };
-
   const handleClearAll = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedPhones([]);
+    setSelectedPhone('');
     setInputValue('');
   };
 
@@ -109,19 +136,26 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
       if (inputValue.trim()) {
         handleAddPhone(inputValue);
       }
-    } else if (e.key === 'Backspace' && !inputValue && selectedPhones.length > 0) {
-      setSelectedPhones((prev) => prev.slice(0, -1));
+    } else if (e.key === 'Backspace' && !inputValue && selectedPhone) {
+      setSelectedPhone('');
     }
   };
 
   const filteredAvailable = availablePhones.filter(
-    (p) => !selectedPhones.includes(p) && p.toLowerCase().includes(inputValue.toLowerCase())
+    (recipient) => recipient.phoneNumber.toLowerCase().includes(inputValue.toLowerCase())
   );
 
   const canCreate =
     inputValue.trim().length > 0 &&
-    !selectedPhones.includes(inputValue.trim()) &&
-    !availablePhones.includes(inputValue.trim());
+    selectedPhone !== inputValue.trim() &&
+    !availablePhones.some((recipient) => recipient.phoneNumber === inputValue.trim());
+
+  const getPhoneDisplay = (phoneNumber: string) => {
+    const recipient = availablePhones.find((item) => item.phoneNumber === phoneNumber);
+    if (!recipient) return phoneNumber;
+    const contactName = recipient.contactName?.trim();
+    return contactName ? `${phoneNumber} (${contactName})` : phoneNumber;
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,17 +163,14 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
     setPhoneError(null);
     setMessageError(null);
 
-    // If there is still text typed in input that wasn't committed, add it
-    let currentPhones = [...selectedPhones];
-    if (inputValue.trim() && !currentPhones.includes(inputValue.trim())) {
-      currentPhones.push(inputValue.trim());
-      setSelectedPhones(currentPhones);
-      setInputValue('');
-    }
+    const currentPhone = inputValue.trim() || selectedPhone;
 
     let hasError = false;
-    if (currentPhones.length === 0) {
+    if (!currentPhone) {
       setPhoneError('required');
+      hasError = true;
+    } else if (currentPhone.includes(',') || currentPhone.includes(';')) {
+      setPhoneError('Enter only one phone number');
       hasError = true;
     }
 
@@ -158,8 +189,7 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
       const sent = await participantApi.sendSms(
         participantId,
         {
-          toPhone: currentPhones.join(', '),
-          toPhones: currentPhones,
+          toPhone: currentPhone,
           body: message.trim(),
           pinned: isPinned,
           studyId: studyId?.trim() || undefined,
@@ -246,99 +276,108 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
             <div className="compose-text-control">
               <div
                 ref={containerRef}
-                className={`relative min-h-[38px] border rounded bg-white flex items-center flex-wrap gap-1 px-2 py-1 transition-colors cursor-text ${
-                  phoneError ? 'border-red-500' : 'border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500'
-                }`}
-                onClick={() => {
-                  inputRef.current?.focus();
-                  setIsDropdownOpen(true);
-                }}
+                style={{ position: 'relative', width: '100%' }}
               >
-                {/* Selected phone chips */}
-                {selectedPhones.map((ph) => (
-                  <span
-                    key={ph}
-                    className="inline-flex items-center gap-1 bg-gray-100 text-gray-800 text-xs px-2 py-0.5 rounded border border-gray-200"
-                  >
-                    <span>{ph}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemovePhone(ph);
-                      }}
-                      className="text-gray-400 hover:text-gray-700 font-bold ml-0.5"
-                      aria-label={`Remove ${ph}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-
-                {/* Input text */}
                 <input
                   ref={inputRef}
                   id="text-to-phone"
-                  type="text"
-                  value={inputValue}
+                  type="tel"
+                  value={inputValue || selectedPhone}
                   onChange={(e) => {
                     setInputValue(e.target.value);
+                    setSelectedPhone('');
                     setIsDropdownOpen(true);
                   }}
                   onFocus={() => setIsDropdownOpen(true)}
                   onKeyDown={handleKeyDown}
-                  placeholder={selectedPhones.length === 0 ? 'To' : ''}
-                  className="flex-1 min-w-[120px] outline-none border-none text-xs text-gray-800 p-0 bg-transparent"
+                  placeholder="Phone number"
+                  className={`form-input ${phoneError ? 'border-red-500' : ''}`}
+                  style={{ paddingRight: selectedPhone ? 76 : 40 }}
+                  aria-label="Recipient phone number"
+                  aria-autocomplete="list"
+                  aria-expanded={isDropdownOpen}
+                  aria-controls="text-to-phone-options"
+                  role="combobox"
+                  autoComplete="off"
                   disabled={isSending}
                 />
 
-                {/* Clear all (X) and Chevron */}
-                <div className="flex items-center gap-1 ml-auto text-gray-400">
-                  {selectedPhones.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearAll}
-                      className="hover:text-gray-600 p-0.5"
-                      aria-label="Clear all recipients"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                  <ChevronDown
-                    size={16}
-                    className="cursor-pointer hover:text-gray-600"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsDropdownOpen((prev) => !prev);
+                {selectedPhone && (
+                  <TooltipButton
+                    label="Clear recipient"
+                    onClick={handleClearAll}
+                    style={{
+                      position: 'absolute',
+                      right: 36,
+                      top: 0,
+                      bottom: 0,
+                      width: 36,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
                     }}
-                  />
-                </div>
-
-                {/* Creatable dropdown menu */}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </TooltipButton>
+                )}
+                <TooltipButton
+                  label="Choose a phone number"
+                  onClick={() => setIsDropdownOpen((open) => !open)}
+                  disabled={isSending}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 36,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                  }}
+                  className="text-gray-500 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-haspopup="listbox"
+                  aria-expanded={isDropdownOpen}
+                >
+                  <ChevronDown size={16} aria-hidden="true" />
+                </TooltipButton>
                 {isDropdownOpen && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto z-50 py-1 text-xs">
-                    {filteredAvailable.map((ph) => (
-                      <div
-                        key={ph}
-                        onClick={() => handleAddPhone(ph)}
-                        className="px-3 py-1.5 hover:bg-blue-50 hover:text-blue-700 cursor-pointer text-gray-700"
+                  <div
+                    id="text-to-phone-options"
+                    role="listbox"
+                    aria-label="Phone number options"
+                    className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                    style={{ position: 'absolute', zIndex: 50, top: '100%', left: 0, right: 0, marginTop: 4 }}
+                  >
+                    {filteredAvailable.map((recipient) => (
+                      <button
+                        key={recipient.phoneNumber}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedPhone === recipient.phoneNumber}
+                        onClick={() => handleAddPhone(recipient.phoneNumber)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs text-gray-700 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                       >
-                        {ph}
-                      </div>
+                        {getPhoneDisplay(recipient.phoneNumber)}
+                      </button>
                     ))}
 
                     {canCreate && (
-                      <div
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={false}
                         onClick={() => handleAddPhone(inputValue)}
-                        className="px-3 py-2 bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 cursor-pointer border-t border-blue-100 flex items-center justify-between"
+                        className="flex w-full items-center justify-between gap-3 border-t border-blue-100 bg-blue-50 px-3 py-2 text-left text-xs font-medium text-blue-700 hover:bg-blue-100"
                       >
-                        <span>Create "{inputValue.trim()}"</span>
-                        <span className="text-[10px] text-blue-500 bg-white px-1.5 py-0.5 rounded border border-blue-200">↵ Enter</span>
-                      </div>
+                        <span>Use {inputValue.trim()}</span>
+                      </button>
                     )}
 
                     {filteredAvailable.length === 0 && !canCreate && (
-                      <div className="px-3 py-2 text-gray-400 italic text-center">
+                      <div className="px-3 py-2 text-center text-xs italic text-gray-400">
                         {availablePhones.length === 0 ? 'Type a phone number and press Enter' : 'No matching numbers'}
                       </div>
                     )}

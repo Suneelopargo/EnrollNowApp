@@ -605,7 +605,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     id="participant-first-name"
                     type="text"
                     value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
+                    readOnly
                     placeholder="First Name"
                     className="form-input"
                   />
@@ -616,7 +616,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     id="participant-middle-name"
                     type="text"
                     value={middleName}
-                    onChange={(e) => setMiddleName(e.target.value)}
+                    readOnly
                     placeholder="Middle Name"
                     className="form-input"
                   />
@@ -627,7 +627,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     id="participant-last-name"
                     type="text"
                     value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
+                    readOnly
                     placeholder="Last Name"
                     className="form-input"
                   />

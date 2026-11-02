@@ -236,19 +236,21 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
         if (!log) return null;
         return (
           <div className="participant-grid__row-actions">
-            <TooltipButton
-              label={log.sticky ? 'Unpin consent' : 'Pin consent'}
-              disabled={togglingPinId === log.id || log.pinnable === false}
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleTogglePin(log);
-              }}
-              className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
-            >
-              {togglingPinId === log.id
-                ? <Loader2 size={14} className="animate-spin" />
-                : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
-            </TooltipButton>
+            {log.pinnable === true && (
+              <TooltipButton
+                label={log.sticky ? 'Unpin consent' : 'Pin consent'}
+                disabled={togglingPinId === log.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleTogglePin(log);
+                }}
+                className={`participant-grid__row-action${log.sticky ? ' participant-grid__row-action--warning' : ''}`}
+              >
+                {togglingPinId === log.id
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Pin size={14} fill={log.sticky ? 'currentColor' : 'none'} />}
+              </TooltipButton>
+            )}
             {log.fileAttached && log.downloadUrl ? (
               <TooltipButton
                 label={`Preview ${log.fileName || 'consent attachment'}`}
@@ -263,7 +265,7 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
             ) : (
               <span className="text-gray-400">—</span>
             )}
-            {log.editable !== false && (
+            {log.editable === true && (
               <>
                 <TooltipButton
                   label="Edit consent log"

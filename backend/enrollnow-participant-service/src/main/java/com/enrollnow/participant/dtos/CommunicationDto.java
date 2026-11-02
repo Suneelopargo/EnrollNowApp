@@ -19,6 +19,7 @@ public class CommunicationDto {
     private OffsetDateTime sentAt;
     private OffsetDateTime createdAt;
     private boolean pinned;
+    private boolean pinnable;
     private String senderName;
     private String replyTo;
     private String design;
@@ -59,6 +60,8 @@ public class CommunicationDto {
     public void setPinned(boolean pinned) { this.pinned = pinned; }
     public boolean isSticky() { return pinned; }
     public void setSticky(boolean sticky) { this.pinned = sticky; }
+    public boolean isPinnable() { return pinnable; }
+    public void setPinnable(boolean pinnable) { this.pinnable = pinnable; }
     public String getSenderName() { return senderName; }
     public void setSenderName(String senderName) { this.senderName = senderName; }
     public String getReplyTo() { return replyTo; }

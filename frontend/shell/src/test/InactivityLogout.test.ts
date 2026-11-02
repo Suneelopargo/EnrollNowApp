@@ -7,7 +7,7 @@ import {
   STORAGE_KEY_INACTIVITY_MINUTES,
   INACTIVITY_BROADCAST_CHANNEL,
 } from '../auth/inactivityManager';
-import { securitySettingsApi } from '../../../shared/api/securitySettingsApi';
+import { securitySettingsApi, type SecuritySettingsResponse } from '../../../shared/api/securitySettingsApi';
 
 vi.mock('../../../shared/api/securitySettingsApi', () => ({
   securitySettingsApi: {
@@ -157,6 +157,55 @@ describe('Enterprise Inactivity Auto-Logout Suite', () => {
     expect(manager.getTimeoutMinutes()).toBe(30);
     expect(localStorage.getItem(STORAGE_KEY_INACTIVITY_MINUTES)).toBe('30');
     manager.stop();
+  });
+
+  it('does not attach listeners when stopped while the policy request is pending', async () => {
+    let resolvePolicy!: (settings: SecuritySettingsResponse) => void;
+    const pendingPolicy = new Promise<SecuritySettingsResponse>((resolve) => {
+      resolvePolicy = resolve;
+    });
+    vi.mocked(securitySettingsApi.getSecuritySettings).mockReturnValueOnce(pendingPolicy);
+
+    const manager = new InactivityManager({
+      isAuthenticated: true,
+      onLogout: vi.fn(),
+    });
+    const startPromise = manager.start();
+
+    manager.stop();
+    resolvePolicy({
+      maxFailedLoginAttempts: 10,
+      preventConcurrentSessions: false,
+      inactivityLogoutMinutes: 30,
+      inactivityLockDays: 90,
+      passwordExpiryDays: 300,
+      passwordHistoryCount: 4,
+      minimumPasswordLength: 10,
+      minimumPasswordStrength: 'MODERATE',
+      requireDigit: true,
+      requireSymbol: true,
+      requireMixedCase: true,
+    });
+    await startPromise;
+
+    expect(windowListeners.mousemove ?? []).toHaveLength(0);
+    expect(docListeners.visibilitychange ?? []).toHaveLength(0);
+    expect(MockBroadcastChannel.channels).toHaveLength(0);
+  });
+
+  it('handles repeated logout signals only once', async () => {
+    const onLogout = vi.fn();
+    const manager = new InactivityManager({
+      isAuthenticated: true,
+      onLogout,
+    });
+    await manager.start();
+
+    manager.triggerLogout('INACTIVITY_TIMEOUT');
+    manager.triggerLogout('INACTIVITY_TIMEOUT');
+
+    expect(onLogout).toHaveBeenCalledTimes(1);
+    expect(onLogout).toHaveBeenCalledWith('INACTIVITY_TIMEOUT');
   });
 
   it('tracks user activity on mousemove and keydown, respecting throttle limit', async () => {

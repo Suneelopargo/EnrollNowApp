@@ -2,6 +2,7 @@ package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
@@ -220,6 +221,31 @@ class ParticipantContactLogServiceTest {
     }
 
     @Test
+    void updateContactLog_adminCannotUpdateAnotherAuthorsLog() {
+        UUID otherUser = UUID.randomUUID();
+        ParticipantContactLog log = new ParticipantContactLog();
+        log.setId(UUID.randomUUID());
+        log.setTenantId(tenantId);
+        log.setParticipantId(participantId);
+        log.setCreatedBy(otherUser);
+
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId))
+                .thenReturn(Optional.of(testParticipant));
+        when(contactLogRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, log.getId()))
+                .thenReturn(Optional.of(log));
+        UserEffectivePermissionsResponse perms = new UserEffectivePermissionsResponse();
+        perms.setCanAccessSiteAdmin(true);
+        perms.setRoles(List.of("SITE_ADMIN"));
+        when(sitePermissionService.resolveEffectivePermissions(tenantId, callerUserId, null)).thenReturn(perms);
+
+        UpdateContactLogRequest request = new UpdateContactLogRequest();
+        request.setComments("Trying to update as administrator");
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.updateContactLog(tenantId, participantId, log.getId(), callerUserId, request));
+    }
+
+    @Test
     void pinContactLog_ownerCanTogglePin() {
         ParticipantContactLog log = new ParticipantContactLog();
         log.setId(UUID.randomUUID());
@@ -261,6 +287,24 @@ class ParticipantContactLogServiceTest {
         verify(contactLogRepository).delete(log);
         verify(participantRepository).save(testParticipant);
         verify(auditRecorder).record(any(AuditEventCommand.class));
+    }
+
+    @Test
+    void deleteContactLog_nonOwnerCannotDelete() {
+        ParticipantContactLog log = new ParticipantContactLog();
+        log.setId(UUID.randomUUID());
+        log.setTenantId(tenantId);
+        log.setParticipantId(participantId);
+        log.setCreatedBy(UUID.randomUUID());
+
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId))
+                .thenReturn(Optional.of(testParticipant));
+        when(contactLogRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, log.getId()))
+                .thenReturn(Optional.of(log));
+
+        assertThrows(AccessDeniedException.class, () ->
+                service.deleteContactLog(tenantId, participantId, log.getId(), callerUserId));
+        verify(contactLogRepository, never()).delete(any());
     }
 
     @Test

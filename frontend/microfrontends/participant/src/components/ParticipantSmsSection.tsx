@@ -127,7 +127,7 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
       comparator: (a, b) => new Date(a || 0).getTime() - new Date(b || 0).getTime(),
       cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
         const message = params.data;
-        if (!message) return null;
+        if (!message || message.pinnable !== true) return null;
         return (
           <div className="flex items-center gap-2 whitespace-nowrap py-1">
             <span className="shrink-0 text-xs text-gray-800">
