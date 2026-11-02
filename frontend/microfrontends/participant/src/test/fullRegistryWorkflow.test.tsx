@@ -17,7 +17,7 @@ import { apiClient } from '../../../../shared/api-client';
 import { ParticipantComments } from '../components/ParticipantComments';
 import { ParticipantEmailSection } from '../components/ParticipantEmailSection';
 import { ComposeEmailModal } from '../components/ComposeEmailModal';
-import { ParticipantSmsSection } from '../components/ParticipantSmsSection';
+import { getSmsSenderName, ParticipantSmsSection } from '../components/ParticipantSmsSection';
 import { ComposeSmsModal, mapSmsRecipientOptions } from '../components/ComposeSmsModal';
 import { ParticipantContactManagement } from '../components/ParticipantContactManagement';
 import { ParticipantContactModal } from '../components/ParticipantContactModal';
@@ -38,6 +38,31 @@ describe('Full Registry Workflow - API Client Integration', () => {
   });
 
   const participantId = 'p-uuid-999';
+
+  it('uses the sender recorded on each text message instead of the current viewer', () => {
+    expect(getSmsSenderName({
+      id: 'sms-1',
+      participantId,
+      channel: 'SMS',
+      direction: 'OUTBOUND',
+      body: 'Hello',
+      status: 'SENT',
+      pinned: false,
+      recipients: [],
+      senderName: '  Dr. Alice  ',
+    })).toBe('Dr. Alice');
+    expect(getSmsSenderName({
+      id: 'sms-2',
+      participantId,
+      channel: 'SMS',
+      direction: 'OUTBOUND',
+      body: 'Hello',
+      status: 'SENT',
+      pinned: false,
+      recipients: [],
+      authorName: 'Dr. Bob',
+    })).toBe('Dr. Bob');
+  });
 
   // 1. Comments API
   it('calls getComments and creates/pins comments via API', async () => {

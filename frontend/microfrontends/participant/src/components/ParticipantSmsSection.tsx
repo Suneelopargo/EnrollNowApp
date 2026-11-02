@@ -18,13 +18,15 @@ export interface ParticipantSmsSectionProps {
   currentUser?: AuthUser | null;
 }
 
+export const getSmsSenderName = (message: CommunicationItem): string =>
+  message.senderName?.trim() || message.authorName?.trim() || 'System';
+
 export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
   participantId,
   participantName,
   studyId,
   tenantId,
   siteId,
-  currentUser,
 }) => {
   const [messages, setMessages] = useState<CommunicationItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -72,15 +74,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
       return msg.recipients.map((r) => r.recipientValue).join(', ');
     }
     return msg.subject ? msg.subject.replace(/^SMS to\s*/i, '') : '—';
-  };
-
-  const getSenderName = (msg: CommunicationItem) => {
-    if (msg.senderName && msg.senderName.trim()) return msg.senderName.trim();
-    if (currentUser?.fullName && currentUser.fullName.trim()) return currentUser.fullName.trim();
-    const parts = [currentUser?.firstName, currentUser?.lastName].filter(Boolean).map((s) => s?.trim()).filter(Boolean);
-    if (parts.length > 0) return parts.join(' ');
-    if (currentUser?.username) return currentUser.username.trim();
-    return 'Suneel Kumar';
   };
 
   const formatDate = (dateStr?: string) => {
@@ -159,7 +152,7 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
       colId: 'from',
       headerName: 'From',
       minWidth: 150,
-      valueGetter: (params) => params.data ? getSenderName(params.data) : '',
+      valueGetter: (params) => params.data ? getSmsSenderName(params.data) : '',
       tooltipValueGetter: (params) => params.value,
     },
     {
@@ -209,7 +202,7 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
         );
       },
     },
-  ], [togglingPinId, currentUser, handleTogglePin]);
+  ], [togglingPinId, handleTogglePin]);
 
   const defaultColDef = useMemo<ColDef<CommunicationItem>>(() => ({
     sortable: true,

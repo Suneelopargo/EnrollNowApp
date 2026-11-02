@@ -135,14 +135,14 @@ const ParticipantStudiesInfo: React.FC<{
   }), [participant.studies, consents]);
 
   const studyColumns = useMemo<ColDef<(typeof studyRows)[number]>[]>(() => [
-    { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
-    { field: 'participantStudyId', headerName: 'ID', minWidth: 130, width: 160 },
-    { field: 'status', headerName: 'Status', minWidth: 150, width: 175 },
+    { field: 'name', headerName: 'Name', minWidth: 180, flex: 1.15 },
+    { field: 'participantStudyId', headerName: 'ID', minWidth: 150, flex: 1 },
+    { field: 'status', headerName: 'Status', minWidth: 150, flex: 1 },
     {
       field: 'consentedAt',
       headerName: 'Date Consented',
       minWidth: 160,
-      width: 190,
+      flex: 1,
       valueFormatter: (params) => params.value
         ? new Date(params.value).toLocaleDateString()
         : 'Not Consented',
