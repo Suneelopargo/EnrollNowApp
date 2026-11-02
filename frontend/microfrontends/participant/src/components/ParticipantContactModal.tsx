@@ -159,6 +159,50 @@ const getRelationshipSelection = (value: string) => {
   };
 };
 
+const getContactDraftSnapshot = (contact: {
+  contactName: string;
+  relationship: string;
+  otherRelationship: string;
+  canLeaveMessage: boolean;
+  notes: string;
+  isPreferredContact: boolean;
+  isContactActive: boolean;
+  methods: ContactMethodDraft[];
+  addresses: AddressDraft[];
+}) => JSON.stringify({
+  contactName: contact.contactName,
+  relationship: contact.relationship,
+  otherRelationship: contact.otherRelationship,
+  canLeaveMessage: contact.canLeaveMessage,
+  notes: contact.notes,
+  isPreferredContact: contact.isPreferredContact,
+  isContactActive: contact.isContactActive,
+  methods: contact.methods.map((method) => ({
+    id: method.id,
+    contactType: method.contactType,
+    originalContactType: method.originalContactType,
+    typeChanged: method.typeChanged,
+    contactValue: method.contactValue,
+    label: method.label,
+    isPreferred: method.isPreferred,
+    active: method.active,
+    deleted: method.deleted,
+  })),
+  addresses: contact.addresses.map((address) => ({
+    id: address.id,
+    addressType: address.addressType,
+    addressLine1: address.addressLine1,
+    addressLine2: address.addressLine2,
+    city: address.city,
+    stateRegion: address.stateRegion,
+    postalCode: address.postalCode,
+    countryCode: address.countryCode,
+    primaryAddress: address.primaryAddress,
+    active: address.active,
+    deleted: address.deleted,
+  })),
+});
+
 export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = ({
   isOpen,
   onClose,
@@ -196,13 +240,37 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionLock = useRef(false);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const normalizedRelationship = relationship.trim().toLowerCase();
-  const isParticipantContact = normalizedRelationship === 'self'
-    || normalizedRelationship === 'participant'
-    || (
-      !normalizedRelationship
-      && isEditing
-      && contactName.trim().toLowerCase() === participantName.trim().toLowerCase()
+  const initialDraftSnapshot = useRef(getContactDraftSnapshot({
+    contactName,
+    relationship,
+    otherRelationship,
+    canLeaveMessage,
+    notes,
+    isPreferredContact,
+    isContactActive,
+    methods,
+    addresses: addressDrafts,
+  }));
+  const currentDraftSnapshot = getContactDraftSnapshot({
+    contactName,
+    relationship,
+    otherRelationship,
+    canLeaveMessage,
+    notes,
+    isPreferredContact,
+    isContactActive,
+    methods,
+    addresses: addressDrafts,
+  });
+  const hasUnsavedChanges = currentDraftSnapshot !== initialDraftSnapshot.current;
+  const registeredContactName = contactToEdit?.contactName?.trim().toLowerCase() ?? '';
+  const registeredRelationship = contactToEdit?.relationship?.trim().toLowerCase() ?? '';
+  const isParticipantContact = isEditing
+    && registeredContactName === participantName.trim().toLowerCase()
+    && (
+      !registeredRelationship
+      || registeredRelationship === 'self'
+      || registeredRelationship === 'participant'
     );
   const isSelf = isParticipantContact;
 
@@ -216,16 +284,34 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
         : [];
     const currentRelationship = contactToEdit?.relationship ?? '';
     const relationshipSelection = getRelationshipSelection(currentRelationship);
+    const currentContactName = contactToEdit?.contactName ?? '';
+    const currentCanLeaveMessage = contactToEdit?.canLeaveMessage ?? false;
+    const currentNotes = contactToEdit?.notes ?? '';
+    const currentIsPreferredContact = currentMethods.some((method) => method.primaryContact);
+    const currentIsContactActive = getContactActiveState(Boolean(contactToEdit?.id), currentMethods);
+    const currentMethodDrafts = currentMethods.map(toContactMethodDraft);
+    const currentAddressDrafts = contactToEdit ? addresses.map(toAddressDraft) : [];
 
-    setContactName(contactToEdit?.contactName ?? '');
+    setContactName(currentContactName);
     setRelationship(relationshipSelection.relationship);
     setOtherRelationship(relationshipSelection.otherRelationship);
-    setCanLeaveMessage(contactToEdit?.canLeaveMessage ?? false);
-    setNotes(contactToEdit?.notes ?? '');
-    setIsPreferredContact(currentMethods.some((method) => method.primaryContact));
-    setIsContactActive(getContactActiveState(Boolean(contactToEdit?.id), currentMethods));
-    setMethods(currentMethods.map(toContactMethodDraft));
-    setAddressDrafts(contactToEdit ? addresses.map(toAddressDraft) : []);
+    setCanLeaveMessage(currentCanLeaveMessage);
+    setNotes(currentNotes);
+    setIsPreferredContact(currentIsPreferredContact);
+    setIsContactActive(currentIsContactActive);
+    setMethods(currentMethodDrafts);
+    setAddressDrafts(currentAddressDrafts);
+    initialDraftSnapshot.current = getContactDraftSnapshot({
+      contactName: currentContactName,
+      relationship: relationshipSelection.relationship,
+      otherRelationship: relationshipSelection.otherRelationship,
+      canLeaveMessage: currentCanLeaveMessage,
+      notes: currentNotes,
+      isPreferredContact: currentIsPreferredContact,
+      isContactActive: currentIsContactActive,
+      methods: currentMethodDrafts,
+      addresses: currentAddressDrafts,
+    });
     setShowArchived(false);
     setErrors({});
 
@@ -381,6 +467,21 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
       }
     });
 
+    const hiddenArchivedErrors = methods.filter((method) => (
+      !method.deleted
+      && !method.active
+      && !showArchived
+      && Boolean(nextErrors.methods?.[method.key])
+    ));
+    if (hiddenArchivedErrors.length > 0) {
+      const hasEmptyMethod = hiddenArchivedErrors.some(
+        (method) => nextErrors.methods?.[method.key] === 'Contact method is required',
+      );
+      toast.error(hasEmptyMethod
+        ? 'Cannot submit with an empty contact method'
+        : 'Please review archived contact methods before saving');
+    }
+
     if (Object.keys(nextErrors.methods!).length === 0) delete nextErrors.methods;
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -506,12 +607,25 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
     });
   };
 
+  const handleClose = async () => {
+    if (isSubmitting) return;
+    if (hasUnsavedChanges) {
+      const confirmed = await requestConfirmation({
+        title: 'Discard changes?',
+        message: 'You have unsaved changes. Are you sure you want to discard them?',
+        intent: 'warning',
+        confirmText: 'Discard Changes',
+        cancelText: 'Keep Editing',
+      });
+      if (!confirmed) return;
+    }
+    onClose();
+  };
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={() => {
-        if (!isSubmitting) onClose();
-      }}
+      onClose={() => { void handleClose(); }}
       title={isEditing ? (isParticipantContact ? 'Edit Contact Methods' : 'Edit Contact') : 'Add Contact'}
       size="wide"
       className="participant-contact-modal"
@@ -539,7 +653,7 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
                 <Trash2 size={14} /> Delete
               </button>
             )}
-            <button type="button" onClick={onClose} className="btn btn-secondary" disabled={isSubmitting}>
+            <button type="button" onClick={() => { void handleClose(); }} className="btn btn-secondary" disabled={isSubmitting}>
               Cancel
             </button>
             <button type="submit" form="participant-contact-form" className="btn btn-primary" disabled={isSubmitting}>

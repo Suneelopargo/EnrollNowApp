@@ -304,6 +304,30 @@ describe('Contact Methods and Related Contacts Components', () => {
     expect(html).not.toContain('Preferred Name');
   });
 
+  it('keeps the relationship field for another contact whose relationship is Self', () => {
+    const selfContact: ParticipantContactDetail = {
+      ...dummyContact,
+      contactName: 'Jane Doe',
+      relationship: 'Self',
+    };
+    const html = renderToStaticMarkup(
+      <ParticipantContactModal
+        isOpen
+        onClose={vi.fn()}
+        participantId="part-uuid-1"
+        participantName="John Doe"
+        contactToEdit={selfContact}
+        contactMethods={[selfContact]}
+        addresses={[]}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(html).toContain('Contact Name');
+    expect(html).toContain('Relationship to Participant');
+    expect(html).not.toContain('Preferred Name');
+  });
+
   it('renders the unified legacy contact editor with methods and addresses together', () => {
     const html = renderToStaticMarkup(
       <ParticipantContactModal
