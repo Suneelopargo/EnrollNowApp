@@ -60,6 +60,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   const [userStudyIds, setUserStudyIds] = useState<Set<string>>(() => new Set());
   const [duplicatesOnly, setDuplicatesOnly] = useState<boolean>(false);
   const [serverTotalCount, setServerTotalCount] = useState<number>(0);
+  const [clearFiltersVersion, setClearFiltersVersion] = useState(0);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -82,6 +83,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     customFilters,
     duplicatesOnly,
   });
+  const participantRequestVersionRef = useRef(0);
 
   useEffect(() => {
     filterStateRef.current = {
@@ -123,6 +125,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     customFilters?: CustomFilterRule[];
     duplicatesOnly?: boolean;
   }) => {
+    const requestVersion = ++participantRequestVersionRef.current;
     if (!quiet) setIsLoading(true);
     try {
       const activeContact = overrideFilters?.contactFilter ?? filterStateRef.current.contactFilter;
@@ -171,6 +174,8 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
         if (nextItems.length === 0) break;
         rawList.push(...nextItems);
       }
+
+      if (requestVersion !== participantRequestVersionRef.current) return false;
 
       const mapped: ParticipantRecord[] = rawList.map((p: any) => ({
         id: String(p.id ?? p.participantId ?? ''),
@@ -261,12 +266,13 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       });
       return true;
     } catch (err: any) {
+      if (requestVersion !== participantRequestVersionRef.current) return false;
       const errorMsg = getApiErrorMessage(err, 'Failed to retrieve participants from the server');
       setError(errorMsg);
       setParticipants([]);
       return false;
     } finally {
-      if (!quiet) setIsLoading(false);
+      if (requestVersion === participantRequestVersionRef.current) setIsLoading(false);
     }
   }, [tenantId, siteId, userStudyIds]);
 
@@ -473,14 +479,6 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     setCustomFilters((prev) => [...prev, newFilter]);
   };
 
-  const handleSelectedStudiesChange: React.Dispatch<React.SetStateAction<string[]>> = useCallback((updater) => {
-    const current = filterStateRef.current.selectedStudies;
-    const next = typeof updater === 'function' ? updater(current) : updater;
-    filterStateRef.current = { ...filterStateRef.current, selectedStudies: next };
-    setSelectedStudies(next);
-    void fetchParticipants(false, { selectedStudies: next });
-  }, [fetchParticipants]);
-
   const handleNavigateToStudy = useCallback((study: StudyItem) => {
     const targetStudyId = String(study.studyId || study.id || '').trim();
     if (!targetStudyId || !context?.navigate) return;
@@ -530,11 +528,20 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
   };
 
   const handleClearFilters = () => {
+    filterStateRef.current = {
+      ...filterStateRef.current,
+      searchTerm: '',
+      contactFilter: 'all',
+      availableFilter: 'all',
+      selectedStudies: [],
+      customFilters: [],
+    };
     setSearchTerm('');
     setContactFilter('all');
     setAvailableFilter('all');
     setSelectedStudies([]);
     setCustomFilters([]);
+    setClearFiltersVersion((version) => version + 1);
     fetchParticipants(false, {
       contactFilter: 'all',
       availableFilter: 'all',
@@ -848,8 +855,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
           totalCount={serverTotalCount}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
-          selectedStudies={selectedStudies}
-          setSelectedStudies={handleSelectedStudiesChange}
+          clearFiltersVersion={clearFiltersVersion}
           studies={availableStudies}
           onNavigateToStudy={handleNavigateToStudy}
           duplicatesOnly={duplicatesOnly}
