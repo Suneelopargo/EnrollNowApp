@@ -13,7 +13,6 @@ import {
   Users, 
   ShieldCheck, 
   Trash2, 
-  ExternalLink,
   Search,
   X,
 } from 'lucide-react';
@@ -22,7 +21,7 @@ import { getStoredAuthUser } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
-import { DataGrid, type ColDef } from '../../../../shared/design-system/components/DataGrid';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
 import { GlobalVariableDefinition, isContactForFutureStudies, ParticipantRecord, ParticipantVariable, StudyItem } from '../types/participant';
 import { ParticipantContactLogs } from './ParticipantContactLogs';
@@ -43,6 +42,15 @@ const getParticipantLastContactDate = (participant?: ParticipantRecord | null): 
   const values = [participant?.globalDateOfLastContact, participant?.lastContact];
   return values.find((value) => isValidDateTimeValue(value)) || '';
 };
+
+interface FamilyGridRow {
+  id: string;
+  name: string;
+  gender: string;
+  age: string;
+  studies: string;
+  isCurrent: boolean;
+}
 
 const GlobalVariableField: React.FC<{
   variable: GlobalVariableDefinition;
@@ -380,6 +388,64 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     })
   );
 
+  const familyMembers = participant?.family?.members || [];
+  const familyGridRows = useMemo<FamilyGridRow[]>(() => {
+    if (!participant) return [];
+
+    const currentAge = calculateCurrentAge(dob, participant.age);
+    const currentStudies = (participant.studies || [])
+      .map((study) => study.name)
+      .filter(Boolean)
+      .join(', ');
+
+    return [
+      {
+        id: participant.id,
+        name: participant.name || '...',
+        gender: gender || '...',
+        age: currentAge === '--' ? '...' : currentAge,
+        studies: currentStudies,
+        isCurrent: true,
+      },
+      ...familyMembers
+        .filter((member) => member.id !== participant.id)
+        .map((member) => ({
+          id: member.id,
+          name: member.name || '...',
+          gender: member.sex || '...',
+          age: member.age || '...',
+          studies: member.studies?.join(', ') || '',
+          isCurrent: false,
+        })),
+    ];
+  }, [dob, familyMembers, gender, participant]);
+  const familyGridColumns = useMemo<ColDef<FamilyGridRow>[]>(() => [
+    {
+      field: 'name',
+      headerName: 'Name',
+      flex: 1,
+      minWidth: 160,
+      cellRenderer: (params: ICellRendererParams<FamilyGridRow>) => {
+        if (!params.data || params.data.isCurrent || !onSelectParticipantById) {
+          return <span>{params.value}</span>;
+        }
+        const memberId = params.data.id;
+        return (
+          <button
+            type="button"
+            className="text-blue-600 hover:underline cursor-pointer"
+            onClick={() => onSelectParticipantById(memberId)}
+          >
+            {params.value}
+          </button>
+        );
+      },
+    },
+    { field: 'gender', headerName: 'Gender', flex: 0.8, minWidth: 110 },
+    { field: 'age', headerName: 'Age', flex: 0.6, minWidth: 90 },
+    { field: 'studies', headerName: 'Studies', flex: 1.4, minWidth: 160 },
+  ], [onSelectParticipantById]);
+
   if (!isOpen || !participant) return null;
 
   const handleAddVariable = () => {
@@ -554,8 +620,6 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     onClose();
   };
 
-  const familyMembers = participant.family?.members || [];
-
   return (
     <Modal
       isOpen={isOpen}
@@ -587,7 +651,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             { id: 'details', label: 'Overview', icon: <User size={16} /> },
             { id: 'contact', label: 'Contact Methods', icon: <Mail size={16} /> },
             { id: 'demographics', label: 'Demographics', icon: <ShieldCheck size={16} /> },
-            { id: 'family', label: `Family (${familyMembers.length || 1})`, icon: <Users size={16} /> },
+            { id: 'family', label: `Family (${familyGridRows.length})`, icon: <Users size={16} /> },
             { id: 'variables', label: `Variables (${globalVariables.length})`, icon: <FileText size={16} /> },
           ]}
         />
@@ -829,7 +893,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           {activeTopNav === 'family' && (
             <section className="card record-detail__panel">
               <div className="card-header">
-                <h3>Family members</h3>
+                <h3>Family Info</h3>
                 <p>People linked to this participant under Family ID: {familyId || 'Not assigned'}</p>
               </div>
               <div className="record-detail__panel-content space-y-3">
@@ -857,58 +921,18 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     <span className="record-detail__readonly">{familyId || 'None'}</span>
                   </div>
                 </div>
-
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="divide-y divide-gray-100">
-                    {/* Current Participant */}
-                    <div className="p-3 bg-blue-50/60 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className="record-detail__avatar"><Users size={16} /></span>
-                        <div>
-                          <strong className="text-sm text-blue-900">{participant.name}</strong>
-                          <div className="text-xs text-gray-500">
-                            {familyRole || 'Family role not selected'} &bull; {gender || 'Sex/gender not selected'} &bull; Age: {calculateCurrentAge(dob, participant.age)}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="badge badge-info">Current Record</span>
-                    </div>
-
-                    {/* Other Linked Family Members */}
-                    {familyMembers
-                      .filter((m) => m.id !== participant.id)
-                      .map((member) => (
-                        <div key={member.id} className="p-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center gap-2.5">
-                            <span className="record-detail__avatar"><User size={16} /></span>
-                            <div>
-                              <strong className="text-sm text-gray-800">{member.name}</strong>
-                              <div className="text-xs text-gray-500">
-                                {member.sex || 'Unknown'} &bull; Age: {member.age || 'N/A'}
-                                {member.studies && member.studies.length > 0 && ` &bull; Studies: ${member.studies.join(', ')}`}
-                              </div>
-                            </div>
-                          </div>
-                          {onSelectParticipantById && (
-                            <button
-                              type="button"
-                              onClick={() => onSelectParticipantById(member.id)}
-                              className="btn btn-sm btn-ghost text-blue-600 hover:bg-blue-50 flex items-center gap-1"
-                              title="Switch to this participant"
-                            >
-                              <ExternalLink size={14} /> View
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-
-                  {familyMembers.length <= 1 && (
-                    <div className="p-4 text-center text-xs text-gray-500 bg-gray-50">
-                      No additional family members found under family ID &ldquo;{familyId || 'None'}&rdquo;.
-                    </div>
-                  )}
-                </div>
+                <DataGrid<FamilyGridRow>
+                  rowData={familyGridRows}
+                  columnDefs={familyGridColumns}
+                  defaultColDef={{ sortable: false, filter: false, floatingFilter: false, resizable: false }}
+                  getRowId={(params) => params.data.id}
+                  rowHeight={44}
+                  headerHeight={42}
+                  domLayout="autoHeight"
+                  suppressMovableColumns
+                  suppressCellFocus
+                  wrapperClassName="record-detail__family-grid"
+                />
               </div>
             </section>
           )}
