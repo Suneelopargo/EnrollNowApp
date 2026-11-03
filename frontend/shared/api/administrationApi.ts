@@ -69,6 +69,19 @@ export interface UpdateUserPayload {
   timezone?: string;
 }
 
+export interface UpdateUserAccessPayload {
+  user?: UpdateUserPayload;
+  siteAccess?: {
+    siteId: string;
+    sitePermission: string;
+  };
+  studies?: Array<{
+    studyId: string;
+    studyRole?: string;
+    studyPermission: string;
+  }>;
+}
+
 export interface AssignRolePayload {
   roleCode: string;
   scopeType: 'TENANT' | 'SITE' | 'STUDY';
@@ -277,6 +290,19 @@ export const administrationApi = {
       timezone: payload.timezone !== undefined ? payload.timezone.trim() : 'America/New_York',
     });
     return res.data;
+  },
+
+  /**
+   * PUT /api/v1/tenants/{tenantId}/users/{userId}/access
+   * Updates a user profile and the requested site/study access in one operation.
+   */
+  async updateUserAccess(
+    userId: string | number,
+    payload: UpdateUserAccessPayload,
+    tenantId?: string
+  ): Promise<void> {
+    const tid = resolveTenantId(tenantId);
+    await apiClient.put<void>(`/api/v1/tenants/${tid}/users/${userId}/access`, payload);
   },
 
   /**

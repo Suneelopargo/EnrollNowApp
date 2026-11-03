@@ -90,6 +90,36 @@ describe('administrationApi', () => {
     });
   });
 
+  describe('updateUserAccess API method', () => {
+    it('puts the access payload to the tenant/user access endpoint', async () => {
+      const payload = {
+        siteAccess: {
+          siteId: 'site-uuid',
+          sitePermission: 'SITE_ADMIN',
+        },
+        studies: [
+          {
+            studyId: 'study-uuid',
+            studyRole: 'Study Leader',
+            studyPermission: 'STUDY_LEADER',
+          },
+          {
+            studyId: 'removed-study-uuid',
+            studyPermission: 'NONE',
+          },
+        ],
+      };
+      vi.mocked(apiClient.put).mockResolvedValueOnce({ data: undefined });
+
+      await administrationApi.updateUserAccess('user-uuid', payload);
+
+      expect(apiClient.put).toHaveBeenCalledWith(
+        '/api/v1/tenants/tenant-test-uuid/users/user-uuid/access',
+        payload
+      );
+    });
+  });
+
   describe('Permission mapping helpers', () => {
     it('supports the four canonical site-permission options and role code mappings', () => {
       expect(SITE_PERMISSION_OPTIONS).toEqual([

@@ -11,7 +11,6 @@ import {
   toSitePermissionLabel,
   normalizeSiteRoleCode,
   normalizeStudyPermission,
-  SITE_PERMISSION_TO_ROLE_CODE,
 } from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
 import { UsersGrid } from './UsersGrid';
@@ -269,64 +268,71 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context,
       if (userToEdit) {
         // Edit existing user
         try {
-          await administrationApi.updateUser(userToEdit.id, {
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-          });
-
-          // Sync site permission
           const oldSiteRoleCode = normalizeSiteRoleCode(
             userToEdit.sitePermissionCode || userToEdit.sitePermissions
           );
           const newSiteRoleCode = normalizeSiteRoleCode(formData.sitePermissions);
-          const newSitePerm = toSitePermissionLabel(newSiteRoleCode);
           const resolvedSiteId = userToEdit.siteId || activeSiteId || undefined;
+          let siteAccess: { siteId: string; sitePermission: string } | undefined;
 
           if (newSiteRoleCode !== oldSiteRoleCode) {
-            if (newSiteRoleCode === 'NONE') {
-              await administrationApi
-                .removeSiteRole(userToEdit.id, undefined, resolvedSiteId)
-                .catch((err) => {
-                  console.warn('Failed to remove site role:', err);
-                });
-            } else {
-              const roleCode =
-                SITE_PERMISSION_TO_ROLE_CODE[newSitePerm] || newSiteRoleCode;
-              try {
-                await administrationApi.assignScopedRole(userToEdit.id, {
-                  roleCode,
-                  scopeType: 'SITE',
-                  scopeId: resolvedSiteId as any,
-                });
-              } catch (siteErr: any) {
-                console.error('Failed to update site permission:', siteErr);
-                const sMsg = getApiErrorMessage(siteErr, 'Access error');
-                toast.warning(`Site permission '${newSitePerm}' could not be updated: ${sMsg}`);
-              }
+            if (!resolvedSiteId) {
+              throw new Error('A site is required to update site permissions.');
+            }
+            siteAccess = {
+              siteId: resolvedSiteId,
+              sitePermission: newSiteRoleCode,
+            };
+          }
+
+          const existingStudies = new Map(
+            (userToEdit.studyAssignments || []).map((study) => [study.id, study])
+          );
+          const fallbackStudyRole: Record<string, string> = {
+            STUDY_ADMIN: 'Study Admin',
+            STUDY_LEADER: 'Study Leader',
+            STUDY_RA: 'Research Assistant',
+            STUDY_READ_ONLY: 'Read Only',
+          };
+          const studies: Array<{
+            studyId: string;
+            studyRole?: string;
+            studyPermission: string;
+          }> = [];
+
+          for (const study of formData.assignedStudies || []) {
+            const studyPermission = normalizeStudyPermission(study.permission);
+            const existing = existingStudies.get(study.studyId);
+            if (
+              existing &&
+              normalizeStudyPermission(existing.studyPermission) === studyPermission
+            ) {
+              continue;
+            }
+
+            const configuredRole = studyRoles.find(
+              (role) => role.code.toUpperCase() === studyPermission
+            );
+            studies.push({
+              studyId: study.studyId,
+              studyRole: configuredRole?.name || fallbackStudyRole[studyPermission] || 'Study Member',
+              studyPermission,
+            });
+          }
+
+          for (const study of formData.unassignedStudies || []) {
+            if (existingStudies.has(study.studyId)) {
+              studies.push({
+                studyId: study.studyId,
+                studyPermission: 'NONE',
+              });
             }
           }
 
-          // Sync study access assignments
-          if (formData.assignedStudies && formData.assignedStudies.length > 0) {
-            for (const s of formData.assignedStudies) {
-              try {
-                await administrationApi.grantStudyAccess(s.studyId, userToEdit.id, {
-                  studyRole: s.permission || 'Study Member',
-                  studyPermission: s.permission,
-                });
-              } catch (studyErr: any) {
-                console.error(`Failed to assign study ${s.studyName}:`, studyErr);
-                const sMsg = getApiErrorMessage(studyErr, 'Access error');
-                toast.warning(`Study access to '${s.studyName}' could not be granted: ${sMsg}`);
-              }
-            }
-          }
-
-          if (formData.unassignedStudies && formData.unassignedStudies.length > 0) {
-            for (const s of formData.unassignedStudies) {
-              await administrationApi.removeStudyAccess(s.studyId, userToEdit.id).catch(() => {});
-            }
-          }
+          await administrationApi.updateUserAccess(userToEdit.id, {
+            ...(siteAccess ? { siteAccess } : {}),
+            ...(studies.length > 0 ? { studies } : {}),
+          });
 
           await fetchUsers(true);
           if (typeof window !== 'undefined') {
