@@ -507,11 +507,71 @@ export const mockAdapter: AxiosAdapter = async (
   }
 
   if (path === '/api/v1/administrator/audit-logs' && method === 'GET') {
-    return createMockSuccessResponse(config, mockStore.getAdminAuditLogs());
+    const params = (config.params || {}) as Record<string, string | number | undefined>;
+    const search = String(params.search || '').trim().toLowerCase();
+    const action = String(params.action || '').trim().toLowerCase();
+    const fromDate = String(params.fromDate || '');
+    const toDate = String(params.toDate || '');
+    const page = Math.max(0, Number(params.page ?? 0) || 0);
+    const size = Math.min(500, Math.max(1, Number(params.size ?? 20) || 20));
+    const events = mockStore.getAdminAuditLogs().map((event) => ({
+      ...event,
+      id: String(event.id),
+      actorUserId: event.actorUserId ?? null,
+      actorName: event.actorName || event.actor || null,
+      entityType: event.entityType || 'SYSTEM',
+      entityId: event.entityId ?? null,
+      description: event.description || event.action,
+      source: event.source || 'MOCK',
+      occurredAt: event.occurredAt || event.timestamp,
+      beforeData: event.beforeData ?? null,
+      afterData: event.afterData ?? null,
+    }));
+    const filteredEvents = events.filter((event) => {
+      const eventDate = String(event.occurredAt || '').slice(0, 10);
+      if (action && String(event.action).toLowerCase() !== action) return false;
+      if (fromDate && eventDate < fromDate) return false;
+      if (toDate && eventDate > toDate) return false;
+      if (
+        search &&
+        ![event.action, event.entityType, event.description, event.actorUserId, event.actorName]
+          .some((value) => String(value || '').toLowerCase().includes(search))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    const totalElements = filteredEvents.length;
+    return createMockSuccessResponse(config, {
+      content: filteredEvents.slice(page * size, (page + 1) * size),
+      totalElements,
+      totalPages: Math.ceil(totalElements / size),
+      number: page,
+      size,
+    });
   }
 
-  if (/^\/api\/v1\/administrator\/audit-logs\/[^/]+\/changes$/.test(path) && method === 'GET') {
-    return createMockSuccessResponse(config, []);
+  const auditDetailMatch = path.match(/^\/api\/v1\/administrator\/audit-logs\/([^/]+)$/);
+  if (auditDetailMatch && method === 'GET') {
+    const auditEventId = decodeURIComponent(auditDetailMatch[1]);
+    const event = mockStore.getAdminAuditLogs().find((item) => String(item.id) === auditEventId);
+    if (!event) {
+      throw createMockErrorResponse(config, 404, 'Audit event not found');
+    }
+    return createMockSuccessResponse(config, {
+      ...event,
+      id: String(event.id),
+      actorUserId: event.actorUserId ?? null,
+      actorName: event.actorName || event.actor || null,
+      entityType: event.entityType || 'SYSTEM',
+      entityId: event.entityId ?? null,
+      description: event.description || event.action,
+      source: event.source || 'MOCK',
+      occurredAt: event.occurredAt || event.timestamp,
+      beforeData: event.beforeData ?? null,
+      afterData: event.afterData ?? null,
+      changes: event.changes || [],
+    });
   }
 
   // --- Security Settings ---

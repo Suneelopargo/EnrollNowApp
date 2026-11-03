@@ -224,6 +224,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const previousSearchTermRef = useRef(searchTerm || '');
   const [gridSearchResultCount, setGridSearchResultCount] = useState(participants.length);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
+  const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
   const [studyToAssign, setStudyToAssign] = useState('');
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -418,8 +419,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     {
       headerName: 'Last Contact',
       field: 'lastContact',
-      width: 150,
-      minWidth: 125,
+      width: 180,
+      minWidth: 170,
       sortable: true,
       filter: 'agDateColumnFilter',
       cellRenderer: DefaultTextRenderer,
@@ -592,11 +593,14 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
               className="bulk-action-icon p-1 text-gray-500 hover:text-gray-800 rounded transition-colors custom-tooltip-btn"
               data-tooltip="Bulk actions"
               aria-label="Bulk actions"
+              aria-controls="participant-grid-selection-toolbar"
+              aria-expanded={isBulkActionsOpen || selectedParticipants.length > 0}
+              onClick={() => setIsBulkActionsOpen((open) => !open)}
             >
               <List size={16} aria-hidden="true" />
             </button>
           </div>
-          <div className="data-grid-toolbar__search">
+          <div className="data-grid-toolbar__search search-field-with-clear">
             <input
               type="text"
               value={gridSearchTerm}
@@ -609,8 +613,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
               <button
                 type="button"
                 onClick={handleClearSearch}
-                className="btn btn-ghost btn-sm custom-tooltip-btn"
-                data-tooltip="Clear search"
+                className="search-field-clear-button"
                 aria-label="Clear search"
               >
                 <X size={14} />
@@ -725,8 +728,8 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
         <p className="mt-4 text-sm text-slate-500">Consent history includes records for each listed participant across their studies.</p>
       </Modal>
 
-      {selectedParticipants.length > 0 && (
-        <div className="participant-grid__selection-toolbar" role="region" aria-label="Selected participants actions">
+      {(selectedParticipants.length > 0 || isBulkActionsOpen) && (
+        <div id="participant-grid-selection-toolbar" className="participant-grid__selection-toolbar" role="region" aria-label="Selected participants actions">
           <label className="participant-grid__select-all">
             <input
               type="checkbox"
@@ -748,6 +751,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
             data-tooltip={`Delete ${selectedParticipants.length} selected participants`}
             onClick={handleBulkDelete}
             aria-label={`Delete ${selectedParticipants.length} selected participants`}
+            disabled={selectedParticipants.length === 0}
           >
             Delete selected
           </button>

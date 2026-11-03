@@ -17,6 +17,16 @@ import com.enrollnow.common.audit.AuditRecorder;
 import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRequest;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 /**
  * Default persistence implementation of the cross-module AuditRecorder.
  *
@@ -134,5 +144,117 @@ public class AuditRecorderImpl implements AuditRecorder {
 
             entityChangeHistoryRepository.save(history);
         }
+    }
+    
+    @Override
+    @Transactional
+    public void record(AuditRequest request) {
+
+        if (request == null) {
+            throw new IllegalArgumentException(
+                    "audit request must not be null"
+            );
+        }
+
+        List<AuditChange> changes =
+                new ArrayList<>();
+
+        for (AuditEntitySnapshot entity : request.entities()) {
+
+            Map<String, Object> before =
+                    entity.beforeData() == null
+                            ? Map.of()
+                            : entity.beforeData();
+
+            Map<String, Object> after =
+                    entity.afterData() == null
+                            ? Map.of()
+                            : entity.afterData();
+
+            Set<String> fieldNames =
+                    new LinkedHashSet<>();
+
+            fieldNames.addAll(before.keySet());
+            fieldNames.addAll(after.keySet());
+
+            for (String fieldName : fieldNames) {
+
+                Object previousValue =
+                        before.get(fieldName);
+
+                Object newValue =
+                        after.get(fieldName);
+
+                if (Objects.equals(
+                        previousValue,
+                        newValue
+                )) {
+                    continue;
+                }
+
+                changes.add(
+                        new AuditChange(
+                                entity.entityType(),
+                                entity.entityId(),
+                                fieldName,
+                                previousValue,
+                                newValue
+                        )
+                );
+            }
+        }
+
+        /*
+         * No actual business change = no audit event.
+         */
+        if (changes.isEmpty()) {
+            return;
+        }
+
+        Map<String, Object> eventBeforeData = null;
+        Map<String, Object> eventAfterData = null;
+
+        /*
+         * For a simple single-entity operation, retaining
+         * before_data / after_data on audit_events is useful.
+         *
+         * For multi-entity operations, entity_change_history
+         * is the authoritative detail.
+         */
+        if (request.entities().size() == 1) {
+
+            AuditEntitySnapshot entity =
+                    request.entities().get(0);
+
+            if (request.entityType()
+                    .equalsIgnoreCase(entity.entityType())
+                    && request.entityId()
+                    .equals(entity.entityId())) {
+
+                eventBeforeData = entity.beforeData();
+                eventAfterData = entity.afterData();
+            }
+        }
+
+        AuditEventCommand command =
+                new AuditEventCommand(
+                        request.tenantId(),
+                        null,
+                        request.entityType(),
+                        request.entityId(),
+                        request.action(),
+                        request.description(),
+                        request.source(),
+                        null,
+                        null,
+                        eventBeforeData,
+                        eventAfterData,
+                        changes
+                );
+
+        /*
+         * Reuse existing tested persistence implementation.
+         */
+        record(command);
     }
 }

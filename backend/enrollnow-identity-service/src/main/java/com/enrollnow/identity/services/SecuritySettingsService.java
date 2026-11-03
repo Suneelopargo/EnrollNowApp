@@ -1,6 +1,10 @@
 package com.enrollnow.identity.services;
 
 import com.enrollnow.common.security.SecurityTokenHelper;
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRequest;
+
+import java.util.Map;
 import com.enrollnow.identity.dtos.ForceResetResultDto;
 import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
@@ -16,6 +20,7 @@ import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
 
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -171,6 +176,8 @@ public class SecuritySettingsService {
 
         SecuritySettings settings = securitySettingsRepository.findByTenantId(tenantId)
                 .orElseGet(() -> createDefaultSettings(tenantId, null));
+        Map<String, Object> beforeData =
+                securitySettingsAuditSnapshot(settings);
 
         UUID callerUserId = siteAuthorizationService.getAuthenticatedCaller()
                 .map(SiteAuthorizationService.CallerIdentity::userId)
@@ -214,6 +221,29 @@ public class SecuritySettingsService {
         settings.setUpdatedBy(callerUserId);
 
         SecuritySettings saved = securitySettingsRepository.save(settings);
+        Map<String, Object> afterData =
+                securitySettingsAuditSnapshot(saved);
+        if (auditRecorder != null) {
+
+            auditRecorder.record(
+                    new AuditRequest(
+                            tenantId,
+                            "SECURITY_SETTINGS",
+                            tenantId,
+                            "SECURITY_SETTINGS_UPDATED",
+                            "Security settings updated",
+                            "API",
+                            List.of(
+                                    new AuditEntitySnapshot(
+                                            "SECURITY_SETTINGS",
+                                            tenantId,
+                                            beforeData,
+                                            afterData
+                                    )
+                            )
+                    )
+            );
+        }
         return toDto(saved);
     }
 
@@ -419,5 +449,69 @@ public class SecuritySettingsService {
         dto.setUpdatedAt(entity.getUpdatedAt());
         dto.setUpdatedBy(entity.getUpdatedBy());
         return dto;
+    }
+    
+    private Map<String, Object> securitySettingsAuditSnapshot(
+            SecuritySettings settings
+    ) {
+
+        Map<String, Object> snapshot = new HashMap<>();
+
+        snapshot.put(
+                "maxFailedLoginAttempts",
+                settings.getMaxFailedLoginAttempts()
+        );
+
+        snapshot.put(
+                "preventConcurrentSessions",
+                settings.isPreventConcurrentSessions()
+        );
+
+        snapshot.put(
+                "inactivityLogoutMinutes",
+                settings.getInactivityLogoutMinutes()
+        );
+
+        snapshot.put(
+                "inactivityLockDays",
+                settings.getInactivityLockDays()
+        );
+
+        snapshot.put(
+                "passwordExpiryDays",
+                settings.getPasswordExpiryDays()
+        );
+
+        snapshot.put(
+                "passwordHistoryCount",
+                settings.getPasswordHistoryCount()
+        );
+
+        snapshot.put(
+                "minimumPasswordLength",
+                settings.getMinimumPasswordLength()
+        );
+
+        snapshot.put(
+                "minimumPasswordStrength",
+                settings.getMinimumPasswordStrength()
+        );
+
+        snapshot.put(
+                "requireDigit",
+                settings.isRequireDigit()
+        );
+
+        snapshot.put(
+                "requireSymbol",
+                settings.isRequireSymbol()
+        );
+
+        snapshot.put(
+                "requireMixedCase",
+                settings.isRequireMixedCase()
+        );
+
+        return snapshot;
     }
 }

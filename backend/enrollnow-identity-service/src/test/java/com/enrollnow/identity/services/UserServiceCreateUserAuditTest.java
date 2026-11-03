@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -13,9 +14,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import com.enrollnow.common.audit.AuditEntitySnapshot;
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.dtos.CreateUserRequest;
+import com.enrollnow.identity.dtos.UserSummaryResponse;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.SiteRepository;
@@ -23,6 +27,9 @@ import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
+
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.*;
 
 class UserServiceCreateUserAuditTest {
 
@@ -95,27 +102,87 @@ class UserServiceCreateUserAuditTest {
 
         userService.createUser(tenantId, request);
 
-        ArgumentCaptor<AuditEventCommand> auditCaptor =
-                ArgumentCaptor.forClass(AuditEventCommand.class);
+       
+    }
+    
+    @Test
+    void createUser_CapturesPersistedStateAndSendsAuditRequest() {
 
-        verify(auditRecorder).record(auditCaptor.capture());
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
 
-        AuditEventCommand command = auditCaptor.getValue();
+        UserService userService = mock(UserService.class);
+        AuditRecorder auditRecorder = mock(AuditRecorder.class);
 
-        assertEquals(tenantId, command.tenantId());
-        assertEquals("USER", command.entityType());
-        assertEquals(userId, command.entityId());
-        assertEquals("USER_CREATED", command.action());
-        assertEquals("API", command.source());
+        UserApplicationService service =
+                new UserApplicationService(
+                        userService,
+                        auditRecorder
+                );
 
-        assertEquals(
-                "john.smith@example.com",
-                command.afterData().get("email")
+        CreateUserRequest request =
+                new CreateUserRequest();
+
+        request.setFirstName("Test");
+        request.setLastName("User");
+        request.setTitle("Study Coordinator");
+        request.setTimezone("Asia/Kolkata");
+        request.setEmail("test.user@example.com");
+
+        UserSummaryResponse response =
+                new UserSummaryResponse(
+                        userId,
+                        "Test",
+                        "User",
+                        "Study Coordinator",
+                        "ACTIVE",
+                        "test.user@example.com"
+                );
+
+        when(userService.createUser(
+                tenantId,
+                request
+        )).thenReturn(response);
+
+        Map<String, Object> after = Map.of(
+                "firstName", "Test",
+                "lastName", "User",
+                "title", "Study Coordinator",
+                "timezone", "Asia/Kolkata",
+                "status", "ACTIVE",
+                "email", "test.user@example.com"
         );
 
-        assertEquals(
-                "ACTIVE",
-                command.afterData().get("status")
-        );
+        when(userService.getUserAuditSnapshot(
+                tenantId,
+                userId
+        )).thenReturn(after);
+
+        UserSummaryResponse result =
+                service.createUser(
+                        tenantId,
+                        request
+                );
+
+        assertEquals(response, result);
+
+        ArgumentCaptor<AuditRequest> captor =
+                ArgumentCaptor.forClass(AuditRequest.class);
+
+        verify(auditRecorder).record(captor.capture());
+
+        AuditRequest auditRequest =
+                captor.getValue();
+
+        assertEquals("USER_CREATED", auditRequest.action());
+        assertEquals("USER", auditRequest.entityType());
+        assertEquals(userId, auditRequest.entityId());
+        assertEquals(1, auditRequest.entities().size());
+
+        AuditEntitySnapshot snapshot =
+                auditRequest.entities().get(0);
+
+        assertNull(snapshot.beforeData());
+        assertEquals(after, snapshot.afterData());
     }
 }

@@ -1,8 +1,10 @@
 package com.enrollnow.identity.services;
 
-import com.enrollnow.common.audit.AuditOperation;
+import com.enrollnow.common.audit.AuditEventCommand;
+
 import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.dtos.UpdateUserRequest;
+import com.enrollnow.identity.dtos.UserSummaryResponse;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.repositories.RoleRepository;
 import com.enrollnow.identity.repositories.SiteRepository;
@@ -10,7 +12,6 @@ import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserRoleAssignmentRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -55,7 +56,7 @@ class UserServiceUpdateUserTest {
     private UserService userService;
 
     @Test
-    void updateUser_AddsChangedProfileFieldsToAuditOperation() {
+    void updateUser_UpdatesChangedProfileFields() {
 
         UUID tenantId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -67,98 +68,39 @@ class UserServiceUpdateUserTest {
         user.setLastName("Smith");
         user.setTitle("Coordinator");
         user.setTimezone("UTC");
+        user.setStatus("ACTIVE");
 
-        when(userRepository.findByTenantIdAndId(
-                tenantId,
-                userId
-        )).thenReturn(Optional.of(user));
-
-        when(userRepository.save(any(User.class)))
-                .thenAnswer(invocation ->
-                        invocation.getArgument(0));
-
-        when(userEmailRepository
-                .findByTenantIdAndUserIdAndPrimaryEmailTrue(
-                        tenantId,
-                        userId
-                ))
-                .thenReturn(Optional.empty());
-
-        UpdateUserRequest request =
-                new UpdateUserRequest();
-
+        UpdateUserRequest request = new UpdateUserRequest();
         request.setFirstName("Jane");
         request.setLastName("Smith");
         request.setTitle("Manager");
         request.setTimezone("Asia/Kolkata");
 
-        AuditOperation auditOperation =
-                new AuditOperation(
+        when(userRepository.findByTenantIdAndId(tenantId, userId))
+                .thenReturn(Optional.of(user));
+
+        when(userRepository.save(any(User.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserSummaryResponse response =
+                userService.updateUser(
                         tenantId,
-                        "USER",
                         userId,
-                        "USER_ACCESS_UPDATED",
-                        "User access updated",
-                        "API"
+                        request
                 );
 
-        userService.updateUser(
-                tenantId,
-                userId,
-                request,
-                auditOperation
-        );
+        assertEquals("Jane", user.getFirstName());
+        assertEquals("Smith", user.getLastName());
+        assertEquals("Manager", user.getTitle());
+        assertEquals("Asia/Kolkata", user.getTimezone());
 
-        assertEquals(
-                3,
-                auditOperation.getChanges().size()
-        );
+        verify(userRepository).save(user);
 
-        assertEquals(
-                "firstName",
-                auditOperation.getChanges().get(0).fieldName()
-        );
+        assertEquals("Jane", response.getFirstName());
+        assertEquals("Smith", response.getLastName());
+        assertEquals("Manager", response.getTitle());
 
-        assertEquals(
-                "John",
-                auditOperation.getChanges().get(0).previousValue()
-        );
-
-        assertEquals(
-                "Jane",
-                auditOperation.getChanges().get(0).newValue()
-        );
-
-        assertEquals(
-                "title",
-                auditOperation.getChanges().get(1).fieldName()
-        );
-
-        assertEquals(
-                "Coordinator",
-                auditOperation.getChanges().get(1).previousValue()
-        );
-
-        assertEquals(
-                "Manager",
-                auditOperation.getChanges().get(1).newValue()
-        );
-
-        assertEquals(
-                "timezone",
-                auditOperation.getChanges().get(2).fieldName()
-        );
-
-        assertEquals(
-                "UTC",
-                auditOperation.getChanges().get(2).previousValue()
-        );
-
-        assertEquals(
-                "Asia/Kolkata",
-                auditOperation.getChanges().get(2).newValue()
-        );
-
-        verify(auditRecorder, never()).record(any());
+        verify(auditRecorder, never())
+                .record(any(AuditEventCommand.class));
     }
 }

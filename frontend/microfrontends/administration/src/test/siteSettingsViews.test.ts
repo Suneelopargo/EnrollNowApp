@@ -58,7 +58,7 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
       expect(typeof AuditLogView).toBe('function');
     });
 
-    it('renders placeholder views with correct title props', () => {
+    it('renders placeholder views and keeps the audit toolbar title-free', () => {
       const importEl = ImportView({}) as React.ReactElement<{ title?: string }>;
       expect(importEl.props.title).toBe('Data Intake & Batch Import');
 
@@ -66,7 +66,10 @@ describe('US-065 Site Security Policy & US-084 General Site Settings Views', () 
       expect(exportEl.props.title).toBe('Export Configurations & Compliance Artifacts');
 
       const auditHtml = renderToStaticMarkup(React.createElement(AuditLogView));
-      expect(auditHtml).toContain('System &amp; Security Audit Ledger');
+      expect(auditHtml).not.toContain('System &amp; Security Audit Ledger');
+      expect(auditHtml).not.toContain('Audit events recorded by the system.');
+      expect(auditHtml).toContain('Refresh');
+      expect(auditHtml).toContain('Export audit log');
     });
   });
 

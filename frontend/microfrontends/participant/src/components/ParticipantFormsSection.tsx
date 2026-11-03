@@ -175,10 +175,10 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
       {/* Content area */}
       <div className="flex-1 overflow-auto">
         <div className="space-y-3">
-            <label className="relative block max-w-sm">
+            <label className="relative block max-w-sm search-field-with-clear">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
-                type="search"
+                type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search forms..."
@@ -190,7 +190,7 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
                   type="button"
                   onClick={() => setSearchTerm('')}
                   aria-label="Clear forms search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                  className="search-field-clear-button"
                 >
                   <X size={14} />
                 </button>

@@ -48,6 +48,161 @@ describe('administrationApi', () => {
     mockLocalStorage.setItem('enrollnow_tenant_id', 'tenant-test-uuid');
   });
 
+  describe('createUserWithAccess API method', () => {
+    it('posts the user and access payload to the tenant endpoint and returns the created user', async () => {
+      const payload = {
+        user: {
+          firstName: 'John',
+          lastName: 'Doe',
+          title: 'Study Coordinator',
+          timezone: 'Asia/Kolkata',
+          email: 'john.doe@example.com',
+        },
+        siteAccess: {
+          siteId: 'site-uuid',
+          sitePermission: 'SITE_MANAGER',
+        },
+        studies: [
+          {
+            studyId: 'study-uuid',
+            studyRole: 'Study Leader',
+            studyPermission: 'STUDY_LEADER',
+          },
+        ],
+      };
+      const createdUser = {
+        id: 'user-uuid',
+        firstName: 'John',
+        lastName: 'Doe',
+        title: 'Study Coordinator',
+        status: 'ACTIVE',
+        primaryEmail: 'john.doe@example.com',
+      };
+      vi.mocked(apiClient.post).mockResolvedValueOnce({ data: createdUser });
+
+      const result = await administrationApi.createUserWithAccess(payload);
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/v1/tenants/tenant-test-uuid/users/with-access',
+        payload
+      );
+      expect(result).toEqual(createdUser);
+    });
+  });
+
+  describe('updateUserAccess API method', () => {
+    it('puts the access payload to the tenant/user access endpoint', async () => {
+      const payload = {
+        siteAccess: {
+          siteId: 'site-uuid',
+          sitePermission: 'SITE_ADMIN',
+        },
+        studies: [
+          {
+            studyId: 'study-uuid',
+            studyRole: 'Study Leader',
+            studyPermission: 'STUDY_LEADER',
+          },
+          {
+            studyId: 'removed-study-uuid',
+            studyPermission: 'NONE',
+          },
+        ],
+      };
+      vi.mocked(apiClient.put).mockResolvedValueOnce({ data: undefined });
+
+      await administrationApi.updateUserAccess('user-uuid', payload);
+
+      expect(apiClient.put).toHaveBeenCalledWith(
+        '/api/v1/tenants/tenant-test-uuid/users/user-uuid/access',
+        payload
+      );
+    });
+  });
+
+  describe('audit log API methods', () => {
+    it('gets a page of audit events with supported filters', async () => {
+      const page = {
+        content: [
+          {
+            id: 'audit-event-1',
+            actorUserId: 'actor-1',
+            entityType: 'USER',
+            entityId: 'user-1',
+            action: 'USER_ACCESS_UPDATED',
+            description: 'User access updated',
+            source: 'API',
+            beforeData: null,
+            afterData: null,
+            occurredAt: '2026-11-03T10:00:00Z',
+          },
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        number: 0,
+        size: 20,
+      };
+      vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { data: page } });
+
+      const result = await administrationApi.getAuditLogs({
+        fromDate: '2026-11-01',
+        toDate: '2026-11-03',
+        action: 'USER_ACCESS_UPDATED',
+        search: 'actor-1',
+        page: 0,
+        size: 20,
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/administrator/audit-logs', {
+        params: {
+          fromDate: '2026-11-01',
+          toDate: '2026-11-03',
+          action: 'USER_ACCESS_UPDATED',
+          search: 'actor-1',
+          page: 0,
+          size: 20,
+        },
+      });
+      expect(result).toEqual(page);
+    });
+
+    it('gets audit event changes by event ID', async () => {
+      const detail = {
+        id: 'audit-event-1',
+        actorUserId: 'actor-1',
+        entityType: 'USER',
+        entityId: 'user-1',
+        action: 'USER_ACCESS_UPDATED',
+        description: 'User access updated',
+        source: 'API',
+        beforeData: null,
+        afterData: null,
+        changes: [
+          {
+            id: 'change-1',
+            auditEventId: 'audit-event-1',
+            entityType: 'USER',
+            entityId: 'user-1',
+            fieldName: 'sitePermission',
+            previousValue: 'NONE',
+            newValue: 'SITE_ADMIN',
+            changedAt: '2026-11-03T10:00:00Z',
+          },
+        ],
+        occurredAt: '2026-11-03T10:00:00Z',
+        createdAt: '2026-11-03T10:00:00Z',
+      };
+      vi.mocked(apiClient.get).mockResolvedValueOnce({ data: detail });
+
+      const result = await administrationApi.getAuditEventDetail('audit-event-1');
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/api/v1/administrator/audit-logs/audit-event-1'
+      );
+      expect(result).toEqual(detail);
+    });
+  });
+
   describe('Permission mapping helpers', () => {
     it('supports the four canonical site-permission options and role code mappings', () => {
       expect(SITE_PERMISSION_OPTIONS).toEqual([

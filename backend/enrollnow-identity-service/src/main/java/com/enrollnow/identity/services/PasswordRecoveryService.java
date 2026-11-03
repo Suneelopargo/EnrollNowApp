@@ -1,5 +1,7 @@
 package com.enrollnow.identity.services;
 
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.common.security.SecurityTokenHelper;
 import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 import com.enrollnow.identity.dtos.ForgotPasswordRequest;
@@ -10,7 +12,6 @@ import com.enrollnow.identity.repositories.UserEmailRepository;
 
 import com.enrollnow.identity.dtos.ResetPasswordRequest;
 import com.enrollnow.identity.models.User;
-import com.enrollnow.identity.models.UserSecurityState;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 
@@ -42,6 +43,7 @@ public class PasswordRecoveryService {
     private final InvitationEmailService invitationEmailService;
     private final PasswordPolicyValidator passwordPolicyValidator;
     private UserSessionService userSessionService;
+    private final AuditRecorder auditRecorder;
 
     public PasswordRecoveryService(
             UserEmailRepository userEmailRepository,
@@ -50,6 +52,7 @@ public class PasswordRecoveryService {
             UserSecurityStateRepository userSecurityStateRepository,
             PasswordEncoder passwordEncoder,
             InvitationEmailService invitationEmailService) {
+
         this(
                 userEmailRepository,
                 userActionTokenRepository,
@@ -57,6 +60,7 @@ public class PasswordRecoveryService {
                 userSecurityStateRepository,
                 passwordEncoder,
                 invitationEmailService,
+                null,
                 null,
                 null
         );
@@ -70,6 +74,7 @@ public class PasswordRecoveryService {
             PasswordEncoder passwordEncoder,
             InvitationEmailService invitationEmailService,
             PasswordPolicyValidator passwordPolicyValidator) {
+
         this(
                 userEmailRepository,
                 userActionTokenRepository,
@@ -78,6 +83,7 @@ public class PasswordRecoveryService {
                 passwordEncoder,
                 invitationEmailService,
                 passwordPolicyValidator,
+                null,
                 null
         );
     }
@@ -91,7 +97,8 @@ public class PasswordRecoveryService {
             PasswordEncoder passwordEncoder,
             InvitationEmailService invitationEmailService,
             @Autowired(required = false) PasswordPolicyValidator passwordPolicyValidator,
-            @Autowired(required = false) UserSessionService userSessionService) {
+            @Autowired(required = false) UserSessionService userSessionService,
+            AuditRecorder auditRecorder) {
 
         this.userEmailRepository = userEmailRepository;
         this.userActionTokenRepository = userActionTokenRepository;
@@ -101,6 +108,7 @@ public class PasswordRecoveryService {
         this.invitationEmailService = invitationEmailService;
         this.passwordPolicyValidator = passwordPolicyValidator;
         this.userSessionService = userSessionService;
+        this.auditRecorder = auditRecorder;
     }
 
     @Autowired(required = false)
@@ -329,6 +337,25 @@ public class PasswordRecoveryService {
         resetToken.setUsedAt(now);
 
         userActionTokenRepository.save(resetToken);
+        
+        if (auditRecorder != null) {
+            auditRecorder.record(
+                    new AuditEventCommand(
+                            tenantId,
+                            null,
+                            "USER",
+                            user.getId(),
+                            "USER_PASSWORD_RESET",
+                            "User password reset",
+                            "API",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null
+                    )
+            );
+        }
     }
 
     private void validatePasswordPolicy(String password) {

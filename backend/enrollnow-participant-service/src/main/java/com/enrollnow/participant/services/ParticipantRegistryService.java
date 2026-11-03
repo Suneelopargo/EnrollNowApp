@@ -301,17 +301,14 @@ public class ParticipantRegistryService {
             }
         }
 
-        // 8b. Filter: potential duplicates only (matches legacy Ripple grouping on lastName, firstName, birthday)
+        // 8b. Filter: potential duplicates only (normalized first and last name groups)
         if (duplicatesOnly) {
             Map<String, List<RegistryParticipantDto>> grouped = dtos.stream()
                     .filter(p -> p.getFirstName() != null && !p.getFirstName().isBlank() && p.getLastName() != null && !p.getLastName().isBlank())
                     .collect(Collectors.groupingBy(p -> {
-                        String fn = p.getFirstName().trim().toLowerCase();
-                        String ln = p.getLastName().trim().toLowerCase();
-                        String dob = (p.getDemographics() != null && p.getDemographics().getDob() != null && !p.getDemographics().getDob().isBlank())
-                                ? p.getDemographics().getDob().trim()
-                                : "NULL_DOB";
-                        return fn + "|||" + ln + "|||" + dob;
+                        String fn = p.getFirstName().trim().toLowerCase(Locale.ROOT);
+                        String ln = p.getLastName().trim().toLowerCase(Locale.ROOT);
+                        return fn + "|||" + ln;
                     }));
 
             Set<String> duplicateKeys = grouped.entrySet().stream()
@@ -321,19 +318,16 @@ public class ParticipantRegistryService {
 
             dtos = dtos.stream().filter(p -> {
                 if (p.getFirstName() == null || p.getLastName() == null) return false;
-                String fn = p.getFirstName().trim().toLowerCase();
-                String ln = p.getLastName().trim().toLowerCase();
-                String dob = (p.getDemographics() != null && p.getDemographics().getDob() != null && !p.getDemographics().getDob().isBlank())
-                        ? p.getDemographics().getDob().trim()
-                        : "NULL_DOB";
-                return duplicateKeys.contains(fn + "|||" + ln + "|||" + dob);
+                String fn = p.getFirstName().trim().toLowerCase(Locale.ROOT);
+                String ln = p.getLastName().trim().toLowerCase(Locale.ROOT);
+                return duplicateKeys.contains(fn + "|||" + ln);
             }).collect(Collectors.toList());
         }
 
         // 9. Sorting
         Comparator<RegistryParticipantDto> comparator = duplicatesOnly
-                ? Comparator.comparing((RegistryParticipantDto p) -> p.getLastName() != null ? p.getLastName().toLowerCase() : "")
-                        .thenComparing(p -> p.getFirstName() != null ? p.getFirstName().toLowerCase() : "")
+                ? Comparator.comparing((RegistryParticipantDto p) -> p.getLastName() != null ? p.getLastName().toLowerCase(Locale.ROOT) : "")
+                        .thenComparing(p -> p.getFirstName() != null ? p.getFirstName().toLowerCase(Locale.ROOT) : "")
                         .thenComparing(p -> (p.getDemographics() != null && p.getDemographics().getDob() != null) ? p.getDemographics().getDob() : "")
                         .thenComparing(p -> p.getDateCreated() != null ? p.getDateCreated() : "")
                 : getComparator(sortBy, sortDirection);
@@ -1311,12 +1305,8 @@ public class ParticipantRegistryService {
         if (firstName == null || lastName == null || firstName.isBlank() || lastName.isBlank()) {
             return Collections.emptyList();
         }
-        List<Participant> matches = participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
-                tenantId, firstName.trim(), lastName.trim(), "DELETED");
-        if (matches == null || matches.isEmpty()) {
-            matches = participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(
-                    tenantId, firstName.trim(), lastName.trim());
-        }
+        List<Participant> matches = participantRepository.findMatchingByTenantAndNormalizedName(
+                tenantId, firstName.trim(), lastName.trim());
         return matches.stream()
                 .filter(p -> p.getStatus() == null || !"DELETED".equalsIgnoreCase(p.getStatus()))
                 .map(p -> getParticipantById(tenantId, p.getId()).orElse(null))

@@ -550,10 +550,10 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
 
       {!isLoading && comments.length > 0 && (
         <div>
-          <label className="relative mb-3 block max-w-sm">
+          <label className="relative mb-3 block max-w-sm search-field-with-clear">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              type="search"
+              type="text"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search comments..."
@@ -565,7 +565,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
                 type="button"
                 onClick={() => setSearchTerm('')}
                 aria-label="Clear comments search"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                className="search-field-clear-button"
               >
                 <X size={14} />
               </button>

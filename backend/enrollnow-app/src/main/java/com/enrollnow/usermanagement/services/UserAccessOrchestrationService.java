@@ -5,165 +5,200 @@ import java.util.UUID;
 import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.services.UserService;
 import com.enrollnow.study.services.StudyAccessService;
+import com.enrollnow.usermanagement.dtos.CreateUserAccessRequest;
 import com.enrollnow.usermanagement.dtos.UpdateUserAccessRequest;
+import com.enrollnow.usermanagement.dtos.UpdateUserAccessRequest.StudyAccessItemRequest;
+
 import org.springframework.stereotype.Service;
-
-
-import com.enrollnow.common.audit.AuditOperation;
 import com.enrollnow.identity.dtos.AssignRoleRequest;
+import com.enrollnow.identity.dtos.UserSummaryResponse;
 import com.enrollnow.study.dtos.GrantStudyAccessRequest;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
-
-
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRequest;
 import org.springframework.transaction.annotation.Transactional;
-
 
 @Service
 public class UserAccessOrchestrationService {
 
-    private final UserService userService;
-    private final StudyAccessService studyAccessService;
-    private final AuditRecorder auditRecorder;
+	private final UserService userService;
+	private final StudyAccessService studyAccessService;
+	private final AuditRecorder auditRecorder;
 
-    public UserAccessOrchestrationService(
-            UserService userService,
-            StudyAccessService studyAccessService,
-            AuditRecorder auditRecorder
-    ) {
-        this.userService = userService;
-        this.studyAccessService = studyAccessService;
-        this.auditRecorder = auditRecorder;
-    }
+	public UserAccessOrchestrationService(UserService userService, StudyAccessService studyAccessService,
+			AuditRecorder auditRecorder) {
+		this.userService = userService;
+		this.studyAccessService = studyAccessService;
+		this.auditRecorder = auditRecorder;
+	}
 
-    @Transactional
-    public void updateUserAccess(
-            UUID tenantId,
-            UUID userId,
-            UpdateUserAccessRequest request
-    ) {
+	@Transactional
+	public void updateUserAccess(UUID tenantId, UUID userId, UpdateUserAccessRequest request) {
 
-        AuditOperation auditOperation =
-                new AuditOperation(
-                        tenantId,
-                        "USER",
-                        userId,
-                        "USER_ACCESS_UPDATED",
-                        "User access updated",
-                        "API"
-                );
+		List<AuditEntitySnapshot> snapshots = new ArrayList<>();
 
-        /*
-         * 1. Update user profile
-         */
-        if (request.getUser() != null) {
+		/*
+		 * 1. USER PROFILE
+		 */
+		if (request.getUser() != null) {
 
-            userService.updateUser(
-                    tenantId,
-                    userId,
-                    request.getUser(),
-                    auditOperation
-            );
-        }
+			Map<String, Object> beforeUser = userService.getUserAuditSnapshot(tenantId, userId);
 
-        /*
-         * 2. Update site access
-         */
-        if (request.getSiteAccess() != null) {
+			userService.updateUser(tenantId, userId, request.getUser());
 
-            UpdateUserAccessRequest.SiteAccessRequest siteAccess =
-                    request.getSiteAccess();
+			Map<String, Object> afterUser = userService.getUserAuditSnapshot(tenantId, userId);
 
-            String sitePermission =
-                    siteAccess.getSitePermission();
+			snapshots.add(new AuditEntitySnapshot("USER", userId, beforeUser, afterUser));
+		}
 
-            if (sitePermission == null
-                    || sitePermission.isBlank()
-                    || "NONE".equalsIgnoreCase(sitePermission)) {
+		/*
+		 * 2. SITE ACCESS
+		 */
+		if (request.getSiteAccess() != null) {
 
-                userService.removeSiteRole(
-                        tenantId,
-                        userId,
-                        siteAccess.getSiteId(),
-                        auditOperation
-                );
+			UpdateUserAccessRequest.SiteAccessRequest siteAccess = request.getSiteAccess();
 
-            } else {
+			UUID siteId = siteAccess.getSiteId();
 
-                AssignRoleRequest assignRoleRequest =
-                        new AssignRoleRequest(
-                                sitePermission,
-                                "SITE",
-                                siteAccess.getSiteId()
-                        );
+			Map<String, Object> beforeSite = userService.getSiteAccessAuditSnapshot(tenantId, userId, siteId);
 
-                userService.assignRole(
-                        tenantId,
-                        userId,
-                        assignRoleRequest,
-                        auditOperation
-                );
-            }
-        }
+			String sitePermission = siteAccess.getSitePermission();
 
-        /*
-         * 3. Update study access
-         */
-        if (request.getStudies() != null) {
+			if (sitePermission == null || sitePermission.isBlank() || "NONE".equalsIgnoreCase(sitePermission)) {
 
-            for (UpdateUserAccessRequest.StudyAccessItemRequest studyAccess
-                    : request.getStudies()) {
+				userService.removeSiteRole(tenantId, userId, siteId);
 
-                if (studyAccess == null) {
-                    continue;
-                }
+			} else {
 
-                String studyPermission =
-                        studyAccess.getStudyPermission();
+				AssignRoleRequest assignRoleRequest = new AssignRoleRequest(sitePermission, "SITE", siteId);
 
-                if (studyPermission == null
-                        || studyPermission.isBlank()
-                        || "NONE".equalsIgnoreCase(studyPermission)) {
+				userService.assignRole(tenantId, userId, assignRoleRequest);
+			}
 
-                    studyAccessService.removeStudyAccess(
-                            tenantId,
-                            studyAccess.getStudyId(),
-                            userId,
-                            auditOperation
-                    );
+			Map<String, Object> afterSite = userService.getSiteAccessAuditSnapshot(tenantId, userId, siteId);
 
-                } else {
+			snapshots.add(new AuditEntitySnapshot("USER", userId, beforeSite, afterSite));
+		}
 
-                    GrantStudyAccessRequest grantRequest =
-                            new GrantStudyAccessRequest();
+		/*
+		 * 3. STUDY ACCESS
+		 */
+		if (request.getStudies() != null) {
 
-                    grantRequest.setStudyRole(
-                            studyAccess.getStudyRole()
-                    );
+			for (UpdateUserAccessRequest.StudyAccessItemRequest studyAccess : request.getStudies()) {
 
-                    grantRequest.setStudyPermission(
-                            studyPermission
-                    );
+				if (studyAccess == null) {
+					continue;
+				}
 
-                    studyAccessService.grantStudyAccess(
-                            tenantId,
-                            studyAccess.getStudyId(),
-                            userId,
-                            grantRequest,
-                            auditOperation
-                    );
-                }
-            }
-        }
+				UUID studyId = studyAccess.getStudyId();
 
-        /*
-         * 4. Persist exactly one audit event for this business operation.
-         */
-        if (auditOperation.hasChanges()) {
+				Map<String, Object> beforeStudy = studyAccessService.getStudyAccessAuditSnapshot(tenantId, studyId,
+						userId);
 
-            auditRecorder.record(
-                    auditOperation.toCommand()
-            );
-        }
-    }
+				String studyPermission = studyAccess.getStudyPermission();
+
+				if (studyPermission == null || studyPermission.isBlank() || "NONE".equalsIgnoreCase(studyPermission)) {
+
+					studyAccessService.removeStudyAccess(tenantId, studyId, userId);
+
+				} else {
+
+					GrantStudyAccessRequest grantRequest = new GrantStudyAccessRequest();
+
+					grantRequest.setStudyRole(studyAccess.getStudyRole());
+
+					grantRequest.setStudyPermission(studyPermission);
+
+					studyAccessService.grantStudyAccess(tenantId, studyId, userId, grantRequest);
+				}
+
+				Map<String, Object> afterStudy = studyAccessService.getStudyAccessAuditSnapshot(tenantId, studyId,
+						userId);
+
+				snapshots.add(new AuditEntitySnapshot("STUDY", studyId, beforeStudy, afterStudy));
+			}
+		}
+
+		/*
+		 * 4. ONE audit call for the whole Save operation.
+		 *
+		 * AuditRecorder automatically: - compares before / after - ignores unchanged
+		 * fields - creates field history - suppresses event if nothing changed
+		 */
+		if (!snapshots.isEmpty()) {
+
+			auditRecorder.record(new AuditRequest(tenantId, "USER", userId, "USER_ACCESS_UPDATED",
+					"User access updated", "API", snapshots));
+		}
+	}
+
+	@Transactional
+	public UserSummaryResponse createUserWithAccess(UUID tenantId, CreateUserAccessRequest request) {
+
+		// 1. create user using business service only
+		UserSummaryResponse createdUser = userService.createUser(tenantId, request.getUser());
+
+		UUID userId = createdUser.getId();
+
+		// 2. collect USER after snapshot
+		Map<String, Object> userAfter = userService.getUserAuditSnapshot(tenantId, userId);
+
+		List<AuditEntitySnapshot> snapshots = new ArrayList<>();
+
+		snapshots.add(new AuditEntitySnapshot("USER", userId, null, userAfter));
+
+		// 3. site access
+		if (request.getSiteAccess() != null) {
+
+			var site = request.getSiteAccess();
+
+			Map<String, Object> beforeSite = userService.getSiteAccessAuditSnapshot(tenantId, userId, site.getSiteId());
+
+			AssignRoleRequest roleRequest = new AssignRoleRequest(site.getSitePermission(), "SITE", site.getSiteId());
+
+			userService.assignRole(tenantId, userId, roleRequest);
+
+			Map<String, Object> afterSite = userService.getSiteAccessAuditSnapshot(tenantId, userId, site.getSiteId());
+
+			snapshots.add(new AuditEntitySnapshot("USER", userId, beforeSite, afterSite));
+		}
+
+		// 4. studies
+		if (request.getStudies() != null) {
+
+			for (StudyAccessItemRequest study : request.getStudies()) {
+
+				UUID studyId = study.getStudyId();
+
+				Map<String, Object> beforeStudy = studyAccessService.getStudyAccessAuditSnapshot(tenantId, studyId,
+						userId);
+
+				GrantStudyAccessRequest grantRequest = new GrantStudyAccessRequest();
+
+				grantRequest.setStudyRole(study.getStudyRole());
+
+				grantRequest.setStudyPermission(study.getStudyPermission());
+
+				studyAccessService.grantStudyAccess(tenantId, studyId, userId, grantRequest);
+
+				Map<String, Object> afterStudy = studyAccessService.getStudyAccessAuditSnapshot(tenantId, studyId,
+						userId);
+
+				snapshots.add(new AuditEntitySnapshot("STUDY", studyId, beforeStudy, afterStudy));
+			}
+		}
+
+		// 5. exactly one audit call
+		auditRecorder.record(new AuditRequest(tenantId, "USER", userId, "USER_CREATED_WITH_ACCESS",
+				"User created with access", "API", snapshots));
+
+		UUID siteId = request.getSiteAccess() != null ? request.getSiteAccess().getSiteId() : null;
+
+		return userService.getUser(tenantId, userId, siteId);
+	}
 }

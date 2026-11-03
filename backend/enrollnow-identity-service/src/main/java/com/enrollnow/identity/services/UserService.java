@@ -1,6 +1,8 @@
 package com.enrollnow.identity.services;
 
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
+
+import java.util.HashMap;
 import com.enrollnow.identity.dtos.UserSummaryResponse;
 import com.enrollnow.identity.exceptions.UserNotFoundException;
 import com.enrollnow.identity.models.User;
@@ -26,15 +28,16 @@ import com.enrollnow.identity.dtos.AssignRoleRequest;
 import com.enrollnow.identity.models.Role;
 import com.enrollnow.identity.models.UserRoleAssignment;
 
+
 import java.util.Map;
 import com.enrollnow.common.audit.AuditEventCommand;
-import com.enrollnow.common.audit.AuditOperation;
+
 import com.enrollnow.common.audit.AuditRecorder;
-import com.enrollnow.common.audit.AuditChange;
 
 import java.util.Locale;
 import com.enrollnow.identity.models.Site;
 import com.enrollnow.identity.repositories.SiteRepository;
+
 
 import java.util.List;
 import java.util.UUID;
@@ -156,19 +159,7 @@ public class UserService {
 		securityState.setFailedLoginAttempts(0);
 
 		userSecurityStateRepository.save(securityState);
-
-		// Audit transaction
-
-		if (auditRecorder != null) {
-			auditRecorder
-					.record(new AuditEventCommand(
-							tenantId, null, "USER", user.getId(), "USER_CREATED", "User account created", "API", null,
-							null, null, Map.of("firstName", user.getFirstName(), "lastName", user.getLastName(),
-									"title", user.getTitle(), "status", user.getStatus(), "email", normalizedEmail),
-							null));
-		}
-
-		UserSummaryResponse summary = new UserSummaryResponse(user.getId(), user.getFirstName(), user.getLastName(),
+      		UserSummaryResponse summary = new UserSummaryResponse(user.getId(), user.getFirstName(), user.getLastName(),
 				user.getTitle(), user.getStatus(), normalizedEmail);
 		summary.setTenantId(tenantId);
 		return summary;
@@ -180,30 +171,11 @@ public class UserService {
 	        UUID userId,
 	        UpdateUserRequest request
 	) {
-	    return updateUser(
-	            tenantId,
-	            userId,
-	            request,
-	            null
-	    );
-	}
-
-	@Transactional
-	public UserSummaryResponse updateUser(
-	        UUID tenantId,
-	        UUID userId,
-	        UpdateUserRequest request,
-	        AuditOperation auditOperation
-	) {
 
 	    User user = userRepository
 	            .findByTenantIdAndId(tenantId, userId)
-	            .orElseThrow(() -> new UserNotFoundException(userId));
-
-	    String previousFirstName = user.getFirstName();
-	    String previousLastName = user.getLastName();
-	    String previousTitle = user.getTitle();
-	    String previousTimezone = user.getTimezone();
+	            .orElseThrow(() ->
+	                    new UserNotFoundException(userId));
 
 	    String newFirstName = request.getFirstName().trim();
 	    String newLastName = request.getLastName().trim();
@@ -225,55 +197,10 @@ public class UserService {
 
 	    userRepository.save(user);
 
-	    if (auditOperation != null) {
-
-	        if (!java.util.Objects.equals(
-	                previousFirstName,
-	                newFirstName
-	        )) {
-	            auditOperation.addChange(
-	                    "firstName",
-	                    previousFirstName,
-	                    newFirstName
-	            );
-	        }
-
-	        if (!java.util.Objects.equals(
-	                previousLastName,
-	                newLastName
-	        )) {
-	            auditOperation.addChange(
-	                    "lastName",
-	                    previousLastName,
-	                    newLastName
-	            );
-	        }
-
-	        if (!java.util.Objects.equals(
-	                previousTitle,
-	                newTitle
-	        )) {
-	            auditOperation.addChange(
-	                    "title",
-	                    previousTitle,
-	                    newTitle
-	            );
-	        }
-
-	        if (!java.util.Objects.equals(
-	                previousTimezone,
-	                newTimezone
-	        )) {
-	            auditOperation.addChange(
-	                    "timezone",
-	                    previousTimezone,
-	                    newTimezone
-	            );
-	        }
-	    }
-
 	    return toSummary(user, null);
 	}
+
+	
 
 	@Transactional
 	public UserSummaryResponse deactivateUser(UUID tenantId, UUID userId) {
@@ -301,24 +228,21 @@ public class UserService {
 		return toSummary(user, null);
 	}
 
-	@Transactional
-	public UserRoleAssignment assignRole(UUID tenantId, UUID userId, AssignRoleRequest request) {
-		return assignRole(tenantId, userId, request, null);
-	}
+
 
 	@Transactional
 	public void removeSiteRole(UUID tenantId, UUID userId) {
 		removeSiteRole(tenantId, userId, null);
 	}
 
-	@Transactional
-	public void removeSiteRole(UUID tenantId, UUID userId, UUID siteId) {
-		removeSiteRole(tenantId, userId, siteId, null);
-	}
+	
 
 	@Transactional
-	public UserRoleAssignment assignRole(UUID tenantId, UUID userId, AssignRoleRequest request,
-			AuditOperation auditOperation) {
+	public UserRoleAssignment assignRole(
+	        UUID tenantId,
+	        UUID userId,
+	        AssignRoleRequest request
+	) {
 		// 1. User must belong to this tenant
 		userRepository.findByTenantIdAndId(tenantId, userId).orElseThrow(() -> new UserNotFoundException(userId));
 
@@ -447,20 +371,7 @@ public class UserService {
 				targetAssignment.setActive(true);
 
 				UserRoleAssignment savedAssignment = userRoleAssignmentRepository.saveAndFlush(targetAssignment);
-
-				if (auditOperation != null) {
-
-					auditOperation.addChange("USER", userId, "sitePermission", previousRoleCode, role.getCode());
-
-				} else if (auditRecorder != null) {
-
-					auditRecorder.record(new AuditEventCommand(tenantId, null, "USER", userId,
-							"SITE_PERMISSION_CHANGED", "User site permission changed", "API", null, null,
-							Map.of("siteId", scopeId, "sitePermission", previousRoleCode),
-							Map.of("siteId", scopeId, "sitePermission", role.getCode()),
-							List.of(new AuditChange("sitePermission", previousRoleCode, role.getCode()))));
-				}
-
+				
 				return savedAssignment;
 			}
 
@@ -505,56 +416,13 @@ public class UserService {
 		UserRoleAssignment savedAssignment =
 		        userRoleAssignmentRepository.save(assignment);
 
-		if (scopeType.equals("SITE")) {
-
-		    if (auditOperation != null) {
-
-		        auditOperation.addChange(
-		                "USER",
-		                userId,
-		                "sitePermission",
-		                "NONE",
-		                role.getCode()
-		        );
-
-		    } else if (auditRecorder != null) {
-
-		        auditRecorder.record(
-		                new AuditEventCommand(
-		                        tenantId,
-		                        null,
-		                        "USER",
-		                        userId,
-		                        "SITE_PERMISSION_ASSIGNED",
-		                        "User site permission assigned",
-		                        "API",
-		                        null,
-		                        null,
-		                        Map.of(
-		                                "siteId", scopeId,
-		                                "sitePermission", "NONE"
-		                        ),
-		                        Map.of(
-		                                "siteId", scopeId,
-		                                "sitePermission", role.getCode()
-		                        ),
-		                        List.of(
-		                                new AuditChange(
-		                                        "sitePermission",
-		                                        "NONE",
-		                                        role.getCode()
-		                                )
-		                        )
-		                )
-		        );
-		    }
-		}
+		
 
 		return savedAssignment;
 	}
 
 	@Transactional
-	public void removeSiteRole(UUID tenantId, UUID userId, UUID siteId, AuditOperation auditOperation) {
+	public void removeSiteRole(UUID tenantId, UUID userId, UUID siteId) {
 		userRepository.findByTenantIdAndId(tenantId, userId).orElseThrow(() -> new UserNotFoundException(userId));
 
 		List<UserRoleAssignment> activeSiteAssignments = siteId != null
@@ -572,18 +440,83 @@ public class UserService {
 			assignment.setActive(false);
 			userRoleAssignmentRepository.save(assignment);
 
-			if (auditOperation != null) {
-
-				auditOperation.addChange("USER", userId, "sitePermission", previousRoleCode, "NONE");
-
-			} else if (auditRecorder != null) {
-
-				auditRecorder.record(new AuditEventCommand(tenantId, null, "USER", userId, "SITE_PERMISSION_REMOVED",
-						"User site permission removed", "API", null, null,
-						Map.of("siteId", assignment.getSiteId(), "sitePermission", previousRoleCode),
-						Map.of("siteId", assignment.getSiteId(), "sitePermission", "NONE"),
-						List.of(new AuditChange("sitePermission", previousRoleCode, "NONE"))));
-			}
+			
 		}
 	}
+	
+	@Transactional(readOnly = true)
+	public Map<String, Object> getUserAuditSnapshot(
+	        UUID tenantId,
+	        UUID userId
+	) {
+
+	    User user = userRepository
+	            .findByTenantIdAndId(tenantId, userId)
+	            .orElseThrow(() ->
+	                    new UserNotFoundException(userId));
+
+	    String email = userEmailRepository
+	            .findByTenantIdAndUserIdAndPrimaryEmailTrue(
+	                    tenantId,
+	                    userId
+	            )
+	            .map(UserEmail::getEmail)
+	            .orElse(null);
+
+	    Map<String, Object> snapshot =
+	            new HashMap<>();
+
+	    snapshot.put("firstName", user.getFirstName());
+	    snapshot.put("lastName", user.getLastName());
+	    snapshot.put("title", user.getTitle());
+	    snapshot.put("timezone", user.getTimezone());
+	    snapshot.put("status", user.getStatus());
+	    snapshot.put("email", email);
+
+	    return snapshot;
+	}
+	
+	@Transactional(readOnly = true)
+	public Map<String, Object> getSiteAccessAuditSnapshot(
+	        UUID tenantId,
+	        UUID userId,
+	        UUID siteId
+	) {
+
+	    List<UserRoleAssignment> assignments =
+	            userRoleAssignmentRepository
+	                    .findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
+	                            tenantId,
+	                            userId,
+	                            siteId
+	                    );
+
+	    String permission =
+	            assignments.stream()
+	                    .filter(assignment ->
+	                            assignment.getTeamId() == null
+	                                    && assignment.getStudyId() == null
+	                    )
+	                    .findFirst()
+	                    .flatMap(assignment ->
+	                            roleRepository.findById(
+	                                    assignment.getRoleId()
+	                            )
+	                    )
+	                    .map(Role::getCode)
+	                    .orElse("NONE");
+
+	    Map<String, Object> snapshot =
+	            new HashMap<>();
+
+	    snapshot.put("siteId", siteId);
+	    snapshot.put(
+	            "sitePermission",
+	            permission
+	    );
+
+	    return snapshot;
+	}
+	
+	
 }
