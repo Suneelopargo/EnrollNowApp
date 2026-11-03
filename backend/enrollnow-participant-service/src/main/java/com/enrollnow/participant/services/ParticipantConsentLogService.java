@@ -56,8 +56,8 @@ public class ParticipantConsentLogService {
     );
 
     private static final Set<String> ALLOWED_FILE_EXTENSIONS = Set.of(
-            "pdf", "doc", "docx", "txt", "rtf", "odt",
-            "jpg", "jpeg", "png", "tif", "tiff"
+            "pdf", "doc", "docx",
+            "jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp"
     );
 
     private final ParticipantConsentLogRepository consentLogRepository;
@@ -445,7 +445,7 @@ public class ParticipantConsentLogService {
 
         if (extension.isEmpty() || !ALLOWED_FILE_EXTENSIONS.contains(extension.toLowerCase())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "File format not allowed. Permitted formats include PDF, DOC, DOCX, TXT, images (JPG, PNG).");
+                    "File format not allowed. Permitted formats include PDF, DOC, DOCX, and images (JPG, PNG, GIF, BMP, TIFF, WEBP).");
         }
 
         try {

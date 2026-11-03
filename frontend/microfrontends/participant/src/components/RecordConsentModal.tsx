@@ -13,6 +13,18 @@ import {
 } from '../../../../shared/api/participantApi';
 
 export const MAX_CONSENT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_CONSENT_FILE_EXTENSIONS = new Set([
+  'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tif', 'tiff', 'webp',
+]);
+
+export const isAllowedConsentAttachment = (file: Pick<File, 'name'>): boolean => {
+  const extension = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+  if (!file.name.includes('.')) return false;
+  return Boolean(extension && ALLOWED_CONSENT_FILE_EXTENSIONS.has(extension));
+};
+
+const CONSENT_ATTACHMENT_FORMAT_ERROR =
+  'Only PDF, Word documents (.doc, .docx), and image files are allowed.';
 
 export interface RecordConsentModalProps {
   isOpen: boolean;
@@ -175,6 +187,14 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      if (!isAllowedConsentAttachment(file)) {
+        setErrors((current) => ({
+          ...current,
+          attachment: CONSENT_ATTACHMENT_FORMAT_ERROR,
+        }));
+        e.target.value = '';
+        return;
+      }
       if (file.size > MAX_CONSENT_SIZE_BYTES) {
         setErrors((current) => ({
           ...current,
@@ -195,10 +215,12 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
 
   const handleClearSelectedFile = () => {
     setSelectedFile(null);
+    clearFieldError('attachment');
   };
 
   const handleRemoveExistingAttachment = () => {
     setRemoveExistingAttachment(true);
+    clearFieldError('attachment');
   };
 
   const validate = (): boolean => {
@@ -215,6 +237,10 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
     const effectiveType = isCreatingCustomType ? customConsentType.trim() : consentType.trim();
     if (!effectiveType) {
       errs.consentType = 'Consent Type is required';
+    }
+
+    if (errors.attachment) {
+      errs.attachment = errors.attachment;
     }
 
     if (expiration && consentDate) {
@@ -584,7 +610,7 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
                   type="file"
                   className="hidden"
                   onChange={handleFileChange}
-                  accept=".pdf,.doc,.docx,.txt,.rtf,.odt,.jpg,.jpeg,.png"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.webp"
                 />
                 <span className="text-gray-400 text-[11px]">PDF, Word, or image</span>
               </div>

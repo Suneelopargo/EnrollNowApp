@@ -4,7 +4,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { participantApi, ConsentLogItem, ConsentTypeOption } from '../../../../shared/api/participantApi';
 import { apiClient } from '../../../../shared/api-client';
-import { RecordConsentModal } from '../components/RecordConsentModal';
+import { isAllowedConsentAttachment, RecordConsentModal } from '../components/RecordConsentModal';
 import { ParticipantConsentSection } from '../components/ParticipantConsentSection';
 
 describe('Consent Log API Client Integration', () => {
@@ -211,6 +211,15 @@ describe('RecordConsentModal UI Component Rendering', () => {
     studyTitle: 'Cardio Registry Study',
     onConsentSaved: vi.fn(),
   };
+
+  it('allows only PDF, Word, and image attachment formats', () => {
+    expect(['consent.pdf', 'consent.DOC', 'consent.docx', 'photo.jpg', 'photo.webp'].every(
+      (name) => isAllowedConsentAttachment({ name })
+    )).toBe(true);
+    expect(['notes.txt', 'consent.rtf', 'consent.odt', 'no-extension'].some(
+      (name) => isAllowedConsentAttachment({ name })
+    )).toBe(false);
+  });
 
   it('renders modal in create mode with all required legacy field labels', () => {
     const html = renderToStaticMarkup(React.createElement(RecordConsentModal, defaultProps));

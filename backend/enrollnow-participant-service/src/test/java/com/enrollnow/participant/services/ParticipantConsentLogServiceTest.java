@@ -245,6 +245,26 @@ class ParticipantConsentLogServiceTest {
     }
 
     @Test
+    void createConsentLog_unsupportedAttachmentFormat_throwsBadRequest() {
+        Participant p = new Participant();
+        p.setId(participantId);
+        p.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(p));
+
+        CreateConsentLogRequest req = new CreateConsentLogRequest();
+        req.setConsentTitle("Consent document");
+        req.setConsentType("Initial Consent");
+        req.setConsentDate(OffsetDateTime.now());
+
+        MockMultipartFile file = new MockMultipartFile("file", "consent.txt", "text/plain", new byte[]{1});
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
+                service.createConsentLog(tenantId, participantId, userId, req, file)
+        );
+
+        assertThat(exception.getReason()).contains("File format not allowed");
+    }
+
+    @Test
     void updateConsentLog_notAuthorOrAdmin_throwsAccessDenied() {
         Participant p = new Participant();
         p.setId(participantId);
