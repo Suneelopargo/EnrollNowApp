@@ -43,17 +43,42 @@ export interface RoleResponse {
 
 export interface AuditEventRecord {
   id: string;
+
   actorUserId?: string | null;
-  actorName?: string | null;
+  actorDisplayName?: string | null;
+
   entityType: string;
   entityId?: string | null;
+  entityDisplayName?: string | null;
+
   action: string;
   description?: string | null;
   source?: string | null;
+
   occurredAt?: string | null;
   createdAt?: string | null;
+
   beforeData?: Record<string, unknown> | null;
   afterData?: Record<string, unknown> | null;
+}
+
+export interface AuditFieldChange {
+  id: string;
+  auditEventId: string;
+
+  entityType: string;
+  entityId: string;
+  entityDisplayName?: string | null;
+
+  fieldName: string;
+  previousValue: unknown;
+  newValue: unknown;
+
+  changedAt: string;
+}
+
+export interface AuditEventDetail extends AuditEventRecord {
+  changes: AuditFieldChange[];
 }
 
 export interface AuditFieldChange {

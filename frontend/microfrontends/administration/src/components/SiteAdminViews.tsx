@@ -11,6 +11,7 @@ import {
   administrationApi,
   type AuditEventDetail,
   type AuditEventRecord,
+  AuditFieldChange,
 } from '../../../../shared/api/administrationApi';
 import { DataGrid, type ColDef, type GridApi, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { Modal } from '../../../../shared/design-system/components/Modal';
@@ -60,8 +61,8 @@ export const ExportView: React.FC<ExportViewProps> = () => {
 // Audit Log View
 // ---------------------------------------------------------------------------
 interface AuditEventRow extends AuditEventRecord {
-  actorName: string;
-  affectedUser: string;
+  changedBy: string;
+  affectedEntity: string;
   dataChange: string;
 }
 
@@ -69,6 +70,101 @@ const formatAuditDate = (value?: string | null) => {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+};
+
+const AUDIT_FIELD_LABELS: Record<string, string> = {
+  firstName: 'First Name',
+  lastName: 'Last Name',
+  email: 'Email',
+  title: 'Title',
+  timezone: 'Timezone',
+  status: 'Status',
+
+  sitePermission: 'Site Permission',
+
+  studyRole: 'Study Role',
+  studyPermission: 'Study Permission',
+
+  maxFailedLoginAttempts: 'Max Failed Login Attempts',
+  preventConcurrentSessions: 'Prevent Concurrent Sessions',
+  inactivityLogoutMinutes: 'Inactivity Logout Minutes',
+  inactivityLockDays: 'Inactivity Lock Days',
+  passwordExpiryDays: 'Password Expiry Days',
+  passwordHistoryCount: 'Password History Count',
+  minimumPasswordLength: 'Minimum Password Length',
+  minimumPasswordStrength: 'Minimum Password Strength',
+  requireDigit: 'Require Digit',
+  requireSymbol: 'Require Symbol',
+  requireMixedCase: 'Require Mixed Case',
+};
+
+const AUDIT_VALUE_LABELS: Record<string, string> = {
+  NONE: 'None',
+  ACTIVE: 'Active',
+  DISABLED: 'Disabled',
+
+  SITE_MANAGER: 'Site Manager',
+
+  STUDY_LEADER: 'Study Leader',
+  STUDY_RA: 'Research Assistant',
+  STUDY_READ_ONLY: 'Study Read-Only',
+
+  STRONG: 'Strong',
+  MODERATE: 'Moderate',
+};
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  USER_CREATED: 'User created',
+  USER_CREATED_WITH_ACCESS: 'User created',
+  USER_UPDATED: 'User updated',
+  USER_ACCESS_UPDATED: 'User access updated',
+  USER_ACTIVATED: 'User activated',
+  USER_DEACTIVATED: 'User deactivated',
+  USER_INVITATION_RESENT: 'User enrollment invitation resent',
+  USER_PASSWORD_RESET: 'User password reset',
+  SECURITY_SETTINGS_UPDATED: 'Security settings updated',
+};
+
+const formatAuditAction = (
+  action?: string | null,
+  description?: string | null
+) => {
+  if (action && AUDIT_ACTION_LABELS[action]) {
+    return AUDIT_ACTION_LABELS[action];
+  }
+
+  return description || action || 'Audit event';
+};
+
+const formatAuditField = (fieldName: string) => {
+  if (AUDIT_FIELD_LABELS[fieldName]) {
+    return AUDIT_FIELD_LABELS[fieldName];
+  }
+
+  return fieldName
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase());
+};
+
+const formatAuditValue = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+
+  if (typeof value === 'string') {
+    return AUDIT_VALUE_LABELS[value] ?? value;
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
 };
 
 const jsonText = (value: unknown) => value === null || value === undefined ? '—' : JSON.stringify(value, null, 2);
@@ -115,6 +211,7 @@ const AuditDataChangeCell: React.FC<ICellRendererParams<AuditEventRow>> = (param
   );
 };
 
+
 export const AuditLogView: React.FC = () => {
   const [rows, setRows] = useState<AuditEventRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,20 +241,40 @@ export const AuditLogView: React.FC = () => {
         if (search.trim()) query.search = search.trim();
         const auditResult = await administrationApi.getAuditLogs(query);
         const mapped = auditResult.content.map((event) => {
-          const actorId = event.actorUserId;
-          const entityId = event.entityId == null ? undefined : String(event.entityId);
-          return {
-            ...event,
-            id: String(event.id),
-            actorUserId: actorId == null ? undefined : String(actorId),
-            actorName: event.actorName || (actorId ? `User ${actorId}` : 'System'),
-            affectedUser: entityId || '—',
-            action: event.action || '—',
-            dataChange: event.beforeData != null || event.afterData != null
-              ? `Before:\n${jsonText(event.beforeData)}\nAfter:\n${jsonText(event.afterData)}`
-              : 'View detailed changes',
-          };
-        });
+  const actorId = event.actorUserId;
+  const entityId =
+    event.entityId == null
+      ? undefined
+      : String(event.entityId);
+
+  return {
+    ...event,
+
+    id: String(event.id),
+
+    actorUserId:
+      actorId == null
+        ? undefined
+        : String(actorId),
+
+    changedBy:
+      event.actorDisplayName
+      || (actorId ? `User ${actorId}` : 'System'),
+
+    affectedEntity:
+      event.entityDisplayName
+      || entityId
+      || event.entityType
+      || '—',
+
+    action: event.action || '—',
+
+    dataChange:
+      event.beforeData != null || event.afterData != null
+        ? `Before:\n${jsonText(event.beforeData)}\nAfter:\n${jsonText(event.afterData)}`
+        : 'View detailed changes',
+  };
+});
         if (!cancelled) setRows(mapped);
       } catch (e: any) {
         if (!cancelled) setError(e?.response?.data?.message || e?.message || 'Unable to load audit events.');
@@ -197,9 +314,9 @@ export const AuditLogView: React.FC = () => {
 
   const columns = useMemo<ColDef<AuditEventRow>[]>(() => [
     { headerName: 'Date & Time', field: 'occurredAt', minWidth: 190, valueGetter: p => p.data?.occurredAt || p.data?.createdAt || '', valueFormatter: p => formatAuditDate(p.value), sort: 'desc' },
-    { headerName: 'Changed By', field: 'actorName', minWidth: 180 },
-    { headerName: 'Action', field: 'action', minWidth: 170 },
-    { headerName: 'Affected User', field: 'affectedUser', minWidth: 190 },
+    { headerName: 'Changed By', field: 'changedBy', minWidth: 180 },
+    { headerName: 'Action', field: 'action', minWidth: 190 },
+    { headerName: 'Affected Entity', field: 'affectedEntity', minWidth: 210 },
     { headerName: 'Description', field: 'description', minWidth: 220, flex: 1 },
     { headerName: 'Data Change', field: 'dataChange', width: 115, minWidth: 100, maxWidth: 130, sortable: false, filter: false, floatingFilter: false, cellRenderer: AuditDataChangeCell },
   ], []);
@@ -217,7 +334,14 @@ export const AuditLogView: React.FC = () => {
   const exportCsv = () => {
     gridApi?.exportDataAsCsv({
       fileName: `${exportFileName}.csv`,
-      columnKeys: ['occurredAt', 'actorName', 'action', 'affectedUser', 'description', 'dataChange'],
+      columnKeys: [
+  'occurredAt',
+  'changedBy',
+  'action',
+  'affectedEntity',
+  'description',
+  'dataChange'
+],
       processCellCallback: params => params.value ?? '',
     });
     setExportMenuOpen(false);
@@ -229,13 +353,13 @@ export const AuditLogView: React.FC = () => {
       { header: 'Date & Time', key: 'date', width: 24 },
       { header: 'Changed By', key: 'actor', width: 28 },
       { header: 'Action', key: 'action', width: 24 },
-      { header: 'Affected User', key: 'affectedUser', width: 28 },
+      { header: 'Affected Entity', key: 'affectedEntity', width: 32 },
       { header: 'Description', key: 'description', width: 55 },
       { header: 'Data Change', key: 'dataChange', width: 70 },
     ];
     getExportRows().forEach(row => sheet.addRow({
-      date: formatAuditDate(row.occurredAt || row.createdAt), actor: row.actorName,
-      action: row.action, affectedUser: row.affectedUser, description: row.description || '', dataChange: row.dataChange,
+      date: formatAuditDate(row.occurredAt || row.createdAt), actor: row.changedBy,
+      action: row.action, affectedEntity: row.affectedEntity, description: row.description || '', dataChange: row.dataChange,
     }));
     sheet.autoFilter = { from: 'A1', to: `F${Math.max(1, sheet.rowCount)}` };
     sheet.getRow(1).eachCell(cell => {
@@ -258,8 +382,8 @@ export const AuditLogView: React.FC = () => {
     doc.text('System & Security Audit Ledger', 14, 16);
     autoTable(doc, {
       startY: 22,
-      head: [['Date & Time', 'Changed By', 'Action', 'Affected User', 'Description', 'Data Change']],
-      body: exportRows.map(row => [formatAuditDate(row.occurredAt || row.createdAt), row.actorName, row.action, row.affectedUser, row.description || '', row.dataChange]),
+      head: [['Date & Time', 'Changed By', 'Action', 'Affected Entity', 'Description', 'Data Change']],
+      body: exportRows.map(row => [formatAuditDate(row.occurredAt || row.createdAt), row.changedBy, row.action, row.affectedEntity, row.description || '', row.dataChange]),
       styles: { fontSize: 8, cellPadding: 3 },
       headStyles: { fillColor: [18, 58, 90] },
     });
@@ -346,54 +470,170 @@ export const AuditLogView: React.FC = () => {
       <Modal
         isOpen={selectedEvent !== null}
         onClose={closeAuditDetails}
-        title="Audit data change"
+        title="Audit Details"
         size="wide"
       >
         {selectedEvent && <>
-          <div className="mb-3">
-            <p><strong>{selectedEvent.action}</strong> · {selectedEvent.actorName} · {formatAuditDate(selectedEvent.occurredAt || selectedEvent.createdAt)}</p>
-            <p className="text-muted">Affected user: {selectedEvent.affectedUser}</p>
-          </div>
+         <div className="mb-3">
+  <p>
+    <strong>
+      {formatAuditAction(
+        selectedEvent.action,
+        selectedEvent.description
+      )}
+    </strong>
+  </p>
+
+  <p className="text-muted">
+    Changed by: {selectedEvent.changedBy}
+  </p>
+
+  <p className="text-muted">
+    Affected entity: {selectedEvent.affectedEntity}
+  </p>
+
+  <p className="text-muted">
+    {formatAuditDate(
+      selectedEvent.occurredAt ||
+      selectedEvent.createdAt
+    )}
+  </p>
+</div>
           {detailLoading && <p role="status">Loading audit event details...</p>}
           {detailError && <div className="alert alert-danger" role="alert">{detailError}</div>}
           {!detailLoading && !detailError && selectedEventDetail && (
             selectedEventDetail.changes.length > 0 ? (
               <div className="audit-data-change">
-                {selectedEventDetail.changes.map((change, index) => (
-                  <div
-                    className="audit-data-change__panel"
-                    key={`${change.entityType}-${change.entityId}-${change.fieldName}-${index}`}
-                  >
-                    <h4>{change.entityType} · {change.entityId}</h4>
-                    <p><strong>{change.fieldName}</strong></p>
-                    <JsonTreeNode name="Previous value" value={change.previousValue} />
-                    <JsonTreeNode name="New value" value={change.newValue} />
+                <div className="audit-data-change__panel">
+                  <h4>
+                    {selectedEventDetail.entityDisplayName
+                      || selectedEventDetail.entityType}
+                  </h4>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table
+                      className="table"
+                      style={{
+                        width: '100%',
+                        borderCollapse: 'collapse',
+                        tableLayout: 'fixed'
+                      }}
+                    >
+                      <thead>
+                        <tr>
+                          <th style={{ width: '45%' }}>Field</th>
+                          <th style={{ width: '27.5%' }}>Before</th>
+                          <th style={{ width: '27.5%' }}>After</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {selectedEventDetail.changes.map(change => {
+                          const fieldLabel =
+                            change.entityType === 'STUDY'
+                              ? `${change.entityDisplayName || 'Study'} / ${formatAuditField(change.fieldName)}`
+                              : formatAuditField(change.fieldName);
+
+                          return (
+                            <tr key={change.id}>
+                              <td>
+                                <strong>{fieldLabel}</strong>
+                              </td>
+
+                              <td>
+                                {formatAuditValue(
+                                  change.previousValue
+                                )}
+                              </td>
+
+                              <td>
+                                {formatAuditValue(
+                                  change.newValue
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
-            ) : selectedEventDetail.beforeData != null || selectedEventDetail.afterData != null ? (
-              <div className="audit-data-change">
-                <div className="audit-data-change__panel">
-                  <h4>Before</h4>
-                  {selectedEventDetail.beforeData != null
-                    ? <JsonTreeNode name="Before" value={selectedEventDetail.beforeData} />
-                    : <span className="audit-json-tree__empty">No previous data</span>}
-                </div>
-                <div className="audit-data-change__panel">
-                  <h4>After</h4>
-                  {selectedEventDetail.afterData != null
-                    ? <JsonTreeNode name="After" value={selectedEventDetail.afterData} />
-                    : <span className="audit-json-tree__empty">No new data</span>}
                 </div>
               </div>
-            ) : (
-              <p className="text-muted">No field-level changes are recorded for this event.</p>
-            )
+            ) : selectedEventDetail.beforeData != null ||
+                selectedEventDetail.afterData != null ? (
+              <div className="audit-data-change__panel">
+                <h4>
+                  {selectedEventDetail.entityDisplayName
+                    || selectedEventDetail.entityType}
+                </h4>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table
+                    className="table"
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      tableLayout: 'fixed'
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        <th style={{ width: '45%' }}>Field</th>
+                        <th style={{ width: '27.5%' }}>Before</th>
+                        <th style={{ width: '27.5%' }}>After</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {getBeforeAfterRows(
+                        selectedEventDetail.beforeData,
+                        selectedEventDetail.afterData
+                      ).map(row => (
+                        <tr key={row.field}>
+                          <td>
+                            <strong>
+                              {formatAuditField(row.field)}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {formatAuditValue(row.before)}
+                          </td>
+
+                          <td>
+                            {formatAuditValue(row.after)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null
           )}
         </>}
       </Modal>
     </section>
   );
+};
+
+const getBeforeAfterRows = (
+  beforeData?: Record<string, unknown> | null,
+  afterData?: Record<string, unknown> | null
+) => {
+
+  const fields = Array.from(
+    new Set([
+      ...Object.keys(beforeData || {}),
+      ...Object.keys(afterData || {}),
+    ])
+  );
+
+  return fields.map(field => ({
+    field,
+    before: beforeData?.[field],
+    after: afterData?.[field],
+  }));
 };
 
 // ---------------------------------------------------------------------------
