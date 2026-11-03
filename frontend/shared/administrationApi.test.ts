@@ -120,6 +120,89 @@ describe('administrationApi', () => {
     });
   });
 
+  describe('audit log API methods', () => {
+    it('gets a page of audit events with supported filters', async () => {
+      const page = {
+        content: [
+          {
+            id: 'audit-event-1',
+            actorUserId: 'actor-1',
+            entityType: 'USER',
+            entityId: 'user-1',
+            action: 'USER_ACCESS_UPDATED',
+            description: 'User access updated',
+            source: 'API',
+            beforeData: null,
+            afterData: null,
+            occurredAt: '2026-11-03T10:00:00Z',
+          },
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        number: 0,
+        size: 20,
+      };
+      vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { data: page } });
+
+      const result = await administrationApi.getAuditLogs({
+        fromDate: '2026-11-01',
+        toDate: '2026-11-03',
+        action: 'USER_ACCESS_UPDATED',
+        search: 'actor-1',
+        page: 0,
+        size: 20,
+      });
+
+      expect(apiClient.get).toHaveBeenCalledWith('/api/v1/administrator/audit-logs', {
+        params: {
+          fromDate: '2026-11-01',
+          toDate: '2026-11-03',
+          action: 'USER_ACCESS_UPDATED',
+          search: 'actor-1',
+          page: 0,
+          size: 20,
+        },
+      });
+      expect(result).toEqual(page);
+    });
+
+    it('gets audit event changes by event ID', async () => {
+      const detail = {
+        id: 'audit-event-1',
+        actorUserId: 'actor-1',
+        entityType: 'USER',
+        entityId: 'user-1',
+        action: 'USER_ACCESS_UPDATED',
+        description: 'User access updated',
+        source: 'API',
+        beforeData: null,
+        afterData: null,
+        changes: [
+          {
+            id: 'change-1',
+            auditEventId: 'audit-event-1',
+            entityType: 'USER',
+            entityId: 'user-1',
+            fieldName: 'sitePermission',
+            previousValue: 'NONE',
+            newValue: 'SITE_ADMIN',
+            changedAt: '2026-11-03T10:00:00Z',
+          },
+        ],
+        occurredAt: '2026-11-03T10:00:00Z',
+        createdAt: '2026-11-03T10:00:00Z',
+      };
+      vi.mocked(apiClient.get).mockResolvedValueOnce({ data: detail });
+
+      const result = await administrationApi.getAuditEventDetail('audit-event-1');
+
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/api/v1/administrator/audit-logs/audit-event-1'
+      );
+      expect(result).toEqual(detail);
+    });
+  });
+
   describe('Permission mapping helpers', () => {
     it('supports the four canonical site-permission options and role code mappings', () => {
       expect(SITE_PERMISSION_OPTIONS).toEqual([

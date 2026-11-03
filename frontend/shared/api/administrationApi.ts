@@ -41,6 +41,53 @@ export interface RoleResponse {
   active: boolean;
 }
 
+export interface AuditEventRecord {
+  id: string;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  entityType: string;
+  entityId?: string | null;
+  action: string;
+  description?: string | null;
+  source?: string | null;
+  occurredAt?: string | null;
+  createdAt?: string | null;
+  beforeData?: Record<string, unknown> | null;
+  afterData?: Record<string, unknown> | null;
+}
+
+export interface AuditFieldChange {
+  id: string;
+  auditEventId: string;
+  entityType: string;
+  entityId: string;
+  fieldName: string;
+  previousValue: unknown;
+  newValue: unknown;
+  changedAt: string;
+}
+
+export interface AuditEventDetail extends AuditEventRecord {
+  changes: AuditFieldChange[];
+}
+
+export interface AuditLogPage {
+  content: AuditEventRecord[];
+  totalElements: number;
+  totalPages: number;
+  number?: number;
+  size?: number;
+}
+
+export interface AuditLogQuery {
+  fromDate?: string;
+  toDate?: string;
+  action?: string;
+  search?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface CreateUserPayload {
   firstName: string;
   lastName: string;
@@ -470,9 +517,34 @@ export const administrationApi = {
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
-  async getAuditLogs(query?: Record<string, any>): Promise<any> {
-    const res = await apiClient.get('/api/v1/administrator/audit-logs', { params: query });
-    return res.data?.data || res.data || [];
+  async getAuditLogs(query?: AuditLogQuery): Promise<AuditLogPage> {
+    const params: Record<string, string | number> = {};
+    if (query?.fromDate) params.fromDate = query.fromDate;
+    if (query?.toDate) params.toDate = query.toDate;
+    if (query?.action) params.action = query.action;
+    if (query?.search) params.search = query.search;
+    if (query?.page !== undefined) params.page = query.page;
+    if (query?.size !== undefined) params.size = query.size;
+
+    const res = await apiClient.get<
+      AuditLogPage | { data: AuditLogPage } | AuditEventRecord[]
+    >('/api/v1/administrator/audit-logs', { params });
+    const response = res.data;
+    if (Array.isArray(response)) {
+      return {
+        content: response,
+        totalElements: response.length,
+        totalPages: response.length > 0 ? 1 : 0,
+      };
+    }
+    return 'data' in response ? response.data : response;
+  },
+
+  async getAuditEventDetail(auditEventId: string): Promise<AuditEventDetail> {
+    const res = await apiClient.get<AuditEventDetail | { data: AuditEventDetail }>(
+      `/api/v1/administrator/audit-logs/${encodeURIComponent(auditEventId)}`
+    );
+    return 'data' in res.data ? res.data.data : res.data;
   },
 
 };

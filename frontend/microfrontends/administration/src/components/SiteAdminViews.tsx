@@ -7,7 +7,11 @@ import { ChevronDown, Download, FileSearch, FileSpreadsheet, FileText, Search, U
 import { ExportSubOption } from '../types/admin';
 import { ComingSoon } from '../../../../shared/design-system/components/ComingSoon';
 import { ManageStudiesView, ManageStudiesViewProps } from './ManageStudiesView';
-import { administrationApi, type AvailableStudy, type UserSummaryResponse } from '../../../../shared/api/administrationApi';
+import {
+  administrationApi,
+  type AuditEventDetail,
+  type AuditEventRecord,
+} from '../../../../shared/api/administrationApi';
 import { DataGrid, type ColDef, type GridApi, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 
@@ -55,46 +59,19 @@ export const ExportView: React.FC<ExportViewProps> = () => {
 // ---------------------------------------------------------------------------
 // Audit Log View
 // ---------------------------------------------------------------------------
-interface AuditEventRow {
-  id: string;
-  actorUserId?: string | null;
+interface AuditEventRow extends AuditEventRecord {
   actorName: string;
   affectedUser: string;
-  action: string;
-  entityType?: string;
-  entityId?: string;
-  description?: string;
-  source?: string;
-  occurredAt?: string;
-  createdAt?: string;
-  correlationId?: string;
-  beforeData?: Record<string, unknown> | null;
-  afterData?: Record<string, unknown> | null;
   dataChange: string;
 }
 
-const formatAuditDate = (value?: string) => {
+const formatAuditDate = (value?: string | null) => {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
 const jsonText = (value: unknown) => value === null || value === undefined ? '—' : JSON.stringify(value, null, 2);
-
-const includeStudyNames = (value: unknown, names: Map<string, string>): unknown => {
-  if (Array.isArray(value)) return value.map(item => includeStudyNames(item, names));
-  if (!value || typeof value !== 'object') return value;
-  const result: Record<string, unknown> = {};
-  Object.entries(value as Record<string, unknown>).forEach(([key, child]) => {
-    result[key] = includeStudyNames(child, names);
-  });
-  const studyId = result.studyId ?? result.study_id;
-  if (typeof studyId === 'string' && !result.studyName && !result.study_name) {
-    const studyName = names.get(studyId);
-    if (studyName) result.studyName = studyName;
-  }
-  return result;
-};
 
 const JsonTreeNode: React.FC<{ name: string; value: unknown; depth?: number }> = ({ name, value, depth = 0 }) => {
   const isObject = value !== null && typeof value === 'object';
@@ -143,13 +120,22 @@ export const AuditLogView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [action, setAction] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [gridApi, setGridApi] = useState<GridApi<AuditEventRow> | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AuditEventRow | null>(null);
+  const [selectedEventDetail, setSelectedEventDetail] = useState<AuditEventDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
   const exportMenuRef = React.useRef<HTMLDivElement>(null);
+  const detailRequestId = React.useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,49 +143,32 @@ export const AuditLogView: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        const query: Record<string, string | number> = { page: 0, size: 500 };
+        const query: Record<string, string | number> = { page, size: pageSize };
         if (fromDate) query.fromDate = fromDate;
         if (toDate) query.toDate = toDate;
+        if (action.trim()) query.action = action.trim();
+        if (search.trim()) query.search = search.trim();
         const auditResult = await administrationApi.getAuditLogs(query);
-        let usersResult: UserSummaryResponse[] = [];
-        let studiesResult: AvailableStudy[] = [];
-        try {
-          usersResult = await administrationApi.getUsers();
-        } catch {
-          // Audit events remain useful even if the user directory is temporarily unavailable.
-        }
-        try {
-          studiesResult = await administrationApi.getStudies();
-        } catch {
-          // Study IDs remain visible when study names are unavailable.
-        }
-        const events: any[] = Array.isArray(auditResult)
-          ? auditResult
-          : Array.isArray(auditResult?.content) ? auditResult.content : [];
-        const names = new Map<string, string>();
-        (usersResult || []).forEach((user: UserSummaryResponse) => {
-          names.set(String(user.id), [user.firstName, user.lastName].filter(Boolean).join(' ') || user.primaryEmail);
-        });
-        const studyNames = new Map<string, string>();
-        (studiesResult || []).forEach(study => studyNames.set(String(study.id), study.name));
-        const mapped = events.map((event) => {
-          const actorId = event.actorUserId ?? event.performedBy ?? event.performedByUserId;
+        const mapped = auditResult.content.map((event) => {
+          const actorId = event.actorUserId;
           const entityId = event.entityId == null ? undefined : String(event.entityId);
-          const beforeData = includeStudyNames(event.beforeData ?? event.before_data ?? null, studyNames) as Record<string, unknown> | null;
-          const afterData = includeStudyNames(event.afterData ?? event.after_data ?? null, studyNames) as Record<string, unknown> | null;
           return {
             ...event,
             id: String(event.id),
             actorUserId: actorId == null ? undefined : String(actorId),
-            actorName: event.actorName || event.actorUserName || event.performedByName || event.performedByUsername || names.get(String(actorId)) || (actorId ? `User ${actorId}` : 'System'),
-            affectedUser: event.targetUserName || event.targetUser?.name || (entityId ? names.get(entityId) || entityId : '—'),
+            actorName: event.actorName || (actorId ? `User ${actorId}` : 'System'),
+            affectedUser: entityId || '—',
             action: event.action || '—',
-            beforeData,
-            afterData,
-            dataChange: `Before:\n${jsonText(beforeData)}\nAfter:\n${jsonText(afterData)}`,
-          } as AuditEventRow;
+            dataChange: event.beforeData != null || event.afterData != null
+              ? `Before:\n${jsonText(event.beforeData)}\nAfter:\n${jsonText(event.afterData)}`
+              : 'View detailed changes',
+          };
         });
-        if (!cancelled) setRows(mapped);
+        if (!cancelled) {
+          setRows(mapped);
+          setTotalElements(auditResult.totalElements);
+          setTotalPages(auditResult.totalPages);
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.response?.data?.message || e?.message || 'Unable to load audit events.');
       } finally {
@@ -208,7 +177,33 @@ export const AuditLogView: React.FC = () => {
     };
     void load();
     return () => { cancelled = true; };
-  }, [fromDate, toDate, refreshKey]);
+  }, [fromDate, toDate, action, search, page, pageSize, refreshKey]);
+
+  const viewAuditDetails = useCallback(async (event: AuditEventRow) => {
+    const requestId = ++detailRequestId.current;
+    setSelectedEvent(event);
+    setSelectedEventDetail(null);
+    setDetailError('');
+    setDetailLoading(true);
+    try {
+      const detail = await administrationApi.getAuditEventDetail(event.id);
+      if (requestId === detailRequestId.current) setSelectedEventDetail(detail);
+    } catch (e: any) {
+      if (requestId === detailRequestId.current) {
+        setDetailError(e?.response?.data?.message || e?.message || 'Unable to load audit event details.');
+      }
+    } finally {
+      if (requestId === detailRequestId.current) setDetailLoading(false);
+    }
+  }, []);
+
+  const closeAuditDetails = useCallback(() => {
+    detailRequestId.current += 1;
+    setSelectedEvent(null);
+    setSelectedEventDetail(null);
+    setDetailError('');
+    setDetailLoading(false);
+  }, []);
 
   const columns = useMemo<ColDef<AuditEventRow>[]>(() => [
     { headerName: 'Date & Time', field: 'occurredAt', minWidth: 190, valueGetter: p => p.data?.occurredAt || p.data?.createdAt || '', valueFormatter: p => formatAuditDate(p.value), sort: 'desc' },
@@ -219,22 +214,18 @@ export const AuditLogView: React.FC = () => {
     { headerName: 'Data Change', field: 'dataChange', width: 115, minWidth: 100, maxWidth: 130, sortable: false, filter: false, floatingFilter: false, cellRenderer: AuditDataChangeCell },
   ], []);
 
-  const filteredRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(row => [row.actorName, row.action, row.affectedUser, row.description, row.dataChange]
-      .some(value => String(value || '').toLowerCase().includes(term)));
-  }, [rows, search]);
-
-  const onSearchChange = useCallback((value: string) => setSearch(value), []);
+  const onSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setPage(0);
+  }, []);
   const getExportRows = useCallback(() => {
     const exportRows: AuditEventRow[] = [];
     if (gridApi) {
       gridApi.forEachNodeAfterFilterAndSort(node => { if (node.data) exportRows.push(node.data); });
       return exportRows;
     }
-    return filteredRows;
-  }, [gridApi, filteredRows]);
+    return rows;
+  }, [gridApi, rows]);
   const exportFileName = `audit-log-${new Date().toISOString().slice(0, 10)}`;
   const exportCsv = () => {
     gridApi?.exportDataAsCsv({
@@ -309,11 +300,25 @@ export const AuditLogView: React.FC = () => {
           <button type="button" className="btn btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Refresh</button>
         </div>
         <div className="data-grid-toolbar__actions">
-          <label className="site-admin-filter-select-wrap">From <input className="form-input" type="date" aria-label="Audit events from date" value={fromDate} max={toDate || undefined} onChange={e => setFromDate(e.target.value)} /></label>
-          <label className="site-admin-filter-select-wrap">To <input className="form-input" type="date" aria-label="Audit events to date" value={toDate} min={fromDate || undefined} onChange={e => setToDate(e.target.value)} /></label>
+          <label className="site-admin-filter-select-wrap">From <input className="form-input" type="date" aria-label="Audit events from date" value={fromDate} max={toDate || undefined} onChange={e => { setPage(0); setFromDate(e.target.value); }} /></label>
+          <label className="site-admin-filter-select-wrap">To <input className="form-input" type="date" aria-label="Audit events to date" value={toDate} min={fromDate || undefined} onChange={e => { setPage(0); setToDate(e.target.value); }} /></label>
+          <label className="site-admin-filter-select-wrap">
+            Action
+            <input
+              className="form-input"
+              type="text"
+              aria-label="Filter audit events by action"
+              placeholder="e.g. USER_ACCESS_UPDATED"
+              value={action}
+              onChange={event => {
+                setPage(0);
+                setAction(event.target.value);
+              }}
+            />
+          </label>
           <div className="data-grid-toolbar__search">
             <input className="form-input" placeholder="Search audit events..." aria-label="Search audit events" value={search} onChange={e => onSearchChange(e.target.value)} />
-            {search && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSearch('')} aria-label="Clear search"><X size={14} /></button>}
+            {search && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSearchChange('')} aria-label="Clear search"><X size={14} /></button>}
             <Search size={14} aria-hidden="true" />
           </div>
           <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
@@ -344,17 +349,58 @@ export const AuditLogView: React.FC = () => {
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {!loading && !error && rows.length === 0 && <p className="text-muted p-3">No audit events found for this date range.</p>}
       <div className="site-admin-users-card-body">
-        <DataGrid loading={loading} rowData={filteredRows} columnDefs={columns}
+        <DataGrid loading={loading} rowData={rows} columnDefs={columns}
           defaultColDef={{ resizable: true, sortable: true, filter: true, floatingFilter: true }}
-          context={{ onViewDataChange: (event: AuditEventRow) => setSelectedEvent(event) }}
+          context={{ onViewDataChange: (event: AuditEventRow) => { void viewAuditDetails(event); } }}
           onGridReady={params => setGridApi(params.api)}
           getRowId={p => String(p.data.id)} rowHeight={48} headerHeight={44}
-          floatingFiltersHeight={38} pagination paginationPageSize={20}
-          paginationPageSizeSelector={[10, 20, 50, 100]} animateRows />
+          floatingFiltersHeight={38} animateRows />
+      </div>
+      <div className="data-grid-toolbar__actions" aria-label="Audit log pagination">
+        <span>
+          {totalElements === 0
+            ? '0 events'
+            : `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalElements)} of ${totalElements} events`}
+        </span>
+        <label className="site-admin-filter-select-wrap">
+          Rows per page
+          <select
+            className="form-select"
+            aria-label="Audit log rows per page"
+            value={pageSize}
+            onChange={event => {
+              setPageSize(Number(event.target.value));
+              setPage(0);
+            }}
+          >
+            {[10, 20, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          aria-label="Previous audit log page"
+          disabled={loading || page <= 0}
+          onClick={() => setPage(current => Math.max(0, current - 1))}
+        >
+          Previous
+        </button>
+        <span aria-live="polite">
+          Page {totalPages === 0 ? 0 : page + 1} of {totalPages}
+        </span>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          aria-label="Next audit log page"
+          disabled={loading || page + 1 >= totalPages}
+          onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+        >
+          Next
+        </button>
       </div>
       <Modal
         isOpen={selectedEvent !== null}
-        onClose={() => setSelectedEvent(null)}
+        onClose={closeAuditDetails}
         title="Audit data change"
         size="wide"
       >
@@ -363,20 +409,42 @@ export const AuditLogView: React.FC = () => {
             <p><strong>{selectedEvent.action}</strong> · {selectedEvent.actorName} · {formatAuditDate(selectedEvent.occurredAt || selectedEvent.createdAt)}</p>
             <p className="text-muted">Affected user: {selectedEvent.affectedUser}</p>
           </div>
-          <div className="audit-data-change">
-            <div className="audit-data-change__panel">
-              <h4>Before</h4>
-              {selectedEvent.beforeData != null
-                ? <JsonTreeNode name="Before" value={selectedEvent.beforeData} />
-                : <span className="audit-json-tree__empty">No previous data</span>}
-            </div>
-            <div className="audit-data-change__panel">
-              <h4>After</h4>
-              {selectedEvent.afterData != null
-                ? <JsonTreeNode name="After" value={selectedEvent.afterData} />
-                : <span className="audit-json-tree__empty">No new data</span>}
-            </div>
-          </div>
+          {detailLoading && <p role="status">Loading audit event details...</p>}
+          {detailError && <div className="alert alert-danger" role="alert">{detailError}</div>}
+          {!detailLoading && !detailError && selectedEventDetail && (
+            selectedEventDetail.changes.length > 0 ? (
+              <div className="audit-data-change">
+                {selectedEventDetail.changes.map((change, index) => (
+                  <div
+                    className="audit-data-change__panel"
+                    key={`${change.entityType}-${change.entityId}-${change.fieldName}-${index}`}
+                  >
+                    <h4>{change.entityType} · {change.entityId}</h4>
+                    <p><strong>{change.fieldName}</strong></p>
+                    <JsonTreeNode name="Previous value" value={change.previousValue} />
+                    <JsonTreeNode name="New value" value={change.newValue} />
+                  </div>
+                ))}
+              </div>
+            ) : selectedEventDetail.beforeData != null || selectedEventDetail.afterData != null ? (
+              <div className="audit-data-change">
+                <div className="audit-data-change__panel">
+                  <h4>Before</h4>
+                  {selectedEventDetail.beforeData != null
+                    ? <JsonTreeNode name="Before" value={selectedEventDetail.beforeData} />
+                    : <span className="audit-json-tree__empty">No previous data</span>}
+                </div>
+                <div className="audit-data-change__panel">
+                  <h4>After</h4>
+                  {selectedEventDetail.afterData != null
+                    ? <JsonTreeNode name="After" value={selectedEventDetail.afterData} />
+                    : <span className="audit-json-tree__empty">No new data</span>}
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted">No field-level changes are recorded for this event.</p>
+            )
+          )}
         </>}
       </Modal>
     </section>
