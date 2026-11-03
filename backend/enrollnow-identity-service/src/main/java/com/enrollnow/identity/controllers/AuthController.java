@@ -7,6 +7,7 @@ import com.enrollnow.identity.dtos.LoginResponse;
 import com.enrollnow.identity.services.LoginService;
 import com.enrollnow.identity.services.PasswordRecoveryService;
 import com.enrollnow.identity.services.UserInvitationService;
+import com.enrollnow.identity.services.UserSessionService;
 import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.ResetPasswordRequest;
 import com.enrollnow.identity.services.SecuritySettingsService;
@@ -14,8 +15,12 @@ import com.enrollnow.identity.exceptions.AlreadyEnrolledException;
 
 import jakarta.validation.Valid;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -27,17 +32,20 @@ public class AuthController {
     private final PasswordRecoveryService passwordRecoveryService;
     private final UserInvitationService userInvitationService;
     private final SecuritySettingsService securitySettingsService;
+    private final UserSessionService userSessionService;
 
     public AuthController(
             LoginService loginService,
             PasswordRecoveryService passwordRecoveryService,
             UserInvitationService userInvitationService,
-            SecuritySettingsService securitySettingsService) {
+            SecuritySettingsService securitySettingsService,
+            UserSessionService userSessionService) {
 
         this.loginService = loginService;
         this.passwordRecoveryService = passwordRecoveryService;
         this.userInvitationService = userInvitationService;
         this.securitySettingsService = securitySettingsService;
+        this.userSessionService = userSessionService;
     }
 
     @PostMapping("/login")
@@ -67,6 +75,29 @@ public class AuthController {
                         "tenantId", tenantId
                 )
         );
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @PathVariable UUID tenantId,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "USER_LOGOUT") String reason) {
+
+        UUID authenticatedTenantId = UUID.fromString(jwt.getClaimAsString("tenantId"));
+        if (!tenantId.equals(authenticatedTenantId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tenant does not match the authenticated session");
+        }
+        if (!"USER_LOGOUT".equals(reason) && !"INACTIVITY_TIMEOUT".equals(reason)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid session revocation reason");
+        }
+
+        userSessionService.revokeSession(
+                tenantId,
+                UUID.fromString(jwt.getSubject()),
+                jwt.getTokenValue(),
+                reason
+        );
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/forgot-password")

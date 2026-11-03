@@ -626,8 +626,30 @@ export const authApi = {
     return res.data;
   },
 
+  async revokeCurrentSession(reason: 'USER_LOGOUT' | 'INACTIVITY_TIMEOUT' = 'USER_LOGOUT'): Promise<void> {
+    const token = getAccessToken();
+    if (!token) return;
+
+    const tenantId = getTenantId() || '11111111-1111-1111-1111-111111111111';
+    try {
+      await apiClient.post(
+        `/api/v1/tenants/${tenantId}/auth/logout?reason=${reason}`,
+        undefined,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          skipToast: true,
+          timeout: 5000,
+        } as any
+      );
+    } catch (error: any) {
+      const status = error.status || error.response?.status;
+      if (status === 401) return;
+      throw error;
+    }
+  },
+
   /**
-   * Logs out the user by clearing session state and dispatching global auth event.
+   * Clears local session state and dispatches the global auth event.
    */
   logout(): void {
     if (typeof localStorage !== 'undefined') {

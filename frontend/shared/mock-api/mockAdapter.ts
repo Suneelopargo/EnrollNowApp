@@ -98,7 +98,13 @@ export const mockAdapter: AxiosAdapter = async (
     return createMockSuccessResponse(config, { active: true }, 200, 'Session active');
   }
 
-  if (path === '/api/v1/auth/logout' && method === 'POST') {
+  if (
+    (path.match(/^\/api\/v1\/tenants\/[^/]+\/auth\/logout$/) || path === '/api/v1/auth/logout') &&
+    method === 'POST'
+  ) {
+    if (!extractBearerToken(config)) {
+      throw createMockErrorResponse(config, 401, 'Authentication required: Missing Authorization token.', 'UNAUTHORIZED');
+    }
     const res = mockAuthApi.handleLogout(config);
     if (res instanceof Error || 'isAxiosError' in res) {
       throw res;

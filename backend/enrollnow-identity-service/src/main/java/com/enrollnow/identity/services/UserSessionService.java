@@ -90,4 +90,26 @@ public class UserSessionService {
             userSessionRepository.save(session);
         }
     }
+
+    @Transactional
+    public void revokeSession(
+            UUID tenantId,
+            UUID userId,
+            String accessToken,
+            String reason) {
+
+        String tokenHash = SecurityTokenHelper.hashToken(accessToken);
+        UserSession session = userSessionRepository.findBySessionTokenHash(tokenHash)
+                .orElseThrow(() -> new IllegalStateException("Session not found"));
+
+        if (!session.getTenantId().equals(tenantId) || !session.getUserId().equals(userId)) {
+            throw new IllegalStateException("Session identity mismatch");
+        }
+
+        if (session.getRevokedAt() == null) {
+            session.setRevokedAt(OffsetDateTime.now());
+            session.setRevokeReason(reason);
+            userSessionRepository.save(session);
+        }
+    }
 }

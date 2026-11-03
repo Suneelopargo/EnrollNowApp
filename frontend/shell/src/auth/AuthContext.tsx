@@ -4,7 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { AuthUser, AuthState } from '../../../shared/contracts';
 import { telemetry } from '../../../shared/telemetry';
 import { toast } from '../../../shared/toaster';
-import { useInactivityLogout, STORAGE_KEY_SESSION_LOGOUT } from './useInactivityLogout';
+import {
+  useInactivityLogout,
+  STORAGE_KEY_INACTIVITY_MINUTES,
+  STORAGE_KEY_LAST_ACTIVE,
+  STORAGE_KEY_SESSION_LOGOUT,
+} from './useInactivityLogout';
 import {
   authApi,
   deriveUserAccessFlags,
@@ -239,11 +244,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleInactivityLogout = useCallback((reason: string, message?: string) => {
+    const revokeRequest = reason === 'INACTIVITY_TIMEOUT'
+      ? authApi.revokeCurrentSession('INACTIVITY_TIMEOUT')
+      : null;
     clearSession();
-    localStorage.removeItem('enrollnow_token');
-    localStorage.removeItem('enrollnow_user');
+    localStorage.removeItem(STORAGE_KEY_LAST_ACTIVE);
+    localStorage.removeItem(STORAGE_KEY_INACTIVITY_MINUTES);
     authApi.logout();
     navigate('/login', { replace: true });
+
+    if (revokeRequest) {
+      void revokeRequest.catch(() => {
+        toast.warning(
+          'You were signed out on this device, but the server could not confirm session revocation.',
+          { title: 'Session Revocation Unconfirmed' }
+        );
+      });
+    }
+
     if (reason === 'INACTIVITY_TIMEOUT') {
       toast.warning('Session expired due to inactivity. Please log in again.', {
         title: 'Session Timeout',
@@ -264,9 +282,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const logout = () => {
+    const revokeRequest = authApi.revokeCurrentSession('USER_LOGOUT');
     clearSession();
-    localStorage.clear();
-    sessionStorage.clear();
+    localStorage.removeItem(STORAGE_KEY_LAST_ACTIVE);
+    localStorage.removeItem(STORAGE_KEY_INACTIVITY_MINUTES);
     authApi.logout();
     if (typeof window !== 'undefined') {
       try {
@@ -276,6 +295,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     navigate('/login', { replace: true });
+
+    void revokeRequest.catch(() => {
+      toast.warning(
+        'You were signed out on this device, but the server could not confirm session revocation.',
+        { title: 'Session Revocation Unconfirmed' }
+      );
+    });
   };
 
   const hasRole = useCallback(

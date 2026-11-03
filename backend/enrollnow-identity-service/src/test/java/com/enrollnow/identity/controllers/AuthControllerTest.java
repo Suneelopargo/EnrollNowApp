@@ -9,6 +9,7 @@ import com.enrollnow.identity.services.LoginService;
 import com.enrollnow.identity.services.PasswordRecoveryService;
 import com.enrollnow.identity.services.SecuritySettingsService;
 import com.enrollnow.identity.services.UserInvitationService;
+import com.enrollnow.identity.services.UserSessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.Map;
 import java.util.UUID;
@@ -38,6 +40,9 @@ class AuthControllerTest {
     @Mock
     private SecuritySettingsService securitySettingsService;
 
+    @Mock
+    private UserSessionService userSessionService;
+
     private AuthController authController;
 
     private final UUID tenantId = UUID.randomUUID();
@@ -48,7 +53,8 @@ class AuthControllerTest {
                 loginService,
                 passwordRecoveryService,
                 userInvitationService,
-                securitySettingsService
+                securitySettingsService,
+                userSessionService
         );
     }
 
@@ -70,6 +76,21 @@ class AuthControllerTest {
         assertNotNull(response.getBody());
         assertEquals("jwt-token-123", response.getBody().getAccessToken());
         verify(loginService).authenticate(tenantId, req);
+    }
+
+    @Test
+    void logoutRevokesTheAuthenticatedSession() {
+        UUID userId = UUID.randomUUID();
+        Jwt jwt = Jwt.withTokenValue("access-token")
+                .header("alg", "none")
+                .subject(userId.toString())
+                .claim("tenantId", tenantId.toString())
+                .build();
+
+        ResponseEntity<Void> response = authController.logout(tenantId, jwt, "INACTIVITY_TIMEOUT");
+
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(userSessionService).revokeSession(tenantId, userId, "access-token", "INACTIVITY_TIMEOUT");
     }
 
     @Test
