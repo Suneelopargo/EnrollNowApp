@@ -336,18 +336,18 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
   const displayedMethods = useMemo(
     () => methods.filter((method) => (
       !method.deleted
-      && (!isParticipantContact || !method.id || Boolean(method.contactValue.trim()))
+      && (!method.id || Boolean(method.contactValue.trim()))
       && (showArchived || method.active)
     )),
-    [isParticipantContact, methods, showArchived],
+    [methods, showArchived],
   );
   const displayedAddresses = useMemo(
     () => addressDrafts.filter((address) => (
       !address.deleted
-      && (!isParticipantContact || !address.id || !isAddressBlank(address))
+      && (!address.id || !isAddressBlank(address))
       && (showArchived || address.active)
     )),
-    [addressDrafts, isParticipantContact, showArchived],
+    [addressDrafts, showArchived],
   );
   const hasArchivedItems = methods.some((method) => !method.active && !method.deleted)
     || addressDrafts.some((address) => !address.active && !address.deleted);

@@ -8,7 +8,6 @@ import {
   Download, 
   Users, 
   Search as SearchIcon, 
-  Filter as FilterIcon, 
   X, 
   Trash2,
   Eye,
@@ -180,8 +179,7 @@ interface ParticipantGridProps {
   totalCount?: number;
   searchTerm?: string;
   setSearchTerm?: (term: string) => void;
-  selectedStudies?: string[];
-  setSelectedStudies?: React.Dispatch<React.SetStateAction<string[]>>;
+  clearFiltersVersion?: number;
   duplicatesOnly?: boolean;
   onToggleDuplicates?: () => void;
   globalVariables?: { id: string; name: string }[];
@@ -213,8 +211,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   totalCount,
   searchTerm = '',
   setSearchTerm,
-  selectedStudies = [],
-  setSelectedStudies,
+  clearFiltersVersion = 0,
   duplicatesOnly = false,
   onToggleDuplicates,
   globalVariables = [],
@@ -228,17 +225,12 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   const [gridSearchResultCount, setGridSearchResultCount] = useState(participants.length);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantRecord[]>([]);
   const [studyToAssign, setStudyToAssign] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [filterPopoverPosition, setFilterPopoverPosition] = useState<React.CSSProperties>({});
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx' | 'pdf'>('csv');
   const [exportTimezone, setExportTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [isExporting, setIsExporting] = useState(false);
   const [selectedExportFields, setSelectedExportFields] = useState<string[]>([]);
-  const [filterSearchQuery, setFilterSearchQuery] = useState('');
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const studyFilterButtonRef = useRef<HTMLButtonElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const archivedStudyKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -272,6 +264,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
   useEffect(() => {
     gridApi?.paginationGoToFirstPage();
   }, [participants, gridApi]);
+
+  useEffect(() => {
+    if (!gridApi) return;
+    gridApi.setFilterModel(null);
+    gridApi.paginationGoToFirstPage();
+    setGridSearchResultCount(gridApi.getDisplayedRowCount());
+  }, [clearFiltersVersion, gridApi]);
 
   const handleSearchChange = (value: string) => {
     gridSearchTermRef.current = value;
@@ -340,47 +339,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     return availableStudyList.map((name) => ({ value: name, label: name }));
   }, [studies, availableStudyList]);
 
-  const filteredStudyOptions = useMemo(() => {
-    if (!filterSearchQuery.trim()) return availableStudyList;
-    return availableStudyList.filter((name) =>
-      name.toLowerCase().includes(filterSearchQuery.toLowerCase())
-    );
-  }, [availableStudyList, filterSearchQuery]);
-
-  const handleToggleStudy = (studyName: string) => {
-    if (!setSelectedStudies) return;
-    setSelectedStudies((prev) => {
-      if (prev.includes(studyName)) {
-        return prev.filter((item) => item !== studyName);
-      } else {
-        return [...prev, studyName];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (setSelectedStudies) setSelectedStudies([...availableStudyList]);
-  };
-
-  const handleClearAll = () => {
-    if (setSelectedStudies) setSelectedStudies([]);
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(target) &&
-        !studyFilterButtonRef.current?.contains(target)
-      ) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   useEffect(() => {
     const closeExportMenu = (event: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -390,48 +348,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     document.addEventListener('mousedown', closeExportMenu);
     return () => document.removeEventListener('mousedown', closeExportMenu);
   }, []);
-
-  const StudiesFilterHeader = () => {
-    return (
-      <div className="flex items-center justify-between w-full pr-1 relative">
-        <span className="font-semibold text-[#334155]">Studies</span>
-        <button
-          ref={studyFilterButtonRef}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isDropdownOpen) {
-              setIsDropdownOpen(false);
-              return;
-            }
-            const bounds = e.currentTarget.getBoundingClientRect();
-            const popoverWidth = 288;
-            const popoverHeight = Math.min(480, window.innerHeight - 16);
-            const left = Math.max(8, Math.min(bounds.right - popoverWidth, window.innerWidth - popoverWidth - 8));
-            const top = bounds.bottom + popoverHeight + 8 <= window.innerHeight
-              ? bounds.bottom + 8
-              : Math.max(8, bounds.top - popoverHeight - 8);
-            setFilterPopoverPosition({ position: 'fixed', left, top, margin: 0 });
-            setIsDropdownOpen(true);
-          }}
-          data-tooltip="Click to filter by checkbox"
-          aria-label="Filter studies by checkbox"
-          className={`p-1 rounded cursor-pointer transition-colors flex items-center gap-1 custom-tooltip-btn ${
-            selectedStudies.length > 0
-              ? 'bg-[#1976d2] text-white shadow-2xs'
-              : 'text-gray-500 hover:text-[#1976d2] hover:bg-gray-100'
-          }`}
-        >
-          <FilterIcon className="w-3.5 h-3.5 stroke-[2.2]" />
-          {selectedStudies.length > 0 && (
-            <span className="text-[10px] font-bold px-1 bg-white text-[#1976d2] rounded-full">
-              {selectedStudies.length}
-            </span>
-          )}
-        </button>
-      </div>
-    );
-  };
 
   const columnDefs = useMemo<ColDef<ParticipantRecord>[]>(() => [
     {
@@ -458,12 +374,19 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       getQuickFilterText: (params) => params.data?.searchableText || params.value || '',
     },
     {
-      headerComponent: StudiesFilterHeader,
+      headerName: 'Studies',
       field: 'studies',
       flex: 2,
       minWidth: 260,
       sortable: false,
-      filter: false,
+      filter: 'agTextColumnFilter',
+      floatingFilter: true,
+      filterValueGetter: (params) => {
+        const studiesForParticipant = params.data?.studies;
+        return Array.isArray(studiesForParticipant)
+          ? studiesForParticipant.map((study) => study?.name || '').join(' ')
+          : '';
+      },
       autoHeight: true,
       cellRenderer: StudiesCellRenderer,
       cellClass: 'flex items-center',
@@ -515,12 +438,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
       cellClass: 'p-0 flex items-center justify-center',
       getQuickFilterText: () => '',
     }
-  ], [selectedStudies]);
+  ], []);
 
   const defaultColDef = useMemo<ColDef>(() => ({
     resizable: true,
     suppressMovable: false,
   }), []);
+  const isGridFiltered = Boolean(gridSearchTerm.trim() || gridApi?.isAnyFilterPresent());
 
   const onSelectionChanged = useCallback(() => {
     if (!gridApi) return;
@@ -656,7 +580,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           <div className="flex items-center gap-2 mr-2">
             <h3 className="sub-heading text-lg font-semibold text-gray-800 flex items-center gap-1.5 mb-0 whitespace-nowrap" id="registry-table-heading">
               <span>{duplicatesOnly ? 'Potential Duplicate Participants' : 'All Participants'}</span>
-              <span className="text-gray-500 font-normal">({gridSearchTerm.trim() ? gridSearchResultCount : totalCount ?? participants.length})</span>
+              <span className="text-gray-500 font-normal">({isGridFiltered ? gridSearchResultCount : totalCount ?? participants.length})</span>
             </h3>
             <button
               id="bulk-actions-toggle"
@@ -797,36 +721,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
         <p className="mt-4 text-sm text-slate-500">Consent history includes records for each listed participant across their studies.</p>
       </Modal>
 
-      {selectedStudies.length > 0 && (
-        <div className="bg-blue-50/70 border-b border-blue-100 px-5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold text-blue-900 text-[11px] flex items-center gap-1">
-              <FilterIcon className="w-3 h-3 text-blue-600" /> Active Filters:
-            </span>
-            {selectedStudies.map((study) => (
-              <span
-                key={study}
-                className="bg-white text-blue-700 border border-blue-300 rounded px-2 py-0.5 text-xs flex items-center gap-1 shadow-2xs font-medium"
-              >
-                {study}
-                <X
-                  className="w-3 h-3 cursor-pointer hover:text-red-500"
-                  onClick={() => handleToggleStudy(study)}
-                />
-              </span>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={handleClearAll}
-            className="text-blue-700 hover:text-red-600 text-xs font-medium underline cursor-pointer custom-tooltip-btn"
-            data-tooltip="Clear all selected studies"
-          >
-            Clear all ({selectedStudies.length})
-          </button>
-        </div>
-      )}
-
       {selectedParticipants.length > 0 && (
         <div className="participant-grid__selection-toolbar" role="region" aria-label="Selected participants actions">
           <label className="participant-grid__select-all">
@@ -878,100 +772,6 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
         </div>
       )}
 
-      {isDropdownOpen && (
-        <div
-          ref={dropdownRef}
-          style={filterPopoverPosition}
-          className="participant-grid__study-filter-popover bg-white rounded-lg shadow-2xl border border-gray-200 p-3 flex flex-col gap-2.5 animate-fade-in"
-        >
-          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-            <div className="flex items-center gap-1.5 font-semibold text-xs text-gray-800">
-              <FilterIcon className="w-3.5 h-3.5 text-blue-600" />
-              <span>Filter by Checkbox</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsDropdownOpen(false)}
-              aria-label="Close study filter"
-              className="text-gray-400 hover:text-gray-600 p-0.5 cursor-pointer"
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="relative">
-            <input
-              type="text"
-              value={filterSearchQuery}
-              onChange={(e) => setFilterSearchQuery(e.target.value)}
-              placeholder="Search items..."
-              aria-label="Search study filter items"
-              className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-gray-50"
-            />
-            {filterSearchQuery && (
-              <X
-                className="w-3 h-3 text-gray-400 absolute right-2 top-2 cursor-pointer"
-                onClick={() => setFilterSearchQuery('')}
-              />
-            )}
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] px-0.5 text-blue-600 font-medium">
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="hover:underline cursor-pointer"
-            >
-              Select All
-            </button>
-            <button
-              type="button"
-              onClick={handleClearAll}
-              className="text-gray-500 hover:text-red-500 cursor-pointer"
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="max-h-56 overflow-y-auto flex flex-col gap-1 pr-1 border border-gray-100 rounded p-1">
-            {filteredStudyOptions.length > 0 ? (
-              filteredStudyOptions.map((study) => {
-                const isChecked = selectedStudies.includes(study);
-                return (
-                  <label
-                    key={study}
-                    className={`flex items-center gap-2.5 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${
-                      isChecked ? 'bg-blue-50/80 text-blue-900 font-medium' : 'hover:bg-gray-50 text-gray-700'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleToggleStudy(study)}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
-                    />
-                    <span className="truncate" title={study}>{study}</span>
-                  </label>
-                );
-              })
-            ) : (
-              <span className="text-xs text-gray-400 p-2 text-center">No items found</span>
-            )}
-          </div>
-
-          <div className="border-t border-gray-100 pt-2 flex items-center justify-between text-[11px] text-gray-500">
-            <span>{selectedStudies.length} checked</span>
-            <button
-              type="button"
-              onClick={() => setIsDropdownOpen(false)}
-              className="bg-[#1976d2] hover:bg-[#1565c0] text-white px-3 py-1 rounded text-xs font-medium cursor-pointer"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
       <DataGrid
           loading={isLoading}
           rowData={participants}
@@ -1000,6 +800,7 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
           rowSelection={{ mode: 'multiRow', checkboxes: false, headerCheckbox: false }}
           onSelectionChanged={onSelectionChanged}
           onGridReady={onGridReady}
+          enableFilterHandlers={true}
           onFilterChanged={(event) => setGridSearchResultCount(event.api.getDisplayedRowCount())}
           onModelUpdated={(event) => setGridSearchResultCount(event.api.getDisplayedRowCount())}
           rowHeight={64}

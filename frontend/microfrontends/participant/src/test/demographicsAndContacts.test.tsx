@@ -213,7 +213,7 @@ describe('Contact Methods and Related Contacts Components', () => {
     expect(html).toContain('Archive Contact');
   });
 
-  it('keeps empty method and address rows for an other contact', () => {
+  it('hides persisted empty method and address rows for an other contact', () => {
     const emptyMethod: ParticipantContactDetail = {
       ...dummyContact,
       contactValue: '',
@@ -239,8 +239,8 @@ describe('Contact Methods and Related Contacts Components', () => {
       />
     );
 
-    expect(html).toContain('aria-label="Contact method type"');
-    expect(html).toContain('aria-label="Address 1"');
+    expect(html).not.toContain('aria-label="Contact method type"');
+    expect(html).not.toContain('aria-label="Address 1"');
     expect(html).toContain('Add Contact Method');
     expect(html).toContain('Add Address');
   });
