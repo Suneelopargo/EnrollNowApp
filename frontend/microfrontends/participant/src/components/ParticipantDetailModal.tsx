@@ -362,6 +362,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   const [race, setRace] = useState(participant?.demographics?.race || '');
   const [internalDemographicOptions, setInternalDemographicOptions] = useState<DemographicOptions | null>(null);
   const [internalDemographicLoading, setInternalDemographicLoading] = useState(false);
+  const [dobError, setDobError] = useState<string | null>(null);
 
   // Family
   const [familyRole, setFamilyRole] = useState(participant?.family?.familyRole || '');
@@ -392,6 +393,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setContactForFuture(isContactForFutureStudies(participant.contactForFutureStudies));
       setDateLastContact(getParticipantLastContactDate(participant));
       setDateLastContactError(null);
+      setDobError(null);
       
       setPrimaryEmail(participant.contactMethods?.primaryEmail || '');
       setSecondaryEmail(participant.contactMethods?.secondaryEmail || '');
@@ -425,7 +427,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           }
         })
         .catch((err) => {
-          console.warn('Could not load demographic options in detail modal:', err);
+          toast.error(getApiErrorMessage(err, 'Could not load demographic options.'));
         })
         .finally(() => {
           if (isMounted) {
@@ -565,6 +567,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   };
 
   const handleSaveParticipant = async (keepOpen = false): Promise<boolean> => {
+    setDobError(null);
     if (hasExistingTimezone && (!timezone || !timezone.trim())) {
       setTimezoneError('Timezone cannot be removed once set. Please select a valid timezone.');
       return false;
@@ -577,11 +580,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     if (dob && dob.trim()) {
       const ageStr = calculateCurrentAge(dob);
       if (ageStr === 'Invalid (Future Date)') {
-        toast.error('Birthday cannot be in the future');
+        setDobError('Birthday cannot be in the future');
         return false;
       }
       if (ageStr === 'Invalid Date') {
-        toast.error('Birthday is not valid');
+        setDobError('Birthday is not valid');
         return false;
       }
     }
@@ -965,9 +968,14 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     id="participant-dob"
                     type="date"
                     value={formatDobForDateInput(dob)}
-                    onChange={(e) => setDob(e.target.value)}
+                    onChange={(e) => {
+                      setDob(e.target.value);
+                      setDobError(null);
+                    }}
                     className="form-input"
+                    aria-invalid={Boolean(dobError)}
                   />
+                  {dobError && <span className="record-detail__inline-error" role="alert">{dobError}</span>}
                 </div>
                 <div className="record-detail__field">
                   <span className="form-label">Current Age</span>

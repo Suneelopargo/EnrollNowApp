@@ -724,9 +724,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       await fetchParticipants(true);
       return true;
     } catch (err: any) {
-      const errorMsg = getApiErrorMessage(err, 'Failed to update participant on server.');
-      showNotification(errorMsg, 'error');
-      return false;
+      throw err;
     }
   };
 

@@ -366,6 +366,14 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
     setMethods((current) => current.map((method) => (
       method.key === key ? { ...method, ...change } : method
     )));
+    setErrors((current) => {
+      const methodErrors = { ...(current.methods ?? {}) };
+      delete methodErrors[key];
+      return {
+        ...current,
+        methods: Object.keys(methodErrors).length > 0 ? methodErrors : undefined,
+      };
+    });
   };
 
   const toggleMethodPreferred = (key: string) => {
@@ -474,12 +482,7 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
       && Boolean(nextErrors.methods?.[method.key])
     ));
     if (hiddenArchivedErrors.length > 0) {
-      const hasEmptyMethod = hiddenArchivedErrors.some(
-        (method) => nextErrors.methods?.[method.key] === 'Contact method is required',
-      );
-      toast.error(hasEmptyMethod
-        ? 'Cannot submit with an empty contact method'
-        : 'Please review archived contact methods before saving');
+      setShowArchived(true);
     }
 
     if (Object.keys(nextErrors.methods!).length === 0) delete nextErrors.methods;
@@ -671,15 +674,17 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
             <div>
               <input
                 id="participant-contact-name"
-                className="form-input"
+                className={`form-input ${errors.contactName ? 'border-red-500 placeholder:text-red-500' : ''}`}
                 value={contactName}
-                onChange={(event) => setContactName(event.target.value)}
-                placeholder={`e.g. ${participantName}`}
-                required
+                onChange={(event) => {
+                  setContactName(event.target.value);
+                  if (event.target.value.trim()) {
+                    setErrors((current) => ({ ...current, contactName: undefined }));
+                  }
+                }}
+                placeholder={isParticipantContact ? 'Preferred Name' : 'Contact Name'}
                 aria-invalid={Boolean(errors.contactName)}
               />
-              <span className="participant-contact-modal__required">*required</span>
-              {errors.contactName && <span className="text-red-600 text-xs">{errors.contactName}</span>}
             </div>
             <button
               type="button"
@@ -708,7 +713,13 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
                   id="participant-contact-relationship"
                   className="form-select"
                   value={relationship}
-                  onChange={(event) => setRelationship(event.target.value)}
+                  onChange={(event) => {
+                    setRelationship(event.target.value);
+                    setErrors((current) => ({
+                      ...current,
+                      otherRelationship: undefined,
+                    }));
+                  }}
                 >
                   <option value="">Relationship</option>
                   {relationshipOptions.map((option) => (
@@ -717,15 +728,19 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
                 </select>
                 {relationship === 'Other' && (
                   <input
-                    className="form-input mt-2"
+                    className={`form-input mt-2 ${errors.otherRelationship ? 'border-red-500 placeholder:text-red-500' : ''}`}
                     value={otherRelationship}
-                    onChange={(event) => setOtherRelationship(event.target.value)}
-                    placeholder="Other relationship"
+                    onChange={(event) => {
+                      setOtherRelationship(event.target.value);
+                      if (event.target.value.trim()) {
+                        setErrors((current) => ({ ...current, otherRelationship: undefined }));
+                      }
+                    }}
+                    placeholder="Other Relationship"
                     aria-label="Other relationship"
                     aria-invalid={Boolean(errors.otherRelationship)}
                   />
                 )}
-                {errors.otherRelationship && <span className="text-red-600 text-xs">{errors.otherRelationship}</span>}
               </div>
               <span />
               <span />
@@ -776,14 +791,16 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
                 </select>
                 <div>
                   <input
-                    className="form-input"
+                    className={`form-input ${errors.methods?.[method.key] ? 'border-red-500 placeholder:text-red-500' : ''}`}
                     value={method.contactValue}
                     onChange={(event) => updateMethod(method.key, { contactValue: event.target.value })}
-                    placeholder="Information"
+                    placeholder="Contact Method"
                     aria-label={`${METHOD_TYPES.find((type) => type.value === method.contactType)?.label ?? 'Contact'} information`}
                     aria-invalid={Boolean(errors.methods?.[method.key])}
                   />
-                  {errors.methods?.[method.key] && <span className="text-red-600 text-xs">{errors.methods[method.key]}</span>}
+                  {errors.methods?.[method.key] && errors.methods[method.key] !== 'Contact method is required' && (
+                    <span className="text-red-600 text-xs" role="alert">{errors.methods[method.key]}</span>
+                  )}
                 </div>
                 <button
                   type="button"

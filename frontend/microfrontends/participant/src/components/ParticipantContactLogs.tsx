@@ -6,7 +6,6 @@ import {
   Pencil,
   Trash2,
   Loader2,
-  AlertCircle,
   Clock,
   User,
   MessageSquare,
@@ -47,7 +46,6 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
 }) => {
   const [logs, setLogs] = useState<ContactLogItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [selectedLog, setSelectedLog] = useState<ContactLogItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -62,13 +60,11 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
   const fetchContactLogs = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const data = await participantApi.getContactLogs(participantId, { studyId, tenantId, siteId });
       setLogs(Array.isArray(data) ? data : []);
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to load contact logs');
-      setError(msg);
       toast.error(msg);
     } finally {
       setIsLoading(false);
@@ -339,25 +335,8 @@ export const ParticipantContactLogs: React.FC<ParticipantContactLogsProps> = ({
         </div>
       )}
 
-      {/* Error state */}
-      {error && !isLoading && (
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-          <button
-            type="button"
-            onClick={fetchContactLogs}
-            className="btn btn-sm btn-ghost text-red-700 underline"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
       {/* Empty State */}
-      {!isLoading && !error && logs.length === 0 && (
+      {!isLoading && logs.length === 0 && (
         <div className="p-8 text-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
           <MessageSquare size={32} className="text-gray-400 mb-2" />
           <h5 className="text-sm font-medium text-gray-700 mb-1">No contact history recorded</h5>

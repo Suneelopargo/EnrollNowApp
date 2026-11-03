@@ -30,7 +30,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
 }) => {
   const [messages, setMessages] = useState<CommunicationItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [togglingPinId, setTogglingPinId] = useState<string | null>(null);
   const [isComposeOpen, setIsComposeOpen] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,13 +37,12 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
   const fetchMessages = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const data = await participantApi.getSms(participantId, { tenantId, siteId });
       setMessages(Array.isArray(data) ? data : []);
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to load text message history');
-      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -250,16 +248,6 @@ export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
         <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
           <Loader2 size={24} className="animate-spin text-blue-600" />
           <span className="text-xs">Loading text messages...</span>
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && !isLoading && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded flex items-center justify-between">
-          <span>{error}</span>
-          <button type="button" onClick={fetchMessages} className="underline font-semibold hover:text-red-800">
-            Retry
-          </button>
         </div>
       )}
 

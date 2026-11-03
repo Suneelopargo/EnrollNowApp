@@ -348,7 +348,9 @@ describe('Contact Methods and Related Contacts Components', () => {
     expect(html).toContain('Add Contact Method');
     expect(html).toContain('Add Address');
     expect(html).not.toContain('Add at least one contact method');
-    expect(html).toContain('*required');
+    expect(html).not.toContain('*required');
+    expect(html).toContain('placeholder="Contact Name"');
+    expect(html).not.toContain('placeholder="Contact name is required"');
     expect(html).not.toContain('aria-label="Contact method type"');
     expect(html).not.toContain('aria-label="Address 1"');
     expect(html).toContain('Contact Name');

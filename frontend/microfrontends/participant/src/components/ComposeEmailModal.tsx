@@ -110,7 +110,7 @@ const EmailRecipientInput: React.FC<EmailRecipientInputProps> = ({
           if (event.key === 'Escape') setIsOpen(false);
         }}
         placeholder={placeholder}
-        className={`form-input ${hasError ? 'border-red-500' : ''}`}
+        className={`form-input ${hasError ? 'border-red-500 placeholder:text-red-500' : ''}`}
         style={{ paddingRight: 40 }}
         aria-label={label}
         aria-invalid={hasError}
@@ -246,6 +246,10 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
         participantApi.getContacts(participantId, { tenantId, siteId }),
       ])
         .then(([emailsRes, contactsRes]) => {
+          const failedRequest = [emailsRes, contactsRes].find((result) => result.status === 'rejected');
+          if (failedRequest?.status === 'rejected') {
+            toast.error(getApiErrorMessage(failedRequest.reason, 'Failed to load email recipients'));
+          }
           const directEmails = emailsRes.status === 'fulfilled' && Array.isArray(emailsRes.value) ? emailsRes.value : [];
           const contacts = contactsRes.status === 'fulfilled' && Array.isArray(contactsRes.value)
             ? contactsRes.value
@@ -253,7 +257,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
           setKnownRecipients(mapEmailRecipientOptions(contacts, directEmails));
         })
         .catch((err) => {
-          console.warn('Failed to load email recipients:', err);
+          toast.error(getApiErrorMessage(err, 'Failed to load email recipients'));
         })
         .finally(() => {
           setIsLoadingRecipients(false);
@@ -272,7 +276,9 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
   useEffect(() => {
     if (!isOpen || isEditorReady) return;
     const timeoutId = window.setTimeout(() => {
-      setEditorError('The email designer could not load. Check your connection, then close and reopen this window.');
+      const message = 'The email designer could not load. Check your connection, then close and reopen this window.';
+      setEditorError(message);
+      toast.error(message);
     }, 30000);
     return () => window.clearTimeout(timeoutId);
   }, [isOpen, isEditorReady]);
@@ -285,11 +291,22 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
       setEditorError('');
       setIsEditorReady(true);
     } catch {
-      setEditorError('The email designer could not be initialized. Close and reopen this window to try again.');
+      const message = 'The email designer could not be initialized. Close and reopen this window to try again.';
+      setEditorError(message);
+      toast.error(message);
     }
   }, []);
 
   if (!isOpen) return null;
+
+  const clearFieldError = (field: string, clearGeneric = false) => {
+    setErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      if (clearGeneric) delete next.generic;
+      return next;
+    });
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -338,15 +355,12 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      if (newErrors.generic) {
-        toast.error(newErrors.generic);
-      }
       return;
     }
 
     const editor = emailEditorRef.current?.editor;
     if (!isEditorReady || !editor) {
-      setErrors({ body: editorError || 'The email editor is still loading. Please wait and try again.' });
+      toast.error(editorError || 'The email editor is still loading. Please wait and try again.');
       return;
     }
 
@@ -460,7 +474,10 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               id="to-input"
               label="To recipient"
               value={toRecipient}
-              onChange={setToRecipient}
+              onChange={(value) => {
+                setToRecipient(value);
+                clearFieldError('to', true);
+              }}
               options={knownRecipients}
               placeholder="To"
               hasError={Boolean(errors.to)}
@@ -469,7 +486,9 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               <span className="mt-1 block text-[11px] text-gray-500">Loading participant email addresses...</span>
             )}
 
-            {errors.to && <span className="text-red-500 text-xs block mt-1">{errors.to}</span>}
+            {errors.to && errors.to !== 'To is required' && (
+              <span className="text-red-500 text-xs block mt-1">{errors.to}</span>
+            )}
           </div>
         </div>
 
@@ -486,6 +505,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 onClick={() => {
                   setShowCc(false);
                   setCcRecipient('');
+                  clearFieldError('cc', true);
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600"
               >
@@ -496,7 +516,10 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               id="cc-input"
               label="CC recipient"
               value={ccRecipient}
-              onChange={setCcRecipient}
+              onChange={(value) => {
+                setCcRecipient(value);
+                clearFieldError('cc', true);
+              }}
               options={knownRecipients}
               placeholder="Cc"
               hasError={Boolean(errors.cc)}
@@ -519,6 +542,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 onClick={() => {
                   setShowBcc(false);
                   setBccRecipient('');
+                  clearFieldError('bcc', true);
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600"
               >
@@ -529,7 +553,10 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 id="bcc-input"
                 label="BCC recipient"
                 value={bccRecipient}
-                onChange={setBccRecipient}
+                onChange={(value) => {
+                  setBccRecipient(value);
+                  clearFieldError('bcc', true);
+                }}
                 options={knownRecipients}
                 placeholder="Bcc"
                 hasError={Boolean(errors.bcc)}
@@ -552,6 +579,7 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
                 onClick={() => {
                   setShowReplyTo(false);
                   setReplyTo('');
+                  clearFieldError('replyTo', true);
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600"
               >
@@ -562,7 +590,10 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               id="reply-to-input"
               type="email"
               value={replyTo}
-              onChange={(e) => setReplyTo(e.target.value)}
+              onChange={(e) => {
+                setReplyTo(e.target.value);
+                clearFieldError('replyTo', true);
+              }}
               placeholder="e.g. replies@study.org"
               className={`form-input ${errors.replyTo ? 'border-red-500' : ''}`}
             />
@@ -580,11 +611,14 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               id="sender-name"
               type="text"
               value={senderName}
-              onChange={(e) => setSenderName(e.target.value)}
-              placeholder="e.g. Dr. Jane Smith"
-              className={`form-input ${errors.senderName ? 'border-red-500' : ''}`}
+              onChange={(e) => {
+                setSenderName(e.target.value);
+                clearFieldError('senderName');
+              }}
+              placeholder="Sender Name"
+              className={`form-input ${errors.senderName ? 'border-red-500 placeholder:text-red-500' : ''}`}
+              aria-invalid={Boolean(errors.senderName)}
             />
-            {errors.senderName && <span className="text-red-500 text-xs block mt-1">{errors.senderName}</span>}
           </div>
         </div>
 
@@ -597,11 +631,14 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
             id="email-subject"
             type="text"
             value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="e.g. Study Screening Confirmation"
-            className={`form-input ${errors.subject ? 'border-red-500' : ''}`}
+            onChange={(e) => {
+              setSubject(e.target.value);
+              clearFieldError('subject');
+            }}
+            placeholder="Subject"
+            className={`form-input ${errors.subject ? 'border-red-500 placeholder:text-red-500' : ''}`}
+            aria-invalid={Boolean(errors.subject)}
           />
-          {errors.subject && <span className="text-red-500 text-xs block mt-1">{errors.subject}</span>}
           </div>
         </div>
 
@@ -624,7 +661,6 @@ export const ComposeEmailModal: React.FC<ComposeEmailModalProps> = ({
               options={{ displayMode: 'email', appearance: { theme: 'light' } }}
             />
             </div>
-            {editorError && <span className="text-red-600 text-xs block mt-1" role="alert">{editorError}</span>}
             {errors.body && <span className="text-red-500 text-xs block mt-1">{errors.body}</span>}
           </div>
         </div>

@@ -48,7 +48,7 @@ export const AssignFormModal: React.FC<AssignFormModalProps> = ({
           }
         })
         .catch((err) => {
-          console.warn('Failed to load available forms:', err);
+          toast.error(getApiErrorMessage(err, 'Failed to load available forms'));
         })
         .finally(() => {
           setIsLoadingOptions(false);
