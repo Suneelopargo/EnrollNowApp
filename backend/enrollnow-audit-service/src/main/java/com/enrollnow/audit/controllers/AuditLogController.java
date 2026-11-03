@@ -15,9 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
+import com.enrollnow.audit.dtos.AuditEventDetailResponse;
 import com.enrollnow.audit.dtos.AuditEventResponse;
-import com.enrollnow.audit.dtos.EntityChangeHistoryResponse;
 import com.enrollnow.audit.services.AuditQueryService;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 
@@ -57,11 +56,22 @@ public class AuditLogController {
         return ResponseEntity.ok(auditQueryService.getEvents(
                 tenantId, fromDate, toDate, action, search, pageable));
     }
+    
+    @GetMapping("/{auditEventId}")
+    public ResponseEntity<AuditEventDetailResponse> getAuditEventDetail(
+            @PathVariable UUID auditEventId
+    ) {
 
-    @GetMapping("/{auditEventId}/changes")
-    public ResponseEntity<List<EntityChangeHistoryResponse>> getEntityChangeHistory(
-            @PathVariable UUID auditEventId) {
-        UUID tenantId = siteAuthorizationService.requireAuditLogView(null);
-        return ResponseEntity.ok(auditQueryService.getChanges(tenantId, auditEventId));
+        UUID tenantId =
+                siteAuthorizationService.requireAuditLogView(null);
+
+        return ResponseEntity.ok(
+                auditQueryService.getEventDetail(
+                        tenantId,
+                        auditEventId
+                )
+        );
     }
+
+    
 }

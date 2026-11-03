@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.enrollnow.audit.dtos.AuditEventDetailResponse;
 import com.enrollnow.audit.dtos.AuditEventResponse;
 import com.enrollnow.audit.dtos.EntityChangeHistoryResponse;
 import com.enrollnow.audit.models.AuditEvent;
@@ -79,17 +80,6 @@ public class AuditQueryService {
         return auditEventRepository.findAll(specification, pageable).map(this::toEventResponse);
     }
 
-    @Transactional(readOnly = true)
-    public List<EntityChangeHistoryResponse> getChanges(UUID tenantId, UUID auditEventId) {
-        if (!auditEventRepository.existsByIdAndTenantId(auditEventId, tenantId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Audit event not found");
-        }
-        return entityChangeHistoryRepository
-                .findByTenantIdAndAuditEventIdOrderByChangedAtAsc(tenantId, auditEventId)
-                .stream()
-                .map(this::toChangeResponse)
-                .toList();
-    }
 
     private AuditEventResponse toEventResponse(AuditEvent event) {
         return new AuditEventResponse(
@@ -103,5 +93,50 @@ public class AuditQueryService {
         return new EntityChangeHistoryResponse(
                 change.getId(), change.getAuditEventId(), change.getEntityType(), change.getEntityId(),
                 change.getFieldName(), change.getPreviousValue(), change.getNewValue(), change.getChangedAt());
+    }
+    
+    @Transactional(readOnly = true)
+    public AuditEventDetailResponse getEventDetail(
+            UUID tenantId,
+            UUID auditEventId
+    ) {
+
+        AuditEvent event =
+                auditEventRepository
+                        .findById(auditEventId)
+                        .filter(e -> tenantId.equals(e.getTenantId()))
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Audit event not found"
+                                )
+                        );
+
+        List<EntityChangeHistoryResponse> changes =
+                entityChangeHistoryRepository
+                        .findByTenantIdAndAuditEventIdOrderByChangedAtAsc(
+                                tenantId,
+                                auditEventId
+                        )
+                        .stream()
+                        .map(this::toChangeResponse)
+                        .toList();
+
+        return new AuditEventDetailResponse(
+                event.getId(),
+                event.getActorUserId(),
+                event.getEntityType(),
+                event.getEntityId(),
+                event.getAction(),
+                event.getDescription(),
+                event.getSource(),
+                event.getCorrelationId(),
+                event.getRequestId(),
+                event.getBeforeData(),
+                event.getAfterData(),
+                changes,
+                event.getOccurredAt(),
+                event.getCreatedAt()
+        );
     }
 }
