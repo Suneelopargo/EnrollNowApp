@@ -104,6 +104,53 @@ export interface AuditLogPage {
   size?: number;
 }
 
+export interface NormalizedPage<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number?: number;
+  size?: number;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const readPageNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+export const normalizePageResponse = <T>(response: unknown): NormalizedPage<T> => {
+  let payload = response;
+  while (isRecord(payload) && !Array.isArray(payload.content) && 'data' in payload) {
+    payload = payload.data;
+  }
+
+  if (Array.isArray(payload)) {
+    return {
+      content: payload as T[],
+      totalElements: payload.length,
+      totalPages: payload.length > 0 ? 1 : 0,
+    };
+  }
+
+  const page = isRecord(payload) ? payload : {};
+  const pageMetadata = isRecord(page.page) ? page.page : {};
+  const content = Array.isArray(page.content) ? page.content as T[] : [];
+
+  return {
+    content,
+    totalElements:
+      readPageNumber(page.totalElements) ??
+      readPageNumber(pageMetadata.totalElements) ??
+      content.length,
+    totalPages:
+      readPageNumber(page.totalPages) ??
+      readPageNumber(pageMetadata.totalPages) ??
+      (content.length > 0 ? 1 : 0),
+    number: readPageNumber(page.number) ?? readPageNumber(pageMetadata.number),
+    size: readPageNumber(page.size) ?? readPageNumber(pageMetadata.size),
+  };
+};
+
 export interface AuditLogQuery {
   fromDate?: string;
   toDate?: string;
@@ -551,18 +598,8 @@ export const administrationApi = {
     if (query?.page !== undefined) params.page = query.page;
     if (query?.size !== undefined) params.size = query.size;
 
-    const res = await apiClient.get<
-      AuditLogPage | { data: AuditLogPage } | AuditEventRecord[]
-    >('/api/v1/administrator/audit-logs', { params });
-    const response = res.data;
-    if (Array.isArray(response)) {
-      return {
-        content: response,
-        totalElements: response.length,
-        totalPages: response.length > 0 ? 1 : 0,
-      };
-    }
-    return 'data' in response ? response.data : response;
+    const res = await apiClient.get<unknown>('/api/v1/administrator/audit-logs', { params });
+    return normalizePageResponse<AuditEventRecord>(res.data);
   },
 
   async getAuditEventDetail(auditEventId: string): Promise<AuditEventDetail> {

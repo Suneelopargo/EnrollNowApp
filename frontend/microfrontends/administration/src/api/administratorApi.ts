@@ -26,6 +26,7 @@ import type {
 } from '@aiventrahealth/administrator-ui';
 import { MfeContext } from '../../../../shared/contracts';
 import { apiClient } from '../../../../shared/api-client';
+import { normalizePageResponse } from '../../../../shared/api/administrationApi';
 
 const ADMIN_PREFIX = '/api/v1/administrator';
 
@@ -174,12 +175,7 @@ export class EnrollNowAdministratorApi implements AdministratorApi {
     if (query?.size !== undefined) params.size = query.size;
 
     const res = await this.client.get(`${ADMIN_PREFIX}/audit-logs`, { params });
-    const data = res.data?.data;
-    return {
-      content: data?.content || [],
-      totalElements: data?.totalElements || 0,
-      totalPages: data?.totalPages || 1,
-    };
+    return normalizePageResponse<Record<string, unknown>>(res.data);
   }
 
   // Provider Mapping

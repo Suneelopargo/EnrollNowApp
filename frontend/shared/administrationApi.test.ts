@@ -201,6 +201,27 @@ describe('administrationApi', () => {
       );
       expect(result).toEqual(detail);
     });
+
+    it('normalizes Spring PagedModel audit responses', async () => {
+      vi.mocked(apiClient.get).mockResolvedValueOnce({
+        data: {
+          data: {
+            content: [{ id: 'audit-event-2', action: 'UPDATE' }],
+            page: { size: 10, number: 2, totalElements: 21, totalPages: 3 },
+          },
+        },
+      });
+
+      const result = await administrationApi.getAuditLogs({ page: 2, size: 10 });
+
+      expect(result).toEqual({
+        content: [{ id: 'audit-event-2', action: 'UPDATE' }],
+        totalElements: 21,
+        totalPages: 3,
+        number: 2,
+        size: 10,
+      });
+    });
   });
 
   describe('Permission mapping helpers', () => {
