@@ -678,7 +678,10 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     setDetailModalState({ isOpen: true, participant });
   };
 
-  const handleSaveDetail = async (updatedParticipant: ParticipantRecord) => {
+  const handleSaveDetail = async (
+    updatedParticipant: ParticipantRecord,
+    options?: { keepOpen?: boolean },
+  ): Promise<boolean> => {
     try {
       await participantApi.updateParticipant(
         updatedParticipant.id,
@@ -713,11 +716,17 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       );
 
       showNotification(`Participant "${updatedParticipant.name}" details updated successfully.`, 'success');
-      setDetailModalState({ isOpen: false, participant: null });
+      if (options?.keepOpen) {
+        setDetailModalState({ isOpen: true, participant: updatedParticipant });
+      } else {
+        setDetailModalState({ isOpen: false, participant: null });
+      }
       await fetchParticipants(true);
+      return true;
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to update participant on server.');
       showNotification(errorMsg, 'error');
+      return false;
     }
   };
 

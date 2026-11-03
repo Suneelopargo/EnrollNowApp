@@ -6,7 +6,11 @@ import { ParticipantModule } from '../remoteEntry';
 import { ParticipantGrid, StudiesCellRenderer } from '../components/ParticipantGrid';
 import { AddParticipantModal } from '../components/AddParticipantModal';
 import { SaveFilterModal } from '../components/SaveFilterModal';
-import { ParticipantDetailModal } from '../components/ParticipantDetailModal';
+import {
+  buildFamilyGridRows,
+  importFamilyContactMethods,
+  ParticipantDetailModal,
+} from '../components/ParticipantDetailModal';
 import { participantApi } from '../../../../shared/api/participantApi';
 import { apiClient } from '../../../../shared/api-client';
 
@@ -356,7 +360,104 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(html).toContain('10/31/2026');
     expect(html).toContain('12:00 AM');
     expect(html).toContain('checked=""');
+    expect(html).toContain('Family (2)');
     expect(html).toContain('Save Changes');
+  });
+
+  it('imports only new family contact methods and clears primary/preferred flags', async () => {
+    const existingContact = {
+      id: 'existing',
+      participantId: 'target',
+      contactType: 'EMAIL',
+      contactValue: 'shared@example.org',
+      canLeaveMessage: true,
+      primaryContact: true,
+      isPreferred: true,
+      active: true,
+      createdAt: '',
+    };
+    const familyContact = {
+      id: 'family-contact',
+      participantId: 'family-member',
+      contactType: 'PHONE',
+      contactValue: '+1 555 0100',
+      label: 'Mobile',
+      contactName: 'Taylor Vance',
+      relationship: 'Sibling',
+      canLeaveMessage: true,
+      notes: 'Call after 5 PM',
+      primaryContact: true,
+      isPreferred: true,
+      active: true,
+      createdAt: '',
+    };
+    const getContactsSpy = vi.spyOn(participantApi, 'getContacts').mockImplementation(async (participantId) => (
+      participantId === 'target' ? [existingContact] : [existingContact, familyContact]
+    ));
+    const createContactSpy = vi.spyOn(participantApi, 'createContact').mockResolvedValue({
+      ...familyContact,
+      participantId: 'target',
+    });
+
+    try {
+      const importedCount = await importFamilyContactMethods(
+        'target',
+        ['family-member-1', 'family-member-2'],
+        { tenantId: 'tenant-1', siteId: 'site-1' },
+      );
+
+      expect(importedCount).toBe(1);
+      expect(getContactsSpy).toHaveBeenCalledTimes(3);
+      expect(createContactSpy).toHaveBeenCalledTimes(1);
+      expect(createContactSpy).toHaveBeenCalledWith(
+        'target',
+        expect.objectContaining({
+          contactType: 'PHONE',
+          contactValue: '+1 555 0100',
+          contactName: 'Taylor Vance',
+          relationship: 'Sibling',
+          primaryContact: false,
+          isPreferred: false,
+        }),
+        { tenantId: 'tenant-1', siteId: 'site-1' },
+      );
+    } finally {
+      getContactsSpy.mockRestore();
+      createContactSpy.mockRestore();
+    }
+  });
+
+  it('keeps the Family tab visible when no Family ID is assigned', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ParticipantDetailModal, {
+        isOpen: true,
+        participant: {
+          id: 'p-103',
+          name: 'No Family ID',
+          family: {
+            members: [{ id: 'p-104', name: 'Related Participant' }],
+          },
+        },
+        onClose: vi.fn(),
+        onSave: vi.fn(),
+      })
+    );
+
+    expect(html).toContain('id="tab-family"');
+    expect(html).toContain('Family</span>');
+  });
+
+  it('keeps the family grid empty until a Family ID is assigned', () => {
+    const participant = { id: 'p-105', name: 'Participant' };
+    const familyMembers = [{ id: 'p-106', name: 'Family Member' }];
+
+    expect(buildFamilyGridRows(participant, familyMembers, '', '')).toEqual([]);
+    expect(buildFamilyGridRows(
+      { ...participant, familyId: 'FAM-105' },
+      familyMembers,
+      '',
+      '',
+    )).toHaveLength(2);
   });
 
   it('leaves the future contact checkbox unchecked when the value is missing and uses a valid last-contact date', () => {

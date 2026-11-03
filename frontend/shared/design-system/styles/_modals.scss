@@ -53,6 +53,48 @@ body.enl-body-freeze {
 
 .modal-container--wide { max-width: 1200px; }
 
+.modal-container.family-contact-import-modal {
+  width: min(720px, calc(100vw - 32px));
+  max-width: 720px;
+  border-radius: 0;
+
+  .modal-body {
+    padding: 18px 24px 22px;
+    color: #24445b;
+    font-size: 16px;
+  }
+
+  .modal-footer {
+    justify-content: flex-start;
+    padding: 4px 24px 16px;
+    border-top: 0;
+    background: #ffffff;
+  }
+}
+
+.family-contact-import__list {
+  display: grid;
+  gap: 12px;
+}
+
+.family-contact-import__member {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 28px;
+  min-height: 24px;
+  margin: 0;
+  color: #24445b;
+  cursor: pointer;
+}
+
+.family-contact-import__checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #1769d2;
+}
+
 .modal-container.compose-text-modal {
   width: min(670px, calc(100vw - 32px));
   max-width: 670px;

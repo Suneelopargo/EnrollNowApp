@@ -17,13 +17,25 @@ import {
   X,
 } from 'lucide-react';
 import { AuthUser } from '../../../../shared/contracts';
-import { getStoredAuthUser } from '../../../../shared/api-client';
+import { getApiErrorMessage, getStoredAuthUser } from '../../../../shared/api-client';
 import { requestConfirmation } from '../../../../shared/confirmation';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { Tabs } from '../../../../shared/design-system/components/Tabs';
 import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
-import { participantApi, ConsentItem, DemographicOptions } from '../../../../shared/api/participantApi';
-import { GlobalVariableDefinition, isContactForFutureStudies, ParticipantRecord, ParticipantVariable, StudyItem } from '../types/participant';
+import {
+  participantApi,
+  ConsentItem,
+  DemographicOptions,
+  ParticipantContactDetail,
+} from '../../../../shared/api/participantApi';
+import {
+  FamilyMember,
+  GlobalVariableDefinition,
+  isContactForFutureStudies,
+  ParticipantRecord,
+  ParticipantVariable,
+  StudyItem,
+} from '../types/participant';
 import { ParticipantContactLogs } from './ParticipantContactLogs';
 import { ParticipantContactManagement } from './ParticipantContactManagement';
 import { ParticipantComments } from './ParticipantComments';
@@ -43,6 +55,49 @@ const getParticipantLastContactDate = (participant?: ParticipantRecord | null): 
   return values.find((value) => isValidDateTimeValue(value)) || '';
 };
 
+const getContactImportKey = (contact: ParticipantContactDetail): string => {
+  const contactType = contact.contactType?.trim().toLocaleLowerCase() ?? '';
+  const contactValue = contact.contactValue?.trim().toLocaleLowerCase() ?? '';
+  return contactType && contactValue ? `${contactType}\u0000${contactValue}` : '';
+};
+
+export const importFamilyContactMethods = async (
+  participantId: string,
+  sourceParticipantIds: string[],
+  options?: { tenantId?: string; siteId?: string },
+): Promise<number> => {
+  const [existingContacts, ...sourceContactGroups] = await Promise.all([
+    participantApi.getContacts(participantId, options),
+    ...sourceParticipantIds.map((sourceId) => participantApi.getContacts(sourceId, options)),
+  ]);
+  const importedKeys = new Set(existingContacts.map(getContactImportKey).filter(Boolean));
+  let importedCount = 0;
+
+  for (const sourceContacts of sourceContactGroups) {
+    for (const contact of sourceContacts) {
+      const key = getContactImportKey(contact);
+      if (!key || importedKeys.has(key)) continue;
+
+      await participantApi.createContact(participantId, {
+        contactType: contact.contactType,
+        contactValue: contact.contactValue,
+        label: contact.label,
+        contactName: contact.contactName,
+        relationship: contact.relationship,
+        canLeaveMessage: contact.canLeaveMessage,
+        notes: contact.notes,
+        primaryContact: false,
+        isPreferred: false,
+        active: contact.active,
+      }, options);
+      importedKeys.add(key);
+      importedCount += 1;
+    }
+  }
+
+  return importedCount;
+};
+
 interface FamilyGridRow {
   id: string;
   name: string;
@@ -51,6 +106,42 @@ interface FamilyGridRow {
   studies: string;
   isCurrent: boolean;
 }
+
+export const buildFamilyGridRows = (
+  participant: ParticipantRecord | null | undefined,
+  familyMembers: FamilyMember[],
+  dob: string,
+  gender: string,
+): FamilyGridRow[] => {
+  if (!participant?.familyId?.trim()) return [];
+
+  const currentAge = calculateCurrentAge(dob, participant.age);
+  const currentStudies = (participant.studies || [])
+    .map((study) => study.name)
+    .filter(Boolean)
+    .join(', ');
+
+  return [
+    {
+      id: participant.id,
+      name: participant.name || '...',
+      gender: gender || '...',
+      age: currentAge === '--' ? '...' : currentAge,
+      studies: currentStudies,
+      isCurrent: true,
+    },
+    ...familyMembers
+      .filter((member) => member.id !== participant.id)
+      .map((member) => ({
+        id: member.id,
+        name: member.name || '...',
+        gender: member.sex || '...',
+        age: member.age || '...',
+        studies: member.studies?.join(', ') || '',
+        isCurrent: false,
+      })),
+  ];
+};
 
 const GlobalVariableField: React.FC<{
   variable: GlobalVariableDefinition;
@@ -199,7 +290,10 @@ export interface ParticipantDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   participant: ParticipantRecord | null;
-  onSave: (updatedParticipant: ParticipantRecord) => void;
+  onSave: (
+    updatedParticipant: ParticipantRecord,
+    options?: { keepOpen?: boolean },
+  ) => void | boolean | Promise<void | boolean>;
   onSelectParticipantById?: (participantId: string) => void;
   onParticipantUpdated?: () => void;
   tenantId?: string;
@@ -272,6 +366,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   // Family
   const [familyRole, setFamilyRole] = useState(participant?.family?.familyRole || '');
   const [familySearchTerm, setFamilySearchTerm] = useState('');
+  const [isImportFamilyContactsOpen, setIsImportFamilyContactsOpen] = useState(false);
+  const [selectedFamilyMemberIds, setSelectedFamilyMemberIds] = useState<string[]>([]);
+  const [isImportingFamilyContacts, setIsImportingFamilyContacts] = useState(false);
 
   // Variables
   const [variables, setVariables] = useState<ParticipantVariable[]>(
@@ -309,6 +406,8 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
       setFamilyRole(participant.family?.familyRole || '');
       setVariables(Array.isArray(participant.variables) ? [...participant.variables] : []);
+      setSelectedFamilyMemberIds([]);
+      setIsImportFamilyContactsOpen(false);
     }
   }, [participant]);
 
@@ -392,36 +491,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   );
 
   const familyMembers = participant?.family?.members || [];
-  const familyGridRows = useMemo<FamilyGridRow[]>(() => {
-    if (!participant) return [];
-
-    const currentAge = calculateCurrentAge(dob, participant.age);
-    const currentStudies = (participant.studies || [])
-      .map((study) => study.name)
-      .filter(Boolean)
-      .join(', ');
-
-    return [
-      {
-        id: participant.id,
-        name: participant.name || '...',
-        gender: gender || '...',
-        age: currentAge === '--' ? '...' : currentAge,
-        studies: currentStudies,
-        isCurrent: true,
-      },
-      ...familyMembers
-        .filter((member) => member.id !== participant.id)
-        .map((member) => ({
-          id: member.id,
-          name: member.name || '...',
-          gender: member.sex || '...',
-          age: member.age || '...',
-          studies: member.studies?.join(', ') || '',
-          isCurrent: false,
-        })),
-    ];
-  }, [dob, familyMembers, gender, participant]);
+  const familyGridRows = useMemo(
+    () => buildFamilyGridRows(participant, familyMembers, dob, gender),
+    [dob, familyMembers, gender, participant],
+  );
   const familyGridColumns = useMemo<ColDef<FamilyGridRow>[]>(() => [
     {
       field: 'name',
@@ -491,25 +564,25 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     });
   };
 
-  const handleSaveParticipant = () => {
+  const handleSaveParticipant = async (keepOpen = false): Promise<boolean> => {
     if (hasExistingTimezone && (!timezone || !timezone.trim())) {
       setTimezoneError('Timezone cannot be removed once set. Please select a valid timezone.');
-      return;
+      return false;
     }
     if (hasExistingDate && (!dateLastContact || !dateLastContact.trim())) {
       setDateLastContactError('Global Date of Last Contact cannot be removed once set.');
-      return;
+      return false;
     }
 
     if (dob && dob.trim()) {
       const ageStr = calculateCurrentAge(dob);
       if (ageStr === 'Invalid (Future Date)') {
         toast.error('Birthday cannot be in the future');
-        return;
+        return false;
       }
       if (ageStr === 'Invalid Date') {
         toast.error('Birthday is not valid');
-        return;
+        return false;
       }
     }
 
@@ -548,7 +621,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       variables,
     };
 
-    onSave(updatedParticipant);
+    try {
+      return (await onSave(updatedParticipant, { keepOpen })) !== false;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to save participant.'));
+      return false;
+    }
   };
 
   const effectiveDemographicOptions = (demographicOptions.ethnicity && demographicOptions.ethnicity.length > 0) ||
@@ -606,6 +684,48 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
     return false;
   };
 
+  const familyImportMembers = familyMembers.filter(
+    (member) => member.id && member.id !== participant?.id,
+  );
+  const hasSavedFamilyId = Boolean(participant?.familyId?.trim());
+  const canImportFamilyContacts = hasSavedFamilyId
+    && familyId.trim() === participant?.familyId?.trim()
+    && familyImportMembers.length > 0;
+
+  const handleOpenFamilyContactsImport = async () => {
+    if (isFormDirty() && !(await handleSaveParticipant(true))) return;
+    setSelectedFamilyMemberIds([]);
+    setIsImportFamilyContactsOpen(true);
+  };
+
+  const handleImportFamilyContacts = async () => {
+    if (!participant || selectedFamilyMemberIds.length === 0 || isImportingFamilyContacts) return;
+
+    setIsImportingFamilyContacts(true);
+    const selectedMembers = familyImportMembers.filter((member) => selectedFamilyMemberIds.includes(member.id));
+
+    try {
+      const importedCount = await importFamilyContactMethods(
+        participant.id,
+        selectedMembers.map((member) => member.id),
+        { tenantId, siteId },
+      );
+
+      setIsImportFamilyContactsOpen(false);
+      setSelectedFamilyMemberIds([]);
+      if (importedCount > 0) {
+        toast.success(`Imported ${importedCount} contact method${importedCount === 1 ? '' : 's'}.`);
+        onParticipantUpdated?.();
+      } else {
+        toast.info('All selected contact methods are already on this participant.');
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to import family contacts.'));
+    } finally {
+      setIsImportingFamilyContacts(false);
+    }
+  };
+
   const handleCloseModal = async () => {
     if (isFormDirty()) {
       const confirmed = await requestConfirmation({
@@ -625,6 +745,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   };
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={handleCloseModal}
@@ -633,7 +754,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       footer={(
         <>
           <button type="button" onClick={handleCloseModal} className="btn btn-secondary">Cancel</button>
-          <button type="button" onClick={handleSaveParticipant} className="btn btn-primary">
+          <button type="button" onClick={() => { void handleSaveParticipant(); }} className="btn btn-primary">
             <Check size={16} /> Save Changes
           </button>
         </>
@@ -655,7 +776,11 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
             { id: 'details', label: 'Overview', icon: <User size={16} /> },
             { id: 'contact', label: 'Contact Methods', icon: <Mail size={16} /> },
             { id: 'demographics', label: 'Demographics', icon: <ShieldCheck size={16} /> },
-            { id: 'family', label: `Family (${familyGridRows.length})`, icon: <Users size={16} /> },
+            {
+              id: 'family',
+              label: hasSavedFamilyId ? `Family (${familyGridRows.length})` : 'Family',
+              icon: <Users size={16} />,
+            },
             { id: 'variables', label: `Variables (${globalVariables.length})`, icon: <FileText size={16} /> },
           ]}
         />
@@ -896,56 +1021,45 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
           {/* TAB 4: FAMILY MEMBERS */}
           {activeTopNav === 'family' && (
             <section className="card record-detail__panel">
-              <div className="card-header">
-                <h3>Family Info</h3>
-                <p>People linked to this participant under Family ID: {familyId || 'Not assigned'}</p>
+              <div className="card-header record-detail__family-header">
+                <div>
+                  <h3>Family Info</h3>
+                 
+                </div>
               </div>
               <div className="record-detail__panel-content space-y-3">
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="record-detail__field">
-                    <label className="form-label" htmlFor="participant-family-role">Family Role</label>
-                    <select
-                      id="participant-family-role"
-                      value={familyRole}
-                      onChange={(e) => setFamilyRole(e.target.value)}
-                      className="form-select"
-                    >
-                      <option value="">Select family role...</option>
-                      <option value="Proband">Proband (Primary)</option>
-                      <option value="Mother">Mother</option>
-                      <option value="Father">Father</option>
-                      <option value="Sibling">Sibling</option>
-                      <option value="Child">Child</option>
-                      <option value="Guardian">Guardian</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div className="record-detail__field">
-                    <span className="form-label">Linked Family ID</span>
-                    <span className="record-detail__readonly">{familyId || 'None'}</span>
-                  </div>
-                </div>
-                <label className="relative mb-3 block max-w-sm">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="search"
-                    value={familySearchTerm}
-                    onChange={(event) => setFamilySearchTerm(event.target.value)}
-                    placeholder="Search family members..."
-                    aria-label="Search family members"
-                    className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                  {familySearchTerm && (
+                <div className="flex items-center justify-between gap-3">
+                  <label className="relative block min-w-0 flex-1">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="search"
+                      value={familySearchTerm}
+                      onChange={(event) => setFamilySearchTerm(event.target.value)}
+                      placeholder="Search family members..."
+                      aria-label="Search family members"
+                      className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                    {familySearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setFamilySearchTerm('')}
+                        aria-label="Clear family search"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </label>
+                  {canImportFamilyContacts && (
                     <button
                       type="button"
-                      onClick={() => setFamilySearchTerm('')}
-                      aria-label="Clear family search"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                      className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
+                      onClick={() => { void handleOpenFamilyContactsImport(); }}
                     >
-                      <X size={14} />
+                      <Plus size={14} /> Import Family Contacts
                     </button>
                   )}
-                </label>
+                </div>
                 <DataGrid<FamilyGridRow>
                   rowData={familyGridRows}
                   columnDefs={familyGridColumns}
@@ -1093,6 +1207,50 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         </div>
       </div>
     </Modal>
+    <Modal
+      isOpen={isImportFamilyContactsOpen}
+      onClose={() => {
+        if (isImportingFamilyContacts) return;
+        setIsImportFamilyContactsOpen(false);
+        setSelectedFamilyMemberIds([]);
+      }}
+      title="Select Family Contacts For Import"
+      className="family-contact-import-modal"
+      footer={selectedFamilyMemberIds.length > 0 && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={isImportingFamilyContacts}
+            onClick={() => { void handleImportFamilyContacts(); }}
+          >
+            {isImportingFamilyContacts
+              ? 'Importing...'
+              : `Import ${selectedFamilyMemberIds.length} Contact${selectedFamilyMemberIds.length === 1 ? '' : 's'}`}
+          </button>
+      )}
+    >
+      <div className="family-contact-import__list">
+        {familyImportMembers.map((member) => (
+          <label key={member.id} className="family-contact-import__member">
+            <input
+              type="checkbox"
+              checked={selectedFamilyMemberIds.includes(member.id)}
+              disabled={isImportingFamilyContacts}
+              className="family-contact-import__checkbox"
+              onChange={(event) => {
+                setSelectedFamilyMemberIds((selected) => (
+                  event.target.checked
+                    ? [...selected, member.id]
+                    : selected.filter((id) => id !== member.id)
+                ));
+              }}
+            />
+            <span>{member.name || member.id}</span>
+          </label>
+        ))}
+      </div>
+    </Modal>
+    </>
   );
 };
 
