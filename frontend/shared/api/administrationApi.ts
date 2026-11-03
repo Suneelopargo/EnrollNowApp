@@ -49,6 +49,19 @@ export interface CreateUserPayload {
   email: string;
 }
 
+export interface CreateUserWithAccessPayload {
+  user: CreateUserPayload;
+  siteAccess?: {
+    siteId: string;
+    sitePermission: string;
+  };
+  studies?: Array<{
+    studyId: string;
+    studyRole: string;
+    studyPermission: string;
+  }>;
+}
+
 export interface UpdateUserPayload {
   firstName: string;
   lastName: string;
@@ -231,6 +244,22 @@ export const administrationApi = {
       timezone: payload.timezone?.trim() || 'America/New_York',
       email: payload.email.trim(),
     });
+    return res.data;
+  },
+
+  /**
+   * POST /api/v1/tenants/{tenantId}/users/with-access
+   * Creates a user and assigns the requested site and study access in one operation.
+   */
+  async createUserWithAccess(
+    payload: CreateUserWithAccessPayload,
+    tenantId?: string
+  ): Promise<UserSummaryResponse> {
+    const tid = resolveTenantId(tenantId);
+    const res = await apiClient.post<UserSummaryResponse>(
+      `/api/v1/tenants/${tid}/users/with-access`,
+      payload
+    );
     return res.data;
   },
 

@@ -10,6 +10,7 @@ import {
   RoleResponse,
   toSitePermissionLabel,
   normalizeSiteRoleCode,
+  normalizeStudyPermission,
   SITE_PERMISSION_TO_ROLE_CODE,
 } from '../../../../shared/api/administrationApi';
 import { SiteAdminHorizontalNav } from './SiteAdminHorizontalNav';
@@ -358,62 +359,62 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context,
       } else {
         // Create new user
         try {
-          const created = await administrationApi.createUser({
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            email: formData.email,
-          });
-
-          const resolvedSiteId = activeSiteId || undefined;
-
-          // If site permission was selected, assign it
-          if (created?.id && formData.sitePermissions) {
-            const siteRoleCode = normalizeSiteRoleCode(formData.sitePermissions);
-            const sitePerm = toSitePermissionLabel(siteRoleCode);
-            if (siteRoleCode !== 'NONE') {
-              const roleCode =
-                SITE_PERMISSION_TO_ROLE_CODE[sitePerm] || siteRoleCode;
-              try {
-                await administrationApi.assignScopedRole(created.id, {
-                  roleCode,
-                  scopeType: 'SITE',
-                  scopeId: resolvedSiteId as any,
-                });
-              } catch (siteErr: any) {
-                console.error('Failed to assign site permission:', siteErr);
-                const sMsg = getApiErrorMessage(siteErr, 'Access error');
-                toast.warning(`User created, but site permission '${sitePerm}' could not be granted: ${sMsg}`);
-              }
+          const sitePermission = normalizeSiteRoleCode(formData.sitePermissions);
+          let siteAccess: { siteId: string; sitePermission: string } | undefined;
+          if (sitePermission !== 'NONE') {
+            if (!activeSiteId) {
+              throw new Error('A site is required to assign site permissions.');
             }
+            siteAccess = {
+              siteId: activeSiteId,
+              sitePermission,
+            };
           }
 
-          // If study assignments were selected, grant access
-          if (created?.id && formData.assignedStudies && formData.assignedStudies.length > 0) {
-            for (const s of formData.assignedStudies) {
-              try {
-                await administrationApi.grantStudyAccess(s.studyId, created.id, {
-                  studyRole: s.permission || 'Study Member',
-                  studyPermission: s.permission,
-                });
-              } catch (studyErr: any) {
-                console.error(`Failed to assign study ${s.studyName}:`, studyErr);
-                const sMsg = getApiErrorMessage(studyErr, 'Access error');
-                toast.warning(`User created, but study access to '${s.studyName}' could not be granted: ${sMsg}`);
-              }
-            }
+          const fallbackStudyRole: Record<string, string> = {
+            STUDY_ADMIN: 'Study Admin',
+            STUDY_LEADER: 'Study Leader',
+            STUDY_RA: 'Research Assistant',
+            STUDY_READ_ONLY: 'Read Only',
+          };
+          const studies = (formData.assignedStudies || []).map((study) => {
+            const studyPermission = normalizeStudyPermission(study.permission);
+            const configuredRole = studyRoles.find(
+              (role) => role.code.toUpperCase() === studyPermission
+            );
+
+            return {
+              studyId: study.studyId,
+              studyRole: configuredRole?.name || fallbackStudyRole[studyPermission] || 'Study Member',
+              studyPermission,
+            };
+          });
+
+          const created = await administrationApi.createUserWithAccess({
+            user: {
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              title: formData.title || 'Study Coordinator',
+              timezone: 'America/New_York',
+              email: formData.email,
+            },
+            ...(siteAccess ? { siteAccess } : {}),
+            studies,
+          });
+
+          if (!created.id) {
+            throw new Error('User creation succeeded without returning a user ID.');
           }
 
           // Send invitation email to the newly registered email address
           let invitationSent = false;
-          if (created?.id) {
-            try {
-              await administrationApi.sendUserInvitation(created.id);
-              invitationSent = true;
-            } catch (invErr: any) {
-              console.error('Failed to send invitation email:', invErr);
-              const invMsg = getApiErrorMessage(invErr, 'Email delivery failed.');
-              toast.warning(`User created, but invitation email could not be sent: ${invMsg}`);
-            }
+          try {
+            await administrationApi.sendUserInvitation(created.id);
+            invitationSent = true;
+          } catch (invErr: any) {
+            console.error('Failed to send invitation email:', invErr);
+            const invMsg = getApiErrorMessage(invErr, 'Email delivery failed.');
+            toast.warning(`User created, but invitation email could not be sent: ${invMsg}`);
           }
 
           await fetchUsers(true);
@@ -443,7 +444,7 @@ export const SiteAdminDashboard: React.FC<SiteAdminDashboardProps> = ({ context,
         }
       }
     },
-    [userToEdit, fetchUsers, activeSiteId]
+    [userToEdit, fetchUsers, activeSiteId, studyRoles]
   );
 
   const handleLockUserFromModal = useCallback(

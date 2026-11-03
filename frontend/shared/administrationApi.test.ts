@@ -48,6 +48,48 @@ describe('administrationApi', () => {
     mockLocalStorage.setItem('enrollnow_tenant_id', 'tenant-test-uuid');
   });
 
+  describe('createUserWithAccess API method', () => {
+    it('posts the user and access payload to the tenant endpoint and returns the created user', async () => {
+      const payload = {
+        user: {
+          firstName: 'John',
+          lastName: 'Doe',
+          title: 'Study Coordinator',
+          timezone: 'Asia/Kolkata',
+          email: 'john.doe@example.com',
+        },
+        siteAccess: {
+          siteId: 'site-uuid',
+          sitePermission: 'SITE_MANAGER',
+        },
+        studies: [
+          {
+            studyId: 'study-uuid',
+            studyRole: 'Study Leader',
+            studyPermission: 'STUDY_LEADER',
+          },
+        ],
+      };
+      const createdUser = {
+        id: 'user-uuid',
+        firstName: 'John',
+        lastName: 'Doe',
+        title: 'Study Coordinator',
+        status: 'ACTIVE',
+        primaryEmail: 'john.doe@example.com',
+      };
+      vi.mocked(apiClient.post).mockResolvedValueOnce({ data: createdUser });
+
+      const result = await administrationApi.createUserWithAccess(payload);
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/v1/tenants/tenant-test-uuid/users/with-access',
+        payload
+      );
+      expect(result).toEqual(createdUser);
+    });
+  });
+
   describe('Permission mapping helpers', () => {
     it('supports the four canonical site-permission options and role code mappings', () => {
       expect(SITE_PERMISSION_OPTIONS).toEqual([
