@@ -411,39 +411,52 @@
   }
 
   &.audit-log-toolbar {
-    align-items: flex-end;
-
-    .data-grid-toolbar__heading,
-    .data-grid-toolbar__actions {
+    .audit-log-filters {
+      display: flex;
+      flex-wrap: nowrap;
       align-items: flex-end;
+      justify-content: flex-end;
+      gap: $spacing-3;
+      width: 100%;
+      min-width: 0;
     }
 
-    .site-admin-filter-select-wrap {
+    .audit-log-filters .site-admin-filter-select-wrap {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      justify-content: flex-end;
       gap: 4px;
+      flex: 0 1 190px;
+      min-width: 150px;
       line-height: 1.2;
     }
 
-    .site-admin-filter-select-wrap > .form-input,
-    .site-admin-filter-select-wrap > .form-select {
+    .audit-log-filters .form-input {
       box-sizing: border-box;
       width: 100%;
       min-height: 44px;
       height: 44px;
     }
 
-    .data-grid-toolbar__search,
-    .data-grid-export-menu-wrap {
-      align-self: flex-end;
+    .audit-log-search {
+      flex: 1 1 320px;
+      width: auto;
+      min-width: 220px;
+      max-width: none;
     }
 
-    .data-grid-toolbar__search > .form-input {
+    .audit-log-search > .form-input {
       box-sizing: border-box;
       min-height: 44px;
       height: 44px;
+    }
+
+    .audit-log-header-actions {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: $spacing-2;
+      align-self: flex-end;
     }
 
     .data-grid-export-trigger,
@@ -454,25 +467,35 @@
       white-space: nowrap;
     }
 
-    @media (max-width: 768px) {
-      align-items: stretch;
-
-      .data-grid-toolbar__heading {
-        align-items: center;
+    @media (max-width: 1100px) {
+      .audit-log-filters {
+        flex-wrap: wrap;
+        justify-content: flex-start;
       }
 
-      .data-grid-toolbar__actions {
-        align-items: flex-end;
+      .audit-log-filters .site-admin-filter-select-wrap {
+        flex: 1 1 180px;
       }
 
-      .site-admin-filter-select-wrap {
-        min-width: 140px;
-        max-width: none;
+      .audit-log-search {
+        flex: 2 1 320px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .audit-log-filters {
+        align-items: stretch;
       }
 
-      .data-grid-toolbar__search {
-        flex: 1 1 220px;
+      .audit-log-filters .site-admin-filter-select-wrap,
+      .audit-log-search {
+        flex: 1 1 100%;
+        min-width: 100%;
+      }
+
+      .audit-log-header-actions {
         width: 100%;
+        justify-content: flex-end;
       }
     }
   }

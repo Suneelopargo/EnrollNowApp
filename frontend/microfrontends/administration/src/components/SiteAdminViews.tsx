@@ -120,13 +120,8 @@ export const AuditLogView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [action, setAction] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [gridApi, setGridApi] = useState<GridApi<AuditEventRow> | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -143,10 +138,9 @@ export const AuditLogView: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        const query: Record<string, string | number> = { page, size: pageSize };
+        const query: Record<string, string | number> = { page: 0, size: 500 };
         if (fromDate) query.fromDate = fromDate;
         if (toDate) query.toDate = toDate;
-        if (action.trim()) query.action = action.trim();
         if (search.trim()) query.search = search.trim();
         const auditResult = await administrationApi.getAuditLogs(query);
         const mapped = auditResult.content.map((event) => {
@@ -164,11 +158,7 @@ export const AuditLogView: React.FC = () => {
               : 'View detailed changes',
           };
         });
-        if (!cancelled) {
-          setRows(mapped);
-          setTotalElements(auditResult.totalElements);
-          setTotalPages(auditResult.totalPages);
-        }
+        if (!cancelled) setRows(mapped);
       } catch (e: any) {
         if (!cancelled) setError(e?.response?.data?.message || e?.message || 'Unable to load audit events.');
       } finally {
@@ -177,7 +167,7 @@ export const AuditLogView: React.FC = () => {
     };
     void load();
     return () => { cancelled = true; };
-  }, [fromDate, toDate, action, search, page, pageSize, refreshKey]);
+  }, [fromDate, toDate, search, refreshKey]);
 
   const viewAuditDetails = useCallback(async (event: AuditEventRow) => {
     const requestId = ++detailRequestId.current;
@@ -214,10 +204,7 @@ export const AuditLogView: React.FC = () => {
     { headerName: 'Data Change', field: 'dataChange', width: 115, minWidth: 100, maxWidth: 130, sortable: false, filter: false, floatingFilter: false, cellRenderer: AuditDataChangeCell },
   ], []);
 
-  const onSearchChange = useCallback((value: string) => {
-    setSearch(value);
-    setPage(0);
-  }, []);
+  const onSearchChange = useCallback((value: string) => setSearch(value), []);
   const getExportRows = useCallback(() => {
     const exportRows: AuditEventRow[] = [];
     if (gridApi) {
@@ -294,60 +281,51 @@ export const AuditLogView: React.FC = () => {
   return (
     <section className="card site-admin-users-card" aria-label="System and security audit ledger">
       <div className="card-header data-grid-toolbar site-admin-users-toolbar audit-log-toolbar">
-        <div className="data-grid-toolbar__heading">
-          
-        </div>
-        <div className="data-grid-toolbar__actions">
-          <label className="site-admin-filter-select-wrap">From <input className="form-input" type="date" aria-label="Audit events from date" value={fromDate} max={toDate || undefined} onChange={e => { setPage(0); setFromDate(e.target.value); }} /></label>
-          <label className="site-admin-filter-select-wrap">To <input className="form-input" type="date" aria-label="Audit events to date" value={toDate} min={fromDate || undefined} onChange={e => { setPage(0); setToDate(e.target.value); }} /></label>
+        <div className="audit-log-filters">
           <label className="site-admin-filter-select-wrap">
-            Action
-            <input
-              className="form-input"
-              type="text"
-              aria-label="Filter audit events by action"
-              placeholder="e.g. USER_ACCESS_UPDATED"
-              value={action}
-              onChange={event => {
-                setPage(0);
-                setAction(event.target.value);
-              }}
-            />
+            From date
+            <input className="form-input" type="date" aria-label="Audit events from date" value={fromDate} max={toDate || undefined} onChange={e => setFromDate(e.target.value)} />
           </label>
-          <div className="data-grid-toolbar__search">
-            <input className="form-input" placeholder="Search audit events..." aria-label="Search audit events" value={search} onChange={e => onSearchChange(e.target.value)} />
+          <label className="site-admin-filter-select-wrap">
+            To date
+            <input className="form-input" type="date" aria-label="Audit events to date" value={toDate} min={fromDate || undefined} onChange={e => setToDate(e.target.value)} />
+          </label>
+          <div className="data-grid-toolbar__search audit-log-search">
+            <input className="form-input" placeholder="Search by actor, event, or description" aria-label="Search audit events" value={search} onChange={e => onSearchChange(e.target.value)} />
             {search && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSearchChange('')} aria-label="Clear search"><X size={14} /></button>}
             <Search size={14} aria-hidden="true" />
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary audit-log-refresh-btn"
-            onClick={() => setRefreshKey(key => key + 1)}
-          >
-            Refresh
-          </button>
-          <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
+          <div className="audit-log-header-actions">
             <button
               type="button"
-              className="data-grid-export-trigger"
-              aria-haspopup="menu"
-              aria-expanded={exportMenuOpen}
-              onClick={() => setExportMenuOpen(open => !open)}
-              aria-label="Export audit log"
+              className="btn btn-secondary audit-log-refresh-btn"
+              onClick={() => setRefreshKey(key => key + 1)}
             >
-              <Download size={15} /> Export <ChevronDown size={14} />
+              Refresh
             </button>
-            {exportMenuOpen && <div className="data-grid-export-menu" role="menu" aria-label="Choose export format">
-              <button type="button" role="menuitem" onClick={exportCsv}>
-                <Download size={15} /><span>CSV</span><small>Comma-separated values</small>
+            <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
+              <button
+                type="button"
+                className="data-grid-export-trigger"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+                onClick={() => setExportMenuOpen(open => !open)}
+                aria-label="Export audit log"
+              >
+                <Download size={15} /> Export <ChevronDown size={14} />
               </button>
-              <button type="button" role="menuitem" onClick={() => void exportExcel()}>
-                <FileSpreadsheet size={15} /><span>Excel</span><small>Excel workbook (.xlsx)</small>
-              </button>
-              <button type="button" role="menuitem" onClick={exportPdf}>
-                <FileText size={15} /><span>PDF</span><small>Portable document</small>
-              </button>
-            </div>}
+              {exportMenuOpen && <div className="data-grid-export-menu" role="menu" aria-label="Choose export format">
+                <button type="button" role="menuitem" onClick={exportCsv}>
+                  <Download size={15} /><span>CSV</span><small>Comma-separated values</small>
+                </button>
+                <button type="button" role="menuitem" onClick={() => void exportExcel()}>
+                  <FileSpreadsheet size={15} /><span>Excel</span><small>Excel workbook (.xlsx)</small>
+                </button>
+                <button type="button" role="menuitem" onClick={exportPdf}>
+                  <FileText size={15} /><span>PDF</span><small>Portable document</small>
+                </button>
+              </div>}
+            </div>
           </div>
         </div>
       </div>
@@ -359,49 +337,11 @@ export const AuditLogView: React.FC = () => {
           context={{ onViewDataChange: (event: AuditEventRow) => { void viewAuditDetails(event); } }}
           onGridReady={params => setGridApi(params.api)}
           getRowId={p => String(p.data.id)} rowHeight={48} headerHeight={44}
-          floatingFiltersHeight={38} animateRows />
-      </div>
-      <div className="data-grid-toolbar__actions" aria-label="Audit log pagination">
-        <span>
-          {totalElements === 0
-            ? '0 events'
-            : `${page * pageSize + 1}-${Math.min((page + 1) * pageSize, totalElements)} of ${totalElements} events`}
-        </span>
-        <label className="site-admin-filter-select-wrap">
-          Rows per page
-          <select
-            className="form-select"
-            aria-label="Audit log rows per page"
-            value={pageSize}
-            onChange={event => {
-              setPageSize(Number(event.target.value));
-              setPage(0);
-            }}
-          >
-            {[10, 20, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          aria-label="Previous audit log page"
-          disabled={loading || page <= 0}
-          onClick={() => setPage(current => Math.max(0, current - 1))}
-        >
-          Previous
-        </button>
-        <span aria-live="polite">
-          Page {totalPages === 0 ? 0 : page + 1} of {totalPages}
-        </span>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          aria-label="Next audit log page"
-          disabled={loading || page + 1 >= totalPages}
-          onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
-        >
-          Next
-        </button>
+          floatingFiltersHeight={38}
+          pagination={true}
+          paginationPageSize={10}
+          paginationPageSizeSelector={[5, 10, 20, 50]}
+          animateRows={true} />
       </div>
       <Modal
         isOpen={selectedEvent !== null}
