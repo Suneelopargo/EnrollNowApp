@@ -414,9 +414,9 @@ export const AuditLogView: React.FC = () => {
             To date
             <input className="form-input" type="date" aria-label="Audit events to date" value={toDate} min={fromDate || undefined} onChange={e => setToDate(e.target.value)} />
           </label>
-          <div className="data-grid-toolbar__search audit-log-search">
+          <div className="data-grid-toolbar__search audit-log-search search-field-with-clear">
             <input className="form-input" placeholder="Search by actor, event, or description" aria-label="Search audit events" value={search} onChange={e => onSearchChange(e.target.value)} />
-            {search && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSearchChange('')} aria-label="Clear search"><X size={14} /></button>}
+            {search && <button type="button" className="search-field-clear-button" onClick={() => onSearchChange('')} aria-label="Clear search"><X size={14} /></button>}
             <Search size={14} aria-hidden="true" />
           </div>
           <div className="audit-log-header-actions">

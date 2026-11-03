@@ -255,7 +255,7 @@ const ParticipantStudiesInfo: React.FC<{
       <label className="record-detail__study-search">
         <Search size={15} aria-hidden="true" />
         <input
-          type="search"
+          type="text"
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Search studies..."
@@ -1037,10 +1037,10 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
               </div>
               <div className="record-detail__panel-content space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <label className="relative block min-w-0 flex-1">
+                  <label className="relative block min-w-0 flex-1 search-field-with-clear">
                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
-                      type="search"
+                      type="text"
                       value={familySearchTerm}
                       onChange={(event) => setFamilySearchTerm(event.target.value)}
                       placeholder="Search family members..."
@@ -1052,7 +1052,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                         type="button"
                         onClick={() => setFamilySearchTerm('')}
                         aria-label="Clear family search"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                        className="search-field-clear-button"
                       >
                         <X size={14} />
                       </button>

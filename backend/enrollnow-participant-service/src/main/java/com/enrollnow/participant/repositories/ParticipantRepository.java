@@ -23,10 +23,17 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID>,
 
     List<Participant> findByTenantId(UUID tenantId);
 
-    List<Participant> findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCase(UUID tenantId, String firstName, String lastName);
-
-    List<Participant> findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
-            UUID tenantId, String firstName, String lastName, String status
+    @Query("""
+        SELECT p FROM Participant p
+        WHERE p.tenantId = :tenantId
+          AND LOWER(TRIM(p.firstName)) = LOWER(:firstName)
+          AND LOWER(TRIM(p.lastName)) = LOWER(:lastName)
+          AND (p.status IS NULL OR UPPER(p.status) <> 'DELETED')
+        """)
+    List<Participant> findMatchingByTenantAndNormalizedName(
+            @Param("tenantId") UUID tenantId,
+            @Param("firstName") String firstName,
+            @Param("lastName") String lastName
     );
 
     Page<Participant> findByTenantId(UUID tenantId, Pageable pageable);

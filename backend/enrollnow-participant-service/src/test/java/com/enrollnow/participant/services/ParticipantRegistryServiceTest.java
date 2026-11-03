@@ -579,8 +579,8 @@ class ParticipantRegistryServiceTest {
         UUID activeId = UUID.randomUUID();
         Participant activePart = createMockParticipant(activeId, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
 
-        when(participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
-                tenantId, "John", "Doe", "DELETED"))
+        when(participantRepository.findMatchingByTenantAndNormalizedName(
+                tenantId, "John", "Doe"))
                 .thenReturn(List.of(activePart));
         when(participantRepository.findByTenantIdAndId(tenantId, activeId)).thenReturn(Optional.of(activePart));
 
@@ -588,8 +588,8 @@ class ParticipantRegistryServiceTest {
 
         assertThat(duplicates).hasSize(1);
         assertThat(duplicates.get(0).getName()).isEqualTo("John Doe");
-        verify(participantRepository).findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(
-                tenantId, "John", "Doe", "DELETED");
+        verify(participantRepository).findMatchingByTenantAndNormalizedName(
+                tenantId, "John", "Doe");
     }
 
     @Test
@@ -725,10 +725,9 @@ class ParticipantRegistryServiceTest {
         UUID id3 = UUID.randomUUID();
         UUID id4 = UUID.randomUUID();
 
-        // id1 and id2 share the same name and date of birth (legacy Ripple duplicate rule: lastName, firstName, birthday)
+        // Matching names are duplicates even when capitalization or birth date differs.
         Participant p1 = createMockParticipant(id1, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
-        Participant p2 = createMockParticipant(id2, "John", "Doe", LocalDate.of(1990, 1, 1), "ACTIVE");
-        // id3 has the same name but different date of birth (e.g. grandfather born 1950 - not a duplicate of p1/p2)
+        Participant p2 = createMockParticipant(id2, "john", "doe", LocalDate.of(1990, 1, 1), "ACTIVE");
         Participant p3 = createMockParticipant(id3, "John", "Doe", LocalDate.of(1950, 5, 10), "ACTIVE");
         // id4 is unique "Alice Unique"
         Participant p4 = createMockParticipant(id4, "Alice", "Unique", LocalDate.of(1985, 3, 15), "ACTIVE");
@@ -741,22 +740,23 @@ class ParticipantRegistryServiceTest {
         );
 
         assertThat(response).isNotNull();
-        assertThat(response.getTotalCount()).isEqualTo(2);
+        assertThat(response.getTotalCount()).isEqualTo(3);
         assertThat(response.getItems()).extracting(RegistryParticipantDto::getName)
-                .containsExactly("John Doe", "John Doe");
+                .containsExactlyInAnyOrder("John Doe", "john doe", "John Doe");
     }
 
     @Test
-    void findDuplicatesByName_returnsMatchingParticipants() {
-        Participant p = createMockParticipant(UUID.randomUUID(), "Alice", "Walker", LocalDate.of(1990, 1, 1), "ACTIVE");
-        when(participantRepository.findByTenantIdAndFirstNameIgnoreCaseAndLastNameIgnoreCaseAndStatusNot(tenantId, "Alice", "Walker", "DELETED"))
+    void findDuplicatesByName_usesNormalizedLookupForMixedCaseInput() {
+        Participant p = createMockParticipant(UUID.randomUUID(), "jhon", "ai", LocalDate.of(1990, 1, 1), "ACTIVE");
+        when(participantRepository.findMatchingByTenantAndNormalizedName(tenantId, "Jhon", "AI"))
                 .thenReturn(List.of(p));
         when(participantRepository.findByTenantIdAndId(tenantId, p.getId()))
                 .thenReturn(Optional.of(p));
 
-        List<RegistryParticipantDto> duplicates = service.findDuplicatesByName(tenantId, "Alice", "Walker");
+        List<RegistryParticipantDto> duplicates = service.findDuplicatesByName(tenantId, " Jhon ", " AI ");
         assertThat(duplicates).hasSize(1);
-        assertThat(duplicates.get(0).getFirstName()).isEqualTo("Alice");
+        assertThat(duplicates.get(0).getName()).isEqualTo("jhon ai");
+        verify(participantRepository).findMatchingByTenantAndNormalizedName(tenantId, "Jhon", "AI");
     }
 
     @Test

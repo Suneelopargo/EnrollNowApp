@@ -542,7 +542,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
           </div>
 
           {/* Global Data Grid Search */}
-          <div className="data-grid-toolbar__search">
+          <div className="data-grid-toolbar__search search-field-with-clear">
             <input
               type="text"
               placeholder="Search users..."
@@ -554,7 +554,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
             {searchTerm && (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="search-field-clear-button"
                 onClick={handleClearSearch}
                 title="Clear search"
                 aria-label="Clear search query"
