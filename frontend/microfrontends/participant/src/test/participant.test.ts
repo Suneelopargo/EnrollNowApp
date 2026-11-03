@@ -150,6 +150,16 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     deleteSpy.mockRestore();
   });
 
+  it('checks bulk study availability via POST /api/v1/participants/check-study-availability', async () => {
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({ data: { available: false } } as any);
+
+    await expect(participantApi.checkStudyAvailability(['p-1', 'p-2'])).resolves.toBe(false);
+    expect(postSpy).toHaveBeenCalledWith('/api/v1/participants/check-study-availability', {
+      participantIds: ['p-1', 'p-2'],
+    });
+    postSpy.mockRestore();
+  });
+
   it('assigns participant to study via POST /api/v1/participants/assign-study', async () => {
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({ data: null } as any);
 

@@ -271,6 +271,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
 
   // Family
   const [familyRole, setFamilyRole] = useState(participant?.family?.familyRole || '');
+  const [familySearchTerm, setFamilySearchTerm] = useState('');
 
   // Variables
   const [variables, setVariables] = useState<ParticipantVariable[]>(
@@ -344,10 +345,12 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       setActiveTopNav('details');
       setActiveTab('comments');
       setGlobalVariableSearch('');
+      setFamilySearchTerm('');
       setIsAddingVariable(false);
     } else {
       setActiveTopNav('details');
       setActiveTab('comments');
+      setFamilySearchTerm('');
     }
   }, [isOpen, participant?.id]);
 
@@ -425,6 +428,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       headerName: 'Name',
       flex: 1,
       minWidth: 160,
+      tooltipValueGetter: (params) => params.value,
       cellRenderer: (params: ICellRendererParams<FamilyGridRow>) => {
         if (!params.data || params.data.isCurrent || !onSelectParticipantById) {
           return <span>{params.value}</span>;
@@ -441,9 +445,9 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
         );
       },
     },
-    { field: 'gender', headerName: 'Gender', flex: 0.8, minWidth: 110 },
-    { field: 'age', headerName: 'Age', flex: 0.6, minWidth: 90 },
-    { field: 'studies', headerName: 'Studies', flex: 1.4, minWidth: 160 },
+    { field: 'gender', headerName: 'Gender', flex: 0.8, minWidth: 110, tooltipValueGetter: (params) => params.value },
+    { field: 'age', headerName: 'Age', flex: 0.6, minWidth: 90, tooltipValueGetter: (params) => params.value },
+    { field: 'studies', headerName: 'Studies', flex: 1.4, minWidth: 160, tooltipValueGetter: (params) => params.value },
   ], [onSelectParticipantById]);
 
   if (!isOpen || !participant) return null;
@@ -921,13 +925,40 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
                     <span className="record-detail__readonly">{familyId || 'None'}</span>
                   </div>
                 </div>
+                <label className="relative mb-3 block max-w-sm">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    value={familySearchTerm}
+                    onChange={(event) => setFamilySearchTerm(event.target.value)}
+                    placeholder="Search family members..."
+                    aria-label="Search family members"
+                    className="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                  {familySearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setFamilySearchTerm('')}
+                      aria-label="Clear family search"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </label>
                 <DataGrid<FamilyGridRow>
                   rowData={familyGridRows}
                   columnDefs={familyGridColumns}
+                  quickFilterText={familySearchTerm}
                   defaultColDef={{ sortable: false, filter: false, floatingFilter: false, resizable: false }}
                   getRowId={(params) => params.data.id}
                   rowHeight={44}
                   headerHeight={42}
+                  pagination
+                  paginationPageSize={10}
+                  paginationPageSizeSelector={[5, 10, 20, 50]}
+                  onFilterChanged={(event) => event.api.paginationGoToFirstPage()}
+                  tooltipShowDelay={500}
                   domLayout="autoHeight"
                   suppressMovableColumns
                   suppressCellFocus

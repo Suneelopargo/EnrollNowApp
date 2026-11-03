@@ -498,14 +498,18 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     const resolvedStudyName = matchedStudy
       ? String(matchedStudy.name || matchedStudy.shortName || matchedStudy.title || studyName).trim()
       : studyName;
-    const hasUnqualifiedParticipants = participantIds.some((participantId) => {
-      const participant = participants.find((item) => item.id === participantId);
-      return !participant || participant.availableToAddStudy === false;
-    });
+    let availableForNewStudy: boolean;
+    try {
+      availableForNewStudy = await participantApi.checkStudyAvailability(participantIds);
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to verify participant availability for this study.');
+      showNotification(errorMsg, 'error');
+      return false;
+    }
 
     const confirmed = await requestConfirmation({
       title: 'Are you sure?',
-      message: hasUnqualifiedParticipants
+      message: !availableForNewStudy
         ? `Some selected participants are not qualified for new studies. Do you want to add the selected participants to ${resolvedStudyName}?`
         : `Do you want to add these participants to ${resolvedStudyName}?`,
       intent: 'warning',

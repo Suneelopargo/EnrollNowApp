@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,8 @@ public class ParticipantRegistryService {
     private static final Logger log = LoggerFactory.getLogger(ParticipantRegistryService.class);
     private static final DateTimeFormatter DISPLAY_DT_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a");
     private static final DateTimeFormatter LAST_CONTACT_FMT = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm a");
+    private static final Set<String> INACTIVE_CANDIDATE_STATUSES = Set.of("DISQUALIFIED", "WITHDRAWN");
+    private static final Set<String> INACTIVE_ENROLLMENT_STATUSES = Set.of("COMPLETED", "WITHDRAWN");
 
     private final ParticipantRepository participantRepository;
     private final ParticipantIdentifierRepository identifierRepository;
@@ -50,6 +53,7 @@ public class ParticipantRegistryService {
     private final StudyEnrollmentRepository enrollmentRepository;
     private final StudyRepository studyRepository;
     private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
@@ -75,7 +79,8 @@ public class ParticipantRegistryService {
             StudyCandidateRepository candidateRepository,
             StudyEnrollmentRepository enrollmentRepository,
             StudyRepository studyRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            JdbcTemplate jdbcTemplate) {
         this.participantRepository = participantRepository;
         this.identifierRepository = identifierRepository;
         this.contactRepository = contactRepository;
@@ -86,6 +91,7 @@ public class ParticipantRegistryService {
         this.enrollmentRepository = enrollmentRepository;
         this.studyRepository = studyRepository;
         this.objectMapper = objectMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional(readOnly = true)
@@ -884,6 +890,85 @@ public class ParticipantRegistryService {
         history.setChangedBy(userId);
         history.setChangedAt(OffsetDateTime.now());
         statusHistoryRepository.save(history);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean checkStudyAvailability(UUID tenantId, UUID userId, List<UUID> participantIds) {
+        if (participantIds == null || participantIds.isEmpty() || participantIds.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("At least one valid participant ID is required");
+        }
+
+        List<UUID> distinctParticipantIds = participantIds.stream().distinct().toList();
+        if (participantRepository.findByTenantIdAndIdIn(tenantId, distinctParticipantIds).size() != distinctParticipantIds.size()) {
+            throw new IllegalArgumentException("One or more selected participants could not be found");
+        }
+
+        boolean teamPermission = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS ("
+                        + "SELECT 1 FROM enrollnow.team_memberships tm "
+                        + "JOIN enrollnow.teams t ON t.tenant_id = tm.tenant_id AND t.id = tm.team_id "
+                        + "WHERE tm.tenant_id = ? AND tm.user_id = ? "
+                        + "AND tm.active = TRUE AND t.active = TRUE AND t.multi_study_participation = TRUE"
+                        + ")",
+                Boolean.class,
+                tenantId,
+                userId
+        ));
+
+        Map<UUID, Study> studiesById = studyRepository.findByTenantId(tenantId).stream()
+                .collect(Collectors.toMap(Study::getId, study -> study, (first, ignored) -> first));
+        Map<UUID, List<StudyCandidate>> candidatesByParticipant = candidateRepository
+                .findByTenantIdAndParticipantIdIn(tenantId, distinctParticipantIds).stream()
+                .collect(Collectors.groupingBy(StudyCandidate::getParticipantId));
+        Map<UUID, List<StudyEnrollment>> enrollmentsByParticipant = enrollmentRepository
+                .findByTenantIdAndParticipantIdIn(tenantId, distinctParticipantIds).stream()
+                .collect(Collectors.groupingBy(StudyEnrollment::getParticipantId));
+
+        List<Boolean> legacyParticipantStates = new ArrayList<>();
+        for (UUID participantId : distinctParticipantIds) {
+            List<Boolean> inactiveStatuses = new ArrayList<>();
+
+            for (StudyCandidate candidate : candidatesByParticipant.getOrDefault(participantId, List.of())) {
+                if (isStudyRelevantToAvailability(studiesById.get(candidate.getStudyId()), teamPermission)) {
+                    inactiveStatuses.add(isInactiveCandidate(candidate));
+                }
+            }
+            for (StudyEnrollment enrollment : enrollmentsByParticipant.getOrDefault(participantId, List.of())) {
+                if (isStudyRelevantToAvailability(studiesById.get(enrollment.getStudyId()), teamPermission)) {
+                    inactiveStatuses.add(isInactiveEnrollment(enrollment));
+                }
+            }
+
+            if (inactiveStatuses.isEmpty()) {
+                legacyParticipantStates.add(!teamPermission);
+            } else if (teamPermission) {
+                legacyParticipantStates.add(inactiveStatuses.stream().noneMatch(Boolean::booleanValue));
+            } else {
+                legacyParticipantStates.add(inactiveStatuses.stream().allMatch(Boolean::booleanValue));
+            }
+        }
+
+        return teamPermission
+                ? legacyParticipantStates.stream().noneMatch(Boolean::booleanValue)
+                : legacyParticipantStates.stream().anyMatch(Boolean::booleanValue);
+    }
+
+    private boolean isStudyRelevantToAvailability(Study study, boolean teamPermission) {
+        boolean archived = study != null && study.isArchived();
+        boolean allowsOtherStudies = study != null && study.isAllowParticipationInOtherStudies();
+        return teamPermission ? !archived && !allowsOtherStudies : !archived;
+    }
+
+    private boolean isInactiveCandidate(StudyCandidate candidate) {
+        return !candidate.isActive() || INACTIVE_CANDIDATE_STATUSES.contains(normalizeStatus(candidate.getStatus()));
+    }
+
+    private boolean isInactiveEnrollment(StudyEnrollment enrollment) {
+        return !enrollment.isActive() || INACTIVE_ENROLLMENT_STATUSES.contains(normalizeStatus(enrollment.getStatus()));
+    }
+
+    private String normalizeStatus(String status) {
+        return status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
     }
 
     @Transactional
