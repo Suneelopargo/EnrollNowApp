@@ -833,6 +833,33 @@
   min-height: 300px;
 }
 
+.enl-ag-grid.ag-theme-quartz.record-detail__family-grid {
+  height: auto !important;
+  min-height: 0 !important;
+
+  .ag-root-wrapper {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .ag-header,
+  .ag-header-row,
+  .ag-header-cell {
+    background: #f5f8fa !important;
+    color: #1e293b !important;
+  }
+
+  .ag-header {
+    border-bottom-color: #d7e3eb !important;
+  }
+
+  .ag-header-cell-text {
+    color: #1e293b !important;
+    font-size: 13px;
+    font-weight: 500;
+  }
+}
+
 .enl-ag-grid.ag-theme-quartz.participant-forms-grid {
   height: clamp(320px, calc(100vh - 420px), 620px);
   min-height: 280px;

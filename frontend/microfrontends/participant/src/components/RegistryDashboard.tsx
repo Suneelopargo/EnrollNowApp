@@ -488,7 +488,7 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     context.navigate(`/studies?studyId=${encodeURIComponent(targetStudyId)}&tab=${targetTab}`);
   }, [context]);
 
-  const handleAssignStudyToSelected = async (participantIds: string[], studyName: string) => {
+  const handleAssignStudyToSelected = async (participantIds: string[], studyName: string): Promise<boolean> => {
     const matchedStudy = availableStudies.find((s) => {
       const id = String(s.id ?? s.studyId ?? '').trim();
       const label = String(s.name || s.shortName || s.title || '').trim();
@@ -498,6 +498,22 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
     const resolvedStudyName = matchedStudy
       ? String(matchedStudy.name || matchedStudy.shortName || matchedStudy.title || studyName).trim()
       : studyName;
+    const hasUnqualifiedParticipants = participantIds.some((participantId) => {
+      const participant = participants.find((item) => item.id === participantId);
+      return !participant || participant.availableToAddStudy === false;
+    });
+
+    const confirmed = await requestConfirmation({
+      title: 'Are you sure?',
+      message: hasUnqualifiedParticipants
+        ? `Some selected participants are not qualified for new studies. Do you want to add the selected participants to ${resolvedStudyName}?`
+        : `Do you want to add these participants to ${resolvedStudyName}?`,
+      intent: 'warning',
+      confirmText: 'Yes, add participants',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return false;
+
     try {
       await participantApi.assignStudy({
         participantIds,
@@ -508,9 +524,11 @@ export const RegistryDashboard: React.FC<RegistryDashboardProps> = ({ context })
       });
       showNotification(`Assigned ${participantIds.length} participant(s) to ${resolvedStudyName}.`, 'success');
       await fetchParticipants(true);
+      return true;
     } catch (err: any) {
       const errorMsg = getApiErrorMessage(err, 'Failed to assign study to selected participants.');
       showNotification(errorMsg, 'error');
+      return false;
     }
   };
 

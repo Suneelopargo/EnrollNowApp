@@ -173,7 +173,7 @@ interface ParticipantGridProps {
   onOpenDetail?: (participant: ParticipantRecord) => void;
   onDeleteParticipant?: (participant: ParticipantRecord) => void;
   onDeleteSelected?: (participantIds: string[]) => void;
-  onAssignStudyToSelected?: (participantIds: string[], studyName: string) => void;
+  onAssignStudyToSelected?: (participantIds: string[], studyName: string) => Promise<boolean | void> | boolean | void;
   isLoading?: boolean;
   onExportServerCsv?: (fields: string[], timezone: string) => Promise<Blob | null>;
   totalCount?: number;
@@ -455,9 +455,13 @@ export const ParticipantGrid: React.FC<ParticipantGridProps> = ({
     }
   }, [gridApi, onSelectParticipant]);
 
-  const handleBulkAction = () => {
+  const handleBulkAction = async () => {
     if (!studyToAssign || selectedParticipants.length === 0) return;
-    onAssignStudyToSelected?.(selectedParticipants.map((participant) => participant.id), studyToAssign);
+    const assigned = await onAssignStudyToSelected?.(
+      selectedParticipants.map((participant) => participant.id),
+      studyToAssign,
+    );
+    if (assigned === false) return;
     gridApi?.deselectAll();
     setStudyToAssign('');
   };
