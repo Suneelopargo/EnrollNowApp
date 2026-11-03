@@ -474,6 +474,15 @@ export const participantApi = {
     await apiClient.delete(`/api/v1/participants/${id}`);
   },
 
+  async checkStudyAvailability(participantIds: string[]): Promise<boolean> {
+    const res = await apiClient.post('/api/v1/participants/check-study-availability', { participantIds });
+    const data = res.data?.data ?? res.data;
+    if (typeof data?.available !== 'boolean') {
+      throw new Error('The server returned an invalid study availability response.');
+    }
+    return data.available;
+  },
+
   async assignStudy(payload: AssignStudyPayload): Promise<void> {
     await apiClient.post('/api/v1/participants/assign-study', payload);
   },

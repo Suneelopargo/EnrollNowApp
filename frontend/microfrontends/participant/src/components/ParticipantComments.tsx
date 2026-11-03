@@ -1,6 +1,6 @@
 // frontend/microfrontends/participant/src/components/ParticipantComments.tsx - Legacy Ripple Compatible Participant Comments
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Pin, Trash2, Edit2, Loader2, AlertCircle, Search, X } from 'lucide-react';
+import { Pin, Trash2, Edit2, Loader2, Search, X } from 'lucide-react';
 import { AuthUser } from '../../../../shared/contracts';
 import { getStoredAuthUser, getApiErrorMessage } from '../../../../shared/api-client';
 import { toast } from '../../../../shared/toaster';
@@ -27,9 +27,14 @@ const CommentEditor: React.FC<CommentEditorProps> = ({
   const [text, setText] = useState(initialText);
   const [pinned, setPinned] = useState(initialPinned);
   const [isSaving, setIsSaving] = useState(false);
+  const [validationError, setValidationError] = useState(false);
 
   const handleSave = async () => {
-    if (!text.trim() || isSaving) return;
+    if (isSaving) return;
+    if (!text.trim()) {
+      setValidationError(true);
+      return;
+    }
     setIsSaving(true);
     try {
       await onSave(commentId, text, pinned);
@@ -43,9 +48,16 @@ const CommentEditor: React.FC<CommentEditorProps> = ({
       <textarea
         rows={5}
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+          if (event.target.value.trim()) setValidationError(false);
+        }}
         aria-label="Edit comment text"
-        className="min-h-[150px] w-full resize-y rounded border border-gray-300 p-2 text-xs"
+        aria-invalid={validationError}
+        placeholder="Comment"
+        className={`min-h-[150px] w-full resize-y rounded border p-2 text-xs ${
+          validationError ? 'border-red-500 placeholder:text-red-500' : 'border-gray-300'
+        }`}
         disabled={isSaving}
         autoFocus
       />
@@ -101,7 +113,6 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
 }) => {
   const [comments, setComments] = useState<ParticipantCommentItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   // New comment state
   const [commentText, setCommentText] = useState('');
@@ -109,6 +120,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [togglingPinId, setTogglingPinId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [commentValidationError, setCommentValidationError] = useState<string | null>(null);
 
   // Inline editing state
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -177,13 +189,12 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
   const fetchComments = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const data = await participantApi.getComments(participantId, { tenantId, siteId });
       setComments(Array.isArray(data) ? data : []);
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to load comments');
-      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -195,9 +206,14 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim() || isSubmitting) return;
+    if (isSubmitting) return;
+    if (!commentText.trim()) {
+      setCommentValidationError('Comment is required');
+      return;
+    }
 
     setIsSubmitting(true);
+    setCommentValidationError(null);
     try {
       await participantApi.createComment(
         participantId,
@@ -471,10 +487,16 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
           id="comment-input"
           rows={5}
           value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          placeholder="Add comment"
+          onChange={(e) => {
+            setCommentText(e.target.value);
+            if (e.target.value.trim()) setCommentValidationError(null);
+          }}
+          placeholder="Comment"
           aria-label="Add Comment"
-          className="form-textarea min-h-[120px] w-full resize-y rounded border border-gray-300 bg-white text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          aria-invalid={Boolean(commentValidationError)}
+          className={`form-textarea min-h-[120px] w-full resize-y rounded border bg-white text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 ${
+            commentValidationError ? 'border-red-500 placeholder:text-red-500' : 'border-gray-300'
+          }`}
           disabled={isSubmitting}
         />
 
@@ -502,7 +524,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
           <button
             type="submit"
             className="btn btn-sm btn-primary"
-            disabled={!commentText.trim() || isSubmitting}
+            disabled={isSubmitting}
             aria-label="Save comment"
             title="Save comment"
           >
@@ -510,19 +532,6 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
           </button>
         </div>
       </form>
-
-      {/* Error state */}
-      {error && !isLoading && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-md flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={15} />
-            <span>{error}</span>
-          </div>
-          <button type="button" onClick={fetchComments} className="underline font-semibold hover:text-red-800">
-            Retry
-          </button>
-        </div>
-      )}
 
       {/* Loading state */}
       {isLoading && comments.length === 0 && (
@@ -533,7 +542,7 @@ export const ParticipantComments: React.FC<ParticipantCommentsProps> = ({
       )}
 
       {/* Empty State */}
-      {!isLoading && !error && comments.length === 0 && (
+      {!isLoading && comments.length === 0 && (
         <div className="p-6 text-center text-xs text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
           No comments recorded for this participant yet. Enter a note above and click Save.
         </div>

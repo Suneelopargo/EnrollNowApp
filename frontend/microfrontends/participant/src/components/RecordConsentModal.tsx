@@ -155,7 +155,7 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
       })
       .catch((err) => {
         if (!isMounted) return;
-        console.warn('Failed to load consent type options:', err);
+        toast.error(getApiErrorMessage(err, 'Failed to load consent type options.'));
       })
       .finally(() => {
         if (isMounted) setIsLoadingOptions(false);
@@ -176,10 +176,18 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > MAX_CONSENT_SIZE_BYTES) {
-        toast.error(`Maximum size of a consent attachment is ${Math.round(MAX_CONSENT_SIZE_BYTES / (1024 * 1024))} megabytes`);
+        setErrors((current) => ({
+          ...current,
+          attachment: `Maximum size of a consent attachment is ${Math.round(MAX_CONSENT_SIZE_BYTES / (1024 * 1024))} megabytes`,
+        }));
         e.target.value = '';
         return;
       }
+      setErrors((current) => {
+        const remainingErrors = { ...current };
+        delete remainingErrors.attachment;
+        return remainingErrors;
+      });
       setSelectedFile(file);
       setRemoveExistingAttachment(false);
     }
@@ -221,6 +229,15 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
     return Object.keys(errs).length === 0;
   };
 
+  const clearFieldError = (field: string) => {
+    setErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      delete next.form;
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -229,6 +246,7 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
     const isoConsentDate = new Date(consentDate).toISOString();
     const isoExpiration = expiration ? new Date(expiration).toISOString() : undefined;
 
+    setErrors({});
     setIsSaving(true);
     try {
       if (isEditMode && logToEdit?.id) {
@@ -349,18 +367,16 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
               id="consent-title-field"
               type="text"
               value={consentTitle}
-              onChange={(e) => setConsentTitle(e.target.value)}
-              placeholder="Consent title..."
-              className={`form-input ${errors.consentTitle ? 'border-red-500' : ''}`}
+              onChange={(e) => {
+                setConsentTitle(e.target.value);
+                clearFieldError('consentTitle');
+              }}
+              placeholder="Consent Title"
+              className={`form-input ${errors.consentTitle ? 'border-red-500 placeholder:text-red-500' : ''}`}
               aria-invalid={Boolean(errors.consentTitle)}
               required
               autoFocus
             />
-            {errors.consentTitle && (
-              <span className="text-xs text-red-500 block mt-1" role="alert">
-                {errors.consentTitle}
-              </span>
-            )}
           </div>
         </div>
 
@@ -374,7 +390,11 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
               id="consent-date-field"
               type="datetime-local"
               value={consentDate}
-              onChange={(e) => setConsentDate(e.target.value)}
+              onChange={(e) => {
+                setConsentDate(e.target.value);
+                clearFieldError('consentDate');
+                clearFieldError('expiration');
+              }}
               className={`form-input ${errors.consentDate ? 'border-red-500' : ''}`}
               aria-invalid={Boolean(errors.consentDate)}
               required
@@ -399,16 +419,22 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
                   id="consent-type-custom"
                   type="text"
                   value={customConsentType}
-                  onChange={(e) => setCustomConsentType(e.target.value)}
-                  placeholder="Enter new consent type..."
-                  className={`form-input ${errors.consentType ? 'border-red-500' : ''}`}
+                  onChange={(e) => {
+                    setCustomConsentType(e.target.value);
+                    clearFieldError('consentType');
+                  }}
+                  placeholder="Consent Type"
+                  className={`form-input ${errors.consentType ? 'border-red-500 placeholder:text-red-500' : ''}`}
                   aria-invalid={Boolean(errors.consentType)}
                 />
               ) : (
                 <select
                   id="consent-type-field"
                   value={consentType}
-                  onChange={(e) => setConsentType(e.target.value)}
+                  onChange={(e) => {
+                    setConsentType(e.target.value);
+                    clearFieldError('consentType');
+                  }}
                   className={`form-select ${errors.consentType ? 'border-red-500' : ''}`}
                   aria-invalid={Boolean(errors.consentType)}
                 >
@@ -428,12 +454,13 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
                 onClick={() => {
                   setIsCreatingCustomType(!isCreatingCustomType);
                   if (!isCreatingCustomType) setCustomConsentType('');
+                  clearFieldError('consentType');
                 }}
               >
                 {isCreatingCustomType ? 'Select from list' : '+ Add custom type'}
               </button>
             </div>
-            {errors.consentType && (
+            {errors.consentType && !isCreatingCustomType && (
               <span className="consent-form-error text-xs text-red-500" role="alert">
                 {errors.consentType}
               </span>
@@ -486,7 +513,10 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
               type="date"
               value={expiration}
               min={consentDate ? consentDate.slice(0, 10) : undefined}
-              onChange={(e) => setExpiration(e.target.value)}
+              onChange={(e) => {
+                setExpiration(e.target.value);
+                clearFieldError('expiration');
+              }}
               className={`form-input ${errors.expiration ? 'border-red-500' : ''}`}
               aria-invalid={Boolean(errors.expiration)}
             />
@@ -558,6 +588,9 @@ export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
                 />
                 <span className="text-gray-400 text-[11px]">PDF, Word, or image</span>
               </div>
+            )}
+            {errors.attachment && (
+              <span className="mt-1 block text-xs text-red-500" role="alert">{errors.attachment}</span>
             )}
           </div>
         </div>

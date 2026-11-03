@@ -21,20 +21,18 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
 }) => {
   const [forms, setForms] = useState<SurveyAssignmentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchForms = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const data = await participantApi.getForms(participantId, { tenantId, siteId });
       setForms(data);
     } catch (err: any) {
       console.error('Failed to load participant forms:', err);
-      setError(err?.response?.data?.message || err?.message || 'Failed to load assigned forms');
+      toast.error(getApiErrorMessage(err, 'Failed to load assigned forms'));
     } finally {
       setIsLoading(false);
     }
@@ -174,16 +172,6 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
 
   return (
     <div className="flex flex-col h-full bg-slate-50/50 p-6 space-y-4">
-      {/* Error state */}
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm flex items-center justify-between">
-          <span>{error}</span>
-          <button type="button" onClick={fetchForms} className="btn btn-ghost btn-sm text-red-700 hover:bg-red-100">
-            Retry
-          </button>
-        </div>
-      )}
-
       {/* Content area */}
       <div className="flex-1 overflow-auto">
         <div className="space-y-3">
@@ -222,7 +210,7 @@ export const ParticipantFormsSection: React.FC<ParticipantFormsSectionProps> = (
               animateRows
               suppressCellFocus
               loading={isLoading}
-              overlayNoRowsTemplate={`<span class='text-slate-500'>${error ? 'Forms could not be loaded.' : forms.length ? 'No forms match your search.' : 'No forms assigned.'}</span>`}
+              overlayNoRowsTemplate={`<span class='text-slate-500'>${forms.length ? 'No forms match your search.' : 'No forms assigned.'}</span>`}
             />
         </div>
       </div>

@@ -89,7 +89,6 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
   const [contacts, setContacts] = useState<ParticipantContactDetail[]>([]);
   const [addresses, setAddresses] = useState<ParticipantAddressDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [editingMethods, setEditingMethods] = useState<ParticipantContactDetail[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -98,7 +97,6 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
   const fetchContactDetails = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const [contactRecords, addressRecords] = await Promise.all([
         participantApi.getContacts(participantId, { tenantId, siteId }),
@@ -108,7 +106,6 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
       setAddresses(addressRecords);
     } catch (requestError: unknown) {
       const message = getApiErrorMessage(requestError, 'Failed to load contact information');
-      setError(message);
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -258,13 +255,6 @@ export const ParticipantContactManagement: React.FC<ParticipantContactManagement
             <div className="p-6 text-center text-gray-500 flex items-center justify-center gap-2">
               <Loader2 size={18} className="animate-spin text-blue-600" />
               <span className="text-sm">Loading contacts...</span>
-            </div>
-          ) : error && contacts.length === 0 ? (
-            <div className="p-4 text-sm text-red-600" role="alert">
-              {error}
-              <button type="button" className="ml-2 underline" onClick={() => void fetchContactDetails()}>
-                Retry
-              </button>
             </div>
           ) : displayedContactRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-gray-500">

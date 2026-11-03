@@ -248,6 +248,24 @@ public class ParticipantRegistryController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/participants/check-study-availability")
+    public ResponseEntity<StudyAvailabilityResponse> checkStudyAvailability(
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID siteId,
+            @Valid @RequestBody CheckStudyAvailabilityRequest request) {
+
+        UUID resolvedTenantId = resolveTenantId(tenantId);
+        UUID userId = resolveUserId();
+        siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
+
+        boolean available = registryService.checkStudyAvailability(
+                resolvedTenantId,
+                userId,
+                request.getParticipantIds()
+        );
+        return ResponseEntity.ok(new StudyAvailabilityResponse(available));
+    }
+
     @GetMapping({"/registry/timezone-options", "/registry/timezones"})
     public ResponseEntity<List<String>> getTimezoneOptions(
             @RequestParam(required = false) UUID tenantId,

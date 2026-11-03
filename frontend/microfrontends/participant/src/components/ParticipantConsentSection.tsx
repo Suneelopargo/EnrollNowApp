@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus,
   FileText,
-  AlertCircle,
   Pin,
   Pencil,
   Trash2,
@@ -44,7 +43,6 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
 }) => {
   const [logs, setLogs] = useState<ConsentLogItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [selectedLog, setSelectedLog] = useState<ConsentLogItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,13 +57,11 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
   const fetchConsentLogs = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const data = await participantApi.getConsentLogs(participantId, { studyId, tenantId, siteId });
       setLogs(Array.isArray(data) ? data : []);
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to load consent logs');
-      setError(msg);
       toast.error(msg);
     } finally {
       setIsLoading(false);
@@ -344,25 +340,8 @@ export const ParticipantConsentSection: React.FC<ParticipantConsentSectionProps>
         </div>
       )}
 
-      {/* Error state */}
-      {error && !isLoading && (
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} />
-            <span>{error}</span>
-          </div>
-          <button
-            type="button"
-            onClick={fetchConsentLogs}
-            className="btn btn-sm btn-ghost text-red-700 underline"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
       {/* Empty State */}
-      {!isLoading && !error && logs.length === 0 && (
+      {!isLoading && logs.length === 0 && (
         <div className="p-8 text-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
           <FileText size={32} className="text-gray-400 mb-2" />
           <h5 className="text-sm font-medium text-gray-700 mb-1">No consent records found</h5>

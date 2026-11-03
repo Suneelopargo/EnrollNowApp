@@ -163,7 +163,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
       })
       .catch((err) => {
         if (!isMounted) return;
-        console.warn('Failed to load contact log options:', err);
+        toast.error(getApiErrorMessage(err, 'Failed to load contact log options.'));
       })
       .finally(() => {
         if (isMounted) setIsLoadingOptions(false);
@@ -206,6 +206,15 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
     return Object.keys(errs).length === 0;
   };
 
+  const clearFieldError = (field: string) => {
+    setErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      delete next.form;
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
@@ -218,6 +227,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
 
     const isoDateTime = new Date(dateTimeOfContact).toISOString();
 
+    setErrors({});
     setIsSaving(true);
     try {
       if (isEditMode && logToEdit?.id) {
@@ -339,9 +349,12 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
                 id="contact-type-custom"
                 type="text"
                 value={customContactType}
-                onChange={(e) => setCustomContactType(e.target.value)}
-                placeholder="Enter new contact type..."
-                className={`form-input ${errors.contactType ? 'border-red-500' : ''}`}
+                onChange={(e) => {
+                  setCustomContactType(e.target.value);
+                  clearFieldError('contactType');
+                }}
+                placeholder="Contact Type"
+                className={`form-input ${errors.contactType ? 'border-red-500 placeholder:text-red-500' : ''}`}
                 aria-invalid={Boolean(errors.contactType)}
                 autoFocus
               />
@@ -349,7 +362,10 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
               <select
                 id="contact-type-select"
                 value={contactType}
-                onChange={(e) => setContactType(e.target.value)}
+                onChange={(e) => {
+                  setContactType(e.target.value);
+                  clearFieldError('contactType');
+                }}
                 className={`form-select ${errors.contactType ? 'border-red-500' : ''}`}
                 aria-invalid={Boolean(errors.contactType)}
               >
@@ -361,7 +377,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
                 ))}
               </select>
             )}
-            {errors.contactType && (
+            {errors.contactType && !isCreatingCustomType && (
               <span className="text-xs text-red-500 block mt-1" role="alert">
                 {errors.contactType}
               </span>
@@ -379,7 +395,10 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
               id="contact-datetime"
               type="datetime-local"
               value={dateTimeOfContact}
-              onChange={(e) => setDateTimeOfContact(e.target.value)}
+              onChange={(e) => {
+                setDateTimeOfContact(e.target.value);
+                clearFieldError('dateTimeOfContact');
+              }}
               className={`form-input ${errors.dateTimeOfContact ? 'border-red-500' : ''}`}
               aria-invalid={Boolean(errors.dateTimeOfContact)}
             />
@@ -400,7 +419,10 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
             <select
               id="contacted-by-select"
               value={contactedBy}
-              onChange={(e) => setContactedBy(e.target.value)}
+              onChange={(e) => {
+                setContactedBy(e.target.value);
+                clearFieldError('contactedBy');
+              }}
               className={`form-select ${errors.contactedBy ? 'border-red-500' : ''}`}
               aria-invalid={Boolean(errors.contactedBy)}
             >
@@ -507,6 +529,8 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
               value={outcome}
               onChange={(e) => {
                 setOutcome(e.target.value);
+                clearFieldError('outcome');
+                if (e.target.value !== 'Other') clearFieldError('otherOutcome');
                 if (e.target.value !== 'Other') setOtherOutcome('');
               }}
               className={`form-select ${errors.outcome ? 'border-red-500' : ''}`}
@@ -535,17 +559,15 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
                   id="other-outcome-input"
                   type="text"
                   value={otherOutcome}
-                  onChange={(e) => setOtherOutcome(e.target.value)}
-                  placeholder="Enter outcome..."
-                  className={`form-input ${errors.otherOutcome ? 'border-red-500' : ''}`}
+                  onChange={(e) => {
+                    setOtherOutcome(e.target.value);
+                    clearFieldError('otherOutcome');
+                  }}
+                  placeholder="Other Outcome"
+                  className={`form-input ${errors.otherOutcome ? 'border-red-500 placeholder:text-red-500' : ''}`}
                   aria-invalid={Boolean(errors.otherOutcome)}
                   autoFocus
                 />
-                {errors.otherOutcome && (
-                  <span className="text-xs text-red-500 block mt-1" role="alert">
-                    {errors.otherOutcome}
-                  </span>
-                )}
               </div>
             )}
           </div>

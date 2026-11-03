@@ -5,7 +5,6 @@ import {
   Plus,
   Pin,
   Loader2,
-  AlertCircle,
   Search,
   X,
 } from 'lucide-react';
@@ -137,7 +136,6 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
 }) => {
   const [emails, setEmails] = useState<CommunicationItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [isComposeOpen, setIsComposeOpen] = useState<boolean>(false);
   const [previewEmailId, setPreviewEmailId] = useState<string | null>(null);
@@ -147,13 +145,12 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
   const fetchEmails = useCallback(async () => {
     if (!participantId) return;
     setIsLoading(true);
-    setError(null);
     try {
       const data = await participantApi.getEmails(participantId, { tenantId, siteId });
       setEmails(Array.isArray(data) ? data : []);
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Failed to load email history');
-      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -352,21 +349,8 @@ export const ParticipantEmailSection: React.FC<ParticipantEmailSectionProps> = (
         </div>
       )}
 
-      {/* Error */}
-      {error && !isLoading && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-md flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={15} />
-            <span>{error}</span>
-          </div>
-          <button type="button" onClick={fetchEmails} className="underline">
-            Retry
-          </button>
-        </div>
-      )}
-
       {/* Empty State */}
-      {!isLoading && !error && emails.length === 0 && (
+      {!isLoading && emails.length === 0 && (
         <div className="p-8 text-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
           <Mail size={32} className="text-gray-400 mb-2" />
           <h5 className="text-sm font-medium text-gray-700 mb-1">No emails logged</h5>

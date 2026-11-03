@@ -19,6 +19,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -43,6 +44,7 @@ class ParticipantRegistryServiceTest {
     @Mock private StudyCandidateRepository candidateRepository;
     @Mock private StudyEnrollmentRepository enrollmentRepository;
     @Mock private StudyRepository studyRepository;
+    @Mock private JdbcTemplate jdbcTemplate;
     @Mock private StudyRequirementRepository studyRequirementRepository;
     @Mock private SiteAuthorizationService siteAuthorizationService;
 
@@ -65,7 +67,8 @@ class ParticipantRegistryServiceTest {
                 candidateRepository,
                 enrollmentRepository,
                 studyRepository,
-                objectMapper
+                objectMapper,
+                jdbcTemplate
         );
         ReflectionTestUtils.setField(service, "studyRequirementRepository", studyRequirementRepository);
         ReflectionTestUtils.setField(service, "siteAuthorizationService", siteAuthorizationService);
@@ -205,6 +208,62 @@ class ParticipantRegistryServiceTest {
         );
         assertThat(unavailResponse.getItems()).hasSize(1);
         assertThat(unavailResponse.getItems().get(0).getId()).isEqualTo(id2.toString());
+    }
+
+    @Test
+    void checkStudyAvailabilityMatchesLegacyTeamPermissionAndInactiveStatusRules() {
+        UUID participantId = UUID.randomUUID();
+        Participant participant = createMockParticipant(participantId, "Ava", "Jones", LocalDate.of(1990, 5, 12), "ACTIVE");
+        Study restrictedStudy = new Study();
+        restrictedStudy.setId(UUID.randomUUID());
+        restrictedStudy.setAllowParticipationInOtherStudies(false);
+
+        StudyCandidate candidate = new StudyCandidate();
+        candidate.setParticipantId(participantId);
+        candidate.setStudyId(restrictedStudy.getId());
+        candidate.setStatus("REFERRED");
+        candidate.setActive(true);
+
+        when(participantRepository.findByTenantIdAndIdIn(tenantId, List.of(participantId))).thenReturn(List.of(participant));
+        when(jdbcTemplate.queryForObject(any(), eq(Boolean.class), eq(tenantId), eq(userId))).thenReturn(true);
+        when(studyRepository.findByTenantId(tenantId)).thenReturn(List.of(restrictedStudy));
+        when(candidateRepository.findByTenantIdAndParticipantIdIn(eq(tenantId), any())).thenReturn(List.of(candidate));
+        when(enrollmentRepository.findByTenantIdAndParticipantIdIn(eq(tenantId), any())).thenReturn(Collections.emptyList());
+
+        assertThat(service.checkStudyAvailability(tenantId, userId, List.of(participantId))).isFalse();
+
+        candidate.setStatus("WITHDRAWN");
+        assertThat(service.checkStudyAvailability(tenantId, userId, List.of(participantId))).isTrue();
+
+        candidate.setStatus("REFERRED");
+        restrictedStudy.setAllowParticipationInOtherStudies(true);
+        assertThat(service.checkStudyAvailability(tenantId, userId, List.of(participantId))).isTrue();
+    }
+
+    @Test
+    void checkStudyAvailabilityRequiresInactiveStatusWhenTeamHasNoMultiStudyPermission() {
+        UUID participantId = UUID.randomUUID();
+        Participant participant = createMockParticipant(participantId, "Ava", "Jones", LocalDate.of(1990, 5, 12), "ACTIVE");
+        Study permissiveStudy = new Study();
+        permissiveStudy.setId(UUID.randomUUID());
+        permissiveStudy.setAllowParticipationInOtherStudies(true);
+
+        StudyEnrollment enrollment = new StudyEnrollment();
+        enrollment.setParticipantId(participantId);
+        enrollment.setStudyId(permissiveStudy.getId());
+        enrollment.setStatus("ENROLLED");
+        enrollment.setActive(true);
+
+        when(participantRepository.findByTenantIdAndIdIn(tenantId, List.of(participantId))).thenReturn(List.of(participant));
+        when(jdbcTemplate.queryForObject(any(), eq(Boolean.class), eq(tenantId), eq(userId))).thenReturn(false);
+        when(studyRepository.findByTenantId(tenantId)).thenReturn(List.of(permissiveStudy));
+        when(candidateRepository.findByTenantIdAndParticipantIdIn(eq(tenantId), any())).thenReturn(Collections.emptyList());
+        when(enrollmentRepository.findByTenantIdAndParticipantIdIn(eq(tenantId), any())).thenReturn(List.of(enrollment));
+
+        assertThat(service.checkStudyAvailability(tenantId, userId, List.of(participantId))).isFalse();
+
+        enrollment.setStatus("WITHDRAWN");
+        assertThat(service.checkStudyAvailability(tenantId, userId, List.of(participantId))).isTrue();
     }
 
     @Test

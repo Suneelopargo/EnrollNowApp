@@ -1,7 +1,6 @@
 // frontend/microfrontends/participant/src/components/ComposeSmsModal.tsx - Add Participant Text Modal (matching legacy Ripple)
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { X, ChevronDown, Loader2, AlertCircle } from 'lucide-react';
+import { X, ChevronDown, Loader2 } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { toast } from '../../../../shared/toaster';
@@ -68,7 +67,6 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
   const [message, setMessage] = useState('');
   const [isPinned, setIsPinned] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [bannerError, setBannerError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
 
@@ -88,13 +86,12 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
           setAvailablePhones(mapSmsRecipientOptions(contacts, phones || []));
         })
         .catch((err) => {
-          console.warn('Failed to load SMS phones:', err);
+          toast.error(getApiErrorMessage(err, 'Failed to load participant phone numbers.'));
         });
 
       setMessage('');
       setIsPinned(false);
       setInputValue('');
-      setBannerError(null);
       setPhoneError(null);
       setMessageError(null);
       setIsDropdownOpen(false);
@@ -120,7 +117,6 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
     setSelectedPhone(trimmed);
     setInputValue('');
     setPhoneError(null);
-    setBannerError(null);
     setIsDropdownOpen(false);
   };
 
@@ -128,6 +124,7 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
     e.stopPropagation();
     setSelectedPhone('');
     setInputValue('');
+    setPhoneError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -159,7 +156,6 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBannerError(null);
     setPhoneError(null);
     setMessageError(null);
 
@@ -202,64 +198,13 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
       onClose();
     } catch (err: any) {
       const msg = getApiErrorMessage(err, 'Phone number is not valid for region. Try changing the phone number.');
-      setBannerError(msg);
-      // Also highlight field error if relevant
-      if (msg.toLowerCase().includes('phone') || msg.toLowerCase().includes('region')) {
-        setPhoneError('Phone number is not valid');
-      }
+      toast.error(msg);
     } finally {
       setIsSending(false);
     }
   };
 
   return (
-    <>
-      {/* Top of screen error banner matching legacy Bert alert (Image 8) */}
-      {bannerError && typeof document !== 'undefined' && createPortal(
-        <div
-          id="bert-alert-top-banner"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            width: '100%',
-            zIndex: 999999,
-            backgroundColor: '#d9534f',
-            color: '#ffffff',
-            padding: '12px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '13px',
-            fontWeight: 500,
-            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25)',
-          }}
-          role="alert"
-        >
-          <button
-            type="button"
-            onClick={() => setBannerError(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#ffffff',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              padding: '0 4px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            aria-label="Dismiss alert"
-          >
-            ✕
-          </button>
-          <span>{bannerError}</span>
-        </div>,
-        document.body
-      )}
-
       <Modal
         isOpen={isOpen}
         onClose={onClose}
@@ -286,14 +231,16 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
                   onChange={(e) => {
                     setInputValue(e.target.value);
                     setSelectedPhone('');
+                    setPhoneError(null);
                     setIsDropdownOpen(true);
                   }}
                   onFocus={() => setIsDropdownOpen(true)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Phone number"
-                  className={`form-input ${phoneError ? 'border-red-500' : ''}`}
+                  placeholder="To"
+                  className={`form-input ${phoneError ? 'border-red-500 placeholder:text-red-500' : ''}`}
                   style={{ paddingRight: selectedPhone ? 76 : 40 }}
                   aria-label="Recipient phone number"
+                  aria-invalid={Boolean(phoneError)}
                   aria-autocomplete="list"
                   aria-expanded={isDropdownOpen}
                   aria-controls="text-to-phone-options"
@@ -385,14 +332,9 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
                 )}
               </div>
 
-              {/* Validation helper text */}
-              <div className="mt-1">
-                {phoneError ? (
-                  <i className="text-red-500 text-xs italic block">*{phoneError}</i>
-                ) : (
-                  <i className="text-gray-400 text-xs italic block">*required</i>
-                )}
-              </div>
+              {phoneError && phoneError !== 'required' && (
+                <i className="mt-1 block text-xs italic text-red-500" role="alert">{phoneError}</i>
+              )}
             </div>
           </div>
 
@@ -410,16 +352,18 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
                   setMessage(e.target.value);
                   if (messageError) setMessageError(null);
                 }}
+                placeholder="Message"
+                aria-invalid={Boolean(messageError)}
                 className={`w-full text-xs rounded border p-2.5 outline-none transition-colors ${
-                  messageError ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                  messageError ? 'border-red-500 placeholder:text-red-500 focus:ring-1 focus:ring-red-500' : 'border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                 }`}
                 disabled={isSending}
               />
               <div className="mt-1 flex items-center justify-between">
-                {messageError ? (
-                  <i className="text-red-500 text-xs italic block">*{messageError}</i>
+                {messageError && messageError !== 'required' ? (
+                  <i className="text-red-500 text-xs italic block" role="alert">*{messageError}</i>
                 ) : (
-                  <i className="text-gray-400 text-xs italic block">*required</i>
+                  <span />
                 )}
                 {message.length > 0 && (
                   <span className={`text-[11px] ${message.length > 1600 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
@@ -475,7 +419,6 @@ export const ComposeSmsModal: React.FC<ComposeSmsModalProps> = ({
         </form>
       </div>
     </Modal>
-  </>
 );
 };
 
