@@ -11,8 +11,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public record AuditEventDetailResponse(
         UUID id,
         UUID actorUserId,
+        String actorDisplayName,
+
         String entityType,
         UUID entityId,
+        String entityDisplayName,
+
         String action,
         String description,
         String source,

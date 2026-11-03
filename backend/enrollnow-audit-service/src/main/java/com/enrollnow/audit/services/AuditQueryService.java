@@ -1,6 +1,8 @@
 package com.enrollnow.audit.services;
 
 import java.time.LocalDate;
+import com.enrollnow.common.audit.AuditEntityDisplayResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -29,12 +31,24 @@ public class AuditQueryService {
 
     private final AuditEventRepository auditEventRepository;
     private final EntityChangeHistoryRepository entityChangeHistoryRepository;
+    private List<AuditEntityDisplayResolver> entityDisplayResolvers =
+            List.of();
 
     public AuditQueryService(
             AuditEventRepository auditEventRepository,
             EntityChangeHistoryRepository entityChangeHistoryRepository) {
         this.auditEventRepository = auditEventRepository;
         this.entityChangeHistoryRepository = entityChangeHistoryRepository;
+    }
+    
+    @Autowired(required = false)
+    public void setEntityDisplayResolvers(
+            List<AuditEntityDisplayResolver> entityDisplayResolvers
+    ) {
+        this.entityDisplayResolvers =
+                entityDisplayResolvers != null
+                        ? entityDisplayResolvers
+                        : List.of();
     }
 
     @Transactional(readOnly = true)
@@ -77,22 +91,80 @@ public class AuditQueryService {
             return filters;
         };
 
-        return auditEventRepository.findAll(specification, pageable).map(this::toEventResponse);
+        return auditEventRepository
+                .findAll(specification, pageable)
+                .map(event ->
+                        toEventResponse(
+                                tenantId,
+                                event
+                        )
+                );
     }
 
 
-    private AuditEventResponse toEventResponse(AuditEvent event) {
+    private AuditEventResponse toEventResponse(
+            UUID tenantId,
+            AuditEvent event
+    ) {
+
+        String actorDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        "USER",
+                        event.getActorUserId()
+                );
+
+        String entityDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        event.getEntityType(),
+                        event.getEntityId()
+                );
+
         return new AuditEventResponse(
-                event.getId(), event.getActorUserId(), event.getEntityType(), event.getEntityId(),
-                event.getAction(), event.getDescription(), event.getSource(), event.getCorrelationId(),
-                event.getRequestId(), event.getBeforeData(), event.getAfterData(),
-                event.getOccurredAt(), event.getCreatedAt());
+                event.getId(),
+
+                event.getActorUserId(),
+                actorDisplayName,
+
+                event.getEntityType(),
+                event.getEntityId(),
+                entityDisplayName,
+
+                event.getAction(),
+                event.getDescription(),
+                event.getSource(),
+                event.getCorrelationId(),
+                event.getRequestId(),
+                event.getBeforeData(),
+                event.getAfterData(),
+                event.getOccurredAt(),
+                event.getCreatedAt()
+        );
     }
 
-    private EntityChangeHistoryResponse toChangeResponse(EntityChangeHistory change) {
+    private EntityChangeHistoryResponse toChangeResponse(
+            UUID tenantId,
+            EntityChangeHistory change
+    ) {
+
         return new EntityChangeHistoryResponse(
-                change.getId(), change.getAuditEventId(), change.getEntityType(), change.getEntityId(),
-                change.getFieldName(), change.getPreviousValue(), change.getNewValue(), change.getChangedAt());
+                change.getId(),
+                change.getAuditEventId(),
+                change.getEntityType(),
+                change.getEntityId(),
+
+                resolveDisplayName(
+                        tenantId,
+                        change.getEntityType(),
+                        change.getEntityId()
+                ),
+
+                change.getFieldName(),
+                change.getPreviousValue(),
+                change.getNewValue(),
+                change.getChangedAt()
+        );
     }
     
     @Transactional(readOnly = true)
@@ -119,14 +191,35 @@ public class AuditQueryService {
                                 auditEventId
                         )
                         .stream()
-                        .map(this::toChangeResponse)
+                        .map(change ->
+                        toChangeResponse(
+                                tenantId,
+                                change
+                        )
+                )
                         .toList();
+        String actorDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        "USER",
+                        event.getActorUserId()
+                );
 
+        String entityDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        event.getEntityType(),
+                        event.getEntityId()
+                );
         return new AuditEventDetailResponse(
                 event.getId(),
                 event.getActorUserId(),
+                actorDisplayName,
+
                 event.getEntityType(),
                 event.getEntityId(),
+                entityDisplayName,
+
                 event.getAction(),
                 event.getDescription(),
                 event.getSource(),
@@ -139,4 +232,30 @@ public class AuditQueryService {
                 event.getCreatedAt()
         );
     }
+    
+    private String resolveDisplayName(
+            UUID tenantId,
+            String entityType,
+            UUID entityId
+    ) {
+
+        if (entityType == null || entityId == null) {
+            return null;
+        }
+
+        return entityDisplayResolvers
+                .stream()
+                .filter(resolver ->
+                        resolver.supports(entityType)
+                )
+                .findFirst()
+                .map(resolver ->
+                        resolver.resolve(
+                                tenantId,
+                                entityId
+                        )
+                )
+                .orElse(null);
+    }
 }
+

@@ -10,8 +10,10 @@ public record EntityChangeHistoryResponse(
         UUID auditEventId,
         String entityType,
         UUID entityId,
+        String entityDisplayName,
         String fieldName,
         JsonNode previousValue,
         JsonNode newValue,
-        OffsetDateTime changedAt) {
+        OffsetDateTime changedAt
+) {
 }

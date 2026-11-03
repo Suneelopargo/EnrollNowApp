@@ -9,9 +9,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 @JsonInclude(JsonInclude.Include.ALWAYS)
 public record AuditEventResponse(
         UUID id,
+
         UUID actorUserId,
+        String actorDisplayName,
+
         String entityType,
         UUID entityId,
+        String entityDisplayName,
+
         String action,
         String description,
         String source,
@@ -20,5 +25,6 @@ public record AuditEventResponse(
         Map<String, Object> beforeData,
         Map<String, Object> afterData,
         OffsetDateTime occurredAt,
-        OffsetDateTime createdAt) {
+        OffsetDateTime createdAt
+) {
 }
