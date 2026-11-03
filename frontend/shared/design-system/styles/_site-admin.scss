@@ -409,6 +409,73 @@
       }
     }
   }
+
+  &.audit-log-toolbar {
+    align-items: flex-end;
+
+    .data-grid-toolbar__heading,
+    .data-grid-toolbar__actions {
+      align-items: flex-end;
+    }
+
+    .site-admin-filter-select-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-end;
+      gap: 4px;
+      line-height: 1.2;
+    }
+
+    .site-admin-filter-select-wrap > .form-input,
+    .site-admin-filter-select-wrap > .form-select {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 44px;
+      height: 44px;
+    }
+
+    .data-grid-toolbar__search,
+    .data-grid-export-menu-wrap {
+      align-self: flex-end;
+    }
+
+    .data-grid-toolbar__search > .form-input {
+      box-sizing: border-box;
+      min-height: 44px;
+      height: 44px;
+    }
+
+    .data-grid-export-trigger,
+    .audit-log-refresh-btn {
+      box-sizing: border-box;
+      min-height: 44px;
+      height: 44px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 768px) {
+      align-items: stretch;
+
+      .data-grid-toolbar__heading {
+        align-items: center;
+      }
+
+      .data-grid-toolbar__actions {
+        align-items: flex-end;
+      }
+
+      .site-admin-filter-select-wrap {
+        min-width: 140px;
+        max-width: none;
+      }
+
+      .data-grid-toolbar__search {
+        flex: 1 1 220px;
+        width: 100%;
+      }
+    }
+  }
 }
 
 .audit-data-change {

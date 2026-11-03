@@ -293,11 +293,9 @@ export const AuditLogView: React.FC = () => {
   }, []);
   return (
     <section className="card site-admin-users-card" aria-label="System and security audit ledger">
-      <div className="card-header data-grid-toolbar site-admin-users-toolbar">
+      <div className="card-header data-grid-toolbar site-admin-users-toolbar audit-log-toolbar">
         <div className="data-grid-toolbar__heading">
-          <div><h2 className="site-admin-screen-title">System &amp; Security Audit Ledger</h2>
-            <p className="text-muted">Audit events recorded by the system.</p></div>
-          <button type="button" className="btn btn-secondary" onClick={() => setRefreshKey(key => key + 1)}>Refresh</button>
+          
         </div>
         <div className="data-grid-toolbar__actions">
           <label className="site-admin-filter-select-wrap">From <input className="form-input" type="date" aria-label="Audit events from date" value={fromDate} max={toDate || undefined} onChange={e => { setPage(0); setFromDate(e.target.value); }} /></label>
@@ -321,6 +319,13 @@ export const AuditLogView: React.FC = () => {
             {search && <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSearchChange('')} aria-label="Clear search"><X size={14} /></button>}
             <Search size={14} aria-hidden="true" />
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary audit-log-refresh-btn"
+            onClick={() => setRefreshKey(key => key + 1)}
+          >
+            Refresh
+          </button>
           <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
             <button
               type="button"
