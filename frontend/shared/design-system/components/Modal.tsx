@@ -6,7 +6,7 @@ import { useFocusTrap } from '../../accessibility/useFocusTrap';
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: 'default' | 'wide';

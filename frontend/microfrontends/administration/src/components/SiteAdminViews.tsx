@@ -3,7 +3,29 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ChevronDown, Download, FileSearch, FileSpreadsheet, FileText, Search, Upload, X } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  Briefcase,
+  CalendarDays,
+  ChevronDown,
+  CircleDot,
+  Download,
+  FileSearch,
+  FileSpreadsheet,
+  FileText,
+  Globe,
+  KeyRound,
+  Layers,
+  Mail,
+  Search,
+  Shield,
+  Upload,
+  UserPlus,
+  UserRound,
+  Users,
+  X,
+} from 'lucide-react';
 import { ExportSubOption } from '../types/admin';
 import { ComingSoon } from '../../../../shared/design-system/components/ComingSoon';
 import { ManageStudiesView, ManageStudiesViewProps } from './ManageStudiesView';
@@ -165,6 +187,46 @@ const formatAuditValue = (value: unknown): string => {
   }
 
   return String(value);
+};
+
+const getAuditFieldIcon = (fieldName: string) => {
+  const field = fieldName.toLowerCase();
+  if (field.includes('permission')) return KeyRound;
+  if (field.includes('role')) return Users;
+  if (field.includes('email')) return Mail;
+  if (field.includes('name')) return UserRound;
+  if (field.includes('status')) return Activity;
+  if (field.includes('timezone')) return Globe;
+  if (field.includes('title')) return Briefcase;
+  return CircleDot;
+};
+
+interface AuditDiffRow {
+  id: string;
+  fieldName: string;
+  entityType?: string;
+  entityDisplayName?: string | null;
+  before: unknown;
+  after: unknown;
+}
+
+const getAuditDiffRows = (detail: AuditEventDetail): AuditDiffRow[] => {
+  const rows: AuditDiffRow[] = detail.changes?.length
+    ? detail.changes.map(change => ({
+        id: change.id,
+        fieldName: change.fieldName,
+        entityType: change.entityType,
+        entityDisplayName: change.entityDisplayName,
+        before: change.previousValue,
+        after: change.newValue,
+      }))
+    : getBeforeAfterRows(detail.beforeData, detail.afterData).map(row => ({
+        ...row,
+        id: row.field,
+        fieldName: row.field,
+      }));
+
+  return rows.filter(row => JSON.stringify(row.before) !== JSON.stringify(row.after));
 };
 
 const jsonText = (value: unknown) => value === null || value === undefined ? '—' : JSON.stringify(value, null, 2);
@@ -470,148 +532,81 @@ export const AuditLogView: React.FC = () => {
       <Modal
         isOpen={selectedEvent !== null}
         onClose={closeAuditDetails}
-        title="Audit Details"
+        title={<span className="audit-details__title"><Layers size={18} aria-hidden="true" />Audit Details</span>}
         size="wide"
+        className="audit-details-modal"
       >
-        {selectedEvent && <>
-         <div className="mb-3">
-  <p>
-    <strong>
-      {formatAuditAction(
-        selectedEvent.action,
-        selectedEvent.description
-      )}
-    </strong>
-  </p>
-
-  <p className="text-muted">
-    Changed by: {selectedEvent.changedBy}
-  </p>
-
-  <p className="text-muted">
-    Affected entity: {selectedEvent.affectedEntity}
-  </p>
-
-  <p className="text-muted">
-    {formatAuditDate(
-      selectedEvent.occurredAt ||
-      selectedEvent.createdAt
-    )}
-  </p>
-</div>
+        {selectedEvent && (
+          <div className="audit-details">
+            <section className="audit-details__summary" aria-label="Audit event summary">
+              <div className="audit-details__action">
+                <span className="audit-details__action-icon">
+                  <UserPlus size={19} aria-hidden="true" />
+                </span>
+                <strong>{formatAuditAction(selectedEvent.action, selectedEvent.description)}</strong>
+              </div>
+              <div className="audit-details__metadata">
+                <div className="audit-details__metadata-item">
+                  <UserRound size={17} aria-hidden="true" />
+                  <span><small>Changed by</small><strong>{selectedEvent.changedBy}</strong></span>
+                </div>
+                <div className="audit-details__metadata-item">
+                  <Shield size={17} aria-hidden="true" />
+                  <span><small>Affected entity</small><strong>{selectedEvent.affectedEntity}</strong></span>
+                </div>
+                <div className="audit-details__metadata-item">
+                  <CalendarDays size={17} aria-hidden="true" />
+                  <span><small>Date &amp; Time</small><strong>{formatAuditDate(selectedEvent.occurredAt || selectedEvent.createdAt)}</strong></span>
+                </div>
+              </div>
+            </section>
           {detailLoading && <p role="status">Loading audit event details...</p>}
           {detailError && <div className="alert alert-danger" role="alert">{detailError}</div>}
           {!detailLoading && !detailError && selectedEventDetail && (
-            selectedEventDetail.changes.length > 0 ? (
-              <div className="audit-data-change">
-                <div className="audit-data-change__panel">
-                  <h4>
-                    {selectedEventDetail.entityDisplayName
-                      || selectedEventDetail.entityType}
-                  </h4>
-
-                  <div style={{ overflowX: 'auto' }}>
-                    <table
-                      className="table"
-                      style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        tableLayout: 'fixed'
-                      }}
-                    >
-                      <thead>
-                        <tr>
-                          <th style={{ width: '45%' }}>Field</th>
-                          <th style={{ width: '27.5%' }}>Before</th>
-                          <th style={{ width: '27.5%' }}>After</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {selectedEventDetail.changes.map(change => {
-                          const fieldLabel =
-                            change.entityType === 'STUDY'
-                              ? `${change.entityDisplayName || 'Study'} / ${formatAuditField(change.fieldName)}`
-                              : formatAuditField(change.fieldName);
-
-                          return (
-                            <tr key={change.id}>
-                              <td>
-                                <strong>{fieldLabel}</strong>
-                              </td>
-
-                              <td>
-                                {formatAuditValue(
-                                  change.previousValue
-                                )}
-                              </td>
-
-                              <td>
-                                {formatAuditValue(
-                                  change.newValue
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+            <section className="audit-diff" aria-labelledby="audit-diff-entity">
+              <h4 id="audit-diff-entity">
+                {selectedEventDetail.entityDisplayName
+                  || selectedEventDetail.entityType
+                  || selectedEvent.affectedEntity}
+              </h4>
+              {getAuditDiffRows(selectedEventDetail).length > 0 ? (
+                <div className="audit-diff__table" role="table" aria-label="Changed fields">
+                  <div className="audit-diff__columns" role="row">
+                    <span role="columnheader">Field</span>
+                    <span role="columnheader">Before</span>
+                    <span aria-hidden="true" />
+                    <span role="columnheader">After</span>
                   </div>
+                  {getAuditDiffRows(selectedEventDetail).map(row => {
+                    const FieldIcon = getAuditFieldIcon(row.fieldName);
+                    const fieldLabel = row.entityType === 'STUDY'
+                      ? `${row.entityDisplayName || 'Study'} / ${formatAuditField(row.fieldName)}`
+                      : formatAuditField(row.fieldName);
+
+                    return (
+                      <div className="audit-diff__row" role="row" key={row.id}>
+                        <div className="audit-diff__field" role="cell">
+                          <FieldIcon size={16} aria-hidden="true" />
+                          <strong>{fieldLabel}</strong>
+                        </div>
+                        <div className="audit-diff__value audit-diff__value--before" role="cell">
+                          {formatAuditValue(row.before)}
+                        </div>
+                        <div className="audit-diff__arrow" aria-hidden="true"><ArrowRight size={17} /></div>
+                        <div className="audit-diff__value audit-diff__value--after" role="cell">
+                          {formatAuditValue(row.after)}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            ) : selectedEventDetail.beforeData != null ||
-                selectedEventDetail.afterData != null ? (
-              <div className="audit-data-change__panel">
-                <h4>
-                  {selectedEventDetail.entityDisplayName
-                    || selectedEventDetail.entityType}
-                </h4>
-
-                <div style={{ overflowX: 'auto' }}>
-                  <table
-                    className="table"
-                    style={{
-                      width: '100%',
-                      borderCollapse: 'collapse',
-                      tableLayout: 'fixed'
-                    }}
-                  >
-                    <thead>
-                      <tr>
-                        <th style={{ width: '45%' }}>Field</th>
-                        <th style={{ width: '27.5%' }}>Before</th>
-                        <th style={{ width: '27.5%' }}>After</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {getBeforeAfterRows(
-                        selectedEventDetail.beforeData,
-                        selectedEventDetail.afterData
-                      ).map(row => (
-                        <tr key={row.field}>
-                          <td>
-                            <strong>
-                              {formatAuditField(row.field)}
-                            </strong>
-                          </td>
-
-                          <td>
-                            {formatAuditValue(row.before)}
-                          </td>
-
-                          <td>
-                            {formatAuditValue(row.after)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null
+              ) : (
+                <p className="audit-diff__empty">No field changes were recorded for this event.</p>
+              )}
+            </section>
           )}
-        </>}
+          </div>
+        )}
       </Modal>
     </section>
   );
