@@ -389,6 +389,92 @@ class ParticipantWorkflowServiceTest {
     }
 
     @Test
+    void createContact_demotesExistingPrimaryOfSameTypeBeforeSaving() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        ParticipantContact existingPrimaryEmail = new ParticipantContact();
+        existingPrimaryEmail.setId(UUID.randomUUID());
+        existingPrimaryEmail.setTenantId(tenantId);
+        existingPrimaryEmail.setParticipantId(participantId);
+        existingPrimaryEmail.setContactType("EMAIL");
+        existingPrimaryEmail.setPrimaryContact(true);
+        existingPrimaryEmail.setActive(true);
+
+        ParticipantContact primaryPhone = new ParticipantContact();
+        primaryPhone.setId(UUID.randomUUID());
+        primaryPhone.setTenantId(tenantId);
+        primaryPhone.setParticipantId(participantId);
+        primaryPhone.setContactType("PHONE");
+        primaryPhone.setPrimaryContact(true);
+        primaryPhone.setActive(true);
+
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, participantId))
+                .thenReturn(List.of(existingPrimaryEmail, primaryPhone));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(invocation -> {
+            ParticipantContact saved = invocation.getArgument(0);
+            if (saved.getId() == null) saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        CreateContactPersonRequest request = new CreateContactPersonRequest();
+        request.setContactType("email");
+        request.setContactValue("new@example.com");
+        request.setPrimaryContact(true);
+
+        ParticipantContactDto created = workflowService.createContact(tenantId, participantId, userId, request);
+
+        assertTrue(created.isPrimaryContact());
+        assertFalse(existingPrimaryEmail.isPrimaryContact());
+        assertTrue(primaryPhone.isPrimaryContact());
+        verify(contactRepository).flush();
+    }
+
+    @Test
+    void updateContact_demotesOtherPrimaryOfNewTypeBeforeSaving() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        ParticipantContact selected = new ParticipantContact();
+        selected.setId(UUID.randomUUID());
+        selected.setTenantId(tenantId);
+        selected.setParticipantId(participantId);
+        selected.setContactType("PHONE");
+        selected.setContactValue("5551112222");
+        selected.setActive(true);
+
+        ParticipantContact existingPrimaryEmail = new ParticipantContact();
+        existingPrimaryEmail.setId(UUID.randomUUID());
+        existingPrimaryEmail.setTenantId(tenantId);
+        existingPrimaryEmail.setParticipantId(participantId);
+        existingPrimaryEmail.setContactType("EMAIL");
+        existingPrimaryEmail.setPrimaryContact(true);
+        existingPrimaryEmail.setActive(true);
+
+        when(contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, selected.getId()))
+                .thenReturn(Optional.of(selected));
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, participantId))
+                .thenReturn(List.of(selected, existingPrimaryEmail));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateContactPersonRequest request = new UpdateContactPersonRequest();
+        request.setContactType("EMAIL");
+        request.setPrimaryContact(true);
+
+        ParticipantContactDto updated = workflowService.updateContact(
+                tenantId, participantId, selected.getId(), userId, request
+        );
+
+        assertTrue(updated.isPrimaryContact());
+        assertFalse(existingPrimaryEmail.isPrimaryContact());
+        verify(contactRepository).flush();
+    }
+
+    @Test
     void testUpdateContact_updatesFieldsAndMaintainsPreferredExclusivity() {
         Participant participant = new Participant();
         participant.setId(participantId);

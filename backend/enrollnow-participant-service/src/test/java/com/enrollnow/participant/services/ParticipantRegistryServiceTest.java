@@ -1005,6 +1005,83 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void validateFilterRules_acceptsSemanticAgeValuesAndRejectsInvalidAgeValues() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        service.validateFilterRules(tenantId, List.of(
+                new CustomFilterRuleDto("1", "age", "equal to", "1y6m", "")
+        ));
+
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, List.of(
+                new CustomFilterRuleDto("2", "age", "equal to", "not-an-age", "")
+        )));
+    }
+
+    @Test
+    void validateFilterRules_usesServerMetadataForCustomVariableType() {
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(UUID.randomUUID());
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration(
+                "{\"customVariables\":[{\"id\":\"heart_rate\",\"name\":\"Heart Rate\",\"type\":\"number\",\"isGlobal\":true}]}"
+        );
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(requirement));
+
+        CustomFilterRuleDto rule = new CustomFilterRuleDto("1", "custom_heart_rate", "equal to", "70", "");
+        service.validateFilterRules(tenantId, List.of(rule));
+
+        assertThat(rule.getFieldType()).isEqualTo("number");
+    }
+
+    @Test
+    void validateFilterRules_acceptsDatetimeLocalValuesForCustomDateTimeFilters() {
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(UUID.randomUUID());
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration(
+                "{\"customVariables\":[{\"id\":\"visit_time\",\"name\":\"Visit Time\",\"type\":\"dateTime\",\"isGlobal\":true}]}"
+        );
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(requirement));
+
+        CustomFilterRuleDto rule = new CustomFilterRuleDto(
+                "1", "custom_visit_time", "between", "", "2026-03-04T10:00", "2026-03-04T11:00", null, ""
+        );
+        service.validateFilterRules(tenantId, List.of(rule));
+
+        assertThat(rule.getFieldType()).isEqualTo("datetime");
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, List.of(
+                new CustomFilterRuleDto("2", "custom_visit_time", "equal", "not-a-date-time", "")
+        )));
+    }
+
+    @Test
+    void applyCustomVariableRule_matchesRipplePresenceTextMultiSelectAndNumericSemantics() {
+        RegistryParticipantDto participant = new RegistryParticipantDto();
+        participant.setVariables(List.of(
+                new ParticipantVariableDto("notes", "Notes", "short", "Eligible participant", null),
+                new ParticipantVariableDto("cohort", "Cohort", "multi", "Alpha, Beta", null),
+                new ParticipantVariableDto("heart_rate", "Heart Rate", "number", "70.0", null),
+                new ParticipantVariableDto("empty", "Empty", "short", "", null)
+        ));
+
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_notes", "equal", List.of(), "eligible"
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_cohort", "equal", List.of("Beta"), "Beta"
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_heart_rate", "greater_than", List.of(), "70"
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_empty", "assigned", List.of(), ""
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_missing", "not_equal", List.of(), "value"
+        )).isTrue();
+    }
+
+    @Test
     void getParticipantTags_delegatesToRepository_whenRepositorySucceeds() {
         when(participantRepository.findDistinctTagsByTenantAndSearch(eq(tenantId), eq(siteId), eq("AD"), eq(20)))
                 .thenReturn(List.of("ADRC", "Adult"));

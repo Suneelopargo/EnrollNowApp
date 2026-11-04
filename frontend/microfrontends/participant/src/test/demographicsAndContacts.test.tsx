@@ -8,7 +8,11 @@ import {
   groupContactMethods,
   ParticipantContactManagement,
 } from '../components/ParticipantContactManagement';
-import { getContactActiveState, ParticipantContactModal } from '../components/ParticipantContactModal';
+import {
+  getContactActiveState,
+  getPrimaryContactMethodKeys,
+  ParticipantContactModal,
+} from '../components/ParticipantContactModal';
 import { RecordConsentModal } from '../components/RecordConsentModal';
 import { AddContactLogModal } from '../components/AddContactLogModal';
 import { ParticipantContactLogs } from '../components/ParticipantContactLogs';
@@ -100,6 +104,18 @@ describe('Demographics Functionality & Age Calculation', () => {
 });
 
 describe('Contact Methods and Related Contacts Components', () => {
+  it('selects only one primary method per backend contact type', () => {
+    const methods = [
+      { key: 'email-1', contactType: 'email' as const, contactValue: 'first@example.com', isPreferred: false, active: true },
+      { key: 'email-2', contactType: 'email' as const, contactValue: 'second@example.com', isPreferred: true, active: true },
+      { key: 'phone-1', contactType: 'phone-cell' as const, contactValue: '5551234567', isPreferred: false, active: true },
+      { key: 'archived-phone', contactType: 'phone-home' as const, contactValue: '5557654321', isPreferred: true, active: false },
+    ];
+
+    expect(getPrimaryContactMethodKeys(methods, true)).toEqual(new Set(['email-2', 'phone-1']));
+    expect(getPrimaryContactMethodKeys(methods, false)).toEqual(new Set());
+  });
+
   const dummyContact: ParticipantContactDetail = {
     id: 'contact-uuid-1',
     participantId: 'part-uuid-1',
@@ -151,6 +167,30 @@ describe('Contact Methods and Related Contacts Components', () => {
 
     expect(groupContactMethods([firstMethod, otherMethod])).toHaveLength(1);
     expect(groupContactMethods([firstMethod, otherMethod])[0].methods).toHaveLength(2);
+  });
+
+  it('groups one contact person’s methods when only primary flags differ', () => {
+    const primaryEmail: ParticipantContactDetail = {
+      ...dummyContact,
+      contactType: 'EMAIL',
+      contactValue: 'preferred@example.com',
+      primaryContact: true,
+      isPreferred: true,
+    };
+    const alternateEmail: ParticipantContactDetail = {
+      ...primaryEmail,
+      id: 'contact-uuid-2',
+      contactValue: 'alternate@example.com',
+      primaryContact: false,
+      isPreferred: false,
+    };
+
+    const [group] = groupContactMethods([primaryEmail, alternateEmail]);
+
+    expect(groupContactMethods([primaryEmail, alternateEmail])).toHaveLength(1);
+    expect(group.methods).toHaveLength(2);
+    expect(group.preferredMethod).toBe('preferred@example.com');
+    expect(group.preferred).toBe(true);
   });
 
   it('groups self contact methods even when primary contact flags differ', () => {

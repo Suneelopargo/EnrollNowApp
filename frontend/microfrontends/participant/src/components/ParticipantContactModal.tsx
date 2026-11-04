@@ -103,6 +103,28 @@ const methodTypeFromContact = (contact: ParticipantContactDetail): ContactMethod
 
 const backendMethodType = (type: ContactMethodType) => (type === 'email' ? 'EMAIL' : 'PHONE');
 
+export const getPrimaryContactMethodKeys = (
+  methods: ContactMethodDraft[],
+  isPrimaryContact: boolean,
+): Set<string> => {
+  const primaryKeys = new Set<string>();
+  if (!isPrimaryContact) return primaryKeys;
+
+  const methodsByType = new Map<string, ContactMethodDraft[]>();
+  methods
+    .filter((method) => !method.deleted && method.active && method.contactValue.trim())
+    .forEach((method) => {
+      const type = backendMethodType(method.contactType);
+      methodsByType.set(type, [...(methodsByType.get(type) ?? []), method]);
+    });
+
+  methodsByType.forEach((typeMethods) => {
+    const primaryMethod = typeMethods.find((method) => method.isPreferred) ?? typeMethods[0];
+    if (primaryMethod) primaryKeys.add(primaryMethod.key);
+  });
+  return primaryKeys;
+};
+
 const methodLabel = (type: ContactMethodType) => {
   if (type === 'email') return 'Email';
   return type.replace('phone-', '').replace(/^./, (letter) => letter.toUpperCase());
@@ -501,6 +523,7 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
     try {
       const methodsWithValues = methods.filter((method) => !method.deleted && method.contactValue.trim());
       const savedMethodIds = new Set<string>();
+      const primaryMethodKeys = getPrimaryContactMethodKeys(methods, isPreferredContact);
       const buildContactPayload = (method?: ContactMethodDraft): Partial<ParticipantContactDetail> => ({
           contactType: method
             ? (method.typeChanged || !method.originalContactType
@@ -515,7 +538,7 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
           relationship: resolvedRelationship,
           canLeaveMessage,
           notes: notes.trim() || undefined,
-          primaryContact: isPreferredContact,
+          primaryContact: method ? primaryMethodKeys.has(method.key) : isPreferredContact,
           isPreferred: method?.isPreferred ?? false,
           active: (method?.active ?? true) && isContactActive,
         });

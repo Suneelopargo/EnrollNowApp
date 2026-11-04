@@ -856,6 +856,10 @@ public class ParticipantWorkflowService {
         contact.setCreatedAt(OffsetDateTime.now());
         contact.setUpdatedAt(OffsetDateTime.now());
 
+        if (contact.isPrimaryContact() && contact.isActive() && contactType != null) {
+            clearOtherPrimaryContacts(tenantId, participantId, contact);
+        }
+
         ParticipantContact saved = contactRepository.save(contact);
         recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_CREATED", "ParticipantContact", saved.getId(), "Created contact on participant " + participantId);
 
@@ -913,12 +917,38 @@ public class ParticipantWorkflowService {
             }
         }
 
+        if (contact.isPrimaryContact() && contact.isActive()
+                && contact.getContactType() != null && !contact.getContactType().isBlank()) {
+            contact.setPrimaryContact(false);
+            clearOtherPrimaryContacts(tenantId, participantId, contact);
+            contact.setPrimaryContact(true);
+        }
+
         contact.setUpdatedBy(userId);
         contact.setUpdatedAt(OffsetDateTime.now());
         ParticipantContact saved = contactRepository.save(contact);
         recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_UPDATED", "ParticipantContact", saved.getId(), "Updated contact on participant " + participantId);
 
         return mapContactToDto(saved);
+    }
+
+    private void clearOtherPrimaryContacts(
+            UUID tenantId, UUID participantId, ParticipantContact selectedContact) {
+        boolean demotedAny = false;
+        for (ParticipantContact other : contactRepository.findByTenantIdAndParticipantId(tenantId, participantId)) {
+            if (other.getId() != null && other.getId().equals(selectedContact.getId())) continue;
+            if (!other.isActive() || !other.isPrimaryContact()
+                    || other.getContactType() == null
+                    || !other.getContactType().equalsIgnoreCase(selectedContact.getContactType())) {
+                continue;
+            }
+            other.setPrimaryContact(false);
+            contactRepository.save(other);
+            demotedAny = true;
+        }
+        if (demotedAny) {
+            contactRepository.flush();
+        }
     }
 
     @Transactional

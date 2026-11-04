@@ -815,6 +815,19 @@
   font-size: 13px;
 }
 
+.record-detail__study-search input:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+@media (forced-colors: active) {
+  .record-detail__study-search:focus-within {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
 .record-detail__study-search button {
   position: absolute;
   top: 50%;
