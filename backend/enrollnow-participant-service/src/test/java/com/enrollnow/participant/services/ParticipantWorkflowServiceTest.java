@@ -480,6 +480,8 @@ class ParticipantWorkflowServiceTest {
         Participant participant = new Participant();
         participant.setId(participantId);
         participant.setTenantId(tenantId);
+        participant.setFirstName("Alice");
+        participant.setLastName("Smith");
         when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
 
         UUID contactId = UUID.randomUUID();
@@ -525,6 +527,7 @@ class ParticipantWorkflowServiceTest {
         verify(auditRecorder).record(auditCaptor.capture());
         AuditRequest auditRequest = auditCaptor.getValue();
         assertEquals("PARTICIPANT_CONTACT_UPDATED", auditRequest.action());
+        assertEquals("Updated contact for participant Alice Smith", auditRequest.description());
         var selectedContactChange = auditRequest.entities().stream()
                 .filter(change -> contactId.equals(change.entityId()))
                 .findFirst()

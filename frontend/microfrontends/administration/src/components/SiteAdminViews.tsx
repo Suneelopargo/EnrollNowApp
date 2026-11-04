@@ -293,8 +293,8 @@ const AuditDataChangeCell: React.FC<ICellRendererParams<AuditEventRow>> = (param
         event.stopPropagation();
         params.context?.onViewDataChange?.(params.data);
       }}
-      aria-label={`View data change for ${params.data.action}`}
-      title="View before and after data"
+      aria-label={`View audit details for ${params.data.action}`}
+      data-tooltip="View audit details"
     ><FileSearch size={16} aria-hidden="true" /></button>
   );
 };
@@ -304,10 +304,10 @@ export const AuditLogView: React.FC = () => {
   const [rows, setRows] = useState<AuditEventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
   const [gridApi, setGridApi] = useState<GridApi<AuditEventRow> | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<AuditEventRow | null>(null);
@@ -326,7 +326,7 @@ export const AuditLogView: React.FC = () => {
         const query: Record<string, string | number> = { page: 0, size: 500 };
         if (fromDate) query.fromDate = fromDate;
         if (toDate) query.toDate = toDate;
-        if (search.trim()) query.search = search.trim();
+        if (appliedSearch.trim()) query.search = appliedSearch.trim();
         const auditResult = await administrationApi.getAuditLogs(query);
         const mapped = auditResult.content.map((event) => {
   const actorId = event.actorUserId;
@@ -373,7 +373,7 @@ export const AuditLogView: React.FC = () => {
     };
     void load();
     return () => { cancelled = true; };
-  }, [fromDate, toDate, search, refreshKey]);
+  }, [fromDate, toDate, appliedSearch]);
 
   const viewAuditDetails = useCallback(async (event: AuditEventRow) => {
     const requestId = ++detailRequestId.current;
@@ -410,7 +410,14 @@ export const AuditLogView: React.FC = () => {
     { headerName: 'Data Change', field: 'dataChange', width: 115, minWidth: 100, maxWidth: 130, sortable: false, filter: false, floatingFilter: false, cellRenderer: AuditDataChangeCell },
   ], []);
 
-  const onSearchChange = useCallback((value: string) => setSearch(value), []);
+  const submitSearch = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAppliedSearch(searchInput.trim());
+  }, [searchInput]);
+  const clearSearch = useCallback(() => {
+    setSearchInput('');
+    setAppliedSearch('');
+  }, []);
   const getExportRows = useCallback(() => {
     const exportRows: AuditEventRow[] = [];
     if (gridApi) {
@@ -503,19 +510,14 @@ export const AuditLogView: React.FC = () => {
             To date
             <input className="form-input" type="date" aria-label="Audit events to date" value={toDate} min={fromDate || undefined} onChange={e => setToDate(e.target.value)} />
           </label>
-          <div className="data-grid-toolbar__search audit-log-search search-field-with-clear">
-            <input className="form-input" placeholder="Search by actor, event, or description" aria-label="Search audit events" value={search} onChange={e => onSearchChange(e.target.value)} />
-            {search && <button type="button" className="search-field-clear-button" onClick={() => onSearchChange('')} aria-label="Clear search"><X size={14} /></button>}
-            <Search size={14} aria-hidden="true" />
-          </div>
-          <div className="audit-log-header-actions">
-            <button
-              type="button"
-              className="btn btn-secondary audit-log-refresh-btn"
-              onClick={() => setRefreshKey(key => key + 1)}
-            >
-              Refresh
+          <form className="data-grid-toolbar__search audit-log-search search-field-with-clear" onSubmit={submitSearch}>
+            <input className="form-input" placeholder="Search by actor, event, or description" aria-label="Search audit events" value={searchInput} onChange={e => setSearchInput(e.target.value)} />
+            {searchInput && <button type="button" className="search-field-clear-button" onClick={clearSearch} aria-label="Clear search" data-tooltip="Clear search"><X size={14} /></button>}
+            <button type="submit" className="audit-log-search-submit" aria-label="Search audit events" data-tooltip="Search audit events">
+              <Search size={14} aria-hidden="true" />
             </button>
+          </form>
+          <div className="audit-log-header-actions">
             <div className="data-grid-export-menu-wrap" ref={exportMenuRef}>
               <button
                 type="button"
@@ -524,6 +526,7 @@ export const AuditLogView: React.FC = () => {
                 aria-expanded={exportMenuOpen}
                 onClick={() => setExportMenuOpen(open => !open)}
                 aria-label="Export audit log"
+                data-tooltip="Export audit log"
               >
                 <Download size={15} /> Export <ChevronDown size={14} />
               </button>
