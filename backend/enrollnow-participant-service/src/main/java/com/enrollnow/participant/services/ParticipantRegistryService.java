@@ -832,15 +832,14 @@ public class ParticipantRegistryService {
         // Update Contact Phone if provided
         if (request.getPhone() != null) {
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
-            ParticipantContact phoneContact = contacts.stream().filter(c -> "PHONE".equalsIgnoreCase(c.getContactType())).findFirst()
-                    .orElseGet(() -> {
-                        ParticipantContact c = new ParticipantContact();
-                        c.setTenantId(tenantId);
-                        c.setParticipantId(participantId);
-                        c.setContactType("PHONE");
-                        c.setPrimaryContact(false);
-                        return c;
-                    });
+            ParticipantContact phoneContact = findExistingProfileContact(contacts, "PHONE", request.getPhone());
+            if (phoneContact == null) {
+                phoneContact = new ParticipantContact();
+                phoneContact.setTenantId(tenantId);
+                phoneContact.setParticipantId(participantId);
+                phoneContact.setContactType("PHONE");
+                phoneContact.setPrimaryContact(false);
+            }
             phoneContact.setContactValue(request.getPhone());
             contactRepository.save(phoneContact);
         }
@@ -848,15 +847,14 @@ public class ParticipantRegistryService {
         // Update Contact Email if provided
         if (request.getPrimaryEmail() != null) {
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
-            ParticipantContact emailContact = contacts.stream().filter(c -> "EMAIL".equalsIgnoreCase(c.getContactType())).findFirst()
-                    .orElseGet(() -> {
-                        ParticipantContact c = new ParticipantContact();
-                        c.setTenantId(tenantId);
-                        c.setParticipantId(participantId);
-                        c.setContactType("EMAIL");
-                        c.setPrimaryContact(true);
-                        return c;
-                    });
+            ParticipantContact emailContact = findExistingProfileContact(contacts, "EMAIL", request.getPrimaryEmail());
+            if (emailContact == null) {
+                emailContact = new ParticipantContact();
+                emailContact.setTenantId(tenantId);
+                emailContact.setParticipantId(participantId);
+                emailContact.setContactType("EMAIL");
+                emailContact.setPrimaryContact(true);
+            }
             emailContact.setContactValue(request.getPrimaryEmail());
             contactRepository.save(emailContact);
         }
@@ -870,6 +868,24 @@ public class ParticipantRegistryService {
                 beforeData,
                 participantAuditData(updated));
         return updated;
+    }
+
+    private ParticipantContact findExistingProfileContact(
+            List<ParticipantContact> contacts,
+            String contactType,
+            String requestedValue) {
+        return contacts.stream()
+                .filter(contact -> contactType.equalsIgnoreCase(contact.getContactType()))
+                .filter(contact -> Objects.equals(requestedValue, contact.getContactValue()))
+                .findFirst()
+                .or(() -> contacts.stream()
+                        .filter(contact -> contactType.equalsIgnoreCase(contact.getContactType()))
+                        .filter(ParticipantContact::isPrimaryContact)
+                        .findFirst())
+                .or(() -> contacts.stream()
+                        .filter(contact -> contactType.equalsIgnoreCase(contact.getContactType()))
+                        .findFirst())
+                .orElse(null);
     }
 
     @Transactional

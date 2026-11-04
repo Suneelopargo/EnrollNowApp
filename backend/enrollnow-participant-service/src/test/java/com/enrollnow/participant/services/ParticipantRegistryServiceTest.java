@@ -650,6 +650,42 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void updateParticipant_usesMatchingPhoneInsteadOfEarlierSecondaryContact() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Ronald", "R", LocalDate.of(1980, 4, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantContact secondaryPhone = new ParticipantContact();
+        secondaryPhone.setId(UUID.randomUUID());
+        secondaryPhone.setTenantId(tenantId);
+        secondaryPhone.setParticipantId(partId);
+        secondaryPhone.setContactType("PHONE");
+        secondaryPhone.setContactValue("5551112222");
+
+        ParticipantContact primaryPhone = new ParticipantContact();
+        primaryPhone.setId(UUID.randomUUID());
+        primaryPhone.setTenantId(tenantId);
+        primaryPhone.setParticipantId(partId);
+        primaryPhone.setContactType("PHONE");
+        primaryPhone.setContactValue("5478963215");
+        primaryPhone.setPrimaryContact(true);
+
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, partId))
+                .thenReturn(List.of(secondaryPhone, primaryPhone));
+
+        UpdateParticipantRequest request = new UpdateParticipantRequest();
+        request.setFamilyId("ABV345");
+        request.setPhone("5478963215");
+
+        service.updateParticipant(tenantId, partId, userId, request);
+
+        verify(contactRepository).save(primaryPhone);
+        verify(contactRepository, never()).save(secondaryPhone);
+        assertThat(secondaryPhone.getContactValue()).isEqualTo("5551112222");
+        assertThat(primaryPhone.getContactValue()).isEqualTo("5478963215");
+    }
+
+    @Test
     void assignStudy_supportsBulkAssignmentAndStudyNameLookup() {
         UUID p1 = UUID.randomUUID();
         UUID p2 = UUID.randomUUID();
