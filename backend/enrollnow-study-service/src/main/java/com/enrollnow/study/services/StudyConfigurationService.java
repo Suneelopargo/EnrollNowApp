@@ -27,6 +27,7 @@ import com.enrollnow.study.dtos.StudyVariableGroupDto;
 import com.enrollnow.study.dtos.UpdateStudyRequirementsRequest;
 import com.enrollnow.study.models.StudyMilestone;
 import com.enrollnow.study.models.StudyRequirement;
+import com.enrollnow.study.models.TenantContactTaxonomyOption;
 import com.enrollnow.study.repositories.StudyMilestoneRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -50,6 +51,7 @@ public class StudyConfigurationService {
     private final StudyRequirementRepository studyRequirementRepository;
     private final ObjectMapper objectMapper;
     private StudyMilestoneRepository studyMilestoneRepository;
+    private TenantContactTaxonomyService tenantContactTaxonomyService;
 
     public StudyConfigurationService(
             StudyRequirementRepository studyRequirementRepository,
@@ -72,6 +74,11 @@ public class StudyConfigurationService {
     @Autowired(required = false)
     public void setStudyMilestoneRepository(StudyMilestoneRepository studyMilestoneRepository) {
         this.studyMilestoneRepository = studyMilestoneRepository;
+    }
+
+    @Autowired(required = false)
+    public void setTenantContactTaxonomyService(TenantContactTaxonomyService tenantContactTaxonomyService) {
+        this.tenantContactTaxonomyService = tenantContactTaxonomyService;
     }
 
     @Transactional
@@ -107,33 +114,6 @@ public class StudyConfigurationService {
         entireSample.put("ageRange", Map.of("min", 1, "max", 100));
         entireSample.put("studyId", studyId.toString());
         groups.add(entireSample);
-
-        for (String gender : List.of("Female", "Male", "Other")) {
-            Map<String, Object> g = new LinkedHashMap<>();
-            g.put("_id", "grp_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
-            g.put("defaultCategoryName", "sex");
-            g.put("label", gender);
-            g.put("studyId", studyId.toString());
-            groups.add(g);
-        }
-
-        for (String eth : List.of("Hispanic or Latino", "Not Hispanic or Latino")) {
-            Map<String, Object> g = new LinkedHashMap<>();
-            g.put("_id", "grp_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
-            g.put("defaultCategoryName", "ethnicity");
-            g.put("label", eth);
-            g.put("studyId", studyId.toString());
-            groups.add(g);
-        }
-
-        for (String race : List.of("American Indian", "Asian", "Hawaiian", "Black / African American", "White")) {
-            Map<String, Object> g = new LinkedHashMap<>();
-            g.put("_id", "grp_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
-            g.put("defaultCategoryName", "race");
-            g.put("label", race);
-            g.put("studyId", studyId.toString());
-            groups.add(g);
-        }
 
         Map<String, Object> intakeEvent = new LinkedHashMap<>();
         String intakeEventId = "evt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
@@ -2610,11 +2590,15 @@ public class StudyConfigurationService {
         response.setCustomVariableLayout(layout);
 
         // 6. Contact Relationships
-        List<ContactTaxonomyDto> relationships = parseContactTaxonomy(configMap.get("contactRelationships"), "relationship", List.of("Mother", "Father", "Guardian", "Self", "Spouse", "Other"));
+        List<ContactTaxonomyDto> relationships = tenantContactTaxonomyService != null
+                ? toContactTaxonomyDtos(tenantContactTaxonomyService.getOptions(tenantId, TenantContactTaxonomyService.RELATIONSHIP))
+                : parseContactTaxonomy(configMap.get("contactRelationships"), "relationship");
         response.setContactRelationships(relationships);
 
         // 7. Contact Outcomes
-        List<ContactTaxonomyDto> outcomes = parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome", List.of("Participant Added", "Call Completed", "Voicemail Left", "Email Sent", "Other"));
+        List<ContactTaxonomyDto> outcomes = tenantContactTaxonomyService != null
+                ? toContactTaxonomyDtos(tenantContactTaxonomyService.getOptions(tenantId, TenantContactTaxonomyService.OUTCOME))
+                : parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome");
         response.setContactOutcomes(outcomes);
 
         // 8. Global Variables Discovery in Tenant
@@ -2662,9 +2646,23 @@ public class StudyConfigurationService {
         }
         if (request.getContactRelationships() != null) {
             configMap.put("contactRelationships", serializeContactTaxonomy(request.getContactRelationships(), "relationship"));
+            if (tenantContactTaxonomyService != null) {
+                tenantContactTaxonomyService.replaceOptions(
+                        tenantId,
+                        TenantContactTaxonomyService.RELATIONSHIP,
+                        request.getContactRelationships()
+                );
+            }
         }
         if (request.getContactOutcomes() != null) {
             configMap.put("contactOutcomes", serializeContactTaxonomy(request.getContactOutcomes(), "outcome"));
+            if (tenantContactTaxonomyService != null) {
+                tenantContactTaxonomyService.replaceOptions(
+                        tenantId,
+                        TenantContactTaxonomyService.OUTCOME,
+                        request.getContactOutcomes()
+                );
+            }
         }
 
         saveStudyRequirement(
@@ -3105,7 +3103,7 @@ public class StudyConfigurationService {
         return list;
     }
 
-    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName, List<String> defaultValues) {
+    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName) {
         List<ContactTaxonomyDto> result = new ArrayList<>();
         if (raw instanceof List<?> list) {
             for (Object item : list) {
@@ -3120,12 +3118,14 @@ public class StudyConfigurationService {
             return result;
         }
 
-        // Initialize defaults with "Other" guaranteed only when not configured yet (raw == null)
-        if (raw == null && defaultValues != null) {
-            int idx = 1;
-            for (String def : defaultValues) {
-                result.add(new ContactTaxonomyDto("tax_" + (idx++), def));
-            }
+        return result;
+    }
+
+    private List<ContactTaxonomyDto> toContactTaxonomyDtos(List<TenantContactTaxonomyOption> options) {
+        List<ContactTaxonomyDto> result = new ArrayList<>();
+        for (TenantContactTaxonomyOption option : options) {
+            String id = option.getId() != null ? option.getId().toString() : null;
+            result.add(new ContactTaxonomyDto(id, option.getOptionValue()));
         }
         return result;
     }

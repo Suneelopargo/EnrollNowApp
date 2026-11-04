@@ -542,7 +542,6 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
                   {o.outcome}
                 </option>
               ))}
-              <option value="Other">Other</option>
             </select>
             {errors.outcome && (
               <span className="text-xs text-red-500 block mt-1" role="alert">

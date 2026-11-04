@@ -11,6 +11,7 @@ import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
+import com.enrollnow.study.services.TenantContactTaxonomyService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -67,9 +68,15 @@ public class ParticipantRegistryService {
 
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
+    @Autowired(required = false)
+    private TenantContactTaxonomyService tenantContactTaxonomyService;
 
     public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
         this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    public void setTenantContactTaxonomyService(TenantContactTaxonomyService tenantContactTaxonomyService) {
+        this.tenantContactTaxonomyService = tenantContactTaxonomyService;
     }
 
     @Autowired(required = false)
@@ -2241,10 +2248,18 @@ public class ParticipantRegistryService {
 
     @Transactional(readOnly = true)
     public List<String> getRelationshipOptions() {
-        return List.of(
-                "Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner",
-                "Sibling", "Child", "Caregiver", "Friend", "Other"
-        );
+        return getRelationshipOptions(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getRelationshipOptions(UUID tenantId) {
+        if (tenantId != null && tenantContactTaxonomyService != null) {
+            return tenantContactTaxonomyService.getOptions(tenantId, TenantContactTaxonomyService.RELATIONSHIP)
+                    .stream()
+                    .map(option -> option.getOptionValue())
+                    .toList();
+        }
+        return List.of();
     }
 
     public Map<String, List<String>> getDemographicOptions(UUID tenantId) {
@@ -2252,22 +2267,6 @@ public class ParticipantRegistryService {
         collected.put("sex", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
         collected.put("ethnicity", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
         collected.put("race", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
-
-        // Default standard legacy options
-        collected.get("sex").addAll(List.of("Female", "Male", "Other", "Unspecified"));
-        collected.get("ethnicity").addAll(List.of("Hispanic or Latino", "Not Hispanic or Latino", "Unknown / Not Reported"));
-        collected.get("race").addAll(List.of(
-                "American Indian",
-                "American Indian or Alaska Native",
-                "Asian",
-                "Black / African American",
-                "Black or African American",
-                "Hawaiian",
-                "Native Hawaiian or Other Pacific Islander",
-                "White",
-                "More Than One Race",
-                "Unknown / Not Reported"
-        ));
 
         if (tenantId != null && studyRequirementRepository != null) {
             for (StudyRequirement requirement : studyRequirementRepository.findByTenantId(tenantId)) {

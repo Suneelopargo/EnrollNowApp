@@ -46,15 +46,6 @@ public class ParticipantConsentLogService {
 
     public static final long MAX_CONSENT_SIZE_BYTES = 5L * 1024L * 1024L; // 5 MB, exactly matches legacy Ripple MAX_CONSENT_SIZE_BYTES
 
-    private static final List<String> DEFAULT_CONSENT_TYPES = List.of(
-            "Initial Consent",
-            "Re-Consent",
-            "Assent",
-            "Re-Assent",
-            "Age of Majority",
-            "Other"
-    );
-
     private static final Set<String> ALLOWED_FILE_EXTENSIONS = Set.of(
             "pdf", "doc", "docx",
             "jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp"
@@ -144,7 +135,7 @@ public class ParticipantConsentLogService {
 
     @Transactional(readOnly = true)
     public List<ConsentTypeOptionDto> getConsentTypes(UUID tenantId, UUID studyId) {
-        Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONSENT_TYPES);
+        Set<String> distinctTypes = new LinkedHashSet<>();
 
         try {
             List<String> recordedTypes = consentLogRepository.findDistinctConsentTypes(tenantId, studyId);

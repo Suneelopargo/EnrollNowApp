@@ -1480,7 +1480,7 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
-    void getDemographicOptions_returnsStandardOptionsAndMergesStudyGroups() {
+    void getDemographicOptions_returnsEmptyOptionsWhenStudyGroupsAreNotConfigured() {
         when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
 
         Map<String, List<String>> options = service.getDemographicOptions(tenantId);
@@ -1489,16 +1489,15 @@ class ParticipantRegistryServiceTest {
         assertThat(options).containsKey("ethnicity");
         assertThat(options).containsKey("race");
 
-        assertThat(options.get("sex")).contains("Female", "Male", "Other", "Unspecified");
-        assertThat(options.get("ethnicity")).contains("Hispanic or Latino", "Not Hispanic or Latino");
-        assertThat(options.get("race")).contains("Asian", "White", "Black or African American");
+        assertThat(options.get("sex")).isEmpty();
+        assertThat(options.get("ethnicity")).isEmpty();
+        assertThat(options.get("race")).isEmpty();
     }
 
     @Test
-    void getRelationshipOptions_returnsStandardLegacyRelationships() {
+    void getRelationshipOptions_returnsNoOptionsWithoutTenantTaxonomy() {
         List<String> options = service.getRelationshipOptions();
-        assertThat(options).isNotNull();
-        assertThat(options).contains("Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner", "Sibling", "Caregiver", "Other");
+        assertThat(options).isEmpty();
     }
 
     @Test

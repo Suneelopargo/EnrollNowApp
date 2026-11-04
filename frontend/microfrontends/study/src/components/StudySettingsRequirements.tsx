@@ -2507,6 +2507,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
 
         {!collapsedSections.relationships && (
           <div>
+            <p className="text-sm text-muted mb-3">
+              These relationship options are shared across all studies in your organization.
+            </p>
             {contactRelationships.map((r) => {
               const itemId = r.id || r.name;
               return (
@@ -2586,6 +2589,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
 
         {!collapsedSections.outcomes && (
           <div>
+            <p className="text-sm text-muted mb-3">
+              These contact outcomes are shared across all studies in your organization.
+            </p>
             {contactOutcomes.map((o) => {
               const itemId = o.id || o.name;
               return (

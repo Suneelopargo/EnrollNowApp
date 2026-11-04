@@ -307,7 +307,7 @@ public class ParticipantRegistryController {
         UUID resolvedTenantId = resolveTenantId(tenantId);
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(registryService.getRelationshipOptions());
+        return ResponseEntity.ok(registryService.getRelationshipOptions(resolvedTenantId));
     }
     @GetMapping("/registry/filter-metadata")
     public ResponseEntity<List<Map<String, Object>>> getFilterMetadata(

@@ -652,10 +652,30 @@ class StudyConfigurationServiceTest {
         assertEquals(150, res.getSampleSize());
         assertEquals(2, res.getStudyGroups().size()); // Pediatric (age) + Female (sex)
         assertEquals("Pediatric", res.getStudyGroups().get(0).getLabel());
+        assertTrue(res.getContactRelationships().isEmpty());
+        assertTrue(res.getContactOutcomes().isEmpty());
         assertEquals(1, res.getCustomVariables().size());
         assertEquals("Handedness", res.getCustomVariables().get(0).getName());
         assertEquals(1, res.getVariableGroups().size());
         assertEquals(1, res.getCustomVariableLayout().size());
+    }
+
+    @Test
+    void createDefaultConfigurationDoesNotSeedDemographicGroups() throws Exception {
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.empty());
+        when(studyRequirementRepository.save(any(StudyRequirement.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudyRequirement saved = configurationService.createDefaultConfiguration(tenantId, studyId, 100);
+        Map<String, Object> config = objectMapper.readValue(
+                saved.getConfiguration(),
+                new TypeReference<>() {}
+        );
+        List<?> groups = (List<?>) config.get("studyGroups");
+
+        assertEquals(1, groups.size());
+        assertEquals("age", ((Map<?, ?>) groups.get(0)).get("defaultCategoryName"));
     }
 
     @Test

@@ -124,14 +124,14 @@ class ParticipantConsentLogServiceTest {
     }
 
     @Test
-    void getConsentTypes_returnsDefaultAndRecordedTypes() {
+    void getConsentTypes_returnsOnlyRecordedTypes() {
         when(consentLogRepository.findDistinctConsentTypes(tenantId, studyId))
                 .thenReturn(List.of("Custom Video Assent", "Initial Consent"));
 
         List<ConsentTypeOptionDto> types = service.getConsentTypes(tenantId, studyId);
 
         assertThat(types.stream().map(ConsentTypeOptionDto::getValue))
-                .contains("Initial Consent", "Re-Consent", "Assent", "Custom Video Assent");
+                .containsExactly("Custom Video Assent", "Initial Consent");
     }
 
     @Test

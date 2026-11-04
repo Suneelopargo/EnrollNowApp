@@ -11,8 +11,10 @@ import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.TenantContactTaxonomyOption;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.services.TenantContactTaxonomyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +47,7 @@ class ParticipantContactLogServiceTest {
     @Mock private UserEmailRepository userEmailRepository;
     @Mock private AuditRecorder auditRecorder;
     @Mock private SitePermissionService sitePermissionService;
+    @Mock private TenantContactTaxonomyService tenantContactTaxonomyService;
 
     private ParticipantContactLogService service;
 
@@ -139,6 +142,28 @@ class ParticipantContactLogServiceTest {
         assertThat(event.action()).isEqualTo("CREATE");
         assertThat(event.actorUserId()).isEqualTo(callerUserId);
         assertThat(event.description()).contains("Alice Smith").doesNotContain(participantId.toString());
+    }
+
+    @Test
+    void getContactOutcomesUsesTenantSharedTaxonomyWhenAvailable() {
+        TenantContactTaxonomyOption option = new TenantContactTaxonomyOption(
+                tenantId,
+                TenantContactTaxonomyService.OUTCOME,
+                "Call Completed",
+                0
+        );
+        option.setId(UUID.randomUUID());
+        service.setTenantContactTaxonomyService(tenantContactTaxonomyService);
+        when(tenantContactTaxonomyService.getOptions(tenantId, TenantContactTaxonomyService.OUTCOME))
+                .thenReturn(List.of(option));
+
+        List<ContactOutcomeDto> outcomes = service.getContactOutcomes(tenantId);
+
+        assertThat(outcomes).hasSize(1);
+        assertThat(outcomes.get(0).getId()).isEqualTo(option.getId());
+        assertThat(outcomes.get(0).getOutcome()).isEqualTo("Call Completed");
+        assertThat(outcomes.get(0).isActive()).isTrue();
+        verifyNoInteractions(outcomeRepository);
     }
 
     @Test
@@ -309,14 +334,14 @@ class ParticipantContactLogServiceTest {
     }
 
     @Test
-    void getContactTypes_returnsDefaultsAndDynamicTypes() {
+    void getContactTypes_returnsOnlyRecordedTypes() {
         when(contactLogRepository.findDistinctContactTypes(tenantId, null))
                 .thenReturn(List.of("Custom Video Call", "Phone Call"));
 
         List<ContactTypeOptionDto> types = service.getContactTypes(tenantId, null);
 
         assertThat(types).extracting(ContactTypeOptionDto::getValue)
-                .contains("Phone Call", "Email", "Text Message", "Custom Video Call");
+                .containsExactly("Custom Video Call", "Phone Call");
     }
 
     @Test

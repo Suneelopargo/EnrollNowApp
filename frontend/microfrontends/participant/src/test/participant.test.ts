@@ -810,6 +810,13 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(getFieldDefinition('tags').options?.[0].value).toBe('Cardio');
     expect(getFieldDefinition('status').options?.[0].value).toBe('ACTIVE');
     expect(getOperatorsForField('city')).toEqual(['equal to', 'not equal to']);
+
+    registerDemographicFilterOptions({});
+    registerRegistryFilterOptions({});
+    expect(getFieldDefinition('gender').options).toEqual([]);
+    expect(getFieldDefinition('ethnicity').options).toEqual([]);
+    expect(getFieldDefinition('race').options).toEqual([]);
+    expect(getFieldDefinition('status').options).toEqual([]);
   });
 
   it('validates semantic age ranges using year and month values', async () => {

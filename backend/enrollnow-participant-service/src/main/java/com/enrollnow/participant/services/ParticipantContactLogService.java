@@ -16,9 +16,11 @@ import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.services.TenantContactTaxonomyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -36,16 +38,6 @@ public class ParticipantContactLogService {
     private static final Logger log = LoggerFactory.getLogger(ParticipantContactLogService.class);
     private static final DateTimeFormatter DISPLAY_DT_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a");
 
-    private static final List<String> DEFAULT_CONTACT_TYPES = List.of(
-            "Phone Call",
-            "Email",
-            "Text Message",
-            "In Person",
-            "Appointment",
-            "No Show",
-            "Other"
-    );
-
     private final ParticipantContactLogRepository contactLogRepository;
     private final ContactOutcomeRepository outcomeRepository;
     private final ParticipantRepository participantRepository;
@@ -57,6 +49,7 @@ public class ParticipantContactLogService {
     private final UserEmailRepository userEmailRepository;
     private final AuditRecorder auditRecorder;
     private final SitePermissionService sitePermissionService;
+    private TenantContactTaxonomyService tenantContactTaxonomyService;
 
     public ParticipantContactLogService(
             ParticipantContactLogRepository contactLogRepository,
@@ -81,6 +74,11 @@ public class ParticipantContactLogService {
         this.userEmailRepository = userEmailRepository;
         this.auditRecorder = auditRecorder;
         this.sitePermissionService = sitePermissionService;
+    }
+
+    @Autowired(required = false)
+    public void setTenantContactTaxonomyService(TenantContactTaxonomyService tenantContactTaxonomyService) {
+        this.tenantContactTaxonomyService = tenantContactTaxonomyService;
     }
 
     @Transactional(readOnly = true)
@@ -142,7 +140,7 @@ public class ParticipantContactLogService {
 
     @Transactional(readOnly = true)
     public List<ContactTypeOptionDto> getContactTypes(UUID tenantId, UUID studyId) {
-        Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONTACT_TYPES);
+        Set<String> distinctTypes = new LinkedHashSet<>();
 
         try {
             List<String> recordedTypes = contactLogRepository.findDistinctContactTypes(tenantId, studyId);
@@ -164,6 +162,11 @@ public class ParticipantContactLogService {
 
     @Transactional(readOnly = true)
     public List<ContactOutcomeDto> getContactOutcomes(UUID tenantId) {
+        if (tenantContactTaxonomyService != null) {
+            return tenantContactTaxonomyService.getOptions(tenantId, TenantContactTaxonomyService.OUTCOME).stream()
+                    .map(option -> new ContactOutcomeDto(option.getId(), option.getOptionValue(), option.isActive()))
+                    .collect(Collectors.toList());
+        }
         List<ContactOutcome> outcomes = outcomeRepository.findByTenantIdAndActiveTrueOrderByOutcomeAsc(tenantId);
         return outcomes.stream()
                 .map(o -> new ContactOutcomeDto(o.getId(), o.getOutcome(), o.isActive()))
@@ -333,8 +336,11 @@ public class ParticipantContactLogService {
         if (request.getSpokeTo() != null) existing.setSpokeTo(request.getSpokeTo().trim());
         if (request.getRegarding() != null) existing.setRegarding(request.getRegarding().trim());
         if (request.getOutcome() != null && !request.getOutcome().isBlank()) {
-            recordOutcomeIfNew(tenantId, request.getOutcome(), callerUserId);
-            existing.setOutcome(request.getOutcome().trim());
+            String submittedOutcome = request.getOutcome().trim();
+            if (!submittedOutcome.equals(existing.getOutcome())) {
+                recordOutcomeIfNew(tenantId, submittedOutcome, callerUserId);
+            }
+            existing.setOutcome(submittedOutcome);
         }
         if (request.getComments() != null) existing.setComments(request.getComments().trim());
         if (request.getSticky() != null) existing.setSticky(request.getSticky());
@@ -504,12 +510,17 @@ public class ParticipantContactLogService {
     private void recordOutcomeIfNew(UUID tenantId, String outcome, UUID userId) {
         if (outcome == null || outcome.isBlank()) return;
         String trimmed = outcome.trim();
+        if (tenantContactTaxonomyService != null) {
+            tenantContactTaxonomyService.recordOption(tenantId, TenantContactTaxonomyService.OUTCOME, trimmed);
+        }
         if (!outcomeRepository.existsByTenantIdAndOutcomeIgnoreCase(tenantId, trimmed)) {
             ContactOutcome newOutcome = new ContactOutcome(tenantId, trimmed, userId);
             try {
                 outcomeRepository.save(newOutcome);
-            } catch (Exception e) {
-                // Ignore unique constraint violation if inserted concurrently
+            } catch (DataIntegrityViolationException ex) {
+                if (!outcomeRepository.existsByTenantIdAndOutcomeIgnoreCase(tenantId, trimmed)) {
+                    throw ex;
+                }
             }
         }
     }
