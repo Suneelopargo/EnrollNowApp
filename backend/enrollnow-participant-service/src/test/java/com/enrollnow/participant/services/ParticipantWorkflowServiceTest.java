@@ -1,6 +1,7 @@
 package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.InvitationEmailService;
 import com.enrollnow.identity.services.MailAttachment;
 import com.enrollnow.participant.dtos.*;
@@ -389,10 +390,98 @@ class ParticipantWorkflowServiceTest {
     }
 
     @Test
+    void createContact_demotesExistingPrimaryOfSameTypeBeforeSaving() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        ParticipantContact existingPrimaryEmail = new ParticipantContact();
+        existingPrimaryEmail.setId(UUID.randomUUID());
+        existingPrimaryEmail.setTenantId(tenantId);
+        existingPrimaryEmail.setParticipantId(participantId);
+        existingPrimaryEmail.setContactType("EMAIL");
+        existingPrimaryEmail.setPrimaryContact(true);
+        existingPrimaryEmail.setActive(true);
+
+        ParticipantContact primaryPhone = new ParticipantContact();
+        primaryPhone.setId(UUID.randomUUID());
+        primaryPhone.setTenantId(tenantId);
+        primaryPhone.setParticipantId(participantId);
+        primaryPhone.setContactType("PHONE");
+        primaryPhone.setPrimaryContact(true);
+        primaryPhone.setActive(true);
+
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, participantId))
+                .thenReturn(List.of(existingPrimaryEmail, primaryPhone));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(invocation -> {
+            ParticipantContact saved = invocation.getArgument(0);
+            if (saved.getId() == null) saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        CreateContactPersonRequest request = new CreateContactPersonRequest();
+        request.setContactType("email");
+        request.setContactValue("new@example.com");
+        request.setPrimaryContact(true);
+
+        ParticipantContactDto created = workflowService.createContact(tenantId, participantId, userId, request);
+
+        assertTrue(created.isPrimaryContact());
+        assertFalse(existingPrimaryEmail.isPrimaryContact());
+        assertTrue(primaryPhone.isPrimaryContact());
+        verify(contactRepository).flush();
+    }
+
+    @Test
+    void updateContact_demotesOtherPrimaryOfNewTypeBeforeSaving() {
+        Participant participant = new Participant();
+        participant.setId(participantId);
+        participant.setTenantId(tenantId);
+        when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
+
+        ParticipantContact selected = new ParticipantContact();
+        selected.setId(UUID.randomUUID());
+        selected.setTenantId(tenantId);
+        selected.setParticipantId(participantId);
+        selected.setContactType("PHONE");
+        selected.setContactValue("5551112222");
+        selected.setActive(true);
+
+        ParticipantContact existingPrimaryEmail = new ParticipantContact();
+        existingPrimaryEmail.setId(UUID.randomUUID());
+        existingPrimaryEmail.setTenantId(tenantId);
+        existingPrimaryEmail.setParticipantId(participantId);
+        existingPrimaryEmail.setContactType("EMAIL");
+        existingPrimaryEmail.setPrimaryContact(true);
+        existingPrimaryEmail.setActive(true);
+
+        when(contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, selected.getId()))
+                .thenReturn(Optional.of(selected));
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, participantId))
+                .thenReturn(List.of(selected, existingPrimaryEmail));
+        when(contactRepository.save(any(ParticipantContact.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateContactPersonRequest request = new UpdateContactPersonRequest();
+        request.setContactType("EMAIL");
+        request.setPrimaryContact(true);
+
+        ParticipantContactDto updated = workflowService.updateContact(
+                tenantId, participantId, selected.getId(), userId, request
+        );
+
+        assertTrue(updated.isPrimaryContact());
+        assertFalse(existingPrimaryEmail.isPrimaryContact());
+        verify(contactRepository).flush();
+    }
+
+    @Test
     void testUpdateContact_updatesFieldsAndMaintainsPreferredExclusivity() {
         Participant participant = new Participant();
         participant.setId(participantId);
         participant.setTenantId(tenantId);
+        participant.setFirstName("Alice");
+        participant.setLastName("Smith");
         when(participantRepository.findByTenantIdAndId(tenantId, participantId)).thenReturn(Optional.of(participant));
 
         UUID contactId = UUID.randomUUID();
@@ -433,6 +522,26 @@ class ParticipantWorkflowServiceTest {
         assertFalse(updated.isCanLeaveMessage());
         // Verify other contact's preferred flag was cleared
         assertFalse(other.isPreferred());
+
+        ArgumentCaptor<AuditRequest> auditCaptor = ArgumentCaptor.forClass(AuditRequest.class);
+        verify(auditRecorder).record(auditCaptor.capture());
+        AuditRequest auditRequest = auditCaptor.getValue();
+        assertEquals("PARTICIPANT_CONTACT_UPDATED", auditRequest.action());
+        assertEquals("Updated contact for participant Alice Smith", auditRequest.description());
+        var selectedContactChange = auditRequest.entities().stream()
+                .filter(change -> contactId.equals(change.entityId()))
+                .findFirst()
+                .orElseThrow();
+        var otherContactChange = auditRequest.entities().stream()
+                .filter(change -> otherContactId.equals(change.entityId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("+15551234567",
+                selectedContactChange.beforeData().get("contactValue"));
+        assertEquals("+15559876543",
+                selectedContactChange.afterData().get("contactValue"));
+        assertEquals(Boolean.FALSE,
+                otherContactChange.afterData().get("preferred"));
     }
 
     @Test

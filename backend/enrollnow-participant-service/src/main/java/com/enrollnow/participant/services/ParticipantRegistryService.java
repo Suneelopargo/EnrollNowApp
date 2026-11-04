@@ -1,5 +1,8 @@
 package com.enrollnow.participant.services;
 
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
@@ -54,6 +57,13 @@ public class ParticipantRegistryService {
     private final StudyRepository studyRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+
+    @Autowired(required = false)
+    private AuditRecorder auditRecorder;
+
+    public void setAuditRecorder(AuditRecorder auditRecorder) {
+        this.auditRecorder = auditRecorder;
+    }
 
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
@@ -604,7 +614,15 @@ public class ParticipantRegistryService {
             }
         }
 
-        return getParticipantById(tenantId, saved.getId()).orElseThrow();
+        RegistryParticipantDto created = getParticipantById(tenantId, saved.getId()).orElseThrow();
+        recordParticipantAudit(
+                tenantId,
+                saved.getId(),
+                "PARTICIPANT_CREATED",
+                "Created participant in registry",
+                null,
+                participantAuditData(created));
+        return created;
     }
 
     private String generateAuthoritativeGlobalId(UUID tenantId, UUID participantId) {
@@ -632,6 +650,8 @@ public class ParticipantRegistryService {
     public RegistryParticipantDto updateParticipant(UUID tenantId, UUID participantId, UUID userId, UpdateParticipantRequest request, UUID siteId) {
         Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
                 .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+        Map<String, Object> beforeData = participantAuditData(
+                getParticipantById(tenantId, participantId).orElseThrow());
 
         if (request.getFirstName() != null) participant.setFirstName(request.getFirstName());
         if (request.getMiddleName() != null) participant.setMiddleName(request.getMiddleName());
@@ -812,15 +832,14 @@ public class ParticipantRegistryService {
         // Update Contact Phone if provided
         if (request.getPhone() != null) {
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
-            ParticipantContact phoneContact = contacts.stream().filter(c -> "PHONE".equalsIgnoreCase(c.getContactType())).findFirst()
-                    .orElseGet(() -> {
-                        ParticipantContact c = new ParticipantContact();
-                        c.setTenantId(tenantId);
-                        c.setParticipantId(participantId);
-                        c.setContactType("PHONE");
-                        c.setPrimaryContact(false);
-                        return c;
-                    });
+            ParticipantContact phoneContact = findExistingProfileContact(contacts, "PHONE", request.getPhone());
+            if (phoneContact == null) {
+                phoneContact = new ParticipantContact();
+                phoneContact.setTenantId(tenantId);
+                phoneContact.setParticipantId(participantId);
+                phoneContact.setContactType("PHONE");
+                phoneContact.setPrimaryContact(false);
+            }
             phoneContact.setContactValue(request.getPhone());
             contactRepository.save(phoneContact);
         }
@@ -828,20 +847,45 @@ public class ParticipantRegistryService {
         // Update Contact Email if provided
         if (request.getPrimaryEmail() != null) {
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
-            ParticipantContact emailContact = contacts.stream().filter(c -> "EMAIL".equalsIgnoreCase(c.getContactType())).findFirst()
-                    .orElseGet(() -> {
-                        ParticipantContact c = new ParticipantContact();
-                        c.setTenantId(tenantId);
-                        c.setParticipantId(participantId);
-                        c.setContactType("EMAIL");
-                        c.setPrimaryContact(true);
-                        return c;
-                    });
+            ParticipantContact emailContact = findExistingProfileContact(contacts, "EMAIL", request.getPrimaryEmail());
+            if (emailContact == null) {
+                emailContact = new ParticipantContact();
+                emailContact.setTenantId(tenantId);
+                emailContact.setParticipantId(participantId);
+                emailContact.setContactType("EMAIL");
+                emailContact.setPrimaryContact(true);
+            }
             emailContact.setContactValue(request.getPrimaryEmail());
             contactRepository.save(emailContact);
         }
 
-        return getParticipantById(tenantId, participantId).orElseThrow();
+        RegistryParticipantDto updated = getParticipantById(tenantId, participantId).orElseThrow();
+        recordParticipantAudit(
+                tenantId,
+                participantId,
+                "PARTICIPANT_UPDATED",
+                "Updated participant registration details",
+                beforeData,
+                participantAuditData(updated));
+        return updated;
+    }
+
+    private ParticipantContact findExistingProfileContact(
+            List<ParticipantContact> contacts,
+            String contactType,
+            String requestedValue) {
+        return contacts.stream()
+                .filter(contact -> contactType.equalsIgnoreCase(contact.getContactType()))
+                .filter(contact -> Objects.equals(requestedValue, contact.getContactValue()))
+                .findFirst()
+                .or(() -> contacts.stream()
+                        .filter(contact -> contactType.equalsIgnoreCase(contact.getContactType()))
+                        .filter(ParticipantContact::isPrimaryContact)
+                        .findFirst())
+                .or(() -> contacts.stream()
+                        .filter(contact -> contactType.equalsIgnoreCase(contact.getContactType()))
+                        .findFirst())
+                .orElse(null);
     }
 
     @Transactional
@@ -863,6 +907,13 @@ public class ParticipantRegistryService {
         history.setChangedBy(userId);
         history.setChangedAt(OffsetDateTime.now());
         statusHistoryRepository.save(history);
+        recordParticipantAudit(
+                tenantId,
+                participantId,
+                "PARTICIPANT_STATUS_UPDATED",
+                "Updated participant status",
+                Collections.singletonMap("status", oldStatus),
+                Map.of("status", status.toUpperCase()));
     }
 
     @Transactional
@@ -884,6 +935,13 @@ public class ParticipantRegistryService {
         history.setChangedBy(userId);
         history.setChangedAt(OffsetDateTime.now());
         statusHistoryRepository.save(history);
+        recordParticipantAudit(
+                tenantId,
+                participantId,
+                "PARTICIPANT_DELETED",
+                "Deleted participant",
+                Collections.singletonMap("status", oldStatus),
+                Map.of("status", "DELETED"));
     }
 
     @Transactional(readOnly = true)
@@ -1300,6 +1358,84 @@ public class ParticipantRegistryService {
         return dto;
     }
 
+    private Map<String, Object> participantAuditData(RegistryParticipantDto participant) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("firstName", auditValue(participant.getFirstName()));
+        data.put("middleName", auditValue(participant.getMiddleName()));
+        data.put("lastName", auditValue(participant.getLastName()));
+        data.put("status", auditValue(participant.getStatus()));
+        data.put("globalId", auditValue(participant.getGlobalId()));
+        data.put("gender", auditValue(participant.getGender()));
+        data.put("globalDateOfLastContact", auditValue(participant.getGlobalDateOfLastContact()));
+        data.put("city", auditValue(participant.getCity()));
+        data.put("state", auditValue(participant.getState()));
+        data.put("zipcode", auditValue(participant.getZipcode()));
+        data.put("contactForFutureStudies", participant.getContactForFutureStudies());
+        data.put("timezone", auditValue(participant.getTimezone()));
+        data.put("familyId", auditValue(participant.getFamilyId()));
+        data.put("tags", auditValue(participant.getTags()));
+
+        ContactMethodsDto contactMethods = participant.getContactMethods();
+        data.put("primaryEmail", contactMethods == null ? null : auditValue(contactMethods.getPrimaryEmail()));
+        data.put("secondaryEmail", contactMethods == null ? null : auditValue(contactMethods.getSecondaryEmail()));
+        data.put("phone", contactMethods == null ? null : auditValue(contactMethods.getPhone()));
+        data.put("address", contactMethods == null ? null : auditValue(contactMethods.getAddress()));
+        data.put("preferredMethod", contactMethods == null ? null : auditValue(contactMethods.getPreferredMethod()));
+
+        DemographicsDto demographics = participant.getDemographics();
+        data.put("dateOfBirth", demographics == null ? null : auditValue(demographics.getDob()));
+        data.put("ethnicity", demographics == null ? null : auditValue(demographics.getEthnicity()));
+        data.put("race", demographics == null ? null : auditValue(demographics.getRace()));
+        data.put("primaryLanguage", demographics == null ? null : auditValue(demographics.getPrimaryLanguage()));
+
+        FamilyInfoDto family = participant.getFamily();
+        data.put("familyRole", family == null ? null : auditValue(family.getFamilyRole()));
+        data.put("familyMembersCount", family == null ? null : family.getMembersCount());
+        data.put("guardianName", family == null ? null : auditValue(family.getGuardianName()));
+
+        List<Map<String, Object>> variables = participant.getVariables() == null
+                ? null
+                : participant.getVariables().stream().map(variable -> {
+                    Map<String, Object> value = new LinkedHashMap<>();
+                    value.put("name", auditValue(variable.getName()));
+                    value.put("type", auditValue(variable.getType()));
+                    value.put("value", auditValue(variable.getValue()));
+                    return value;
+                }).toList();
+        data.put("variables", auditValue(variables));
+        return data;
+    }
+
+    private Object auditValue(Object value) {
+        if (value instanceof String text && text.isBlank()) {
+            return null;
+        }
+        if (value instanceof Collection<?> collection && collection.isEmpty()) {
+            return null;
+        }
+        return value;
+    }
+
+    private void recordParticipantAudit(
+            UUID tenantId,
+            UUID participantId,
+            String action,
+            String description,
+            Map<String, Object> beforeData,
+            Map<String, Object> afterData) {
+        if (auditRecorder == null) {
+            throw new IllegalStateException("Audit recorder is required to record participant data changes");
+        }
+        auditRecorder.record(new AuditRequest(
+                tenantId,
+                "Participant",
+                participantId,
+                action,
+                description,
+                "APPLICATION",
+                List.of(new AuditEntitySnapshot("Participant", participantId, beforeData, afterData))));
+    }
+
     @Transactional(readOnly = true)
     public List<RegistryParticipantDto> findDuplicatesByName(UUID tenantId, String firstName, String lastName) {
         if (firstName == null || lastName == null || firstName.isBlank() || lastName.isBlank()) {
@@ -1422,9 +1558,10 @@ public class ParticipantRegistryService {
             String id = (String) meta.get("id");
             String type = (String) meta.get("type");
             if (id != null) {
-                fieldTypes.put(id.toLowerCase().trim(), type != null ? type : "text");
+                String normalizedType = type != null ? type.toLowerCase(Locale.ROOT) : "text";
+                fieldTypes.put(id.toLowerCase().trim(), normalizedType);
                 if (id.startsWith("custom_")) {
-                    fieldTypes.put(id.substring(7).toLowerCase().trim(), type != null ? type : "text");
+                    fieldTypes.put(id.substring(7).toLowerCase().trim(), normalizedType);
                 }
             }
         }
@@ -1439,6 +1576,7 @@ public class ParticipantRegistryService {
             }
 
             String fieldType = fieldTypes.getOrDefault(field, "text");
+            rule.setFieldType(fieldType);
             String op = rule.getOperator() != null ? rule.getOperator().toLowerCase().trim() : "";
             if (op.isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Operator cannot be empty for field: " + rule.getField());
@@ -1456,18 +1594,42 @@ public class ParticipantRegistryService {
                             "Range filter for field '" + rule.getField() + "' requires both minimum and maximum boundaries");
                 }
                 if ("number".equals(fieldType) || "age".equals(field)) {
-                    try {
-                        double minD = Double.parseDouble(min.trim());
-                        double maxD = Double.parseDouble(max.trim());
-                        if (minD > maxD) {
+                    if ("age".equals(field)) {
+                        Integer minMonths = ParticipantSpecifications.parseAgeMonths(min);
+                        Integer maxMonths = ParticipantSpecifications.parseAgeMonths(max);
+                        if (minMonths == null || maxMonths == null) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "Invalid age boundary for field '" + rule.getField() + "'");
+                        }
+                        if (minMonths > maxMonths) {
                             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                     "Minimum value (" + min + ") cannot be greater than maximum value (" + max + ") for field '" + rule.getField() + "'");
                         }
-                    } catch (NumberFormatException e) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Invalid numeric boundary for field '" + rule.getField() + "': " + e.getMessage());
+                    } else {
+                        try {
+                            double minD = Double.parseDouble(min.trim());
+                            double maxD = Double.parseDouble(max.trim());
+                            if (minD > maxD) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "Minimum value (" + min + ") cannot be greater than maximum value (" + max + ") for field '" + rule.getField() + "'");
+                            }
+                        } catch (NumberFormatException e) {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                    "Invalid numeric boundary for field '" + rule.getField() + "': " + e.getMessage());
+                        }
                     }
-                } else if ("date".equals(fieldType) || "datetime".equals(fieldType) || "datecreated".equals(field) || "lastcontact".equals(field)) {
+                } else if ("datetime".equals(fieldType)) {
+                    OffsetDateTime dMin = parseDateTime(min);
+                    OffsetDateTime dMax = parseDateTime(max);
+                    if (dMin == null || dMax == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Invalid date/time boundary for field '" + rule.getField() + "'");
+                    }
+                    if (dMin.isAfter(dMax)) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Start date/time cannot be after end date/time for field '" + rule.getField() + "'");
+                    }
+                } else if ("date".equals(fieldType) || "datecreated".equals(field) || "lastcontact".equals(field)) {
                     LocalDate dMin = parseDate(min);
                     LocalDate dMax = parseDate(max);
                     if (dMin == null || dMax == null) {
@@ -1485,6 +1647,29 @@ public class ParticipantRegistryService {
                 if ((val == null || val.isBlank()) && (values == null || values.isEmpty())) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Value is required for operator '" + rule.getOperator() + "' on field '" + rule.getField() + "'");
+                }
+                String comparisonValue = val != null && !val.isBlank()
+                        ? val.trim()
+                        : values.get(0);
+                if ("age".equals(field) && ParticipantSpecifications.parseAgeMonths(comparisonValue) == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Invalid age value for field '" + rule.getField() + "'");
+                }
+                if ("datetime".equals(fieldType) && parseDateTime(comparisonValue) == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Invalid date/time value for field '" + rule.getField() + "'");
+                }
+                if ("date".equals(fieldType) && parseDate(comparisonValue) == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Invalid date value for field '" + rule.getField() + "'");
+                }
+                if ("number".equals(fieldType) && !"age".equals(field)) {
+                    try {
+                        Double.parseDouble(comparisonValue);
+                    } catch (NumberFormatException e) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Invalid numeric value for field '" + rule.getField() + "'");
+                    }
                 }
             }
         }
@@ -1602,6 +1787,15 @@ public class ParticipantRegistryService {
 
         if ("studies".equals(field)) {
             return matchesStudiesRule(p, op, values, targetVal);
+        }
+        if (field.startsWith("custom_")) {
+            return applyCustomVariableRule(p, rule, field, op, values, targetVal);
+        }
+        if ("age".equals(field)) {
+            LocalDate dob = p.getDemographics() != null ? parseDate(p.getDemographics().getDob()) : null;
+            return ParticipantSpecifications.matchesAgeFilter(
+                    dob, op, targetVal, rule.getEffectiveMinValue(), rule.getEffectiveMaxValue(), LocalDate.now()
+            );
         }
 
         String actualVal = getFieldValue(p, field);
@@ -1748,6 +1942,147 @@ public class ParticipantRegistryService {
 
             default:
                 return false;
+        }
+    }
+
+    boolean applyCustomVariableRule(
+            RegistryParticipantDto participant,
+            CustomFilterRuleDto rule,
+            String field,
+            String operator,
+            List<String> values,
+            String targetValue) {
+        String key = field.substring("custom_".length());
+        ParticipantVariableDto variable = participant.getVariables() == null
+                ? null
+                : participant.getVariables().stream()
+                        .filter(candidate -> matchesVariableKey(candidate, key, field))
+                        .findFirst()
+                        .orElse(null);
+
+        if ("assigned".equals(operator)) return variable != null;
+        if ("not_assigned".equals(operator)) return variable == null;
+        if (variable == null) return "not_equal".equals(operator) || "not_contains".equals(operator);
+
+        String actualValue = variable.getValue();
+        if (actualValue == null) actualValue = "";
+        final String observedValue = actualValue;
+        String fieldType = rule.getFieldType() != null
+                ? rule.getFieldType().trim().toLowerCase(Locale.ROOT)
+                : variable.getType() != null ? variable.getType().trim().toLowerCase(Locale.ROOT) : "";
+
+        if ("number".equals(fieldType)) {
+            Double actualNumber = parseNumber(actualValue);
+            Double targetNumber = parseNumber(targetValue);
+            if (actualNumber == null) return "not_equal".equals(operator);
+            if ("equal".equals(operator) || "not_equal".equals(operator)) {
+                if (targetNumber == null) return false;
+                boolean matches = Double.compare(actualNumber, targetNumber) == 0;
+                return "equal".equals(operator) ? matches : !matches;
+            }
+            if ("between".equals(operator) || "not_between".equals(operator)) {
+                Double min = parseNumber(rule.getEffectiveMinValue());
+                Double max = parseNumber(rule.getEffectiveMaxValue());
+                if (min == null || max == null) return false;
+                double low = Math.min(min, max);
+                double high = Math.max(min, max);
+                boolean between = actualNumber >= low && actualNumber <= high;
+                return "between".equals(operator) ? between : !between;
+            }
+            if (targetNumber == null) return false;
+            if ("greater_than".equals(operator)) return actualNumber >= targetNumber;
+            if ("less_than".equals(operator)) return actualNumber <= targetNumber;
+            return false;
+        }
+
+        if ("date".equals(fieldType) || "datetime".equals(fieldType)) {
+            boolean dateTime = "datetime".equals(fieldType);
+            if ("between".equals(operator) || "not_between".equals(operator)) {
+                String minValue = rule.getEffectiveMinValue();
+                String maxValue = rule.getEffectiveMaxValue();
+                if (dateTime) {
+                    OffsetDateTime actual = parseDateTime(actualValue);
+                    OffsetDateTime min = parseDateTime(minValue);
+                    OffsetDateTime max = parseDateTime(maxValue);
+                    if (actual == null || min == null || max == null) return false;
+                    boolean between = !actual.isBefore(min) && !actual.isAfter(max);
+                    return "between".equals(operator) ? between : !between;
+                }
+                LocalDate actual = parseDate(actualValue);
+                LocalDate min = parseDate(minValue);
+                LocalDate max = parseDate(maxValue);
+                if (actual == null || min == null || max == null) return false;
+                boolean between = !actual.isBefore(min) && !actual.isAfter(max);
+                return "between".equals(operator) ? between : !between;
+            }
+            if (dateTime) {
+                OffsetDateTime actual = parseDateTime(actualValue);
+                OffsetDateTime target = parseDateTime(targetValue);
+                if (actual == null || target == null) return false;
+                return switch (operator) {
+                    case "equal" -> actual.toLocalDate().equals(target.toLocalDate());
+                    case "not_equal" -> !actual.toLocalDate().equals(target.toLocalDate());
+                    case "greater_than" -> !actual.isBefore(target.toLocalDate().atStartOfDay().atOffset(target.getOffset()));
+                    case "less_than" -> !actual.isAfter(target.toLocalDate().plusDays(1).atStartOfDay().minusNanos(1).atOffset(target.getOffset()));
+                    default -> false;
+                };
+            }
+            LocalDate actual = parseDate(actualValue);
+            LocalDate target = parseDate(targetValue);
+            if (actual == null || target == null) return false;
+            return switch (operator) {
+                case "equal" -> actual.equals(target);
+                case "not_equal" -> !actual.equals(target);
+                case "greater_than" -> !actual.isBefore(target);
+                case "less_than" -> !actual.isAfter(target);
+                default -> false;
+            };
+        }
+
+        if ("equal".equals(operator) || "not_equal".equals(operator)) {
+            boolean matches;
+            if ("multi".equals(fieldType) || "multiselect".equals(fieldType)) {
+                matches = values.stream().anyMatch(value -> matchesValueOrOption(observedValue, value));
+            } else if ("short".equals(fieldType) || "long".equals(fieldType)
+                    || "text".equals(fieldType) || "textarea".equals(fieldType)) {
+                String regex = !targetValue.isBlank() ? targetValue : values.isEmpty() ? "" : values.get(0);
+                matches = matchesCaseInsensitiveRegex(actualValue, regex);
+            } else {
+                List<String> expectedValues = values.isEmpty() ? List.of(targetValue) : values;
+                matches = expectedValues.stream().anyMatch(value -> matchesValueOrOption(observedValue, value));
+            }
+            return "equal".equals(operator) ? matches : !matches;
+        }
+        if ("contains".equals(operator) || "not_contains".equals(operator)) {
+            boolean matches = matchesCaseInsensitiveRegex(actualValue, targetValue);
+            return "contains".equals(operator) ? matches : !matches;
+        }
+        if ("starts_with".equals(operator)) {
+            return actualValue.toLowerCase(Locale.ROOT).startsWith(targetValue.toLowerCase(Locale.ROOT));
+        }
+        if ("ends_with".equals(operator)) {
+            return actualValue.toLowerCase(Locale.ROOT).endsWith(targetValue.toLowerCase(Locale.ROOT));
+        }
+        return false;
+    }
+
+    private Double parseNumber(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private boolean matchesCaseInsensitiveRegex(String value, String regex) {
+        if (value == null || regex == null || regex.isBlank()) return false;
+        try {
+            return java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE)
+                    .matcher(value)
+                    .find();
+        } catch (java.util.regex.PatternSyntaxException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid custom filter pattern", e);
         }
     }
 
@@ -2236,6 +2571,9 @@ public class ParticipantRegistryService {
         } catch (Exception ignored) {}
         try {
             return java.time.Instant.parse(val.trim()).atOffset(java.time.ZoneOffset.UTC);
+        } catch (Exception ignored) {}
+        try {
+            return java.time.LocalDateTime.parse(val.trim()).atOffset(java.time.ZoneOffset.UTC);
         } catch (Exception ignored) {}
         try {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy hh:mm a", Locale.US);

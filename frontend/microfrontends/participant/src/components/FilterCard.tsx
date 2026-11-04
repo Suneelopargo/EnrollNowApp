@@ -143,6 +143,8 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
       const selected = filter.values?.length
         ? filter.values
         : (filter.value ? filter.value.split(',').map((s) => s.trim()) : []);
+      const clearQueryOnClose = ['city', 'state', 'zip', 'zipcode', 'status']
+        .includes(currentField.toLowerCase());
       return (
         <SearchableMultiSelect
           options={effectiveOptions || []}
@@ -150,6 +152,7 @@ export const FilterCard: React.FC<FilterCardProps> = ({ filter, index, onUpdate,
           onChange={(values) => onUpdate(index, { ...filter, values, value: values.join(',') })}
           placeholder={currentFieldDef.placeholder || 'Select options...'}
           ariaLabel={`Filter rule ${index + 1} values`}
+          clearQueryOnClose={clearQueryOnClose}
         />
       );
     }

@@ -20,6 +20,8 @@ public class ParticipantSpecifications {
 
     private static final Pattern MONTH_OR_YEAR_PATTERN = Pattern.compile("(?i)(?:(\\d+(?:\\.\\d+)?)\\s*y(?:ears?)?)?(?:\\s*(\\d+(?:\\.\\d+)?)\\s*m(?:onths?|o)?)?");
 
+    private record AgeBoundaries(LocalDate maxBirthday, LocalDate minBirthday) {}
+
     private static final Map<String, Integer> MONTH_NAMES = new HashMap<>();
     static {
         MONTH_NAMES.put("january", 1);
@@ -277,7 +279,7 @@ public class ParticipantSpecifications {
 
         // Custom variable rules go directly to custom attribute predicate
         if (field.startsWith("custom_")) {
-            return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, values, root, cb);
+            return buildCustomAttributePredicate(field, rule.getFieldType(), op, rawVal, minVal, maxVal, values, root, cb);
         }
 
         // Studies filter uses active StudyCandidate / StudyEnrollment memberships (including NONE = Not in a study)
@@ -347,7 +349,7 @@ public class ParticipantSpecifications {
 
             default:
                 // Treat any unrecognized non-standard field as a custom variable
-                return buildCustomAttributePredicate(field, op, rawVal, minVal, maxVal, values, root, cb);
+                return buildCustomAttributePredicate(field, rule.getFieldType(), op, rawVal, minVal, maxVal, values, root, cb);
         }
     }
 
@@ -557,63 +559,112 @@ public class ParticipantSpecifications {
         LocalDate today = LocalDate.now();
 
         if ("between".equals(op) || "not_between".equals(op)) {
-            double lowYears = parseAge(minVal);
-            double highYears = parseAge(maxVal);
-            if (lowYears > highYears) {
-                double temp = lowYears;
-                lowYears = highYears;
-                highYears = temp;
-            }
-            LocalDate upperDate = today.minusDays(Math.round(lowYears * 365.25));
-            LocalDate lowerDate = today.minusDays(Math.round((highYears + 1) * 365.25));
+            AgeBoundaries youngerAge = getAgeBoundaries(minVal, today);
+            AgeBoundaries olderAge = getAgeBoundaries(maxVal, today);
+            if (youngerAge == null || olderAge == null) return cb.disjunction();
 
             Predicate between = cb.and(
                     cb.isNotNull(dob),
-                    cb.lessThanOrEqualTo(dob, upperDate),
-                    cb.greaterThan(dob, lowerDate)
+                    cb.lessThanOrEqualTo(dob, youngerAge.maxBirthday()),
+                    cb.greaterThanOrEqualTo(dob, olderAge.minBirthday())
             );
-            return "between".equals(op) ? between : cb.or(cb.isNull(dob), cb.not(between));
+            return "between".equals(op) ? between : cb.and(cb.isNotNull(dob), cb.not(between));
         }
 
-        double ageYears = parseAge(rawVal);
-        LocalDate maxDob = today.minusDays(Math.round(ageYears * 365.25));
-        LocalDate minDob = today.minusDays(Math.round((ageYears + 1) * 365.25));
+        AgeBoundaries boundaries = getAgeBoundaries(rawVal, today);
+        if (boundaries == null) return cb.disjunction();
 
         switch (op) {
             case "equal":
-                return cb.and(cb.isNotNull(dob), cb.lessThanOrEqualTo(dob, maxDob), cb.greaterThan(dob, minDob));
+                return cb.and(
+                        cb.isNotNull(dob),
+                        cb.lessThanOrEqualTo(dob, boundaries.maxBirthday()),
+                        cb.greaterThan(dob, boundaries.minBirthday())
+                );
             case "not_equal":
-                return cb.or(cb.isNull(dob), cb.greaterThan(dob, maxDob), cb.lessThanOrEqualTo(dob, minDob));
+                return cb.and(cb.isNotNull(dob), cb.or(
+                        cb.greaterThan(dob, boundaries.maxBirthday()),
+                        cb.lessThanOrEqualTo(dob, boundaries.minBirthday())
+                ));
             case "greater_than":
-                return cb.and(cb.isNotNull(dob), cb.lessThanOrEqualTo(dob, minDob));
+                return cb.and(cb.isNotNull(dob), cb.lessThanOrEqualTo(dob, boundaries.minBirthday()));
             case "less_than":
-                return cb.and(cb.isNotNull(dob), cb.greaterThan(dob, maxDob));
+                return cb.and(cb.isNotNull(dob), cb.greaterThanOrEqualTo(dob, boundaries.maxBirthday()));
             default:
                 return null;
         }
     }
 
-    private static double parseAge(String val) {
-        if (val == null || val.isBlank()) return 0.0;
+    static boolean matchesAgeFilter(
+            LocalDate dob, String op, String rawVal, String minVal, String maxVal, LocalDate today) {
+        if (dob == null || today == null) return false;
+        if ("between".equals(op) || "not_between".equals(op)) {
+            AgeBoundaries youngerAge = getAgeBoundaries(minVal, today);
+            AgeBoundaries olderAge = getAgeBoundaries(maxVal, today);
+            if (youngerAge == null || olderAge == null) return false;
+            boolean between = !dob.isAfter(youngerAge.maxBirthday())
+                    && !dob.isBefore(olderAge.minBirthday());
+            return "between".equals(op) ? between : "not_between".equals(op) && !between;
+        }
+
+        AgeBoundaries boundaries = getAgeBoundaries(rawVal, today);
+        if (boundaries == null) return false;
+        return switch (op) {
+            case "equal" -> dob.isAfter(boundaries.minBirthday()) && !dob.isAfter(boundaries.maxBirthday());
+            case "not_equal" -> dob.isAfter(boundaries.maxBirthday()) || !dob.isAfter(boundaries.minBirthday());
+            case "greater_than" -> !dob.isAfter(boundaries.minBirthday());
+            case "less_than" -> !dob.isBefore(boundaries.maxBirthday());
+            default -> false;
+        };
+    }
+
+    static Integer parseAgeMonths(String val) {
+        if (val == null || val.isBlank()) return null;
         String s = val.trim();
         try {
-            return Double.parseDouble(s);
-        } catch (NumberFormatException ignored) {}
+            double years = Double.parseDouble(s);
+            if (!Double.isFinite(years) || years < 0) return null;
+            return (int) Math.round(years * 12);
+        } catch (NumberFormatException ignored) {
+        }
 
         Matcher m = MONTH_OR_YEAR_PATTERN.matcher(s);
-        if (m.matches()) {
-            double years = 0.0;
+        if (m.matches() && (m.group(1) != null || m.group(2) != null)) {
+            double months = 0.0;
             String yGroup = m.group(1);
             String mGroup = m.group(2);
             if (yGroup != null && !yGroup.isBlank()) {
-                years += Double.parseDouble(yGroup);
+                months += Double.parseDouble(yGroup) * 12;
             }
             if (mGroup != null && !mGroup.isBlank()) {
-                years += Double.parseDouble(mGroup) / 12.0;
+                months += Double.parseDouble(mGroup);
             }
-            return years;
+            if (!Double.isFinite(months) || months < 0) return null;
+            return (int) Math.round(months);
         }
-        return 0.0;
+        return null;
+    }
+
+    private static AgeBoundaries getAgeBoundaries(String age, LocalDate today) {
+        Integer ageMonths = parseAgeMonths(age);
+        if (ageMonths == null) return null;
+
+        LocalDate maxBirthday = today.minusMonths(ageMonths);
+        Matcher matcher = MONTH_OR_YEAR_PATTERN.matcher(age.trim());
+        boolean wholeYears = false;
+        if (matcher.matches() && matcher.group(1) != null && matcher.group(2) == null) {
+            wholeYears = true;
+        } else {
+            try {
+                double numericAge = Double.parseDouble(age.trim());
+                wholeYears = numericAge == Math.rint(numericAge);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        LocalDate minBirthday = wholeYears
+                ? maxBirthday.minusYears(1).plusDays(1)
+                : maxBirthday.minusMonths(1);
+        return new AgeBoundaries(maxBirthday, minBirthday);
     }
 
     private static Predicate buildBirthMonthPredicate(
@@ -668,9 +719,9 @@ public class ParticipantSpecifications {
             Predicate between = cb.and(
                     cb.isNotNull(datePath),
                     cb.greaterThanOrEqualTo(datePath, minStart),
-                    cb.lessThanOrEqualTo(datePath, maxEnd)
+                    cb.lessThanOrEqualTo(datePath, maxEnd.plusNanos(1))
             );
-            return "between".equals(op) ? between : cb.or(cb.isNull(datePath), cb.not(between));
+            return "between".equals(op) ? between : cb.and(cb.isNotNull(datePath), cb.not(between));
         }
 
         OffsetDateTime start = parseStartOfDay(rawVal);
@@ -683,9 +734,9 @@ public class ParticipantSpecifications {
             case "not_equal":
                 return cb.or(cb.isNull(datePath), cb.lessThan(datePath, start), cb.greaterThan(datePath, end));
             case "greater_than":
-                return cb.and(cb.isNotNull(datePath), cb.greaterThan(datePath, end));
+                return cb.and(cb.isNotNull(datePath), cb.greaterThanOrEqualTo(datePath, start));
             case "less_than":
-                return cb.and(cb.isNotNull(datePath), cb.lessThan(datePath, start));
+                return cb.and(cb.isNotNull(datePath), cb.lessThanOrEqualTo(datePath, end.plusNanos(1)));
             default:
                 return null;
         }
@@ -737,7 +788,10 @@ public class ParticipantSpecifications {
         if ("equal".equals(op)) {
             return cb.or(inSex, inGender);
         } else if ("not_equal".equals(op)) {
-            return cb.and(cb.not(inSex), cb.not(inGender));
+            return cb.and(
+                    cb.or(cb.isNull(root.get("sexAtBirth")), cb.not(inSex)),
+                    cb.or(cb.isNull(root.get("genderIdentity")), cb.not(inGender))
+            );
         }
         return null;
     }
@@ -755,7 +809,7 @@ public class ParticipantSpecifications {
         if ("equal".equals(op)) {
             return statusExpr.in(upperOpts);
         } else if ("not_equal".equals(op)) {
-            return cb.not(statusExpr.in(upperOpts));
+            return cb.or(cb.isNull(statusExpr), cb.not(statusExpr.in(upperOpts)));
         }
         return null;
     }
@@ -768,7 +822,7 @@ public class ParticipantSpecifications {
             case "equal":
                 return cb.equal(expr, val);
             case "not_equal":
-                return cb.notEqual(expr, val);
+                return cb.or(cb.isNull(expr), cb.notEqual(expr, val));
             case "contains":
                 return cb.like(expr, "%" + val + "%");
             default:
@@ -867,7 +921,10 @@ public class ParticipantSpecifications {
             return cb.or(matches.toArray(new Predicate[0]));
         }
         if ("not_equal".equals(op)) {
-            return cb.and(matches.toArray(new Predicate[0]));
+            return cb.or(
+                    cb.isNull(root.get("customAttributes")),
+                    cb.and(matches.toArray(new Predicate[0]))
+            );
         }
         return null;
     }
@@ -879,18 +936,25 @@ public class ParticipantSpecifications {
         List<String> options = !values.isEmpty() ? values : (rawVal.isBlank() ? Collections.emptyList() : Arrays.asList(rawVal.split(",")));
         if (options.isEmpty()) return null;
 
+        Expression<String> fieldValue = cb.function(
+                "jsonb_extract_path_text",
+                String.class,
+                root.get("customAttributes"),
+                cb.literal(fieldName)
+        );
         List<Predicate> orPreds = new ArrayList<>();
         for (String opt : options) {
-            String term = "%\"" + fieldName.toLowerCase() + "\"%\"" + opt.trim().toLowerCase() + "\"%";
-            orPreds.add(cb.like(cb.lower(root.get("customAttributes")), term));
+            orPreds.add(cb.equal(fieldValue, opt.trim()));
         }
 
         Predicate combined = cb.or(orPreds.toArray(new Predicate[0]));
-        return "equal".equals(op) ? combined : cb.not(combined);
+        return "equal".equals(op)
+                ? combined
+                : cb.or(new Predicate[]{cb.isNull(fieldValue), cb.not(combined)});
     }
 
     private static Predicate buildCustomAttributePredicate(
-            String customKey, String op, String rawVal, String minVal, String maxVal,
+            String customKey, String fieldType, String op, String rawVal, String minVal, String maxVal,
             List<String> values, Root<Participant> root, CriteriaBuilder cb) {
 
         String key = (customKey != null && customKey.startsWith("custom_")) ? customKey.substring(7) : (customKey != null ? customKey : "");
@@ -899,54 +963,49 @@ public class ParticipantSpecifications {
         }
 
         String safeKey = key.replace("\\", "\\\\").replace("\"", "\\\"");
+        String variableMatch = "@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\"";
+        String normalizedType = fieldType != null ? fieldType.trim().toLowerCase(Locale.ROOT) : "";
+        List<String> effectiveValues = values != null && !values.isEmpty()
+                ? values
+                : (rawVal == null || rawVal.isBlank() ? Collections.emptyList() : Arrays.asList(rawVal.split(",")));
 
         // 1. Presence operators
         if ("assigned".equals(op)) {
-            String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && exists(@.value) && @.value != \"\")";
+            String path = "$.variables[*] ? (" + variableMatch + ")";
             return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
         }
         if ("not_assigned".equals(op)) {
-            String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && exists(@.value) && @.value != \"\")";
-            return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            String path = "$.variables[*] ? (" + variableMatch + ")";
+            return buildJsonbPathNotExistsPredicate(root, path, cb);
+        }
+
+        if ("date".equals(normalizedType) || "datetime".equals(normalizedType)) {
+            return cb.isTrue(cb.function(
+                    "enrollnow.registry_custom_variable_date_matches",
+                    Boolean.class,
+                    root.get("customAttributes"),
+                    cb.literal(key),
+                    cb.literal(normalizedType),
+                    cb.literal(op),
+                    cb.literal(rawVal != null ? rawVal : ""),
+                    cb.literal(minVal != null ? minVal : ""),
+                    cb.literal(maxVal != null ? maxVal : "")
+            ));
         }
 
         // 2. Equality / Categorical / Multi-select
         if ("equal".equals(op)) {
-            if (values != null && !values.isEmpty()) {
-                StringBuilder valueMatches = new StringBuilder();
-                for (int i = 0; i < values.size(); i++) {
-                    if (i > 0) valueMatches.append(" || ");
-                    String safeV = values.get(i).replace("\\", "\\\\").replace("\"", "\\\"");
-                    valueMatches.append("@.value == \"").append(safeV).append("\"");
-                }
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && (" + valueMatches + "))";
-                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
-            }
-            if (rawVal != null && !rawVal.isBlank()) {
-                String safeVal = rawVal.replace("\\", "\\\\").replace("\"", "\\\"");
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value == \"" + safeVal + "\")";
-                return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
-            }
-            return cb.disjunction();
+            String valueMatch = buildCustomValueMatch(normalizedType, rawVal, effectiveValues);
+            if (valueMatch == null) return cb.disjunction();
+            String path = "$.variables[*] ? ((" + variableMatch + ") && (" + valueMatch + "))";
+            return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
         }
 
         if ("not_equal".equals(op)) {
-            if (values != null && !values.isEmpty()) {
-                StringBuilder valueMatches = new StringBuilder();
-                for (int i = 0; i < values.size(); i++) {
-                    if (i > 0) valueMatches.append(" || ");
-                    String safeV = values.get(i).replace("\\", "\\\\").replace("\"", "\\\"");
-                    valueMatches.append("@.value == \"").append(safeV).append("\"");
-                }
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && (" + valueMatches + "))";
-                return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
-            }
-            if (rawVal != null && !rawVal.isBlank()) {
-                String safeVal = rawVal.replace("\\", "\\\\").replace("\"", "\\\"");
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value == \"" + safeVal + "\")";
-                return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
-            }
-            return cb.disjunction();
+            String valueMatch = buildCustomValueMatch(normalizedType, rawVal, effectiveValues);
+            if (valueMatch == null) return cb.disjunction();
+            String path = "$.variables[*] ? ((" + variableMatch + ") && (" + valueMatch + "))";
+            return buildJsonbPathNotExistsPredicate(root, path, cb);
         }
 
         // 3. Numeric comparisons
@@ -954,12 +1013,12 @@ public class ParticipantSpecifications {
             if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
             try {
                 double num = Double.parseDouble(rawVal.trim());
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value.double() > " + num + ")";
+                String path = "$.variables[*] ? ((" + variableMatch + ") && @.value.double() >= " + num + ")";
                 return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
             } catch (NumberFormatException e) {
                 // ISO date comparison
                 String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value > \"" + safeVal + "\")";
+                String path = "$.variables[*] ? ((" + variableMatch + ") && @.value >= \"" + safeVal + "\")";
                 return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
             }
         }
@@ -968,12 +1027,12 @@ public class ParticipantSpecifications {
             if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
             try {
                 double num = Double.parseDouble(rawVal.trim());
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value.double() < " + num + ")";
+                String path = "$.variables[*] ? ((" + variableMatch + ") && @.value.double() <= " + num + ")";
                 return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
             } catch (NumberFormatException e) {
                 // ISO date comparison
                 String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
-                String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value < \"" + safeVal + "\")";
+                String path = "$.variables[*] ? ((" + variableMatch + ") && @.value <= \"" + safeVal + "\")";
                 return cb.isTrue(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
             }
         }
@@ -1030,9 +1089,64 @@ public class ParticipantSpecifications {
             if (rawVal == null || rawVal.isBlank()) return cb.disjunction();
             String safeVal = rawVal.trim().replace("\\", "\\\\").replace("\"", "\\\"");
             String path = "$.variables[*] ? ((@.id == \"" + safeKey + "\" || @.name == \"" + safeKey + "\") && @.value like_regex \"" + safeVal + "\" flag \"i\")";
-            return cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)));
+            return buildJsonbPathNotExistsPredicate(root, path, cb);
         }
 
         return cb.disjunction();
+    }
+
+    private static String buildCustomValueMatch(String fieldType, String rawVal, List<String> values) {
+        String type = fieldType != null ? fieldType : "";
+        String target = rawVal != null && !rawVal.isBlank()
+                ? rawVal.trim()
+                : values.isEmpty() ? "" : values.get(0);
+        if (target.isBlank() && values.isEmpty()) return null;
+
+        if ("number".equals(type)) {
+            try {
+                double numericValue = Double.parseDouble(target);
+                return "@.value.double() == " + numericValue;
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        if ("short".equals(type) || "long".equals(type) || "text".equals(type) || "textarea".equals(type)) {
+            String safeRegex = target.replace("\\", "\\\\").replace("\"", "\\\"");
+            return "@.value like_regex \"" + safeRegex + "\" flag \"i\"";
+        }
+
+        if ("multi".equals(type) || "multiselect".equals(type)) {
+            String alternatives = values.stream()
+                    .map(ParticipantSpecifications::escapeRegexLiteral)
+                    .collect(Collectors.joining("|"));
+            if (alternatives.isBlank()) return null;
+            String regex = "(^|,\\s*)(" + alternatives + ")(\\s*,|$)";
+            String safeRegex = regex.replace("\\", "\\\\").replace("\"", "\\\"");
+            return "@.value like_regex \"" + safeRegex + "\"";
+        }
+
+        List<String> options = values.isEmpty() ? List.of(target) : values;
+        return options.stream()
+                .map(value -> "@.value == \"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+                .collect(Collectors.joining(" || "));
+    }
+
+    private static String escapeRegexLiteral(String value) {
+        StringBuilder escaped = new StringBuilder(value.length());
+        String specialCharacters = "\\.^$|?*+()[]{}";
+        for (char character : value.toCharArray()) {
+            if (specialCharacters.indexOf(character) >= 0) escaped.append('\\');
+            escaped.append(character);
+        }
+        return escaped.toString();
+    }
+
+    private static Predicate buildJsonbPathNotExistsPredicate(
+            Root<Participant> root, String path, CriteriaBuilder cb) {
+        return cb.or(
+                cb.isNull(root.get("customAttributes")),
+                cb.isFalse(cb.function("jsonb_path_exists", Boolean.class, root.get("customAttributes"), cb.literal(path)))
+        );
     }
 }

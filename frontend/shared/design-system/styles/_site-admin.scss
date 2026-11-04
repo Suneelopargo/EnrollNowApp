@@ -449,6 +449,39 @@
       box-sizing: border-box;
       min-height: 44px;
       height: 44px;
+      padding-right: 68px;
+    }
+
+    .audit-log-search > .search-field-clear-button {
+      right: 34px;
+    }
+
+    .audit-log-search-submit {
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      transform: translateY(-50%);
+      border: 0;
+      border-radius: 4px;
+      background: $color-brand-accent;
+      color: #ffffff;
+      cursor: pointer;
+    }
+
+    .audit-log-search-submit:hover {
+      background: $color-brand-accent-hover;
+    }
+
+    .audit-log-search-submit:focus-visible {
+      outline: 2px solid $color-brand-accent;
+      outline-offset: 1px;
     }
 
     .audit-log-header-actions {
@@ -459,8 +492,7 @@
       align-self: flex-end;
     }
 
-    .data-grid-export-trigger,
-    .audit-log-refresh-btn {
+    .data-grid-export-trigger {
       box-sizing: border-box;
       min-height: 44px;
       height: 44px;

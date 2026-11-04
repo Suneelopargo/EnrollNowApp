@@ -36,14 +36,12 @@ export const groupContactMethods = (contacts: ParticipantContactDetail[]): Conta
     // The current REST contract stores one method per row; common person fields identify legacy contact groups.
     const contactName = contact.contactName?.trim().toLocaleLowerCase() ?? '';
     const relationship = contact.relationship?.trim().toLocaleLowerCase() ?? '';
-    const isSelfContact = relationship === 'self' || relationship === 'participant';
     const groupKey = contactName
       ? JSON.stringify([
         contactName,
         relationship,
         contact.notes ?? '',
         contact.canLeaveMessage,
-        isSelfContact ? undefined : contact.primaryContact,
       ])
       : contact.id;
     grouped.set(groupKey, [...(grouped.get(groupKey) ?? []), contact]);

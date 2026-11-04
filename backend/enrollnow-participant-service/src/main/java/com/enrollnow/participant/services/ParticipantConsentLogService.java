@@ -232,7 +232,8 @@ public class ParticipantConsentLogService {
                 callerUserId,
                 savedLog.getId(),
                 "CREATE",
-                "Created consent log for participant " + participantId + " (Title: " + savedLog.getConsentTitle() + ")"
+                "Created consent log for " + participantDisplayName(tenantId, participantId)
+                        + " (Title: " + savedLog.getConsentTitle() + ")"
         );
 
         Map<UUID, Study> studiesMap = studyRepository.findByTenantId(tenantId).stream()
@@ -315,7 +316,7 @@ public class ParticipantConsentLogService {
                 callerUserId,
                 updatedLog.getId(),
                 "UPDATE",
-                "Updated consent log for participant " + participantId
+                "Updated consent log for " + participantDisplayName(tenantId, participantId)
         );
 
         Map<UUID, Study> studiesMap = studyRepository.findByTenantId(tenantId).stream()
@@ -354,7 +355,8 @@ public class ParticipantConsentLogService {
                 callerUserId,
                 saved.getId(),
                 sticky ? "PIN" : "UNPIN",
-                (sticky ? "Pinned" : "Unpinned") + " consent log for participant " + participantId
+                (sticky ? "Pinned" : "Unpinned") + " consent log for "
+                        + participantDisplayName(tenantId, participantId)
         );
 
         Map<UUID, Study> studiesMap = studyRepository.findByTenantId(tenantId).stream()
@@ -396,7 +398,7 @@ public class ParticipantConsentLogService {
                 callerUserId,
                 existing.getId(),
                 "DELETE",
-                "Deleted consent log " + logId + " for participant " + participantId
+                "Deleted consent log for " + participantDisplayName(tenantId, participantId)
         );
     }
 
@@ -571,6 +573,10 @@ public class ParticipantConsentLogService {
         } catch (Exception e) {
             log.warn("Failed to record audit event: {}", e.getMessage());
         }
+    }
+
+    private String participantDisplayName(UUID tenantId, UUID participantId) {
+        return ParticipantAuditDescription.participantDisplayName(participantRepository, tenantId, participantId);
     }
 
     private boolean checkUserIsAdminOrManager(UUID tenantId, UUID userId) {

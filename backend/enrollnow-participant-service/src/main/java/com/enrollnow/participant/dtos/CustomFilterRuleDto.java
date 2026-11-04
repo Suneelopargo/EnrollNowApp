@@ -1,6 +1,7 @@
 package com.enrollnow.participant.dtos;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.ArrayList;
@@ -14,6 +15,9 @@ public class CustomFilterRuleDto {
     private String field;
     private String operator;
     private String value;
+
+    @JsonIgnore
+    private String fieldType;
 
     @JsonAlias({"min", "minInput", "start", "startDate"})
     private String minValue;
@@ -62,6 +66,14 @@ public class CustomFilterRuleDto {
 
     public void setField(String field) {
         this.field = field;
+    }
+
+    public String getFieldType() {
+        return fieldType;
+    }
+
+    public void setFieldType(String fieldType) {
+        this.fieldType = fieldType;
     }
 
     public String getOperator() {

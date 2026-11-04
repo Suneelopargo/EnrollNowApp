@@ -138,6 +138,7 @@ class ParticipantContactLogServiceTest {
         assertThat(event.entityType()).isEqualTo("PARTICIPANT_CONTACT_LOG");
         assertThat(event.action()).isEqualTo("CREATE");
         assertThat(event.actorUserId()).isEqualTo(callerUserId);
+        assertThat(event.description()).contains("Alice Smith").doesNotContain(participantId.toString());
     }
 
     @Test

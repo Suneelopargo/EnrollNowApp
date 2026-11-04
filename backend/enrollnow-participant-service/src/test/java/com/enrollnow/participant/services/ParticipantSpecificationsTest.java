@@ -41,6 +41,7 @@ class ParticipantSpecificationsTest {
     @Mock private Path<String> customAttributesPath;
 
     @Mock private Expression<String> lowerExpr;
+    @Mock private Expression<String> jsonbFieldValueExpr;
     @Mock private Expression<Integer> monthExpr;
     @Mock private Predicate mockPredicate;
     @Mock private Subquery<UUID> subquery;
@@ -89,6 +90,8 @@ class ParticipantSpecificationsTest {
         lenient().when(cb.literal(any())).thenReturn(mock(Expression.class));
         lenient().when(cb.function(eq("jsonb_path_exists"), eq(Boolean.class), any(), any())).thenReturn(mock(Expression.class));
         lenient().when(cb.function(eq("jsonb_pretty"), eq(String.class), any())).thenReturn(lowerExpr);
+        lenient().when(cb.function(eq("jsonb_extract_path_text"), eq(String.class), any(Expression[].class)))
+                .thenReturn(jsonbFieldValueExpr);
         lenient().when(cb.disjunction()).thenReturn(mockPredicate);
         lenient().when(cb.function(eq("month"), eq(Integer.class), any())).thenReturn(monthExpr);
         lenient().when(monthExpr.in(anyCollection())).thenReturn(mockPredicate);
@@ -158,6 +161,18 @@ class ParticipantSpecificationsTest {
     }
 
     @Test
+    void matchesAgeFilter_usesCalendarBoundariesForSemanticAgeValues() {
+        LocalDate today = LocalDate.of(2026, 11, 4);
+
+        assertThat(ParticipantSpecifications.matchesAgeFilter(
+                LocalDate.of(2025, 5, 4), "equal", "1y6m", null, null, today
+        )).isTrue();
+        assertThat(ParticipantSpecifications.matchesAgeFilter(
+                null, "not_equal", "1y6m", null, null, today
+        )).isFalse();
+    }
+
+    @Test
     void buildSpecification_handlesBirthMonth() {
         CustomFilterRuleDto monthRule = new CustomFilterRuleDto("1", "birthMonth", "equal to", "March", "");
         Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
@@ -201,6 +216,51 @@ class ParticipantSpecificationsTest {
         );
         spec.toPredicate(root, query, cb);
         verify(cb, atLeastOnce()).or(any(), any());
+    }
+
+    @Test
+    void buildSpecification_genderNotEqualIncludesMissingGenderValues() {
+        CustomFilterRuleDto genderRule = new CustomFilterRuleDto(
+                "1", "gender", "not equal to", "", "", "", List.of("Male", "Female"), ""
+        );
+        Specification<Participant> spec = ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(genderRule)
+        );
+
+        spec.toPredicate(root, query, cb);
+
+        verify(cb).isNull(sexAtBirthPath);
+        verify(cb).isNull(genderIdentityPath);
+    }
+
+    @Test
+    void buildSpecification_ageNotEqualAndNotBetweenExcludeMissingBirthDates() {
+        CustomFilterRuleDto notEqualRule = new CustomFilterRuleDto("1", "age", "not equal to", "35", "");
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(notEqualRule)
+        ).toPredicate(root, query, cb);
+        verify(cb, never()).isNull(dobPath);
+
+        CustomFilterRuleDto notBetweenRule = new CustomFilterRuleDto(
+                "2", "age", "not between", "", "20", "40", null, ""
+        );
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(notBetweenRule)
+        ).toPredicate(root, query, cb);
+        verify(cb, never()).isNull(dobPath);
+    }
+
+    @Test
+    void buildSpecification_dateNotBetweenExcludesMissingDates() {
+        CustomFilterRuleDto notBetweenRule = new CustomFilterRuleDto(
+                "1", "dateCreated", "not between", "", "2026-01-01", "2026-06-30", null, ""
+        );
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(notBetweenRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb, never()).isNull(createdAtPath);
+        verify(cb, atLeastOnce()).isNotNull(createdAtPath);
     }
 
     @Test
@@ -314,6 +374,32 @@ class ParticipantSpecificationsTest {
     }
 
     @Test
+    void buildSpecification_matchesRaceAndEthnicityAsExactJsonbValues() {
+        CustomFilterRuleDto raceRule = new CustomFilterRuleDto(
+                "1", "race", "equal to", "", "", "", List.of("Asian", "Black / African American"), ""
+        );
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(raceRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb).literal("race");
+        verify(cb).equal(jsonbFieldValueExpr, "Asian");
+        verify(cb).equal(jsonbFieldValueExpr, "Black / African American");
+        verify(cb, never()).lower(customAttributesPath);
+
+        CustomFilterRuleDto ethnicityRule = new CustomFilterRuleDto(
+                "2", "ethnicity", "not equal to", "", "", "", List.of("Hispanic or Latino"), ""
+        );
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(ethnicityRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb).literal("ethnicity");
+        verify(cb).equal(jsonbFieldValueExpr, "Hispanic or Latino");
+        verify(cb, atLeastOnce()).isNull(jsonbFieldValueExpr);
+    }
+
+    @Test
     void buildSpecification_handlesCustomVariableContainsAndNotEqual() {
         CustomFilterRuleDto containsRule = new CustomFilterRuleDto("1", "custom_notes", "contains", "eligible", "");
         Specification<Participant> spec1 = ParticipantSpecifications.buildSpecification(
@@ -363,7 +449,7 @@ class ParticipantSpecificationsTest {
         );
         specGt.toPredicate(root, query, cb);
         verify(cb).literal(argThat(path ->
-                path.toString().contains("@.id == \"heart_rate\"") && path.toString().contains("@.value.double() > 70.0")));
+                path.toString().contains("@.id == \"heart_rate\"") && path.toString().contains("@.value.double() >= 70.0")));
 
         // Numeric Less Than
         CustomFilterRuleDto ltRule = new CustomFilterRuleDto("2", "custom_heart_rate", "less than", "100", "");
@@ -372,7 +458,7 @@ class ParticipantSpecificationsTest {
         );
         specLt.toPredicate(root, query, cb);
         verify(cb).literal(argThat(path ->
-                path.toString().contains("@.id == \"heart_rate\"") && path.toString().contains("@.value.double() < 100.0")));
+                path.toString().contains("@.id == \"heart_rate\"") && path.toString().contains("@.value.double() <= 100.0")));
 
         // Numeric Between
         CustomFilterRuleDto betweenRule = new CustomFilterRuleDto("3", "custom_heart_rate", "between", "", "60", "90", null, "");
@@ -409,6 +495,95 @@ class ParticipantSpecificationsTest {
         verify(cb).literal(argThat(path ->
                 path.toString().contains("@.id == \"cohort\"") &&
                 path.toString().contains("@.value == \"Alpha\" || @.value == \"Beta\"")));
+    }
+
+    @Test
+    void buildSpecification_customPresenceFiltersCheckAssignmentNotValueContent() {
+        CustomFilterRuleDto assignedRule = new CustomFilterRuleDto(
+                "1", "custom_notes", "has any value", "", ""
+        );
+        assignedRule.setFieldType("short");
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(assignedRule)
+        ).toPredicate(root, query, cb);
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.id == \"notes\"")
+                        && !path.toString().contains("exists(@.value)")
+                        && !path.toString().contains("@.value !=")));
+
+        CustomFilterRuleDto notAssignedRule = new CustomFilterRuleDto(
+                "2", "custom_notes", "has no value", "", ""
+        );
+        notAssignedRule.setFieldType("short");
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(notAssignedRule)
+        ).toPredicate(root, query, cb);
+        verify(cb, atLeastOnce()).isFalse(any());
+    }
+
+    @Test
+    void buildSpecification_customTextEqualityUsesLegacyTextSearchMatching() {
+        CustomFilterRuleDto textRule = new CustomFilterRuleDto(
+                "1", "custom_notes", "equal to", "eligible", ""
+        );
+        textRule.setFieldType("short");
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(textRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.value like_regex \"eligible\" flag \"i\"")));
+    }
+
+    @Test
+    void buildSpecification_customMultiSelectMatchesDelimitedValues() {
+        CustomFilterRuleDto multiRule = new CustomFilterRuleDto(
+                "1", "custom_cohort", "equal to", "Alpha, Beta", "", "", List.of("Alpha", "Beta"), ""
+        );
+        multiRule.setFieldType("multi");
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(multiRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("(^|,\\\\s*)")
+                        && path.toString().contains("(Alpha|Beta)")
+                        && path.toString().contains("\\\\s*,|$")));
+    }
+
+    @Test
+    void buildSpecification_customNumberEqualityUsesNumericComparison() {
+        CustomFilterRuleDto numberRule = new CustomFilterRuleDto(
+                "1", "custom_heart_rate", "equal to", "70", ""
+        );
+        numberRule.setFieldType("number");
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(numberRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb).literal(argThat(path ->
+                path.toString().contains("@.value.double() == 70.0")));
+    }
+
+    @Test
+    void buildSpecification_customDateFiltersUseNormalizedDatabaseDatePredicate() {
+        CustomFilterRuleDto dateRule = new CustomFilterRuleDto(
+                "1", "custom_follow_up", "equal to", "2026-03-04", ""
+        );
+        dateRule.setFieldType("date");
+        CustomFilterRuleDto dateTimeRule = new CustomFilterRuleDto(
+                "2", "custom_visit_time", "between", "", "2026-03-04T10:00", "2026-03-04T11:00", null, ""
+        );
+        dateTimeRule.setFieldType("dateTime");
+
+        ParticipantSpecifications.buildSpecification(
+                tenantId, null, null, "all", "all", null, List.of(dateRule, dateTimeRule)
+        ).toPredicate(root, query, cb);
+
+        verify(cb, times(2)).function(
+                eq("enrollnow.registry_custom_variable_date_matches"), eq(Boolean.class),
+                any(), any(), any(), any(), any(), any(), any()
+        );
     }
 
     @Test

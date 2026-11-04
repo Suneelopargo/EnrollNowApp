@@ -1,5 +1,7 @@
 package com.enrollnow.participant.services;
 
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
@@ -12,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -47,6 +50,7 @@ class ParticipantRegistryServiceTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private StudyRequirementRepository studyRequirementRepository;
     @Mock private SiteAuthorizationService siteAuthorizationService;
+    @Mock private AuditRecorder auditRecorder;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ParticipantRegistryService service;
@@ -70,6 +74,7 @@ class ParticipantRegistryServiceTest {
                 objectMapper,
                 jdbcTemplate
         );
+        service.setAuditRecorder(auditRecorder);
         ReflectionTestUtils.setField(service, "studyRequirementRepository", studyRequirementRepository);
         ReflectionTestUtils.setField(service, "siteAuthorizationService", siteAuthorizationService);
     }
@@ -436,6 +441,15 @@ class ParticipantRegistryServiceTest {
         ));
         verify(addressRepository).save(any(ParticipantAddress.class));
         verify(preferenceRepository).save(argThat(pref -> !pref.isDoNotContact()));
+
+        ArgumentCaptor<AuditRequest> auditCaptor = ArgumentCaptor.forClass(AuditRequest.class);
+        verify(auditRecorder).record(auditCaptor.capture());
+        AuditRequest auditRequest = auditCaptor.getValue();
+        assertThat(auditRequest.action()).isEqualTo("PARTICIPANT_CREATED");
+        assertThat(auditRequest.entities()).singleElement().satisfies(snapshot -> {
+            assertThat(snapshot.entityType()).isEqualTo("Participant");
+            assertThat(snapshot.afterData()).containsEntry("firstName", "Charlie");
+        });
     }
 
     @Test
@@ -633,6 +647,42 @@ class ParticipantRegistryServiceTest {
         service.updateParticipant(tenantId, partId, userId, req);
 
         verify(contactRepository, atLeastOnce()).save(any(ParticipantContact.class));
+    }
+
+    @Test
+    void updateParticipant_usesMatchingPhoneInsteadOfEarlierSecondaryContact() {
+        UUID partId = UUID.randomUUID();
+        Participant p = createMockParticipant(partId, "Ronald", "R", LocalDate.of(1980, 4, 1), "ACTIVE");
+        when(participantRepository.findByTenantIdAndId(tenantId, partId)).thenReturn(Optional.of(p));
+
+        ParticipantContact secondaryPhone = new ParticipantContact();
+        secondaryPhone.setId(UUID.randomUUID());
+        secondaryPhone.setTenantId(tenantId);
+        secondaryPhone.setParticipantId(partId);
+        secondaryPhone.setContactType("PHONE");
+        secondaryPhone.setContactValue("5551112222");
+
+        ParticipantContact primaryPhone = new ParticipantContact();
+        primaryPhone.setId(UUID.randomUUID());
+        primaryPhone.setTenantId(tenantId);
+        primaryPhone.setParticipantId(partId);
+        primaryPhone.setContactType("PHONE");
+        primaryPhone.setContactValue("5478963215");
+        primaryPhone.setPrimaryContact(true);
+
+        when(contactRepository.findByTenantIdAndParticipantId(tenantId, partId))
+                .thenReturn(List.of(secondaryPhone, primaryPhone));
+
+        UpdateParticipantRequest request = new UpdateParticipantRequest();
+        request.setFamilyId("ABV345");
+        request.setPhone("5478963215");
+
+        service.updateParticipant(tenantId, partId, userId, request);
+
+        verify(contactRepository).save(primaryPhone);
+        verify(contactRepository, never()).save(secondaryPhone);
+        assertThat(secondaryPhone.getContactValue()).isEqualTo("5551112222");
+        assertThat(primaryPhone.getContactValue()).isEqualTo("5478963215");
     }
 
     @Test
@@ -1002,6 +1052,83 @@ class ParticipantRegistryServiceTest {
         );
 
         assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, missingBound));
+    }
+
+    @Test
+    void validateFilterRules_acceptsSemanticAgeValuesAndRejectsInvalidAgeValues() {
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+
+        service.validateFilterRules(tenantId, List.of(
+                new CustomFilterRuleDto("1", "age", "equal to", "1y6m", "")
+        ));
+
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, List.of(
+                new CustomFilterRuleDto("2", "age", "equal to", "not-an-age", "")
+        )));
+    }
+
+    @Test
+    void validateFilterRules_usesServerMetadataForCustomVariableType() {
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(UUID.randomUUID());
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration(
+                "{\"customVariables\":[{\"id\":\"heart_rate\",\"name\":\"Heart Rate\",\"type\":\"number\",\"isGlobal\":true}]}"
+        );
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(requirement));
+
+        CustomFilterRuleDto rule = new CustomFilterRuleDto("1", "custom_heart_rate", "equal to", "70", "");
+        service.validateFilterRules(tenantId, List.of(rule));
+
+        assertThat(rule.getFieldType()).isEqualTo("number");
+    }
+
+    @Test
+    void validateFilterRules_acceptsDatetimeLocalValuesForCustomDateTimeFilters() {
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(UUID.randomUUID());
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration(
+                "{\"customVariables\":[{\"id\":\"visit_time\",\"name\":\"Visit Time\",\"type\":\"dateTime\",\"isGlobal\":true}]}"
+        );
+        when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(List.of(requirement));
+
+        CustomFilterRuleDto rule = new CustomFilterRuleDto(
+                "1", "custom_visit_time", "between", "", "2026-03-04T10:00", "2026-03-04T11:00", null, ""
+        );
+        service.validateFilterRules(tenantId, List.of(rule));
+
+        assertThat(rule.getFieldType()).isEqualTo("datetime");
+        assertThrows(ResponseStatusException.class, () -> service.validateFilterRules(tenantId, List.of(
+                new CustomFilterRuleDto("2", "custom_visit_time", "equal", "not-a-date-time", "")
+        )));
+    }
+
+    @Test
+    void applyCustomVariableRule_matchesRipplePresenceTextMultiSelectAndNumericSemantics() {
+        RegistryParticipantDto participant = new RegistryParticipantDto();
+        participant.setVariables(List.of(
+                new ParticipantVariableDto("notes", "Notes", "short", "Eligible participant", null),
+                new ParticipantVariableDto("cohort", "Cohort", "multi", "Alpha, Beta", null),
+                new ParticipantVariableDto("heart_rate", "Heart Rate", "number", "70.0", null),
+                new ParticipantVariableDto("empty", "Empty", "short", "", null)
+        ));
+
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_notes", "equal", List.of(), "eligible"
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_cohort", "equal", List.of("Beta"), "Beta"
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_heart_rate", "greater_than", List.of(), "70"
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_empty", "assigned", List.of(), ""
+        )).isTrue();
+        assertThat(service.applyCustomVariableRule(
+                participant, new CustomFilterRuleDto(), "custom_missing", "not_equal", List.of(), "value"
+        )).isTrue();
     }
 
     @Test

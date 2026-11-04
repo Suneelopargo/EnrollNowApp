@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -19,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.enrollnow.audit.dtos.AuditEventDetailResponse;
 import com.enrollnow.audit.dtos.AuditEventResponse;
 import com.enrollnow.audit.dtos.EntityChangeHistoryResponse;
+import com.enrollnow.common.audit.AuditEventDescriptionResolver;
 import com.enrollnow.audit.models.AuditEvent;
 import com.enrollnow.audit.models.EntityChangeHistory;
 import com.enrollnow.audit.repositories.AuditEventRepository;
@@ -33,6 +35,7 @@ public class AuditQueryService {
     private final EntityChangeHistoryRepository entityChangeHistoryRepository;
     private List<AuditEntityDisplayResolver> entityDisplayResolvers =
             List.of();
+    private List<AuditEventDescriptionResolver> descriptionResolvers = List.of();
 
     public AuditQueryService(
             AuditEventRepository auditEventRepository,
@@ -49,6 +52,11 @@ public class AuditQueryService {
                 entityDisplayResolvers != null
                         ? entityDisplayResolvers
                         : List.of();
+    }
+
+    @Autowired(required = false)
+    public void setDescriptionResolvers(List<AuditEventDescriptionResolver> descriptionResolvers) {
+        this.descriptionResolvers = descriptionResolvers != null ? descriptionResolvers : List.of();
     }
 
     @Transactional(readOnly = true)
@@ -132,7 +140,7 @@ public class AuditQueryService {
                 entityDisplayName,
 
                 event.getAction(),
-                event.getDescription(),
+                resolveDescription(tenantId, event.getDescription()),
                 event.getSource(),
                 event.getCorrelationId(),
                 event.getRequestId(),
@@ -221,7 +229,7 @@ public class AuditQueryService {
                 entityDisplayName,
 
                 event.getAction(),
-                event.getDescription(),
+                resolveDescription(tenantId, event.getDescription()),
                 event.getSource(),
                 event.getCorrelationId(),
                 event.getRequestId(),
@@ -257,5 +265,12 @@ public class AuditQueryService {
                 )
                 .orElse(null);
     }
-}
 
+    private String resolveDescription(UUID tenantId, String description) {
+        return descriptionResolvers.stream()
+                .map(resolver -> resolver.resolveDescription(tenantId, description))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(description);
+    }
+}
