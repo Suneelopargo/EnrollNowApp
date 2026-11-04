@@ -299,6 +299,33 @@ const AuditDataChangeCell: React.FC<ICellRendererParams<AuditEventRow>> = (param
   );
 };
 
+const AuditDescriptionCell: React.FC<ICellRendererParams<AuditEventRow>> = ({ value }) => {
+  if (typeof value !== 'string' || !value) return null;
+
+  const participantSuffix = value.lastIndexOf(' — ');
+  if (participantSuffix > 0) {
+    return (
+      <span>
+        {value.slice(0, participantSuffix + 3)}
+        <strong className="audit-description__participant">{value.slice(participantSuffix + 3)}</strong>
+      </span>
+    );
+  }
+
+  const participantMatch = value.match(/^(.*\b(?:for|on|to)\s+participant\s+)([^()]+?)(\s+\([^)]*\))?$/i);
+  if (participantMatch && !/^[0-9a-f-]{36}$/i.test(participantMatch[2].trim())) {
+    return (
+      <span>
+        {participantMatch[1]}
+        <strong className="audit-description__participant">{participantMatch[2].trim()}</strong>
+        {participantMatch[3]}
+      </span>
+    );
+  }
+
+  return <>{value}</>;
+};
+
 
 export const AuditLogView: React.FC = () => {
   const [rows, setRows] = useState<AuditEventRow[]>([]);
@@ -406,7 +433,7 @@ export const AuditLogView: React.FC = () => {
     { headerName: 'Changed By', field: 'changedBy', minWidth: 180 },
     { headerName: 'Action', field: 'action', minWidth: 190 },
     { headerName: 'Affected Entity', field: 'affectedEntity', minWidth: 210 },
-    { headerName: 'Description', field: 'description', minWidth: 220, flex: 1 },
+    { headerName: 'Description', field: 'description', minWidth: 220, flex: 1, cellRenderer: AuditDescriptionCell },
     { headerName: 'Data Change', field: 'dataChange', width: 115, minWidth: 100, maxWidth: 130, sortable: false, filter: false, floatingFilter: false, cellRenderer: AuditDataChangeCell },
   ], []);
 

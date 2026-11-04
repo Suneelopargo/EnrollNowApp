@@ -446,6 +446,7 @@ class ParticipantRegistryServiceTest {
         verify(auditRecorder).record(auditCaptor.capture());
         AuditRequest auditRequest = auditCaptor.getValue();
         assertThat(auditRequest.action()).isEqualTo("PARTICIPANT_CREATED");
+        assertThat(auditRequest.description()).isEqualTo("Created participant in registry — Charlie Brown");
         assertThat(auditRequest.entities()).singleElement().satisfies(snapshot -> {
             assertThat(snapshot.entityType()).isEqualTo("Participant");
             assertThat(snapshot.afterData()).containsEntry("firstName", "Charlie");

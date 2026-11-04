@@ -732,6 +732,11 @@
   .audit-diff__value { padding: 5px 7px; font-size: 11px; }
 }
 
+.audit-description__participant {
+  color: $color-brand-accent-hover;
+  font-weight: $font-weight-semibold;
+}
+
 .data-grid-toolbar__search-clear {
   position: absolute;
   right: 32px;
