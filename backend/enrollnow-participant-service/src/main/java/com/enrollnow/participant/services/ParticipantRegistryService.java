@@ -1,5 +1,8 @@
 package com.enrollnow.participant.services;
 
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
@@ -54,6 +57,13 @@ public class ParticipantRegistryService {
     private final StudyRepository studyRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+
+    @Autowired(required = false)
+    private AuditRecorder auditRecorder;
+
+    public void setAuditRecorder(AuditRecorder auditRecorder) {
+        this.auditRecorder = auditRecorder;
+    }
 
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
@@ -604,7 +614,15 @@ public class ParticipantRegistryService {
             }
         }
 
-        return getParticipantById(tenantId, saved.getId()).orElseThrow();
+        RegistryParticipantDto created = getParticipantById(tenantId, saved.getId()).orElseThrow();
+        recordParticipantAudit(
+                tenantId,
+                saved.getId(),
+                "PARTICIPANT_CREATED",
+                "Created participant in registry",
+                null,
+                participantAuditData(created));
+        return created;
     }
 
     private String generateAuthoritativeGlobalId(UUID tenantId, UUID participantId) {
@@ -632,6 +650,8 @@ public class ParticipantRegistryService {
     public RegistryParticipantDto updateParticipant(UUID tenantId, UUID participantId, UUID userId, UpdateParticipantRequest request, UUID siteId) {
         Participant participant = participantRepository.findByTenantIdAndId(tenantId, participantId)
                 .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+        Map<String, Object> beforeData = participantAuditData(
+                getParticipantById(tenantId, participantId).orElseThrow());
 
         if (request.getFirstName() != null) participant.setFirstName(request.getFirstName());
         if (request.getMiddleName() != null) participant.setMiddleName(request.getMiddleName());
@@ -841,7 +861,15 @@ public class ParticipantRegistryService {
             contactRepository.save(emailContact);
         }
 
-        return getParticipantById(tenantId, participantId).orElseThrow();
+        RegistryParticipantDto updated = getParticipantById(tenantId, participantId).orElseThrow();
+        recordParticipantAudit(
+                tenantId,
+                participantId,
+                "PARTICIPANT_UPDATED",
+                "Updated participant registration details",
+                beforeData,
+                participantAuditData(updated));
+        return updated;
     }
 
     @Transactional
@@ -863,6 +891,13 @@ public class ParticipantRegistryService {
         history.setChangedBy(userId);
         history.setChangedAt(OffsetDateTime.now());
         statusHistoryRepository.save(history);
+        recordParticipantAudit(
+                tenantId,
+                participantId,
+                "PARTICIPANT_STATUS_UPDATED",
+                "Updated participant status",
+                Collections.singletonMap("status", oldStatus),
+                Map.of("status", status.toUpperCase()));
     }
 
     @Transactional
@@ -884,6 +919,13 @@ public class ParticipantRegistryService {
         history.setChangedBy(userId);
         history.setChangedAt(OffsetDateTime.now());
         statusHistoryRepository.save(history);
+        recordParticipantAudit(
+                tenantId,
+                participantId,
+                "PARTICIPANT_DELETED",
+                "Deleted participant",
+                Collections.singletonMap("status", oldStatus),
+                Map.of("status", "DELETED"));
     }
 
     @Transactional(readOnly = true)
@@ -1298,6 +1340,84 @@ public class ParticipantRegistryService {
         dto.setVariables(variableList);
 
         return dto;
+    }
+
+    private Map<String, Object> participantAuditData(RegistryParticipantDto participant) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("firstName", auditValue(participant.getFirstName()));
+        data.put("middleName", auditValue(participant.getMiddleName()));
+        data.put("lastName", auditValue(participant.getLastName()));
+        data.put("status", auditValue(participant.getStatus()));
+        data.put("globalId", auditValue(participant.getGlobalId()));
+        data.put("gender", auditValue(participant.getGender()));
+        data.put("globalDateOfLastContact", auditValue(participant.getGlobalDateOfLastContact()));
+        data.put("city", auditValue(participant.getCity()));
+        data.put("state", auditValue(participant.getState()));
+        data.put("zipcode", auditValue(participant.getZipcode()));
+        data.put("contactForFutureStudies", participant.getContactForFutureStudies());
+        data.put("timezone", auditValue(participant.getTimezone()));
+        data.put("familyId", auditValue(participant.getFamilyId()));
+        data.put("tags", auditValue(participant.getTags()));
+
+        ContactMethodsDto contactMethods = participant.getContactMethods();
+        data.put("primaryEmail", contactMethods == null ? null : auditValue(contactMethods.getPrimaryEmail()));
+        data.put("secondaryEmail", contactMethods == null ? null : auditValue(contactMethods.getSecondaryEmail()));
+        data.put("phone", contactMethods == null ? null : auditValue(contactMethods.getPhone()));
+        data.put("address", contactMethods == null ? null : auditValue(contactMethods.getAddress()));
+        data.put("preferredMethod", contactMethods == null ? null : auditValue(contactMethods.getPreferredMethod()));
+
+        DemographicsDto demographics = participant.getDemographics();
+        data.put("dateOfBirth", demographics == null ? null : auditValue(demographics.getDob()));
+        data.put("ethnicity", demographics == null ? null : auditValue(demographics.getEthnicity()));
+        data.put("race", demographics == null ? null : auditValue(demographics.getRace()));
+        data.put("primaryLanguage", demographics == null ? null : auditValue(demographics.getPrimaryLanguage()));
+
+        FamilyInfoDto family = participant.getFamily();
+        data.put("familyRole", family == null ? null : auditValue(family.getFamilyRole()));
+        data.put("familyMembersCount", family == null ? null : family.getMembersCount());
+        data.put("guardianName", family == null ? null : auditValue(family.getGuardianName()));
+
+        List<Map<String, Object>> variables = participant.getVariables() == null
+                ? null
+                : participant.getVariables().stream().map(variable -> {
+                    Map<String, Object> value = new LinkedHashMap<>();
+                    value.put("name", auditValue(variable.getName()));
+                    value.put("type", auditValue(variable.getType()));
+                    value.put("value", auditValue(variable.getValue()));
+                    return value;
+                }).toList();
+        data.put("variables", auditValue(variables));
+        return data;
+    }
+
+    private Object auditValue(Object value) {
+        if (value instanceof String text && text.isBlank()) {
+            return null;
+        }
+        if (value instanceof Collection<?> collection && collection.isEmpty()) {
+            return null;
+        }
+        return value;
+    }
+
+    private void recordParticipantAudit(
+            UUID tenantId,
+            UUID participantId,
+            String action,
+            String description,
+            Map<String, Object> beforeData,
+            Map<String, Object> afterData) {
+        if (auditRecorder == null) {
+            throw new IllegalStateException("Audit recorder is required to record participant data changes");
+        }
+        auditRecorder.record(new AuditRequest(
+                tenantId,
+                "Participant",
+                participantId,
+                action,
+                description,
+                "APPLICATION",
+                List.of(new AuditEntitySnapshot("Participant", participantId, beforeData, afterData))));
     }
 
     @Transactional(readOnly = true)

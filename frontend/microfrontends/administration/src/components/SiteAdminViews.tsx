@@ -145,6 +145,32 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   USER_INVITATION_RESENT: 'User enrollment invitation resent',
   USER_PASSWORD_RESET: 'User password reset',
   SECURITY_SETTINGS_UPDATED: 'Security settings updated',
+  PARTICIPANT_CREATED: 'Participant registered',
+  PARTICIPANT_UPDATED: 'Participant details updated',
+  PARTICIPANT_STATUS_UPDATED: 'Participant status updated',
+  PARTICIPANT_DELETED: 'Participant deleted',
+  PARTICIPANT_CONTACT_CREATED: 'Contact added',
+  PARTICIPANT_CONTACT_UPDATED: 'Contact updated',
+  PARTICIPANT_CONTACT_RESTORED: 'Contact restored',
+  PARTICIPANT_CONTACT_ARCHIVED: 'Contact archived',
+  PARTICIPANT_CONTACT_DELETED: 'Contact deleted',
+  PARTICIPANT_ADDRESS_CREATED: 'Address added',
+  PARTICIPANT_ADDRESS_UPDATED: 'Address updated',
+  PARTICIPANT_ADDRESS_RESTORED: 'Address restored',
+  PARTICIPANT_ADDRESS_ARCHIVED: 'Address archived',
+  PARTICIPANT_ADDRESS_DELETED: 'Address deleted',
+  PARTICIPANT_COMMENT_CREATED: 'Comment added',
+  PARTICIPANT_COMMENT_UPDATED: 'Comment updated',
+  PARTICIPANT_COMMENT_DELETED: 'Comment deleted',
+  EMAIL_SENT: 'Email sent',
+  CONSENT_RECORDED: 'Consent recorded',
+  SURVEY_ASSIGNED: 'Survey assigned',
+};
+
+const AUDIT_ENTITY_LABELS: Record<string, string> = {
+  Participant: 'Participant',
+  ParticipantContact: 'Participant contact',
+  ParticipantAddress: 'Participant address',
 };
 
 const formatAuditAction = (
@@ -325,6 +351,7 @@ export const AuditLogView: React.FC = () => {
 
     affectedEntity:
       event.entityDisplayName
+      || AUDIT_ENTITY_LABELS[event.entityType || '']
       || entityId
       || event.entityType
       || '—',
@@ -566,6 +593,7 @@ export const AuditLogView: React.FC = () => {
             <section className="audit-diff" aria-labelledby="audit-diff-entity">
               <h4 id="audit-diff-entity">
                 {selectedEventDetail.entityDisplayName
+                  || AUDIT_ENTITY_LABELS[selectedEventDetail.entityType || '']
                   || selectedEventDetail.entityType
                   || selectedEvent.affectedEntity}
               </h4>

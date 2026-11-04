@@ -1,5 +1,7 @@
 package com.enrollnow.participant.services;
 
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
@@ -12,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -47,6 +50,7 @@ class ParticipantRegistryServiceTest {
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private StudyRequirementRepository studyRequirementRepository;
     @Mock private SiteAuthorizationService siteAuthorizationService;
+    @Mock private AuditRecorder auditRecorder;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ParticipantRegistryService service;
@@ -70,6 +74,7 @@ class ParticipantRegistryServiceTest {
                 objectMapper,
                 jdbcTemplate
         );
+        service.setAuditRecorder(auditRecorder);
         ReflectionTestUtils.setField(service, "studyRequirementRepository", studyRequirementRepository);
         ReflectionTestUtils.setField(service, "siteAuthorizationService", siteAuthorizationService);
     }
@@ -436,6 +441,15 @@ class ParticipantRegistryServiceTest {
         ));
         verify(addressRepository).save(any(ParticipantAddress.class));
         verify(preferenceRepository).save(argThat(pref -> !pref.isDoNotContact()));
+
+        ArgumentCaptor<AuditRequest> auditCaptor = ArgumentCaptor.forClass(AuditRequest.class);
+        verify(auditRecorder).record(auditCaptor.capture());
+        AuditRequest auditRequest = auditCaptor.getValue();
+        assertThat(auditRequest.action()).isEqualTo("PARTICIPANT_CREATED");
+        assertThat(auditRequest.entities()).singleElement().satisfies(snapshot -> {
+            assertThat(snapshot.entityType()).isEqualTo("Participant");
+            assertThat(snapshot.afterData()).containsEntry("firstName", "Charlie");
+        });
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.InvitationEmailService;
 import com.enrollnow.identity.services.MailAttachment;
 import com.enrollnow.participant.dtos.*;
@@ -519,6 +520,25 @@ class ParticipantWorkflowServiceTest {
         assertFalse(updated.isCanLeaveMessage());
         // Verify other contact's preferred flag was cleared
         assertFalse(other.isPreferred());
+
+        ArgumentCaptor<AuditRequest> auditCaptor = ArgumentCaptor.forClass(AuditRequest.class);
+        verify(auditRecorder).record(auditCaptor.capture());
+        AuditRequest auditRequest = auditCaptor.getValue();
+        assertEquals("PARTICIPANT_CONTACT_UPDATED", auditRequest.action());
+        var selectedContactChange = auditRequest.entities().stream()
+                .filter(change -> contactId.equals(change.entityId()))
+                .findFirst()
+                .orElseThrow();
+        var otherContactChange = auditRequest.entities().stream()
+                .filter(change -> otherContactId.equals(change.entityId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("+15551234567",
+                selectedContactChange.beforeData().get("contactValue"));
+        assertEquals("+15559876543",
+                selectedContactChange.afterData().get("contactValue"));
+        assertEquals(Boolean.FALSE,
+                otherContactChange.afterData().get("preferred"));
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.common.audit.AuditRecorder;
 import com.enrollnow.identity.services.InvitationEmailService;
 import com.enrollnow.identity.services.MailAttachment;
@@ -818,6 +820,7 @@ public class ParticipantWorkflowService {
     @Transactional
     public ParticipantContactDto createContact(UUID tenantId, UUID participantId, UUID userId, CreateContactPersonRequest request) {
         verifyParticipantExists(tenantId, participantId);
+        List<AuditEntitySnapshot> auditSnapshots = new ArrayList<>();
         String contactType = request.getContactType() == null || request.getContactType().isBlank()
                 ? null
                 : request.getContactType().trim().toUpperCase();
@@ -832,8 +835,10 @@ public class ParticipantWorkflowService {
             List<ParticipantContact> existingContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
             for (ParticipantContact other : existingContacts) {
                 if (other.isPreferred()) {
+                    Map<String, Object> beforeData = contactAuditData(other);
                     other.setPreferred(false);
-                    contactRepository.save(other);
+                    ParticipantContact updated = contactRepository.save(other);
+                    auditSnapshots.add(contactAuditSnapshot(updated, beforeData));
                 }
             }
         }
@@ -857,11 +862,14 @@ public class ParticipantWorkflowService {
         contact.setUpdatedAt(OffsetDateTime.now());
 
         if (contact.isPrimaryContact() && contact.isActive() && contactType != null) {
-            clearOtherPrimaryContacts(tenantId, participantId, contact);
+            auditSnapshots.addAll(clearOtherPrimaryContacts(tenantId, participantId, contact));
         }
 
         ParticipantContact saved = contactRepository.save(contact);
-        recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_CREATED", "ParticipantContact", saved.getId(), "Created contact on participant " + participantId);
+        auditSnapshots.add(new AuditEntitySnapshot(
+                "ParticipantContact", saved.getId(), null, contactAuditData(saved)));
+        recordAuditChanges(tenantId, "PARTICIPANT_CONTACT_CREATED", "ParticipantContact", saved.getId(),
+                "Created contact on participant " + participantId, auditSnapshots);
 
         return mapContactToDto(saved);
     }
@@ -871,6 +879,8 @@ public class ParticipantWorkflowService {
         verifyParticipantExists(tenantId, participantId);
         ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
+        Map<String, Object> beforeData = contactAuditData(contact);
+        List<AuditEntitySnapshot> auditSnapshots = new ArrayList<>();
 
         if (request.getContactType() != null) {
             contact.setContactType(request.getContactType().isBlank() ? null : request.getContactType().toUpperCase().trim());
@@ -910,8 +920,10 @@ public class ParticipantWorkflowService {
                 List<ParticipantContact> allContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
                 for (ParticipantContact other : allContacts) {
                     if (!other.getId().equals(contactId) && other.isPreferred()) {
+                        Map<String, Object> otherBeforeData = contactAuditData(other);
                         other.setPreferred(false);
-                        contactRepository.save(other);
+                        ParticipantContact updated = contactRepository.save(other);
+                        auditSnapshots.add(contactAuditSnapshot(updated, otherBeforeData));
                     }
                 }
             }
@@ -920,21 +932,24 @@ public class ParticipantWorkflowService {
         if (contact.isPrimaryContact() && contact.isActive()
                 && contact.getContactType() != null && !contact.getContactType().isBlank()) {
             contact.setPrimaryContact(false);
-            clearOtherPrimaryContacts(tenantId, participantId, contact);
+            auditSnapshots.addAll(clearOtherPrimaryContacts(tenantId, participantId, contact));
             contact.setPrimaryContact(true);
         }
 
         contact.setUpdatedBy(userId);
         contact.setUpdatedAt(OffsetDateTime.now());
         ParticipantContact saved = contactRepository.save(contact);
-        recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_UPDATED", "ParticipantContact", saved.getId(), "Updated contact on participant " + participantId);
+        auditSnapshots.add(contactAuditSnapshot(saved, beforeData));
+        recordAuditChanges(tenantId, "PARTICIPANT_CONTACT_UPDATED", "ParticipantContact", saved.getId(),
+                "Updated contact on participant " + participantId, auditSnapshots);
 
         return mapContactToDto(saved);
     }
 
-    private void clearOtherPrimaryContacts(
+    private List<AuditEntitySnapshot> clearOtherPrimaryContacts(
             UUID tenantId, UUID participantId, ParticipantContact selectedContact) {
         boolean demotedAny = false;
+        List<AuditEntitySnapshot> auditSnapshots = new ArrayList<>();
         for (ParticipantContact other : contactRepository.findByTenantIdAndParticipantId(tenantId, participantId)) {
             if (other.getId() != null && other.getId().equals(selectedContact.getId())) continue;
             if (!other.isActive() || !other.isPrimaryContact()
@@ -942,13 +957,16 @@ public class ParticipantWorkflowService {
                     || !other.getContactType().equalsIgnoreCase(selectedContact.getContactType())) {
                 continue;
             }
+            Map<String, Object> beforeData = contactAuditData(other);
             other.setPrimaryContact(false);
-            contactRepository.save(other);
+            ParticipantContact updated = contactRepository.save(other);
+            auditSnapshots.add(contactAuditSnapshot(updated, beforeData));
             demotedAny = true;
         }
         if (demotedAny) {
             contactRepository.flush();
         }
+        return auditSnapshots;
     }
 
     @Transactional
@@ -957,6 +975,7 @@ public class ParticipantWorkflowService {
         ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
 
+        Map<String, Object> beforeData = contactAuditData(contact);
         contact.setActive(active);
         if (!active) {
             contact.setPreferred(false);
@@ -964,8 +983,9 @@ public class ParticipantWorkflowService {
         contact.setUpdatedBy(userId);
         contact.setUpdatedAt(OffsetDateTime.now());
         ParticipantContact saved = contactRepository.save(contact);
-        recordAudit(tenantId, userId, active ? "PARTICIPANT_CONTACT_RESTORED" : "PARTICIPANT_CONTACT_ARCHIVED",
-                "ParticipantContact", saved.getId(), (active ? "Restored" : "Archived") + " contact on participant " + participantId);
+        recordAuditChanges(tenantId, active ? "PARTICIPANT_CONTACT_RESTORED" : "PARTICIPANT_CONTACT_ARCHIVED",
+                "ParticipantContact", saved.getId(), (active ? "Restored" : "Archived") + " contact on participant " + participantId,
+                List.of(contactAuditSnapshot(saved, beforeData)));
 
         return mapContactToDto(saved);
     }
@@ -975,8 +995,11 @@ public class ParticipantWorkflowService {
         ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
 
+        Map<String, Object> beforeData = contactAuditData(contact);
         contactRepository.delete(contact);
-        recordAudit(tenantId, userId, "PARTICIPANT_CONTACT_DELETED", "ParticipantContact", contactId, "Deleted contact on participant " + participantId);
+        recordAuditChanges(tenantId, "PARTICIPANT_CONTACT_DELETED", "ParticipantContact", contactId,
+                "Deleted contact on participant " + participantId,
+                List.of(new AuditEntitySnapshot("ParticipantContact", contactId, beforeData, null)));
     }
 
     private ParticipantContactDto mapContactToDto(ParticipantContact c) {
@@ -995,6 +1018,25 @@ public class ParticipantWorkflowService {
         dto.setActive(c.isActive());
         dto.setCreatedAt(c.getCreatedAt());
         return dto;
+    }
+
+    private Map<String, Object> contactAuditData(ParticipantContact contact) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("contactType", contact.getContactType());
+        data.put("contactValue", contact.getContactValue());
+        data.put("label", contact.getLabel());
+        data.put("contactName", contact.getContactName());
+        data.put("relationship", contact.getRelationship());
+        data.put("canLeaveMessage", contact.isCanLeaveMessage());
+        data.put("primaryContact", contact.isPrimaryContact());
+        data.put("preferred", contact.isPreferred());
+        data.put("active", contact.isActive());
+        return data;
+    }
+
+    private AuditEntitySnapshot contactAuditSnapshot(ParticipantContact contact, Map<String, Object> beforeData) {
+        return new AuditEntitySnapshot(
+                "ParticipantContact", contact.getId(), beforeData, contactAuditData(contact));
     }
 
     @Transactional(readOnly = true)
@@ -1028,7 +1070,9 @@ public class ParticipantWorkflowService {
         address.setUpdatedAt(OffsetDateTime.now());
 
         ParticipantAddress saved = addressRepository.save(address);
-        recordAudit(tenantId, userId, "PARTICIPANT_ADDRESS_CREATED", "ParticipantAddress", saved.getId(), "Created address on participant " + participantId);
+        recordAuditChanges(tenantId, "PARTICIPANT_ADDRESS_CREATED", "ParticipantAddress", saved.getId(),
+                "Created address on participant " + participantId,
+                List.of(new AuditEntitySnapshot("ParticipantAddress", saved.getId(), null, addressAuditData(saved))));
 
         return mapAddressToDto(saved);
     }
@@ -1038,6 +1082,7 @@ public class ParticipantWorkflowService {
         verifyParticipantExists(tenantId, participantId);
         ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+        Map<String, Object> beforeData = addressAuditData(address);
 
         if (request.getAddressType() != null && !request.getAddressType().isBlank()) {
             address.setAddressType(request.getAddressType().toUpperCase().trim());
@@ -1070,7 +1115,9 @@ public class ParticipantWorkflowService {
         address.setUpdatedBy(userId);
         address.setUpdatedAt(OffsetDateTime.now());
         ParticipantAddress saved = addressRepository.save(address);
-        recordAudit(tenantId, userId, "PARTICIPANT_ADDRESS_UPDATED", "ParticipantAddress", saved.getId(), "Updated address on participant " + participantId);
+        recordAuditChanges(tenantId, "PARTICIPANT_ADDRESS_UPDATED", "ParticipantAddress", saved.getId(),
+                "Updated address on participant " + participantId,
+                List.of(new AuditEntitySnapshot("ParticipantAddress", saved.getId(), beforeData, addressAuditData(saved))));
 
         return mapAddressToDto(saved);
     }
@@ -1081,12 +1128,14 @@ public class ParticipantWorkflowService {
         ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
 
+        Map<String, Object> beforeData = addressAuditData(address);
         address.setActive(active);
         address.setUpdatedBy(userId);
         address.setUpdatedAt(OffsetDateTime.now());
         ParticipantAddress saved = addressRepository.save(address);
-        recordAudit(tenantId, userId, active ? "PARTICIPANT_ADDRESS_RESTORED" : "PARTICIPANT_ADDRESS_ARCHIVED",
-                "ParticipantAddress", saved.getId(), (active ? "Restored" : "Archived") + " address on participant " + participantId);
+        recordAuditChanges(tenantId, active ? "PARTICIPANT_ADDRESS_RESTORED" : "PARTICIPANT_ADDRESS_ARCHIVED",
+                "ParticipantAddress", saved.getId(), (active ? "Restored" : "Archived") + " address on participant " + participantId,
+                List.of(new AuditEntitySnapshot("ParticipantAddress", saved.getId(), beforeData, addressAuditData(saved))));
 
         return mapAddressToDto(saved);
     }
@@ -1096,8 +1145,11 @@ public class ParticipantWorkflowService {
         ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
 
+        Map<String, Object> beforeData = addressAuditData(address);
         addressRepository.delete(address);
-        recordAudit(tenantId, userId, "PARTICIPANT_ADDRESS_DELETED", "ParticipantAddress", addressId, "Deleted address on participant " + participantId);
+        recordAuditChanges(tenantId, "PARTICIPANT_ADDRESS_DELETED", "ParticipantAddress", addressId,
+                "Deleted address on participant " + participantId,
+                List.of(new AuditEntitySnapshot("ParticipantAddress", addressId, beforeData, null)));
     }
 
     private ParticipantAddressDto mapAddressToDto(ParticipantAddress a) {
@@ -1115,6 +1167,20 @@ public class ParticipantWorkflowService {
         dto.setActive(a.isActive());
         dto.setCreatedAt(a.getCreatedAt());
         return dto;
+    }
+
+    private Map<String, Object> addressAuditData(ParticipantAddress address) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("addressType", address.getAddressType());
+        data.put("addressLine1", address.getAddressLine1());
+        data.put("addressLine2", address.getAddressLine2());
+        data.put("city", address.getCity());
+        data.put("stateRegion", address.getStateRegion());
+        data.put("postalCode", address.getPostalCode());
+        data.put("countryCode", address.getCountryCode());
+        data.put("primaryAddress", address.isPrimaryAddress());
+        data.put("active", address.isActive());
+        return data;
     }
 
     // =========================================================================
@@ -1427,5 +1493,19 @@ public class ParticipantWorkflowService {
         } catch (Exception ex) {
             log.warn("Failed to record audit event for {}: {}", action, ex.getMessage());
         }
+    }
+
+    private void recordAuditChanges(
+            UUID tenantId,
+            String action,
+            String entityType,
+            UUID entityId,
+            String description,
+            List<AuditEntitySnapshot> entities) {
+        if (auditRecorder == null) {
+            throw new IllegalStateException("Audit recorder is required to record participant data changes");
+        }
+        auditRecorder.record(new AuditRequest(
+                tenantId, entityType, entityId, action, description, "APPLICATION", entities));
     }
 }
