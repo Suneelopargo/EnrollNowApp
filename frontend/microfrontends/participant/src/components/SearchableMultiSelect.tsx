@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
 import { FilterOptionItem } from '../types/participant';
@@ -9,6 +9,7 @@ interface SearchableMultiSelectProps {
   onChange: (values: string[]) => void;
   placeholder?: string;
   ariaLabel: string;
+  clearQueryOnClose?: boolean;
 }
 
 export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
@@ -17,6 +18,7 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
   onChange,
   placeholder = 'Select options...',
   ariaLabel,
+  clearQueryOnClose = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -36,26 +38,35 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!containerRef.current?.contains(target) && !menuRef.current?.contains(target)) setIsOpen(false);
+      if (!containerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setIsOpen(false);
+        if (clearQueryOnClose) setQuery('');
+      }
     };
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
+  }, [clearQueryOnClose]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen) return;
     const updatePosition = () => {
       const bounds = containerRef.current?.getBoundingClientRect();
       if (!bounds) return;
       const menuHeight = Math.min(230, Math.max(120, filteredOptions.length * 38 + 8));
-      const openAbove = window.innerHeight - bounds.bottom < menuHeight && bounds.top > window.innerHeight - bounds.bottom;
+      const gap = 4;
+      const viewportPadding = 8;
+      const spaceAbove = Math.max(0, bounds.top - gap - viewportPadding);
+      const spaceBelow = Math.max(0, window.innerHeight - bounds.bottom - gap - viewportPadding);
+      const openAbove = spaceBelow < menuHeight && spaceAbove > spaceBelow;
+      const availableSpace = openAbove ? spaceAbove : spaceBelow;
       setMenuStyle({
         position: 'fixed',
         left: bounds.left,
         width: bounds.width,
-        top: openAbove ? undefined : bounds.bottom + 4,
-        bottom: openAbove ? window.innerHeight - bounds.top + 4 : undefined,
-        maxHeight: Math.max(100, Math.min(230, openAbove ? bounds.top - 12 : window.innerHeight - bounds.bottom - 12)),
+        top: openAbove ? undefined : bounds.bottom + gap,
+        bottom: openAbove ? window.innerHeight - bounds.top + gap : undefined,
+        maxHeight: Math.min(230, availableSpace),
+        boxSizing: 'border-box',
       });
     };
     updatePosition();
@@ -97,6 +108,10 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
       event.preventDefault();
       toggleValue(filteredOptions[activeIndex]?.value ?? filteredOptions[0].value);
     } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setIsOpen(false);
+      setQuery('');
+    } else if (event.key === 'Enter' && isOpen && clearQueryOnClose) {
       event.preventDefault();
       setIsOpen(false);
       setQuery('');
@@ -146,6 +161,11 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
             aria-autocomplete="list"
             role="combobox"
             onFocus={() => setIsOpen(true)}
+            onBlur={() => {
+              if (!clearQueryOnClose) return;
+              setIsOpen(false);
+              setQuery('');
+            }}
             onChange={(event) => {
               setQuery(event.target.value);
               setActiveIndex(0);
@@ -174,8 +194,13 @@ export const SearchableMultiSelect: React.FC<SearchableMultiSelectProps> = ({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              setIsOpen((open) => !open);
-              inputRef.current?.focus();
+              if (isOpen) {
+                setIsOpen(false);
+                if (clearQueryOnClose) setQuery('');
+              } else {
+                setIsOpen(true);
+                inputRef.current?.focus();
+              }
             }}
             aria-label={isOpen ? 'Close options' : 'Open options'}
             aria-expanded={isOpen}
