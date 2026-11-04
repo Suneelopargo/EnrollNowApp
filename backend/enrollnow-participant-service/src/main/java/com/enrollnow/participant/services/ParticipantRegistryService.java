@@ -1426,12 +1426,14 @@ public class ParticipantRegistryService {
         if (auditRecorder == null) {
             throw new IllegalStateException("Audit recorder is required to record participant data changes");
         }
+        String participantName = ParticipantAuditDescription.participantDisplayName(
+                participantRepository, tenantId, participantId);
         auditRecorder.record(new AuditRequest(
                 tenantId,
                 "Participant",
                 participantId,
                 action,
-                description,
+                description + " — " + participantName,
                 "APPLICATION",
                 List.of(new AuditEntitySnapshot("Participant", participantId, beforeData, afterData))));
     }
