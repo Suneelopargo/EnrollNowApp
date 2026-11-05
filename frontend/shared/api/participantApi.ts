@@ -738,7 +738,15 @@ export const participantApi = {
   },
 
   async sendSms(participantId: string, payload: { toPhone: string; body: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
-    const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, payload, { params: options });
+    // Temporary: default to the USA country code when none is provided
+    const rawPhone = (payload.toPhone || '').trim();
+    const digits = rawPhone.replace(/\D/g, '');
+    const toPhone = rawPhone.startsWith('+')
+      ? `+${digits}`
+      : digits.length === 11 && digits.startsWith('1')
+        ? `+${digits}`
+        : `+1${digits}`;
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, { ...payload, toPhone }, { params: options });
     return res.data?.data ?? res.data;
   },
 
