@@ -12,6 +12,7 @@ import {
   ContactTaxonomy,
   VariableOption,
 } from '../../../../shared/api/studyApi';
+import { participantApi, ContactOutcomeOption } from '../../../../shared/api/participantApi';
 import { toast } from '../../../../shared/toaster';
 import {
   Users,
@@ -72,6 +73,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const [layout, setLayout] = useState<StudyLayoutItem[]>([]);
   const [contactRelationships, setContactRelationships] = useState<ContactTaxonomy[]>([]);
   const [contactOutcomes, setContactOutcomes] = useState<ContactTaxonomy[]>([]);
+  const [tenantContactOutcomes, setTenantContactOutcomes] = useState<ContactOutcomeOption[]>([]);
   const [contactLogTypes, setContactLogTypes] = useState<ContactTaxonomy[]>([]);
   const [consentTypes, setConsentTypes] = useState<ContactTaxonomy[]>([]);
   const [globalVariables, setGlobalVariables] = useState<StudyCustomVariable[]>([]);
@@ -367,6 +369,26 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   useEffect(() => {
     loadRequirements();
   }, [loadRequirements]);
+
+  useEffect(() => {
+    let isMounted = true;
+    participantApi.getContactOutcomes({ studyId })
+      .then((outcomes) => {
+        if (isMounted) {
+          setTenantContactOutcomes(outcomes.filter((outcome) => Boolean(outcome.id)));
+        }
+      })
+      .catch((error: unknown) => {
+        if (isMounted) {
+          console.error('Failed to load tenant contact outcomes:', error);
+          toast.error(extractApiErrorMessage(error, 'Failed to load tenant contact outcomes.'));
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [studyId]);
 
   // Target Sample Size (N) - persists onBlur
   const handleBlurSampleSize = async () => {
@@ -2750,6 +2772,18 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
 
         {!collapsedSections.outcomes && (
           <div>
+            {tenantContactOutcomes.length > 0 && (
+              <div className="mb-3 rounded border border-slate-200 bg-slate-50 p-3" aria-label="Tenant default contact outcomes">
+                <div className="mb-2 text-sm font-medium text-slate-700">Tenant defaults (read-only)</div>
+                <div className="flex flex-wrap gap-2">
+                  {tenantContactOutcomes.map((outcome) => (
+                    <span key={outcome.id} className="rounded bg-white px-2 py-1 text-sm text-slate-700">
+                      {outcome.outcome}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             {contactOutcomes.map((o) => {
               const itemId = o.id || o.value;
               return (

@@ -2618,15 +2618,15 @@ public class StudyConfigurationService {
         response.setCustomVariableLayout(layout);
 
         // 6. Contact Relationships
-        List<ContactTaxonomyDto> relationships = parseContactTaxonomy(configMap.get("contactRelationships"), "relationship", List.of("Mother", "Father", "Guardian", "Self", "Spouse", "Other"));
+        List<ContactTaxonomyDto> relationships = parseContactTaxonomy(configMap.get("contactRelationships"), "relationship");
         response.setContactRelationships(relationships);
 
         // 7. Contact Outcomes
-        List<ContactTaxonomyDto> outcomes = parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome", List.of("Participant Added", "Call Completed", "Voicemail Left", "Email Sent", "Other"));
+        List<ContactTaxonomyDto> outcomes = parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome");
         response.setContactOutcomes(outcomes);
 
-        response.setContactLogTypes(parseContactTaxonomy(configMap.get("contactLogTypes"), "contactType", null));
-        response.setConsentTypes(parseContactTaxonomy(configMap.get("consentTypes"), "consentType", null));
+        response.setContactLogTypes(parseContactTaxonomy(configMap.get("contactLogTypes"), "contactType"));
+        response.setConsentTypes(parseContactTaxonomy(configMap.get("consentTypes"), "consentType"));
 
         // 8. Global Variables Discovery in Tenant
         List<StudyCustomVariableDto> globals = findTenantGlobalVariables(tenantId);
@@ -3122,7 +3122,7 @@ public class StudyConfigurationService {
         return list;
     }
 
-    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName, List<String> defaultValues) {
+    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName) {
         List<ContactTaxonomyDto> result = new ArrayList<>();
         if (raw instanceof List<?> list) {
             for (Object item : list) {
@@ -3133,15 +3133,6 @@ public class StudyConfigurationService {
                         result.add(new ContactTaxonomyDto(id, val));
                     }
                 }
-            }
-            return result;
-        }
-
-        // Initialize defaults with "Other" guaranteed only when not configured yet (raw == null)
-        if (raw == null && defaultValues != null) {
-            int idx = 1;
-            for (String def : defaultValues) {
-                result.add(new ContactTaxonomyDto("tax_" + (idx++), def));
             }
         }
         return result;

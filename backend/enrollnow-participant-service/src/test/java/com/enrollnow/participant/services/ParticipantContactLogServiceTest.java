@@ -47,6 +47,7 @@ class ParticipantContactLogServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private UserEmailRepository userEmailRepository;
     @Mock private StudyRequirementRepository studyRequirementRepository;
+    @Mock private TenantOptionRepository tenantOptionRepository;
     @Mock private AuditRecorder auditRecorder;
     @Mock private SitePermissionService sitePermissionService;
 
@@ -78,6 +79,7 @@ class ParticipantContactLogServiceTest {
         );
         service.setStudyRequirementRepository(studyRequirementRepository);
         service.setObjectMapper(new ObjectMapper());
+        service.setTenantOptionRepository(tenantOptionRepository);
 
         testParticipant = new Participant();
         testParticipant.setId(participantId);
@@ -315,7 +317,14 @@ class ParticipantContactLogServiceTest {
     }
 
     @Test
-    void getContactTypes_returnsDefaultsAndDynamicTypes() {
+    void getContactTypes_returnsTenantCatalogAndRecordedTypes() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONTACT_TYPE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Phone Call", 10),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Email", 20),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Text Message", 30)
+        ));
         when(contactLogRepository.findDistinctContactTypes(tenantId, null))
                 .thenReturn(List.of("Custom Video Call", "Phone Call"));
 
@@ -327,6 +336,11 @@ class ParticipantContactLogServiceTest {
 
     @Test
     void getContactTypes_mergesStudyConfiguredTypes() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONTACT_TYPE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Phone Call", 10)
+        ));
         StudyRequirement requirement = new StudyRequirement();
         requirement.setStudyId(studyId);
         requirement.setTenantId(tenantId);

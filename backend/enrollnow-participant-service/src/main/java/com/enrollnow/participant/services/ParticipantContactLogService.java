@@ -38,16 +38,6 @@ public class ParticipantContactLogService {
     private static final Logger log = LoggerFactory.getLogger(ParticipantContactLogService.class);
     private static final DateTimeFormatter DISPLAY_DT_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a");
 
-    private static final List<String> DEFAULT_CONTACT_TYPES = List.of(
-            "Phone Call",
-            "Email",
-            "Text Message",
-            "In Person",
-            "Appointment",
-            "No Show",
-            "Other"
-    );
-
     private final ParticipantContactLogRepository contactLogRepository;
     private final ContactOutcomeRepository outcomeRepository;
     private final ParticipantRepository participantRepository;
@@ -65,6 +55,9 @@ public class ParticipantContactLogService {
 
     @Autowired(required = false)
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TenantOptionRepository tenantOptionRepository;
 
     public ParticipantContactLogService(
             ParticipantContactLogRepository contactLogRepository,
@@ -97,6 +90,10 @@ public class ParticipantContactLogService {
 
     public void setObjectMapper(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+    }
+
+    public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
+        this.tenantOptionRepository = tenantOptionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -158,18 +155,21 @@ public class ParticipantContactLogService {
 
     @Transactional(readOnly = true)
     public List<ContactTypeOptionDto> getContactTypes(UUID tenantId, UUID studyId) {
-        Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONTACT_TYPES);
-        distinctTypes.addAll(StudyRequirementOptionReader.read(
+        Map<String, String> distinctTypes = new LinkedHashMap<>();
+        TenantOptionReader.read(tenantOptionRepository, tenantId, TenantOptionCategory.CONTACT_TYPE)
+                .forEach(type -> distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type));
+        StudyRequirementOptionReader.read(
                 studyRequirementRepository, objectMapper, tenantId, studyId,
                 "contactLogTypes", "contactType"
-        ));
+        ).forEach(type -> distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type));
 
         try {
             List<String> recordedTypes = contactLogRepository.findDistinctContactTypes(tenantId, studyId);
             if (recordedTypes != null) {
                 for (String t : recordedTypes) {
                     if (t != null && !t.isBlank()) {
-                        distinctTypes.add(t.trim());
+                        String type = t.trim();
+                        distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type);
                     }
                 }
             }
@@ -177,7 +177,7 @@ public class ParticipantContactLogService {
             log.warn("Failed to fetch recorded contact types: {}", e.getMessage());
         }
 
-        return distinctTypes.stream()
+        return distinctTypes.values().stream()
                 .map(t -> new ContactTypeOptionDto(t, t))
                 .collect(Collectors.toList());
     }

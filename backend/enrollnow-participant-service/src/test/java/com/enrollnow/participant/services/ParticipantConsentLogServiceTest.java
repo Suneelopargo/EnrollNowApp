@@ -12,9 +12,12 @@ import com.enrollnow.participant.dtos.UpdateConsentLogRequest;
 import com.enrollnow.participant.models.Participant;
 import com.enrollnow.participant.models.ParticipantConsentLog;
 import com.enrollnow.participant.models.StudyCandidate;
+import com.enrollnow.participant.models.TenantOption;
+import com.enrollnow.participant.models.TenantOptionCategory;
 import com.enrollnow.participant.repositories.ParticipantConsentLogRepository;
 import com.enrollnow.participant.repositories.ParticipantRepository;
 import com.enrollnow.participant.repositories.StudyCandidateRepository;
+import com.enrollnow.participant.repositories.TenantOptionRepository;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRepository;
@@ -48,6 +51,7 @@ class ParticipantConsentLogServiceTest {
     @Mock private AuditRecorder auditRecorder;
     @Mock private SitePermissionService sitePermissionService;
     @Mock private StudyRequirementRepository studyRequirementRepository;
+    @Mock private TenantOptionRepository tenantOptionRepository;
 
     private ParticipantConsentLogService service;
 
@@ -71,6 +75,7 @@ class ParticipantConsentLogServiceTest {
         );
         service.setStudyRequirementRepository(studyRequirementRepository);
         service.setObjectMapper(new ObjectMapper());
+        service.setTenantOptionRepository(tenantOptionRepository);
     }
 
     @Test
@@ -130,7 +135,14 @@ class ParticipantConsentLogServiceTest {
     }
 
     @Test
-    void getConsentTypes_returnsDefaultAndRecordedTypes() {
+    void getConsentTypes_returnsTenantCatalogAndRecordedTypes() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONSENT_TYPE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONSENT_TYPE, "Initial Consent", 10),
+                new TenantOption(tenantId, TenantOptionCategory.CONSENT_TYPE, "Re-Consent", 20),
+                new TenantOption(tenantId, TenantOptionCategory.CONSENT_TYPE, "Assent", 30)
+        ));
         when(consentLogRepository.findDistinctConsentTypes(tenantId, studyId))
                 .thenReturn(List.of("Custom Video Assent", "Initial Consent"));
 
@@ -142,6 +154,11 @@ class ParticipantConsentLogServiceTest {
 
     @Test
     void getConsentTypes_mergesStudyConfiguredTypes() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONSENT_TYPE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONSENT_TYPE, "Initial Consent", 10)
+        ));
         StudyRequirement requirement = new StudyRequirement();
         requirement.setStudyId(studyId);
         requirement.setTenantId(tenantId);

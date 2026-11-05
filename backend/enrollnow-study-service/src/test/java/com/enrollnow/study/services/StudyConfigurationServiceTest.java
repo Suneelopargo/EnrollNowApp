@@ -712,6 +712,25 @@ class StudyConfigurationServiceTest {
     }
 
     @Test
+    void getStudyRequirements_doesNotInventUnconfiguredTaxonomyOptions() {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(existing));
+        when(studyMilestoneRepository.findByTenantIdAndStudyIdOrderByMilestoneDateAsc(tenantId, studyId))
+                .thenReturn(Collections.emptyList());
+
+        StudyRequirementsResponse response = configurationService.getStudyRequirements(tenantId, studyId, true);
+
+        assertTrue(response.getContactRelationships().isEmpty());
+        assertTrue(response.getContactOutcomes().isEmpty());
+        assertTrue(response.getContactLogTypes().isEmpty());
+        assertTrue(response.getConsentTypes().isEmpty());
+    }
+
+    @Test
     void updateStudyRequirements_persistsAllSectionsCorrectly() throws Exception {
         StudyRequirement existing = new StudyRequirement();
         existing.setTenantId(tenantId);

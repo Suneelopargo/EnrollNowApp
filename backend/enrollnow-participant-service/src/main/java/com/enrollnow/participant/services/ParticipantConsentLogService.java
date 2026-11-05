@@ -10,9 +10,11 @@ import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.Participant;
 import com.enrollnow.participant.models.ParticipantConsentLog;
 import com.enrollnow.participant.models.StudyCandidate;
+import com.enrollnow.participant.models.TenantOptionCategory;
 import com.enrollnow.participant.repositories.ParticipantConsentLogRepository;
 import com.enrollnow.participant.repositories.ParticipantRepository;
 import com.enrollnow.participant.repositories.StudyCandidateRepository;
+import com.enrollnow.participant.repositories.TenantOptionRepository;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
 import com.enrollnow.study.repositories.StudyRequirementRepository;
@@ -48,15 +50,6 @@ public class ParticipantConsentLogService {
 
     public static final long MAX_CONSENT_SIZE_BYTES = 5L * 1024L * 1024L; // 5 MB, exactly matches legacy Ripple MAX_CONSENT_SIZE_BYTES
 
-    private static final List<String> DEFAULT_CONSENT_TYPES = List.of(
-            "Initial Consent",
-            "Re-Consent",
-            "Assent",
-            "Re-Assent",
-            "Age of Majority",
-            "Other"
-    );
-
     private static final Set<String> ALLOWED_FILE_EXTENSIONS = Set.of(
             "pdf", "doc", "docx",
             "jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp"
@@ -67,6 +60,9 @@ public class ParticipantConsentLogService {
 
     @Autowired(required = false)
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TenantOptionRepository tenantOptionRepository;
 
     private final ParticipantConsentLogRepository consentLogRepository;
     private final ParticipantRepository participantRepository;
@@ -99,6 +95,10 @@ public class ParticipantConsentLogService {
 
     public void setObjectMapper(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+    }
+
+    public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
+        this.tenantOptionRepository = tenantOptionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -160,18 +160,21 @@ public class ParticipantConsentLogService {
 
     @Transactional(readOnly = true)
     public List<ConsentTypeOptionDto> getConsentTypes(UUID tenantId, UUID studyId) {
-        Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONSENT_TYPES);
-        distinctTypes.addAll(StudyRequirementOptionReader.read(
+        Map<String, String> distinctTypes = new LinkedHashMap<>();
+        TenantOptionReader.read(tenantOptionRepository, tenantId, TenantOptionCategory.CONSENT_TYPE)
+                .forEach(type -> distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type));
+        StudyRequirementOptionReader.read(
                 studyRequirementRepository, objectMapper, tenantId, studyId,
                 "consentTypes", "consentType"
-        ));
+        ).forEach(type -> distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type));
 
         try {
             List<String> recordedTypes = consentLogRepository.findDistinctConsentTypes(tenantId, studyId);
             if (recordedTypes != null) {
                 for (String t : recordedTypes) {
                     if (t != null && !t.isBlank()) {
-                        distinctTypes.add(t.trim());
+                        String type = t.trim();
+                        distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type);
                     }
                 }
             }
@@ -179,7 +182,7 @@ public class ParticipantConsentLogService {
             log.warn("Failed to fetch recorded consent types: {}", e.getMessage());
         }
 
-        return distinctTypes.stream()
+        return distinctTypes.values().stream()
                 .map(t -> new ConsentTypeOptionDto(t, t))
                 .collect(Collectors.toList());
     }

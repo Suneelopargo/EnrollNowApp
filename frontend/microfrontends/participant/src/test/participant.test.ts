@@ -812,6 +812,15 @@ describe('Participant MFE Remote Entry & Registry API Integration', () => {
     expect(getOperatorsForField('city')).toEqual(['equal to', 'not equal to']);
   });
 
+  it('clears status filter options when the backend returns none', async () => {
+    const { getFieldDefinition, registerRegistryFilterOptions } = await import('../constants/filterMetadata');
+
+    registerRegistryFilterOptions({});
+
+    expect(getFieldDefinition('status').options).toEqual([]);
+    registerRegistryFilterOptions({ statuses: ['ACTIVE'] });
+  });
+
   it('validates semantic age ranges using year and month values', async () => {
     const { validateFilterRule } = await import('../constants/filterMetadata');
 

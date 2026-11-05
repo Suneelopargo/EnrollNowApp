@@ -68,8 +68,15 @@ public class ParticipantRegistryService {
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
 
+    @Autowired
+    private TenantOptionRepository tenantOptionRepository;
+
     public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
         this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
+        this.tenantOptionRepository = tenantOptionRepository;
     }
 
     @Autowired(required = false)
@@ -2240,16 +2247,10 @@ public class ParticipantRegistryService {
     }
 
     @Transactional(readOnly = true)
-    public List<String> getRelationshipOptions() {
-        return getRelationshipOptions(null, null);
-    }
-
-    @Transactional(readOnly = true)
     public List<String> getRelationshipOptions(UUID tenantId, UUID studyId) {
         Set<String> options = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        options.addAll(List.of(
-                "Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner",
-                "Sibling", "Child", "Caregiver", "Friend", "Other"
+        options.addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP
         ));
         options.addAll(StudyRequirementOptionReader.read(
                 studyRequirementRepository, objectMapper, tenantId, studyId,
@@ -2264,20 +2265,14 @@ public class ParticipantRegistryService {
         collected.put("ethnicity", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
         collected.put("race", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
 
-        // Default standard legacy options
-        collected.get("sex").addAll(List.of("Female", "Male", "Other", "Unspecified"));
-        collected.get("ethnicity").addAll(List.of("Hispanic or Latino", "Not Hispanic or Latino", "Unknown / Not Reported"));
-        collected.get("race").addAll(List.of(
-                "American Indian",
-                "American Indian or Alaska Native",
-                "Asian",
-                "Black / African American",
-                "Black or African American",
-                "Hawaiian",
-                "Native Hawaiian or Other Pacific Islander",
-                "White",
-                "More Than One Race",
-                "Unknown / Not Reported"
+        collected.get("sex").addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.SEX
+        ));
+        collected.get("ethnicity").addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.ETHNICITY
+        ));
+        collected.get("race").addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.RACE
         ));
 
         if (tenantId != null && studyRequirementRepository != null) {

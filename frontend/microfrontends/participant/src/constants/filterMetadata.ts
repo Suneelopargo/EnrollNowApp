@@ -20,15 +20,6 @@ export const BIRTH_MONTH_OPTIONS: FilterOptionItem[] = [
   { value: '12', label: 'December' },
 ];
 
-export const STATUS_OPTIONS: FilterOptionItem[] = [
-  { value: 'ACTIVE', label: 'Active' },
-  { value: 'INACTIVE', label: 'Inactive' },
-  { value: 'SCREENING', label: 'Screening' },
-  { value: 'ENROLLED', label: 'Enrolled' },
-  { value: 'COMPLETED', label: 'Completed' },
-  { value: 'WITHDRAWN', label: 'Withdrawn' },
-];
-
 export const ALL_NUMERIC_OPERATORS = [
   'equal to',
   'not equal to',
@@ -145,7 +136,7 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
     label: 'Participant Status',
     placeholder: 'Select status...',
     type: 'multiselect',
-    options: STATUS_OPTIONS,
+    options: [],
   },
   {
     id: 'lastContact',
@@ -229,11 +220,7 @@ export function registerRegistryFilterOptions(options: {
   mappings.forEach(([fieldId, values]) => {
     const field = REGISTRY_FILTER_FIELDS.find((item) => item.id === fieldId);
     const dynamicOptions = optionsFromValues(values);
-    if (field) {
-      field.options = fieldId === 'status' && dynamicOptions.length === 0
-        ? STATUS_OPTIONS
-        : dynamicOptions;
-    }
+    if (field) field.options = dynamicOptions;
   });
 }
 
