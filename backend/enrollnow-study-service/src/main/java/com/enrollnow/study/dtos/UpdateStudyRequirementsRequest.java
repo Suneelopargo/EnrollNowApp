@@ -19,6 +19,8 @@ public class UpdateStudyRequirementsRequest {
     private List<StudyLayoutItemDto> customVariableLayout;
     private List<ContactTaxonomyDto> contactRelationships;
     private List<ContactTaxonomyDto> contactOutcomes;
+    private List<ContactTaxonomyDto> contactLogTypes;
+    private List<ContactTaxonomyDto> consentTypes;
 
     public UpdateStudyRequirementsRequest() {
     }
@@ -86,5 +88,21 @@ public class UpdateStudyRequirementsRequest {
 
     public void setContactOutcomes(List<ContactTaxonomyDto> contactOutcomes) {
         this.contactOutcomes = contactOutcomes;
+    }
+
+    public List<ContactTaxonomyDto> getContactLogTypes() {
+        return contactLogTypes;
+    }
+
+    public void setContactLogTypes(List<ContactTaxonomyDto> contactLogTypes) {
+        this.contactLogTypes = contactLogTypes;
+    }
+
+    public List<ContactTaxonomyDto> getConsentTypes() {
+        return consentTypes;
+    }
+
+    public void setConsentTypes(List<ContactTaxonomyDto> consentTypes) {
+        this.consentTypes = consentTypes;
     }
 }

@@ -92,11 +92,14 @@ describe('Contact Log API Client Integration', () => {
       data: mockTypes,
     } as any);
 
-    const result = await participantApi.getContactTypeOptions();
+    const result = await participantApi.getContactTypeOptions({ tenantId: 'tenant-1', studyId: 's-1' });
 
     expect(getSpy).toHaveBeenCalledWith(
       '/api/v1/participants/contact-types',
-      expect.objectContaining({ skipToast: true })
+      expect.objectContaining({
+        params: { tenantId: 'tenant-1', studyId: 's-1' },
+        skipToast: true,
+      })
     );
     expect(result).toHaveLength(2);
     expect(result[0].label).toBe('Phone Call');
@@ -113,11 +116,14 @@ describe('Contact Log API Client Integration', () => {
       data: mockOutcomes,
     } as any);
 
-    const result = await participantApi.getContactOutcomes();
+    const result = await participantApi.getContactOutcomes({ tenantId: 'tenant-1', studyId: 's-1' });
 
     expect(getSpy).toHaveBeenCalledWith(
       '/api/v1/participants/contact-outcomes',
-      expect.objectContaining({ skipToast: true })
+      expect.objectContaining({
+        params: { tenantId: 'tenant-1', studyId: 's-1' },
+        skipToast: true,
+      })
     );
     expect(result).toHaveLength(2);
     expect(result[1].outcome).toBe('Left Voicemail');

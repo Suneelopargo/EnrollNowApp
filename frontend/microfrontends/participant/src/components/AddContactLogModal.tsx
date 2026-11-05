@@ -149,7 +149,7 @@ export const AddContactLogModal: React.FC<AddContactLogModalProps> = ({
 
     Promise.all([
       participantApi.getContactTypeOptions({ studyId, tenantId }),
-      participantApi.getContactOutcomes({ tenantId }),
+      participantApi.getContactOutcomes({ tenantId, studyId }),
       participantApi.getParticipantContactMethods(participantId, { studyId, tenantId }),
       participantApi.getContactTeamMembers({ studyId, tenantId }),
     ])

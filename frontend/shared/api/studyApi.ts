@@ -383,7 +383,7 @@ export interface StudyLayoutItem {
 
 export interface ContactTaxonomy {
   id?: string;
-  name: string;
+  value: string;
   type: string; // 'relationship' | 'outcome'
 }
 
@@ -397,6 +397,8 @@ export interface StudyRequirementsData {
   customVariableLayout: StudyLayoutItem[];
   contactRelationships: ContactTaxonomy[];
   contactOutcomes: ContactTaxonomy[];
+  contactLogTypes: ContactTaxonomy[];
+  consentTypes: ContactTaxonomy[];
   globalVariables: StudyCustomVariable[];
   canManage?: boolean;
 }
@@ -409,6 +411,8 @@ export interface UpdateStudyRequirementsPayload {
   customVariableLayout?: StudyLayoutItem[];
   contactRelationships?: ContactTaxonomy[];
   contactOutcomes?: ContactTaxonomy[];
+  contactLogTypes?: ContactTaxonomy[];
+  consentTypes?: ContactTaxonomy[];
 }
 
 export interface ImportStudyResult {

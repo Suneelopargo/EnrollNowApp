@@ -944,14 +944,20 @@ public class StudyConfigurationService {
         }
 
         // 8. Process Contact Outcomes & Relationships
-        for (String cat : List.of("contactOutcomes", "contactRelationships")) {
+        for (String cat : List.of("contactOutcomes", "contactRelationships", "contactLogTypes", "consentTypes")) {
             if (components.get(cat) instanceof List<?> rawList && !rawList.isEmpty()) {
                 List<Map<String, Object>> existingList = getMutableList(currentConfig, cat);
+                String fieldName = switch (cat) {
+                    case "contactOutcomes" -> "outcome";
+                    case "contactRelationships" -> "relationship";
+                    case "contactLogTypes" -> "contactType";
+                    default -> "consentType";
+                };
                 Set<String> existingNames = new HashSet<>();
                 for (Map<String, Object> item : existingList) {
-                    Object name = item.get("outcome") != null ? item.get("outcome") : item.get("relationship");
-                    if (name != null) {
-                        existingNames.add(name.toString().trim().toLowerCase(Locale.ROOT));
+                    String name = getContactTaxonomyName(item, fieldName);
+                    if (!name.isEmpty()) {
+                        existingNames.add(name.toLowerCase(Locale.ROOT));
                     }
                 }
 
@@ -959,11 +965,13 @@ public class StudyConfigurationService {
                 for (Object obj : rawList) {
                     if (obj instanceof Map<?, ?> origMap) {
                         Map<String, Object> item = new LinkedHashMap<>((Map<String, Object>) origMap);
-                        Object nameObj = item.get("outcome") != null ? item.get("outcome") : item.get("relationship");
-                        String nameStr = nameObj != null ? nameObj.toString().trim().toLowerCase(Locale.ROOT) : "";
+                        String name = getContactTaxonomyName(item, fieldName);
+                        String nameStr = name.toLowerCase(Locale.ROOT);
 
                         if (!nameStr.isEmpty() && !existingNames.contains(nameStr)) {
                             item.put("_id", "cont_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+                            item.put(fieldName, name);
+                            item.put("value", name);
                             existingList.add(item);
                             existingNames.add(nameStr);
                             addedCount++;
@@ -2610,12 +2618,15 @@ public class StudyConfigurationService {
         response.setCustomVariableLayout(layout);
 
         // 6. Contact Relationships
-        List<ContactTaxonomyDto> relationships = parseContactTaxonomy(configMap.get("contactRelationships"), "relationship", List.of("Mother", "Father", "Guardian", "Self", "Spouse", "Other"));
+        List<ContactTaxonomyDto> relationships = parseContactTaxonomy(configMap.get("contactRelationships"), "relationship");
         response.setContactRelationships(relationships);
 
         // 7. Contact Outcomes
-        List<ContactTaxonomyDto> outcomes = parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome", List.of("Participant Added", "Call Completed", "Voicemail Left", "Email Sent", "Other"));
+        List<ContactTaxonomyDto> outcomes = parseContactTaxonomy(configMap.get("contactOutcomes"), "outcome");
         response.setContactOutcomes(outcomes);
+
+        response.setContactLogTypes(parseContactTaxonomy(configMap.get("contactLogTypes"), "contactType"));
+        response.setConsentTypes(parseContactTaxonomy(configMap.get("consentTypes"), "consentType"));
 
         // 8. Global Variables Discovery in Tenant
         List<StudyCustomVariableDto> globals = findTenantGlobalVariables(tenantId);
@@ -2665,6 +2676,12 @@ public class StudyConfigurationService {
         }
         if (request.getContactOutcomes() != null) {
             configMap.put("contactOutcomes", serializeContactTaxonomy(request.getContactOutcomes(), "outcome"));
+        }
+        if (request.getContactLogTypes() != null) {
+            configMap.put("contactLogTypes", serializeContactTaxonomy(request.getContactLogTypes(), "contactType"));
+        }
+        if (request.getConsentTypes() != null) {
+            configMap.put("consentTypes", serializeContactTaxonomy(request.getConsentTypes(), "consentType"));
         }
 
         saveStudyRequirement(
@@ -3105,29 +3122,30 @@ public class StudyConfigurationService {
         return list;
     }
 
-    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName, List<String> defaultValues) {
+    private List<ContactTaxonomyDto> parseContactTaxonomy(Object raw, String fieldName) {
         List<ContactTaxonomyDto> result = new ArrayList<>();
         if (raw instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
                     String id = map.get("_id") != null ? map.get("_id").toString() : (map.get("id") != null ? map.get("id").toString() : "");
-                    String val = map.get(fieldName) != null ? map.get(fieldName).toString() : (map.get("value") != null ? map.get("value").toString() : "");
+                    String val = getContactTaxonomyName(map, fieldName);
                     if (!val.isBlank()) {
                         result.add(new ContactTaxonomyDto(id, val));
                     }
                 }
             }
-            return result;
-        }
-
-        // Initialize defaults with "Other" guaranteed only when not configured yet (raw == null)
-        if (raw == null && defaultValues != null) {
-            int idx = 1;
-            for (String def : defaultValues) {
-                result.add(new ContactTaxonomyDto("tax_" + (idx++), def));
-            }
         }
         return result;
+    }
+
+    private String getContactTaxonomyName(Map<?, ?> item, String fieldName) {
+        for (String key : List.of(fieldName, "value", "name")) {
+            Object value = item.get(key);
+            if (value != null && !value.toString().isBlank()) {
+                return value.toString().trim();
+            }
+        }
+        return "";
     }
 
     private List<Map<String, Object>> serializeContactTaxonomy(List<ContactTaxonomyDto> dtos, String fieldName) {

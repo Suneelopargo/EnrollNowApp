@@ -49,6 +49,7 @@ class ParticipantRegistryServiceTest {
     @Mock private StudyRepository studyRepository;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private StudyRequirementRepository studyRequirementRepository;
+    @Mock private TenantOptionRepository tenantOptionRepository;
     @Mock private SiteAuthorizationService siteAuthorizationService;
     @Mock private AuditRecorder auditRecorder;
 
@@ -76,6 +77,7 @@ class ParticipantRegistryServiceTest {
         );
         service.setAuditRecorder(auditRecorder);
         ReflectionTestUtils.setField(service, "studyRequirementRepository", studyRequirementRepository);
+        service.setTenantOptionRepository(tenantOptionRepository);
         ReflectionTestUtils.setField(service, "siteAuthorizationService", siteAuthorizationService);
     }
 
@@ -1482,6 +1484,27 @@ class ParticipantRegistryServiceTest {
     @Test
     void getDemographicOptions_returnsStandardOptionsAndMergesStudyGroups() {
         when(studyRequirementRepository.findByTenantId(tenantId)).thenReturn(Collections.emptyList());
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.SEX
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.SEX, "Female", 10),
+                new TenantOption(tenantId, TenantOptionCategory.SEX, "Male", 20),
+                new TenantOption(tenantId, TenantOptionCategory.SEX, "Other", 30),
+                new TenantOption(tenantId, TenantOptionCategory.SEX, "Unspecified", 40)
+        ));
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.ETHNICITY
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.ETHNICITY, "Hispanic or Latino", 10),
+                new TenantOption(tenantId, TenantOptionCategory.ETHNICITY, "Not Hispanic or Latino", 20)
+        ));
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.RACE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.RACE, "Asian", 10),
+                new TenantOption(tenantId, TenantOptionCategory.RACE, "White", 20),
+                new TenantOption(tenantId, TenantOptionCategory.RACE, "Black or African American", 30)
+        ));
 
         Map<String, List<String>> options = service.getDemographicOptions(tenantId);
         assertThat(options).isNotNull();
@@ -1495,10 +1518,39 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
-    void getRelationshipOptions_returnsStandardLegacyRelationships() {
-        List<String> options = service.getRelationshipOptions();
+    void getRelationshipOptions_returnsTenantCatalogValues() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP, "Self", 10),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP, "Mother", 20),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP, "Parent / Guardian", 30)
+        ));
+
+        List<String> options = service.getRelationshipOptions(tenantId, null);
         assertThat(options).isNotNull();
-        assertThat(options).contains("Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner", "Sibling", "Caregiver", "Other");
+        assertThat(options).containsExactly("Mother", "Parent / Guardian", "Self");
+    }
+
+    @Test
+    void getRelationshipOptions_mergesStudyConfiguredRelationships() {
+        UUID studyId = UUID.randomUUID();
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP, "Self", 10),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP, "Mother", 20)
+        ));
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(studyId);
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration("{\"contactRelationships\":[{\"relationship\":\"Foster Parent\"}]}");
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(requirement));
+
+        List<String> options = service.getRelationshipOptions(tenantId, studyId);
+
+        assertThat(options).contains("Self", "Mother", "Foster Parent");
     }
 
     @Test

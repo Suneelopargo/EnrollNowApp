@@ -645,7 +645,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   if (race && !raceOptions.includes(race)) raceOptions.unshift(race);
 
   const serverGenders = effectiveDemographicOptions.sex || effectiveDemographicOptions.gender || [];
-  const genderOptions = serverGenders.length > 0 ? [...serverGenders] : ['Female', 'Male', 'Other', 'Unspecified'];
+  const genderOptions = [...serverGenders];
   if (gender && !genderOptions.some((g) => g.toLowerCase() === gender.toLowerCase())) {
     genderOptions.unshift(gender);
   }
@@ -757,7 +757,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
       footer={(
         <>
           <button type="button" onClick={handleCloseModal} className="btn btn-secondary">Cancel</button>
-          <button type="button" onClick={() => { void handleSaveParticipant(); }} className="btn btn-primary">
+          <button type="button" onClick={() => { void handleSaveParticipant(true); }} className="btn btn-primary">
             <Check size={16} /> Save Changes
           </button>
         </>

@@ -302,13 +302,19 @@ public class ParticipantRegistryController {
     @GetMapping("/registry/relationship-options")
     public ResponseEntity<List<String>> getRelationshipOptions(
             @RequestParam(required = false) UUID tenantId,
-            @RequestParam(required = false) UUID siteId) {
+            @RequestParam(required = false) UUID siteId,
+            @RequestParam(required = false) UUID studyId) {
 
         UUID resolvedTenantId = resolveTenantId(tenantId);
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, siteId);
 
-        return ResponseEntity.ok(registryService.getRelationshipOptions());
+        return ResponseEntity.ok(registryService.getRelationshipOptions(resolvedTenantId, studyId));
     }
+
+    public ResponseEntity<List<String>> getRelationshipOptions(UUID tenantId, UUID siteId) {
+        return getRelationshipOptions(tenantId, siteId, null);
+    }
+
     @GetMapping("/registry/filter-metadata")
     public ResponseEntity<List<Map<String, Object>>> getFilterMetadata(
             @RequestParam(required = false) UUID tenantId,

@@ -16,6 +16,8 @@ import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,16 +38,6 @@ public class ParticipantContactLogService {
     private static final Logger log = LoggerFactory.getLogger(ParticipantContactLogService.class);
     private static final DateTimeFormatter DISPLAY_DT_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy, hh:mm a");
 
-    private static final List<String> DEFAULT_CONTACT_TYPES = List.of(
-            "Phone Call",
-            "Email",
-            "Text Message",
-            "In Person",
-            "Appointment",
-            "No Show",
-            "Other"
-    );
-
     private final ParticipantContactLogRepository contactLogRepository;
     private final ContactOutcomeRepository outcomeRepository;
     private final ParticipantRepository participantRepository;
@@ -57,6 +49,15 @@ public class ParticipantContactLogService {
     private final UserEmailRepository userEmailRepository;
     private final AuditRecorder auditRecorder;
     private final SitePermissionService sitePermissionService;
+
+    @Autowired(required = false)
+    private StudyRequirementRepository studyRequirementRepository;
+
+    @Autowired(required = false)
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private TenantOptionRepository tenantOptionRepository;
 
     public ParticipantContactLogService(
             ParticipantContactLogRepository contactLogRepository,
@@ -81,6 +82,18 @@ public class ParticipantContactLogService {
         this.userEmailRepository = userEmailRepository;
         this.auditRecorder = auditRecorder;
         this.sitePermissionService = sitePermissionService;
+    }
+
+    public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
+        this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    public void setObjectMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
+        this.tenantOptionRepository = tenantOptionRepository;
     }
 
     @Transactional(readOnly = true)
@@ -142,14 +155,21 @@ public class ParticipantContactLogService {
 
     @Transactional(readOnly = true)
     public List<ContactTypeOptionDto> getContactTypes(UUID tenantId, UUID studyId) {
-        Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONTACT_TYPES);
+        Map<String, String> distinctTypes = new LinkedHashMap<>();
+        TenantOptionReader.read(tenantOptionRepository, tenantId, TenantOptionCategory.CONTACT_TYPE)
+                .forEach(type -> distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type));
+        StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "contactLogTypes", "contactType"
+        ).forEach(type -> distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type));
 
         try {
             List<String> recordedTypes = contactLogRepository.findDistinctContactTypes(tenantId, studyId);
             if (recordedTypes != null) {
                 for (String t : recordedTypes) {
                     if (t != null && !t.isBlank()) {
-                        distinctTypes.add(t.trim());
+                        String type = t.trim();
+                        distinctTypes.putIfAbsent(type.toLowerCase(Locale.ROOT), type);
                     }
                 }
             }
@@ -157,17 +177,31 @@ public class ParticipantContactLogService {
             log.warn("Failed to fetch recorded contact types: {}", e.getMessage());
         }
 
-        return distinctTypes.stream()
+        return distinctTypes.values().stream()
                 .map(t -> new ContactTypeOptionDto(t, t))
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<ContactOutcomeDto> getContactOutcomes(UUID tenantId) {
-        List<ContactOutcome> outcomes = outcomeRepository.findByTenantIdAndActiveTrueOrderByOutcomeAsc(tenantId);
-        return outcomes.stream()
-                .map(o -> new ContactOutcomeDto(o.getId(), o.getOutcome(), o.isActive()))
-                .collect(Collectors.toList());
+        return getContactOutcomes(tenantId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContactOutcomeDto> getContactOutcomes(UUID tenantId, UUID studyId) {
+        Map<String, ContactOutcomeDto> outcomes = new LinkedHashMap<>();
+        List<ContactOutcome> recordedOutcomes = outcomeRepository.findByTenantIdAndActiveTrueOrderByOutcomeAsc(tenantId);
+        for (ContactOutcome outcome : recordedOutcomes) {
+            outcomes.putIfAbsent(outcome.getOutcome().toLowerCase(Locale.ROOT),
+                    new ContactOutcomeDto(outcome.getId(), outcome.getOutcome(), outcome.isActive()));
+        }
+        for (String outcome : StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "contactOutcomes", "outcome"
+        )) {
+            outcomes.putIfAbsent(outcome.toLowerCase(Locale.ROOT), new ContactOutcomeDto(null, outcome, true));
+        }
+        return new ArrayList<>(outcomes.values());
     }
 
     @Transactional(readOnly = true)

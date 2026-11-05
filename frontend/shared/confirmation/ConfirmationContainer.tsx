@@ -84,7 +84,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
   } = state;
 
   const isWordRequirementSatisfied = confirmWord
-    ? confirmInput.trim().toLowerCase() === confirmWord.trim().toLowerCase()
+    ? confirmInput.trim() === confirmWord.trim()
     : true;
 
   const isConfirmDisabled = isLoading || !isWordRequirementSatisfied;

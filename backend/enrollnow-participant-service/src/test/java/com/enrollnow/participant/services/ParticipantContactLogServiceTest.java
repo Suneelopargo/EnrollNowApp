@@ -11,8 +11,11 @@ import com.enrollnow.participant.dtos.*;
 import com.enrollnow.participant.models.*;
 import com.enrollnow.participant.repositories.*;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyMemberRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +46,8 @@ class ParticipantContactLogServiceTest {
     @Mock private StudyMemberRepository studyMemberRepository;
     @Mock private UserRepository userRepository;
     @Mock private UserEmailRepository userEmailRepository;
+    @Mock private StudyRequirementRepository studyRequirementRepository;
+    @Mock private TenantOptionRepository tenantOptionRepository;
     @Mock private AuditRecorder auditRecorder;
     @Mock private SitePermissionService sitePermissionService;
 
@@ -72,6 +77,9 @@ class ParticipantContactLogServiceTest {
                 auditRecorder,
                 sitePermissionService
         );
+        service.setStudyRequirementRepository(studyRequirementRepository);
+        service.setObjectMapper(new ObjectMapper());
+        service.setTenantOptionRepository(tenantOptionRepository);
 
         testParticipant = new Participant();
         testParticipant.setId(participantId);
@@ -309,7 +317,14 @@ class ParticipantContactLogServiceTest {
     }
 
     @Test
-    void getContactTypes_returnsDefaultsAndDynamicTypes() {
+    void getContactTypes_returnsTenantCatalogAndRecordedTypes() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONTACT_TYPE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Phone Call", 10),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Email", 20),
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Text Message", 30)
+        ));
         when(contactLogRepository.findDistinctContactTypes(tenantId, null))
                 .thenReturn(List.of("Custom Video Call", "Phone Call"));
 
@@ -317,6 +332,45 @@ class ParticipantContactLogServiceTest {
 
         assertThat(types).extracting(ContactTypeOptionDto::getValue)
                 .contains("Phone Call", "Email", "Text Message", "Custom Video Call");
+    }
+
+    @Test
+    void getContactTypes_mergesStudyConfiguredTypes() {
+        when(tenantOptionRepository.findByTenantIdAndCategoryAndActiveTrueOrderBySortOrderAscValueAsc(
+                tenantId, TenantOptionCategory.CONTACT_TYPE
+        )).thenReturn(List.of(
+                new TenantOption(tenantId, TenantOptionCategory.CONTACT_TYPE, "Phone Call", 10)
+        ));
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(studyId);
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration("{\"contactLogTypes\":[{\"value\":\"Secure Portal\"}]}");
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(requirement));
+        when(contactLogRepository.findDistinctContactTypes(tenantId, studyId)).thenReturn(List.of("Legacy Call"));
+
+        List<ContactTypeOptionDto> types = service.getContactTypes(tenantId, studyId);
+
+        assertThat(types).extracting(ContactTypeOptionDto::getValue)
+                .contains("Phone Call", "Legacy Call", "Secure Portal");
+    }
+
+    @Test
+    void getContactOutcomes_mergesStudyOptionsWithTenantCatalog() {
+        ContactOutcome tenantOutcome = new ContactOutcome(tenantId, "No Answer", callerUserId);
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(studyId);
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration("{\"contactOutcomes\":[{\"value\":\"Portal Follow-up\"}]}");
+        when(outcomeRepository.findByTenantIdAndActiveTrueOrderByOutcomeAsc(tenantId))
+                .thenReturn(List.of(tenantOutcome));
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(requirement));
+
+        List<ContactOutcomeDto> outcomes = service.getContactOutcomes(tenantId, studyId);
+
+        assertThat(outcomes).extracting(ContactOutcomeDto::getOutcome)
+                .containsExactly("No Answer", "Portal Follow-up");
     }
 
     @Test

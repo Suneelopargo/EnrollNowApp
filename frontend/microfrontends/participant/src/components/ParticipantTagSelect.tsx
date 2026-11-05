@@ -55,7 +55,8 @@ export const ParticipantTagSelect: React.FC<ParticipantTagSelectProps> = ({
         return;
       }
 
-      setIsLoading(true);
+      // Background searches while typing stay silent; only the initial load shows the spinner
+      if (!cleanQuery) setIsLoading(true);
       setError(null);
       try {
         const results = await participantApi.getParticipantTags(cleanQuery || undefined, 20, {
@@ -100,7 +101,7 @@ export const ParticipantTagSelect: React.FC<ParticipantTagSelectProps> = ({
     }
     debounceTimerRef.current = setTimeout(() => {
       fetchSuggestions(clean);
-    }, 250);
+    }, 400);
 
     return () => {
       if (debounceTimerRef.current) {

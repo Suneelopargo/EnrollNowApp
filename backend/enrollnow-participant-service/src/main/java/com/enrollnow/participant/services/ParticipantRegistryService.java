@@ -68,8 +68,15 @@ public class ParticipantRegistryService {
     @Autowired(required = false)
     private StudyRequirementRepository studyRequirementRepository;
 
+    @Autowired
+    private TenantOptionRepository tenantOptionRepository;
+
     public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
         this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
+        this.tenantOptionRepository = tenantOptionRepository;
     }
 
     @Autowired(required = false)
@@ -653,9 +660,9 @@ public class ParticipantRegistryService {
         Map<String, Object> beforeData = participantAuditData(
                 getParticipantById(tenantId, participantId).orElseThrow());
 
-        if (request.getFirstName() != null) participant.setFirstName(request.getFirstName());
+        if (request.getFirstName() != null && !request.getFirstName().isBlank()) participant.setFirstName(request.getFirstName());
         if (request.getMiddleName() != null) participant.setMiddleName(request.getMiddleName());
-        if (request.getLastName() != null) participant.setLastName(request.getLastName());
+        if (request.getLastName() != null && !request.getLastName().isBlank()) participant.setLastName(request.getLastName());
         if (request.getPreferredName() != null) participant.setPreferredName(request.getPreferredName());
         if (request.getDateOfBirth() != null) {
             if (request.getDateOfBirth().isBlank()) {
@@ -680,7 +687,7 @@ public class ParticipantRegistryService {
             String val = request.getGenderIdentity().trim();
             participant.setGenderIdentity(val.isEmpty() ? null : val);
         }
-        if (request.getStatus() != null) participant.setStatus(request.getStatus().toUpperCase());
+        if (request.getStatus() != null && !request.getStatus().isBlank()) participant.setStatus(request.getStatus().toUpperCase());
         if (request.getGlobalDateOfLastContact() != null) {
             if (request.getGlobalDateOfLastContact().isBlank()) {
                 participant.setGlobalLastContactDate(null);
@@ -810,8 +817,13 @@ public class ParticipantRegistryService {
         }
 
         // Update Address if provided
-        if (request.getCity() != null || request.getState() != null || request.getPostalCode() != null || request.getAddressLine1() != null) {
-            List<ParticipantAddress> addresses = addressRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+        boolean hasAddressInput = Stream.of(request.getCity(), request.getState(), request.getPostalCode(),
+                request.getAddressLine1(), request.getAddressLine2()).anyMatch(v -> v != null && !v.isBlank());
+        List<ParticipantAddress> existingAddresses = addressRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+        boolean hasPrimaryAddress = existingAddresses.stream().anyMatch(ParticipantAddress::isPrimaryAddress);
+        if (hasAddressInput || (hasPrimaryAddress && (request.getCity() != null || request.getState() != null
+                || request.getPostalCode() != null || request.getAddressLine1() != null))) {
+            List<ParticipantAddress> addresses = existingAddresses;
             ParticipantAddress address = addresses.stream().filter(ParticipantAddress::isPrimaryAddress).findFirst()
                     .orElseGet(() -> {
                         ParticipantAddress a = new ParticipantAddress();
@@ -830,7 +842,7 @@ public class ParticipantRegistryService {
         }
 
         // Update Contact Phone if provided
-        if (request.getPhone() != null) {
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
             ParticipantContact phoneContact = findExistingProfileContact(contacts, "PHONE", request.getPhone());
             if (phoneContact == null) {
@@ -845,7 +857,7 @@ public class ParticipantRegistryService {
         }
 
         // Update Contact Email if provided
-        if (request.getPrimaryEmail() != null) {
+        if (request.getPrimaryEmail() != null && !request.getPrimaryEmail().isBlank()) {
             List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
             ParticipantContact emailContact = findExistingProfileContact(contacts, "EMAIL", request.getPrimaryEmail());
             if (emailContact == null) {
@@ -2240,11 +2252,16 @@ public class ParticipantRegistryService {
     }
 
     @Transactional(readOnly = true)
-    public List<String> getRelationshipOptions() {
-        return List.of(
-                "Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner",
-                "Sibling", "Child", "Caregiver", "Friend", "Other"
-        );
+    public List<String> getRelationshipOptions(UUID tenantId, UUID studyId) {
+        Set<String> options = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        options.addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.CONTACT_RELATIONSHIP
+        ));
+        options.addAll(StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "contactRelationships", "relationship"
+        ));
+        return new ArrayList<>(options);
     }
 
     public Map<String, List<String>> getDemographicOptions(UUID tenantId) {
@@ -2253,20 +2270,14 @@ public class ParticipantRegistryService {
         collected.put("ethnicity", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
         collected.put("race", new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
 
-        // Default standard legacy options
-        collected.get("sex").addAll(List.of("Female", "Male", "Other", "Unspecified"));
-        collected.get("ethnicity").addAll(List.of("Hispanic or Latino", "Not Hispanic or Latino", "Unknown / Not Reported"));
-        collected.get("race").addAll(List.of(
-                "American Indian",
-                "American Indian or Alaska Native",
-                "Asian",
-                "Black / African American",
-                "Black or African American",
-                "Hawaiian",
-                "Native Hawaiian or Other Pacific Islander",
-                "White",
-                "More Than One Race",
-                "Unknown / Not Reported"
+        collected.get("sex").addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.SEX
+        ));
+        collected.get("ethnicity").addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.ETHNICITY
+        ));
+        collected.get("race").addAll(TenantOptionReader.read(
+                tenantOptionRepository, tenantId, TenantOptionCategory.RACE
         ));
 
         if (tenantId != null && studyRequirementRepository != null) {

@@ -71,20 +71,6 @@ const METHOD_TYPES: Array<{ value: ContactMethodType; label: string }> = [
 const isContactMethodType = (value: string): value is ContactMethodType =>
   METHOD_TYPES.some((method) => method.value === value);
 
-const DEFAULT_RELATIONSHIPS = [
-  'Participant',
-  'Self',
-  'Mother',
-  'Father',
-  'Parent / Guardian',
-  'Spouse / Partner',
-  'Sibling',
-  'Child',
-  'Caregiver',
-  'Friend',
-  'Other',
-];
-
 const createKey = () => `contact-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export const getContactActiveState = (
@@ -170,14 +156,9 @@ const isAddressBlank = (address: AddressDraft) =>
   && !address.postalCode?.trim();
 
 const getRelationshipSelection = (value: string) => {
-  const knownRelationship = DEFAULT_RELATIONSHIPS.find(
-    (option) => option.toLowerCase() === value.trim().toLowerCase(),
-  );
-  const isCustomRelationship = value !== '' && !knownRelationship;
-
   return {
-    relationship: isCustomRelationship ? 'Other' : knownRelationship ?? value,
-    otherRelationship: isCustomRelationship ? value : '',
+    relationship: value,
+    otherRelationship: '',
   };
 };
 
@@ -247,7 +228,7 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
   const [contactName, setContactName] = useState(contactToEdit?.contactName ?? '');
   const [relationship, setRelationship] = useState(initialRelationship.relationship);
   const [otherRelationship, setOtherRelationship] = useState(initialRelationship.otherRelationship);
-  const [relationshipOptions, setRelationshipOptions] = useState(DEFAULT_RELATIONSHIPS);
+  const [relationshipOptions, setRelationshipOptions] = useState<string[]>([]);
   const [canLeaveMessage, setCanLeaveMessage] = useState(contactToEdit?.canLeaveMessage ?? false);
   const [notes, setNotes] = useState(contactToEdit?.notes ?? '');
   const [isPreferredContact, setIsPreferredContact] = useState(
@@ -339,14 +320,18 @@ export const ParticipantContactModal: React.FC<ParticipantContactModalProps> = (
 
     let active = true;
     participantApi.getRelationshipOptions({ tenantId, siteId }).then((options) => {
-      if (!active || !Array.isArray(options) || options.length === 0) return;
+      if (!active || !Array.isArray(options)) return;
       const merged = [...options];
-      if (!merged.includes('Other')) merged.push('Other');
       if (currentRelationship && !merged.includes(currentRelationship)) merged.push(currentRelationship);
       setRelationshipOptions(merged);
     }).catch((error: unknown) => {
       if (active) {
         toast.error(getApiErrorMessage(error, 'Could not load relationship options'));
+        if (currentRelationship) {
+          setRelationshipOptions((options) => (
+            options.includes(currentRelationship) ? options : [...options, currentRelationship]
+          ));
+        }
       }
     });
 

@@ -172,7 +172,7 @@ export interface UpdateContactLogPayload {
 }
 
 export interface ContactOutcomeOption {
-  id: string;
+  id?: string;
   outcome: string;
   active?: boolean;
 }
@@ -599,7 +599,7 @@ export const participantApi = {
     return res.data?.data ?? res.data ?? [];
   },
 
-  async getContactOutcomes(options?: { tenantId?: string }): Promise<ContactOutcomeOption[]> {
+  async getContactOutcomes(options?: { tenantId?: string; studyId?: string }): Promise<ContactOutcomeOption[]> {
     const res = await apiClient.get('/api/v1/participants/contact-outcomes', {
       params: options,
       skipToast: true,
@@ -738,7 +738,15 @@ export const participantApi = {
   },
 
   async sendSms(participantId: string, payload: { toPhone: string; body: string; pinned?: boolean; studyId?: string }, options?: { tenantId?: string; siteId?: string }): Promise<CommunicationItem> {
-    const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, payload, { params: options });
+    // Temporary: default to the USA country code when none is provided
+    const rawPhone = (payload.toPhone || '').trim();
+    const digits = rawPhone.replace(/\D/g, '');
+    const toPhone = rawPhone.startsWith('+')
+      ? `+${digits}`
+      : digits.length === 11 && digits.startsWith('1')
+        ? `+${digits}`
+        : `+1${digits}`;
+    const res = await apiClient.post(`/api/v1/participants/${participantId}/sms`, { ...payload, toPhone }, { params: options });
     return res.data?.data ?? res.data;
   },
 
@@ -828,12 +836,10 @@ export const participantApi = {
     await apiClient.delete(`/api/v1/participants/${participantId}/addresses/${addressId}`, { params: options });
   },
 
-  async getRelationshipOptions(options?: { tenantId?: string; siteId?: string }): Promise<string[]> {
+  async getRelationshipOptions(options?: { tenantId?: string; siteId?: string; studyId?: string }): Promise<string[]> {
     const res = await apiClient.get('/api/v1/registry/relationship-options', { params: options, skipToast: true } as any);
-    return res.data?.data ?? res.data ?? [
-      'Self', 'Mother', 'Father', 'Parent / Guardian', 'Spouse / Partner',
-      'Sibling', 'Child', 'Caregiver', 'Friend', 'Other'
-    ];
+    const data = res.data?.data ?? res.data ?? [];
+    return Array.isArray(data) ? data : [];
   },
 
   // 4. Consent

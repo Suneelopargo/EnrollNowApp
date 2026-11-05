@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { SiteAdminUser, UserStatus } from '../types/admin';
 import { toSitePermissionLabel } from '../../../../shared/api/administrationApi';
+import { getStoredAuthUser } from '../../../../shared/api-client';
 
 // ---------------------------------------------------------------------------
 // Custom Cell Renderers (CSS classes only - NO inline styles!)
@@ -140,6 +141,14 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
   };
 
   const isUserActive = user.status === 'Active';
+  const storedUser = getStoredAuthUser<any>();
+  const isSelf = Boolean(
+    storedUser &&
+      ((storedUser.id && String(storedUser.id) === String(user.id)) ||
+        (storedUser.email &&
+          user.email &&
+          String(storedUser.email).trim().toLowerCase() === user.email.trim().toLowerCase())),
+  );
 
   return (
     <div className="participant-grid__row-actions">
@@ -163,6 +172,7 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
         } site-admin-tooltip-btn`}
         onClick={handleToggleStatus}
         onKeyDown={handleKeyDown}
+        disabled={isSelf}
         data-tooltip={isUserActive ? 'Lock user' : 'Unlock user'}
         aria-label={isUserActive ? `Lock ${user.name}` : `Unlock ${user.name}`}
       >
