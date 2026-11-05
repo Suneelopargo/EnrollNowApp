@@ -16,6 +16,8 @@ import com.enrollnow.study.models.Study;
 import com.enrollnow.study.models.StudyMember;
 import com.enrollnow.study.repositories.StudyMemberRepository;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +60,12 @@ public class ParticipantContactLogService {
     private final AuditRecorder auditRecorder;
     private final SitePermissionService sitePermissionService;
 
+    @Autowired(required = false)
+    private StudyRequirementRepository studyRequirementRepository;
+
+    @Autowired(required = false)
+    private ObjectMapper objectMapper;
+
     public ParticipantContactLogService(
             ParticipantContactLogRepository contactLogRepository,
             ContactOutcomeRepository outcomeRepository,
@@ -81,6 +89,14 @@ public class ParticipantContactLogService {
         this.userEmailRepository = userEmailRepository;
         this.auditRecorder = auditRecorder;
         this.sitePermissionService = sitePermissionService;
+    }
+
+    public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
+        this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    public void setObjectMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -143,6 +159,10 @@ public class ParticipantContactLogService {
     @Transactional(readOnly = true)
     public List<ContactTypeOptionDto> getContactTypes(UUID tenantId, UUID studyId) {
         Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONTACT_TYPES);
+        distinctTypes.addAll(StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "contactLogTypes", "contactType"
+        ));
 
         try {
             List<String> recordedTypes = contactLogRepository.findDistinctContactTypes(tenantId, studyId);
@@ -164,10 +184,24 @@ public class ParticipantContactLogService {
 
     @Transactional(readOnly = true)
     public List<ContactOutcomeDto> getContactOutcomes(UUID tenantId) {
-        List<ContactOutcome> outcomes = outcomeRepository.findByTenantIdAndActiveTrueOrderByOutcomeAsc(tenantId);
-        return outcomes.stream()
-                .map(o -> new ContactOutcomeDto(o.getId(), o.getOutcome(), o.isActive()))
-                .collect(Collectors.toList());
+        return getContactOutcomes(tenantId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContactOutcomeDto> getContactOutcomes(UUID tenantId, UUID studyId) {
+        Map<String, ContactOutcomeDto> outcomes = new LinkedHashMap<>();
+        List<ContactOutcome> recordedOutcomes = outcomeRepository.findByTenantIdAndActiveTrueOrderByOutcomeAsc(tenantId);
+        for (ContactOutcome outcome : recordedOutcomes) {
+            outcomes.putIfAbsent(outcome.getOutcome().toLowerCase(Locale.ROOT),
+                    new ContactOutcomeDto(outcome.getId(), outcome.getOutcome(), outcome.isActive()));
+        }
+        for (String outcome : StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "contactOutcomes", "outcome"
+        )) {
+            outcomes.putIfAbsent(outcome.toLowerCase(Locale.ROOT), new ContactOutcomeDto(null, outcome, true));
+        }
+        return new ArrayList<>(outcomes.values());
     }
 
     @Transactional(readOnly = true)

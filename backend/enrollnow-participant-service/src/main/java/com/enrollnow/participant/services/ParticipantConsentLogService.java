@@ -15,6 +15,8 @@ import com.enrollnow.participant.repositories.ParticipantRepository;
 import com.enrollnow.participant.repositories.StudyCandidateRepository;
 import com.enrollnow.study.models.Study;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +62,12 @@ public class ParticipantConsentLogService {
             "jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp"
     );
 
+    @Autowired(required = false)
+    private StudyRequirementRepository studyRequirementRepository;
+
+    @Autowired(required = false)
+    private ObjectMapper objectMapper;
+
     private final ParticipantConsentLogRepository consentLogRepository;
     private final ParticipantRepository participantRepository;
     private final StudyCandidateRepository candidateRepository;
@@ -83,6 +91,14 @@ public class ParticipantConsentLogService {
         this.userRepository = userRepository;
         this.auditRecorder = auditRecorder;
         this.sitePermissionService = sitePermissionService;
+    }
+
+    public void setStudyRequirementRepository(StudyRequirementRepository studyRequirementRepository) {
+        this.studyRequirementRepository = studyRequirementRepository;
+    }
+
+    public void setObjectMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -145,6 +161,10 @@ public class ParticipantConsentLogService {
     @Transactional(readOnly = true)
     public List<ConsentTypeOptionDto> getConsentTypes(UUID tenantId, UUID studyId) {
         Set<String> distinctTypes = new LinkedHashSet<>(DEFAULT_CONSENT_TYPES);
+        distinctTypes.addAll(StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "consentTypes", "consentType"
+        ));
 
         try {
             List<String> recordedTypes = consentLogRepository.findDistinctConsentTypes(tenantId, studyId);

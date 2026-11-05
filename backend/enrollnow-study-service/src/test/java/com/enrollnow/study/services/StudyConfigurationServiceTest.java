@@ -140,6 +140,51 @@ class StudyConfigurationServiceTest {
     }
 
     @Test
+    void importComponents_contactTaxonomiesAcceptLegacyNameAndValueFields() throws Exception {
+        StudyRequirement existing = new StudyRequirement();
+        existing.setTenantId(tenantId);
+        existing.setStudyId(studyId);
+        existing.setConfiguration("{}");
+
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
+
+        Map<String, Object> components = Map.of(
+                "contactRelationships", List.of(
+                        Map.of("name", "Mother"),
+                        Map.of("value", "Father"),
+                        Map.of("relationship", "Guardian")
+                ),
+                "contactOutcomes", List.of(
+                        Map.of("name", "Call Completed"),
+                        Map.of("value", "Voicemail Left")
+                ),
+                "contactLogTypes", List.of(Map.of("value", "Secure Portal")),
+                "consentTypes", List.of(Map.of("name", "Remote Assent"))
+        );
+
+        Map<String, Object> result = configurationService.importComponentsIntoExistingStudy(tenantId, studyId, components);
+
+        assertEquals(7, result.get("importedCount"));
+        ArgumentCaptor<StudyRequirement> captor = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository).save(captor.capture());
+
+        Map<String, Object> updatedConfig = objectMapper.readValue(
+                captor.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        List<?> relationships = (List<?>) updatedConfig.get("contactRelationships");
+        assertEquals(List.of("Mother", "Father", "Guardian"), relationships.stream()
+                .map(item -> ((Map<?, ?>) item).get("relationship"))
+                .toList());
+        List<?> outcomes = (List<?>) updatedConfig.get("contactOutcomes");
+        assertEquals(List.of("Call Completed", "Voicemail Left"), outcomes.stream()
+                .map(item -> ((Map<?, ?>) item).get("outcome"))
+                .toList());
+        assertEquals("Secure Portal", ((Map<?, ?>) ((List<?>) updatedConfig.get("contactLogTypes")).get(0)).get("contactType"));
+        assertEquals("Remote Assent", ((Map<?, ?>) ((List<?>) updatedConfig.get("consentTypes")).get(0)).get("consentType"));
+    }
+
+    @Test
     void importComponents_duplicateAgainstExisting_reusesExistingIdWithoutDuplicate() throws Exception {
         Map<String, Object> existingConfig = new LinkedHashMap<>();
         existingConfig.put("statuses", List.of(Map.of("_id", "stat_existing_123", "name", "Pre-Screen")));
@@ -639,7 +684,11 @@ class StudyConfigurationServiceTest {
                 "\"genderGroups\":[{\"_id\":\"gen_1\",\"name\":\"Female\",\"sample\":75}]," +
                 "\"customVariables\":[{\"_id\":\"var_1\",\"name\":\"Handedness\",\"type\":\"single\",\"isGlobal\":false,\"options\":[{\"label\":\"Right\",\"value\":\"right\"}]}]," +
                 "\"variableGroups\":[{\"_id\":\"grp_1\",\"name\":\"Neurological Markers\"}]," +
-                "\"layout\":[{\"id\":\"var_1\",\"type\":\"variable\"}]" +
+                "\"layout\":[{\"id\":\"var_1\",\"type\":\"variable\"}]," +
+                "\"contactRelationships\":[{\"_id\":\"rel_1\",\"name\":\"Mother\"}]," +
+                "\"contactOutcomes\":[{\"_id\":\"out_1\",\"value\":\"Call Completed\"}]," +
+                "\"contactLogTypes\":[{\"_id\":\"type_1\",\"value\":\"Secure Portal\"}]," +
+                "\"consentTypes\":[{\"_id\":\"consent_1\",\"value\":\"Remote Assent\"}]" +
                 "}");
 
         when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId)).thenReturn(Optional.of(existing));
@@ -656,6 +705,10 @@ class StudyConfigurationServiceTest {
         assertEquals("Handedness", res.getCustomVariables().get(0).getName());
         assertEquals(1, res.getVariableGroups().size());
         assertEquals(1, res.getCustomVariableLayout().size());
+        assertEquals("Mother", res.getContactRelationships().get(0).getValue());
+        assertEquals("Call Completed", res.getContactOutcomes().get(0).getValue());
+        assertEquals("Secure Portal", res.getContactLogTypes().get(0).getValue());
+        assertEquals("Remote Assent", res.getConsentTypes().get(0).getValue());
     }
 
     @Test
@@ -685,6 +738,19 @@ class StudyConfigurationServiceTest {
         varDto.setGlobal(true);
         req.setCustomVariables(List.of(varDto));
 
+        ContactTaxonomyDto relationship = new ContactTaxonomyDto();
+        relationship.setId("rel_mother");
+        relationship.setValue("Mother");
+        req.setContactRelationships(List.of(relationship));
+        ContactTaxonomyDto contactType = new ContactTaxonomyDto();
+        contactType.setId("type_portal");
+        contactType.setValue("Secure Portal");
+        req.setContactLogTypes(List.of(contactType));
+        ContactTaxonomyDto consentType = new ContactTaxonomyDto();
+        consentType.setId("consent_remote");
+        consentType.setValue("Remote Assent");
+        req.setConsentTypes(List.of(consentType));
+
         StudyRequirementsResponse updated = configurationService.updateStudyRequirements(tenantId, studyId, req, true);
 
         assertNotNull(updated);
@@ -694,6 +760,18 @@ class StudyConfigurationServiceTest {
         assertEquals(1, updated.getCustomVariables().size());
         assertEquals("Blood Pressure", updated.getCustomVariables().get(0).getName());
         assertTrue(updated.getCustomVariables().get(0).isGlobal());
+        assertEquals("Mother", updated.getContactRelationships().get(0).getValue());
+        assertEquals("Secure Portal", updated.getContactLogTypes().get(0).getValue());
+        assertEquals("Remote Assent", updated.getConsentTypes().get(0).getValue());
+
+        ArgumentCaptor<StudyRequirement> savedRequirement = ArgumentCaptor.forClass(StudyRequirement.class);
+        verify(studyRequirementRepository).save(savedRequirement.capture());
+        Map<String, Object> savedConfig = objectMapper.readValue(
+                savedRequirement.getValue().getConfiguration(),
+                new TypeReference<Map<String, Object>>() {}
+        );
+        assertEquals("Secure Portal", ((Map<?, ?>) ((List<?>) savedConfig.get("contactLogTypes")).get(0)).get("contactType"));
+        assertEquals("Remote Assent", ((Map<?, ?>) ((List<?>) savedConfig.get("consentTypes")).get(0)).get("consentType"));
     }
 
     @Test

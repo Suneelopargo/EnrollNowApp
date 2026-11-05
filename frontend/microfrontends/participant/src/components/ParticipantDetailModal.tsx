@@ -645,7 +645,7 @@ export const ParticipantDetailModal: React.FC<ParticipantDetailModalProps> = ({
   if (race && !raceOptions.includes(race)) raceOptions.unshift(race);
 
   const serverGenders = effectiveDemographicOptions.sex || effectiveDemographicOptions.gender || [];
-  const genderOptions = serverGenders.length > 0 ? [...serverGenders] : ['Female', 'Male', 'Other', 'Unspecified'];
+  const genderOptions = [...serverGenders];
   if (gender && !genderOptions.some((g) => g.toLowerCase() === gender.toLowerCase())) {
     genderOptions.unshift(gender);
   }

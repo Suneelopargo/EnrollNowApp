@@ -72,6 +72,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const [layout, setLayout] = useState<StudyLayoutItem[]>([]);
   const [contactRelationships, setContactRelationships] = useState<ContactTaxonomy[]>([]);
   const [contactOutcomes, setContactOutcomes] = useState<ContactTaxonomy[]>([]);
+  const [contactLogTypes, setContactLogTypes] = useState<ContactTaxonomy[]>([]);
+  const [consentTypes, setConsentTypes] = useState<ContactTaxonomy[]>([]);
   const [globalVariables, setGlobalVariables] = useState<StudyCustomVariable[]>([]);
 
   // Lock State for Global Custom Variables (Global variables are locked by default in UI)
@@ -97,7 +99,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const [expandedAgeRangeIds, setExpandedAgeRangeIds] = useState<Set<string>>(new Set());
   const [expandedGenderGroupIds, setExpandedGenderGroupIds] = useState<Set<string>>(new Set());
 
-  // Accordion collapsed state for 8 sections
+  // Accordion collapsed state for requirements and option catalogs
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     sample: false,
     age: false,
@@ -107,6 +109,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     customVars: false,
     relationships: false,
     outcomes: false,
+    contactTypes: false,
+    consentTypes: false,
   });
 
   const toggleSection = (sectionKey: string) => {
@@ -123,6 +127,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       customVars: false,
       relationships: false,
       outcomes: false,
+      contactTypes: false,
+      consentTypes: false,
     });
   };
 
@@ -136,6 +142,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       customVars: true,
       relationships: true,
       outcomes: true,
+      contactTypes: true,
+      consentTypes: true,
     });
   };
 
@@ -194,11 +202,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renameGroupValue, setRenameGroupValue] = useState<string>('');
 
-  const [showAddTaxonomyModal, setShowAddTaxonomyModal] = useState<'relationship' | 'outcome' | null>(null);
+  const [showAddTaxonomyModal, setShowAddTaxonomyModal] = useState<
+    'relationship' | 'outcome' | 'contactType' | 'consentType' | null
+  >(null);
   const [newTaxonomyName, setNewTaxonomyName] = useState<string>('');
-
-  const [renamingTaxonomyId, setRenamingTaxonomyId] = useState<string | null>(null);
-  const [renameTaxonomyValue, setRenameTaxonomyValue] = useState<string>('');
+  const taxonomyValuesAtFocusRef = useRef<Record<string, string>>({});
 
   const [confirmDeleteModal, setConfirmDeleteModal] = useState<{
     type: 'milestone' | 'group' | 'variable' | 'variableGroup' | 'taxonomy';
@@ -271,6 +279,12 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         if (partial.contactOutcomes !== undefined) {
           setContactOutcomes(updated.contactOutcomes || []);
         }
+        if (partial.contactLogTypes !== undefined) {
+          setContactLogTypes(updated.contactLogTypes || []);
+        }
+        if (partial.consentTypes !== undefined) {
+          setConsentTypes(updated.consentTypes || []);
+        }
         isDirtyRef.current = false;
         onDirtyChangeRef.current?.(false);
         if (successMsg) {
@@ -336,6 +350,8 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       setLayout(data.customVariableLayout || []);
       setContactRelationships(data.contactRelationships || []);
       setContactOutcomes(data.contactOutcomes || []);
+      setContactLogTypes(data.contactLogTypes || []);
+      setConsentTypes(data.consentTypes || []);
       setGlobalVariables(data.globalVariables || []);
       setUnlockedVariableIds(new Set());
       isDirtyRef.current = false;
@@ -1100,19 +1116,39 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     if (!newTaxonomyName.trim() || !showAddTaxonomyModal) return;
     const newTax: ContactTaxonomy = {
       id: 'tax_' + Date.now(),
-      name: newTaxonomyName.trim(),
+      value: newTaxonomyName.trim(),
       type: showAddTaxonomyModal,
+    };
+    const taxonomyLabels = {
+      relationship: 'Relationship',
+      outcome: 'Outcome',
+      contactType: 'Contact log type',
+      consentType: 'Consent type',
     };
     if (showAddTaxonomyModal === 'relationship') {
       const updated = [...contactRelationships, newTax];
-      const ok = await persistPartial({ contactRelationships: updated }, `Relationship "${newTax.name}" added.`);
+      const ok = await persistPartial({ contactRelationships: updated }, `Relationship "${newTax.value}" added.`);
+      if (ok) {
+        setShowAddTaxonomyModal(null);
+        setNewTaxonomyName('');
+      }
+    } else if (showAddTaxonomyModal === 'outcome') {
+      const updated = [...contactOutcomes, newTax];
+      const ok = await persistPartial({ contactOutcomes: updated }, `Outcome "${newTax.value}" added.`);
+      if (ok) {
+        setShowAddTaxonomyModal(null);
+        setNewTaxonomyName('');
+      }
+    } else if (showAddTaxonomyModal === 'contactType') {
+      const updated = [...contactLogTypes, newTax];
+      const ok = await persistPartial({ contactLogTypes: updated }, `${taxonomyLabels.contactType} "${newTax.value}" added.`);
       if (ok) {
         setShowAddTaxonomyModal(null);
         setNewTaxonomyName('');
       }
     } else {
-      const updated = [...contactOutcomes, newTax];
-      const ok = await persistPartial({ contactOutcomes: updated }, `Outcome "${newTax.name}" added.`);
+      const updated = [...consentTypes, newTax];
+      const ok = await persistPartial({ consentTypes: updated }, `${taxonomyLabels.consentType} "${newTax.value}" added.`);
       if (ok) {
         setShowAddTaxonomyModal(null);
         setNewTaxonomyName('');
@@ -1120,39 +1156,61 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
     }
   };
 
-  const handleRenameTaxonomy = async (id: string, type: 'relationship' | 'outcome') => {
-    if (!renameTaxonomyValue.trim()) return;
+  const handleRenameTaxonomy = async (
+    id: string,
+    value: string,
+    type: 'relationship' | 'outcome' | 'contactType' | 'consentType',
+  ) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return;
     if (type === 'relationship') {
       const updated = contactRelationships.map((r) =>
-        (r.id || r.name) === id ? { ...r, name: renameTaxonomyValue.trim() } : r
+        (r.id || r.value) === id ? { ...r, value: trimmedValue } : r
       );
-      const ok = await persistPartial({ contactRelationships: updated }, 'Contact relationship updated.');
-      if (ok) {
-        setRenamingTaxonomyId(null);
-        setRenameTaxonomyValue('');
-      }
-    } else {
+      await persistPartial({ contactRelationships: updated }, 'Contact relationship updated.');
+    } else if (type === 'outcome') {
       const updated = contactOutcomes.map((o) =>
-        (o.id || o.name) === id ? { ...o, name: renameTaxonomyValue.trim() } : o
+        (o.id || o.value) === id ? { ...o, value: trimmedValue } : o
       );
-      const ok = await persistPartial({ contactOutcomes: updated }, 'Contact outcome updated.');
-      if (ok) {
-        setRenamingTaxonomyId(null);
-        setRenameTaxonomyValue('');
-      }
+      await persistPartial({ contactOutcomes: updated }, 'Contact outcome updated.');
+    } else if (type === 'contactType') {
+      const updated = contactLogTypes.map((option) =>
+        (option.id || option.value) === id ? { ...option, value: trimmedValue } : option
+      );
+      await persistPartial({ contactLogTypes: updated }, 'Contact log type updated.');
+    } else {
+      const updated = consentTypes.map((option) =>
+        (option.id || option.value) === id ? { ...option, value: trimmedValue } : option
+      );
+      await persistPartial({ consentTypes: updated }, 'Consent type updated.');
     }
   };
 
-  const handleDeleteTaxonomy = async (id: string, type: 'relationship' | 'outcome') => {
+  const handleDeleteTaxonomy = async (
+    id: string,
+    type: 'relationship' | 'outcome' | 'contactType' | 'consentType',
+  ) => {
     if (type === 'relationship') {
-      const updated = contactRelationships.filter((t) => (t.id || t.name) !== id);
+      const updated = contactRelationships.filter((t) => (t.id || t.value) !== id);
       const ok = await persistPartial({ contactRelationships: updated }, 'Contact relationship deleted.');
       if (ok) {
         setConfirmDeleteModal(null);
       }
-    } else {
-      const updated = contactOutcomes.filter((t) => (t.id || t.name) !== id);
+    } else if (type === 'outcome') {
+      const updated = contactOutcomes.filter((t) => (t.id || t.value) !== id);
       const ok = await persistPartial({ contactOutcomes: updated }, 'Contact outcome deleted.');
+      if (ok) {
+        setConfirmDeleteModal(null);
+      }
+    } else if (type === 'contactType') {
+      const updated = contactLogTypes.filter((t) => (t.id || t.value) !== id);
+      const ok = await persistPartial({ contactLogTypes: updated }, 'Contact log type deleted.');
+      if (ok) {
+        setConfirmDeleteModal(null);
+      }
+    } else {
+      const updated = consentTypes.filter((t) => (t.id || t.value) !== id);
+      const ok = await persistPartial({ consentTypes: updated }, 'Consent type deleted.');
       if (ok) {
         setConfirmDeleteModal(null);
       }
@@ -1426,6 +1484,98 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
       </div>
     );
   };
+
+  const renderTaxonomyCatalog = (
+    type: 'contactType' | 'consentType',
+    title: string,
+    items: ContactTaxonomy[],
+    setItems: React.Dispatch<React.SetStateAction<ContactTaxonomy[]>>,
+    sectionKey: 'contactTypes' | 'consentTypes',
+  ) => (
+    <div>
+      <div
+        className="sub-heading underlined"
+        onClick={() => toggleSection(sectionKey)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsedSections[sectionKey]}
+      >
+        <span>{title}</span>
+        <div className="toggle-section">
+          {collapsedSections[sectionKey] ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+        </div>
+      </div>
+      {!collapsedSections[sectionKey] && (
+        <div>
+          {items.map((item) => {
+            const itemId = item.id || item.value;
+            const focusKey = `${type}:${itemId}`;
+            return (
+              <div key={itemId} className="req-row">
+                <div className="req-field">
+                  <label className="field-label">{title.replace(/s$/, '')}</label>
+                  <input
+                    type="text"
+                    className="group-input"
+                    value={item.value}
+                    onFocus={() => {
+                      taxonomyValuesAtFocusRef.current[focusKey] = item.value;
+                    }}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setItems((previous) => previous.map((entry) => (
+                        (entry.id || entry.value) === itemId ? { ...entry, value } : entry
+                      )));
+                    }}
+                    onBlur={() => {
+                      const initialValue = taxonomyValuesAtFocusRef.current[focusKey];
+                      const value = item.value.trim();
+                      delete taxonomyValuesAtFocusRef.current[focusKey];
+                      if (initialValue !== undefined && initialValue !== value) {
+                        if (value) {
+                          handleRenameTaxonomy(itemId, value, type);
+                        } else {
+                          setItems((previous) => previous.map((entry) => (
+                            (entry.id || entry.value) === itemId ? { ...entry, value: initialValue } : entry
+                          )));
+                        }
+                      }
+                    }}
+                    disabled={!canManageSettings || isArchived}
+                    aria-label={`${title.replace(/s$/, '')} name for ${item.value}`}
+                  />
+                </div>
+                {canManageSettings && !isArchived && item.value !== 'Other' && (
+                  <div className="ms-auto">
+                    <button
+                      type="button"
+                      className="btn-trash"
+                      onClick={() => setConfirmDeleteModal({
+                        type: 'taxonomy',
+                        id: itemId,
+                        name: `${title.replace(/s$/, '')} "${item.value}"`,
+                      })}
+                      aria-label={`Delete ${title.replace(/s$/, '').toLowerCase()} ${item.value}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {canManageSettings && !isArchived && (
+            <div
+              className="btn-add-item marginbottom40"
+              onClick={() => setShowAddTaxonomyModal(type)}
+            >
+              Add {title.replace(/s$/, '').toLowerCase()}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -2508,7 +2658,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         {!collapsedSections.relationships && (
           <div>
             {contactRelationships.map((r) => {
-              const itemId = r.id || r.name;
+              const itemId = r.id || r.value;
               return (
                 <div key={itemId} className="req-row">
                   <div className="req-field">
@@ -2516,24 +2666,38 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     <input
                       type="text"
                       className="group-input"
-                      value={r.name}
+                      value={r.value}
+                      onFocus={() => {
+                        taxonomyValuesAtFocusRef.current[`relationship:${itemId}`] = r.value;
+                      }}
                       onChange={(e) => {
                         const val = e.target.value;
                         setContactRelationships((prev) =>
-                          prev.map((item) => ((item.id || item.name) === itemId ? { ...item, name: val } : item))
+                          prev.map((item) => ((item.id || item.value) === itemId ? { ...item, value: val } : item))
                         );
                       }}
                       onBlur={() => {
-                        const current = contactRelationships.find((item) => (item.id || item.name) === itemId);
-                        if (current && current.name !== r.name) {
-                          handleRenameTaxonomy(itemId, 'relationship');
+                        const key = `relationship:${itemId}`;
+                        const initialValue = taxonomyValuesAtFocusRef.current[key];
+                        const value = r.value.trim();
+                        delete taxonomyValuesAtFocusRef.current[key];
+                        if (initialValue !== undefined && initialValue !== value) {
+                          if (value) {
+                            handleRenameTaxonomy(itemId, value, 'relationship');
+                          } else {
+                            setContactRelationships((prev) =>
+                              prev.map((item) =>
+                                (item.id || item.value) === itemId ? { ...item, value: initialValue } : item
+                              )
+                            );
+                          }
                         }
                       }}
                       disabled={!canManageSettings || isArchived}
-                      aria-label={`Relationship name for ${r.name}`}
+                      aria-label={`Relationship name for ${r.value}`}
                     />
                   </div>
-                  {canManageSettings && !isArchived && r.name !== 'Other' && (
+                  {canManageSettings && !isArchived && r.value !== 'Other' && (
                     <div className="ms-auto">
                       <button
                         type="button"
@@ -2542,10 +2706,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           setConfirmDeleteModal({
                             type: 'taxonomy',
                             id: itemId,
-                            name: `Relationship "${r.name}"`,
+                            name: `Relationship "${r.value}"`,
                           })
                         }
-                        aria-label={`Delete relationship ${r.name}`}
+                        aria-label={`Delete relationship ${r.value}`}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -2587,7 +2751,7 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         {!collapsedSections.outcomes && (
           <div>
             {contactOutcomes.map((o) => {
-              const itemId = o.id || o.name;
+              const itemId = o.id || o.value;
               return (
                 <div key={itemId} className="req-row">
                   <div className="req-field">
@@ -2595,24 +2759,38 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                     <input
                       type="text"
                       className="group-input"
-                      value={o.name}
+                      value={o.value}
+                      onFocus={() => {
+                        taxonomyValuesAtFocusRef.current[`outcome:${itemId}`] = o.value;
+                      }}
                       onChange={(e) => {
                         const val = e.target.value;
                         setContactOutcomes((prev) =>
-                          prev.map((item) => ((item.id || item.name) === itemId ? { ...item, name: val } : item))
+                          prev.map((item) => ((item.id || item.value) === itemId ? { ...item, value: val } : item))
                         );
                       }}
                       onBlur={() => {
-                        const current = contactOutcomes.find((item) => (item.id || item.name) === itemId);
-                        if (current && current.name !== o.name) {
-                          handleRenameTaxonomy(itemId, 'outcome');
+                        const key = `outcome:${itemId}`;
+                        const initialValue = taxonomyValuesAtFocusRef.current[key];
+                        const value = o.value.trim();
+                        delete taxonomyValuesAtFocusRef.current[key];
+                        if (initialValue !== undefined && initialValue !== value) {
+                          if (value) {
+                            handleRenameTaxonomy(itemId, value, 'outcome');
+                          } else {
+                            setContactOutcomes((prev) =>
+                              prev.map((item) =>
+                                (item.id || item.value) === itemId ? { ...item, value: initialValue } : item
+                              )
+                            );
+                          }
                         }
                       }}
                       disabled={!canManageSettings || isArchived}
-                      aria-label={`Outcome name for ${o.name}`}
+                      aria-label={`Outcome name for ${o.value}`}
                     />
                   </div>
-                  {canManageSettings && !isArchived && o.name !== 'Other' && (
+                  {canManageSettings && !isArchived && o.value !== 'Other' && (
                     <div className="ms-auto">
                       <button
                         type="button"
@@ -2621,10 +2799,10 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                           setConfirmDeleteModal({
                             type: 'taxonomy',
                             id: itemId,
-                            name: `Outcome "${o.name}"`,
+                            name: `Outcome "${o.value}"`,
                           })
                         }
-                        aria-label={`Delete outcome ${o.name}`}
+                        aria-label={`Delete outcome ${o.value}`}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -2644,6 +2822,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
           </div>
         )}
       </div>
+
+      {renderTaxonomyCatalog('contactType', 'Contact Log Types', contactLogTypes, setContactLogTypes, 'contactTypes')}
+      {renderTaxonomyCatalog('consentType', 'Consent Types', consentTypes, setConsentTypes, 'consentTypes')}
 
       {/* ========================================================================= */}
       {/* MODALS */}
@@ -3521,13 +3702,17 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
         </div>
       )}
 
-      {/* Add Taxonomy Modal (Relationship or Outcome) */}
+      {/* Add Taxonomy Modal */}
       {showAddTaxonomyModal && (
         <div className="study-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-tax-title">
           <div className="study-modal study-modal--sm">
             <div className="study-modal__header">
               <h3 id="modal-tax-title">
-                Add Contact {showAddTaxonomyModal === 'relationship' ? 'Relationship' : 'Outcome'}
+                Add {
+                  showAddTaxonomyModal === 'relationship' ? 'Contact Relationship'
+                    : showAddTaxonomyModal === 'outcome' ? 'Contact Outcome'
+                      : showAddTaxonomyModal === 'contactType' ? 'Contact Log Type' : 'Consent Type'
+                }
               </h3>
               <button
                 type="button"
@@ -3541,7 +3726,9 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
             <div className="study-modal__body">
               <div className="study-form-group">
                 <label className="study-form-label">
-                  {showAddTaxonomyModal === 'relationship' ? 'Relationship Title' : 'Outcome Title'}
+                  {showAddTaxonomyModal === 'relationship' ? 'Relationship'
+                    : showAddTaxonomyModal === 'outcome' ? 'Outcome'
+                      : showAddTaxonomyModal === 'contactType' ? 'Contact Log Type' : 'Consent Type'}
                 </label>
                 <input
                   type="text"
@@ -3549,7 +3736,11 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   placeholder={
                     showAddTaxonomyModal === 'relationship'
                       ? 'e.g. Sibling, Grandparent'
-                      : 'e.g. Appointment Rescheduled'
+                      : showAddTaxonomyModal === 'outcome'
+                        ? 'e.g. Appointment Rescheduled'
+                        : showAddTaxonomyModal === 'contactType'
+                          ? 'e.g. Video Call'
+                          : 'e.g. Re-consent'
                   }
                   value={newTaxonomyName}
                   onChange={(e) => setNewTaxonomyName(e.target.value)}
@@ -3647,9 +3838,13 @@ export const StudySettingsRequirements: React.FC<StudySettingsRequirementsProps>
                   } else if (confirmDeleteModal.type === 'taxonomy') {
                     handleDeleteTaxonomy(
                       confirmDeleteModal.id,
-                      contactRelationships.some((r) => (r.id || r.name) === confirmDeleteModal.id)
+                      contactRelationships.some((r) => (r.id || r.value) === confirmDeleteModal.id)
                         ? 'relationship'
-                        : 'outcome'
+                        : contactOutcomes.some((o) => (o.id || o.value) === confirmDeleteModal.id)
+                          ? 'outcome'
+                          : contactLogTypes.some((type) => (type.id || type.value) === confirmDeleteModal.id)
+                            ? 'contactType'
+                            : 'consentType'
                     );
                   }
                 }}

@@ -95,12 +95,18 @@ describe('StudySettingsRequirements Component Tests', () => {
       { id: 'lay-2', type: 'variable' as const, refId: 'var-2', rank: 1 },
     ],
     contactRelationships: [
-      { id: 'rel-1', name: 'Mother', type: 'relationship' },
-      { id: 'rel-2', name: 'Father', type: 'relationship' },
+      { id: 'rel-1', value: 'Mother', type: 'relationship' },
+      { id: 'rel-2', value: 'Father', type: 'relationship' },
     ],
     contactOutcomes: [
-      { id: 'out-1', name: 'Call Completed', type: 'outcome' },
-      { id: 'out-2', name: 'Voicemail Left', type: 'outcome' },
+      { id: 'out-1', value: 'Call Completed', type: 'outcome' },
+      { id: 'out-2', value: 'Voicemail Left', type: 'outcome' },
+    ],
+    contactLogTypes: [
+      { id: 'type-1', value: 'Secure Portal', type: 'contactType' },
+    ],
+    consentTypes: [
+      { id: 'consent-1', value: 'Remote Assent', type: 'consentType' },
     ],
     globalVariables: [
       { id: 'gvar-1', name: 'Global Language', variableType: 'single', isGlobal: true },
@@ -154,6 +160,8 @@ describe('StudySettingsRequirements Component Tests', () => {
     expect(res.customVariableLayout).toHaveLength(2);
     expect(res.contactRelationships).toHaveLength(2);
     expect(res.contactOutcomes).toHaveLength(2);
+    expect(res.contactLogTypes).toHaveLength(1);
+    expect(res.consentTypes).toHaveLength(1);
     expect(res.globalVariables).toHaveLength(1);
 
     // Verify custom variable options and flags

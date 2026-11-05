@@ -2241,10 +2241,21 @@ public class ParticipantRegistryService {
 
     @Transactional(readOnly = true)
     public List<String> getRelationshipOptions() {
-        return List.of(
+        return getRelationshipOptions(null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getRelationshipOptions(UUID tenantId, UUID studyId) {
+        Set<String> options = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        options.addAll(List.of(
                 "Self", "Mother", "Father", "Parent / Guardian", "Spouse / Partner",
                 "Sibling", "Child", "Caregiver", "Friend", "Other"
-        );
+        ));
+        options.addAll(StudyRequirementOptionReader.read(
+                studyRequirementRepository, objectMapper, tenantId, studyId,
+                "contactRelationships", "relationship"
+        ));
+        return new ArrayList<>(options);
     }
 
     public Map<String, List<String>> getDemographicOptions(UUID tenantId) {

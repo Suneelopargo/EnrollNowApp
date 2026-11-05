@@ -1502,6 +1502,21 @@ class ParticipantRegistryServiceTest {
     }
 
     @Test
+    void getRelationshipOptions_mergesStudyConfiguredRelationships() {
+        UUID studyId = UUID.randomUUID();
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(studyId);
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration("{\"contactRelationships\":[{\"relationship\":\"Foster Parent\"}]}");
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(requirement));
+
+        List<String> options = service.getRelationshipOptions(tenantId, studyId);
+
+        assertThat(options).contains("Self", "Mother", "Foster Parent");
+    }
+
+    @Test
     void updateParticipant_withFutureDob_throwsBadRequest() {
         UUID partId = UUID.randomUUID();
         Participant p = createMockParticipant(partId, "Alice", "Smith", LocalDate.of(1990, 1, 1), "ACTIVE");

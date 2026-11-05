@@ -5,30 +5,6 @@ export const DEFAULT_STUDY_FILTER_OPTIONS: FilterOptionItem[] = [
   { value: 'NONE', label: 'Not in a study' },
 ];
 
-export const GENDER_OPTIONS: FilterOptionItem[] = [
-  { value: 'Male', label: 'Male' },
-  { value: 'Female', label: 'Female' },
-  { value: 'Other', label: 'Other' },
-  { value: 'Unspecified', label: 'Unspecified' },
-];
-
-export const ETHNICITY_OPTIONS: FilterOptionItem[] = [
-  { value: 'Hispanic or Latino', label: 'Hispanic or Latino' },
-  { value: 'Not Hispanic or Latino', label: 'Not Hispanic or Latino' },
-  { value: 'Not Disclosed', label: 'Not Disclosed' },
-  { value: 'Unknown', label: 'Unknown' },
-];
-
-export const RACE_OPTIONS: FilterOptionItem[] = [
-  { value: 'American Indian or Alaska Native', label: 'American Indian or Alaska Native' },
-  { value: 'Asian', label: 'Asian' },
-  { value: 'Black or African American', label: 'Black or African American' },
-  { value: 'Native Hawaiian or Other Pacific Islander', label: 'Native Hawaiian or Other Pacific Islander' },
-  { value: 'White / Caucasian', label: 'White / Caucasian' },
-  { value: 'More than one race', label: 'More than one race' },
-  { value: 'Not Disclosed', label: 'Not Disclosed' },
-];
-
 export const BIRTH_MONTH_OPTIONS: FilterOptionItem[] = [
   { value: '1', label: 'January' },
   { value: '2', label: 'February' },
@@ -107,7 +83,7 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
     label: 'Sex/Gender',
     placeholder: 'Select gender...',
     type: 'multiselect',
-    options: GENDER_OPTIONS,
+    options: [],
   },
   {
     id: 'studies',
@@ -128,14 +104,14 @@ export const REGISTRY_FILTER_FIELDS: FilterFieldOption[] = [
     label: 'Ethnicity',
     placeholder: 'Select ethnicity...',
     type: 'multiselect',
-    options: ETHNICITY_OPTIONS,
+    options: [],
   },
   {
     id: 'race',
     label: 'Race',
     placeholder: 'Select race...',
     type: 'multiselect',
-    options: RACE_OPTIONS,
+    options: [],
   },
   {
     id: 'city',
@@ -229,15 +205,10 @@ export function registerDemographicFilterOptions(options: {
     ['ethnicity', options.ethnicity],
     ['race', options.race],
   ];
-  const defaults: Record<string, FilterOptionItem[]> = {
-    gender: GENDER_OPTIONS,
-    ethnicity: ETHNICITY_OPTIONS,
-    race: RACE_OPTIONS,
-  };
   mappings.forEach(([fieldId, values]) => {
     const field = REGISTRY_FILTER_FIELDS.find((item) => item.id === fieldId);
     const dynamicOptions = optionsFromValues(values);
-    if (field) field.options = dynamicOptions.length > 0 ? dynamicOptions : defaults[fieldId];
+    if (field) field.options = dynamicOptions;
   });
 }
 

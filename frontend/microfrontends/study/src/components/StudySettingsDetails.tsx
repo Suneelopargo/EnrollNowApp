@@ -73,6 +73,9 @@ interface ImportItemRecord {
   name?: string;
   relationship?: string;
   outcome?: string;
+  contactType?: string;
+  consentType?: string;
+  value?: string;
   [key: string]: unknown;
 }
 
@@ -443,8 +446,10 @@ export const StudySettingsDetails: React.FC<StudySettingsDetailsProps> = ({
           { key: 'surveys', label: 'Surveys', items: parsed.surveys ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Survey' },
           { key: 'statuses', label: 'Statuses', items: parsed.statuses ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Status' },
           { key: 'customVariables', label: 'Custom Variables', items: parsed.customVariables ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Variable' },
-          { key: 'contactRelationships', label: 'Contact Relationships', items: parsed.contactRelationships ?? [], getName: (i: ImportItemRecord) => i.relationship || i.name || 'Unnamed Relationship' },
-          { key: 'contactOutcomes', label: 'Contact Outcomes', items: parsed.contactOutcomes ?? [], getName: (i: ImportItemRecord) => i.outcome || i.name || 'Unnamed Outcome' },
+          { key: 'contactRelationships', label: 'Contact Relationships', items: parsed.contactRelationships ?? [], getName: (i: ImportItemRecord) => i.relationship || i.value || i.name || 'Unnamed Relationship' },
+          { key: 'contactOutcomes', label: 'Contact Outcomes', items: parsed.contactOutcomes ?? [], getName: (i: ImportItemRecord) => i.outcome || i.value || i.name || 'Unnamed Outcome' },
+          { key: 'contactLogTypes', label: 'Contact Log Types', items: parsed.contactLogTypes ?? [], getName: (i: ImportItemRecord) => i.contactType || i.value || i.name || 'Unnamed Contact Log Type' },
+          { key: 'consentTypes', label: 'Consent Types', items: parsed.consentTypes ?? [], getName: (i: ImportItemRecord) => i.consentType || i.value || i.name || 'Unnamed Consent Type' },
           { key: 'emailTemplates', label: 'Email Templates', items: parsed.emailTemplates ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Template' },
           { key: 'textTemplates', label: 'Text Templates', items: parsed.textTemplates ?? [], getName: (i: ImportItemRecord) => i.name || 'Unnamed Template' },
         ].filter((cat) => cat.items.length > 0);

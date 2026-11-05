@@ -16,7 +16,10 @@ import com.enrollnow.participant.repositories.ParticipantConsentLogRepository;
 import com.enrollnow.participant.repositories.ParticipantRepository;
 import com.enrollnow.participant.repositories.StudyCandidateRepository;
 import com.enrollnow.study.models.Study;
+import com.enrollnow.study.models.StudyRequirement;
 import com.enrollnow.study.repositories.StudyRepository;
+import com.enrollnow.study.repositories.StudyRequirementRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +47,7 @@ class ParticipantConsentLogServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private AuditRecorder auditRecorder;
     @Mock private SitePermissionService sitePermissionService;
+    @Mock private StudyRequirementRepository studyRequirementRepository;
 
     private ParticipantConsentLogService service;
 
@@ -65,6 +69,8 @@ class ParticipantConsentLogServiceTest {
                 auditRecorder,
                 sitePermissionService
         );
+        service.setStudyRequirementRepository(studyRequirementRepository);
+        service.setObjectMapper(new ObjectMapper());
     }
 
     @Test
@@ -132,6 +138,22 @@ class ParticipantConsentLogServiceTest {
 
         assertThat(types.stream().map(ConsentTypeOptionDto::getValue))
                 .contains("Initial Consent", "Re-Consent", "Assent", "Custom Video Assent");
+    }
+
+    @Test
+    void getConsentTypes_mergesStudyConfiguredTypes() {
+        StudyRequirement requirement = new StudyRequirement();
+        requirement.setStudyId(studyId);
+        requirement.setTenantId(tenantId);
+        requirement.setConfiguration("{\"consentTypes\":[{\"value\":\"Remote Assent\"}]}");
+        when(studyRequirementRepository.findByTenantIdAndStudyId(tenantId, studyId))
+                .thenReturn(Optional.of(requirement));
+        when(consentLogRepository.findDistinctConsentTypes(tenantId, studyId)).thenReturn(List.of("Recorded Consent"));
+
+        List<ConsentTypeOptionDto> types = service.getConsentTypes(tenantId, studyId);
+
+        assertThat(types).extracting(ConsentTypeOptionDto::getValue)
+                .contains("Initial Consent", "Remote Assent", "Recorded Consent");
     }
 
     @Test

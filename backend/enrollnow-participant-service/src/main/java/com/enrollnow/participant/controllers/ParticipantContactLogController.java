@@ -97,13 +97,18 @@ public class ParticipantContactLogController {
 
     @GetMapping("/contact-outcomes")
     public ResponseEntity<List<ContactOutcomeDto>> getContactOutcomes(
-            @RequestParam(required = false) UUID tenantId) {
+            @RequestParam(required = false) UUID tenantId,
+            @RequestParam(required = false) UUID studyId) {
 
         UUID resolvedTenantId = resolveTenantId(tenantId);
         siteAuthorizationService.requireRegistryAccess(resolvedTenantId, null);
 
-        List<ContactOutcomeDto> outcomes = contactLogService.getContactOutcomes(resolvedTenantId);
+        List<ContactOutcomeDto> outcomes = contactLogService.getContactOutcomes(resolvedTenantId, studyId);
         return ResponseEntity.ok(outcomes);
+    }
+
+    public ResponseEntity<List<ContactOutcomeDto>> getContactOutcomes(UUID tenantId) {
+        return getContactOutcomes(tenantId, null);
     }
 
     @GetMapping("/{participantId}/contact-methods")

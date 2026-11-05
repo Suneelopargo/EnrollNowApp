@@ -14,6 +14,8 @@ public class StudyRequirementsResponse {
     private List<StudyLayoutItemDto> customVariableLayout = new ArrayList<>();
     private List<ContactTaxonomyDto> contactRelationships = new ArrayList<>();
     private List<ContactTaxonomyDto> contactOutcomes = new ArrayList<>();
+    private List<ContactTaxonomyDto> contactLogTypes = new ArrayList<>();
+    private List<ContactTaxonomyDto> consentTypes = new ArrayList<>();
     private List<StudyCustomVariableDto> globalVariables = new ArrayList<>();
     private boolean canManage;
 
@@ -90,6 +92,22 @@ public class StudyRequirementsResponse {
 
     public void setContactOutcomes(List<ContactTaxonomyDto> contactOutcomes) {
         this.contactOutcomes = contactOutcomes != null ? contactOutcomes : new ArrayList<>();
+    }
+
+    public List<ContactTaxonomyDto> getContactLogTypes() {
+        return contactLogTypes;
+    }
+
+    public void setContactLogTypes(List<ContactTaxonomyDto> contactLogTypes) {
+        this.contactLogTypes = contactLogTypes != null ? contactLogTypes : new ArrayList<>();
+    }
+
+    public List<ContactTaxonomyDto> getConsentTypes() {
+        return consentTypes;
+    }
+
+    public void setConsentTypes(List<ContactTaxonomyDto> consentTypes) {
+        this.consentTypes = consentTypes != null ? consentTypes : new ArrayList<>();
     }
 
     public List<StudyCustomVariableDto> getGlobalVariables() {
