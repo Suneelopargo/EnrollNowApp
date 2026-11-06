@@ -1,5 +1,6 @@
 // frontend/shared/confirmation/ConfirmationContainer.tsx - Global Confirmation Dialog Host UI
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Trash2,
@@ -76,11 +77,14 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
     cancelText,
     loadingText,
     confirmWord,
+    confirmInputLabel,
+    confirmInputPlaceholder,
+    confirmInputSubtext,
     errorMessage,
   } = state;
 
   const isWordRequirementSatisfied = confirmWord
-    ? confirmInput.trim().toLowerCase() === confirmWord.trim().toLowerCase()
+    ? confirmInput.trim() === confirmWord.trim()
     : true;
 
   const isConfirmDisabled = isLoading || !isWordRequirementSatisfied;
@@ -116,7 +120,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
     ? [details]
     : [];
 
-  return (
+  const dialogContent = (
     <div
       className={`enl-confirm-backdrop ${className}`}
       onClick={handleBackdropClick}
@@ -158,10 +162,13 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="enl-confirm-body">
-          <div id="enl-confirm-message" className="enl-confirm-message">
-            {message}
-          </div>
+        {(message || detailsList.length > 0 || confirmWord || errorMessage) && (
+          <div className="enl-confirm-body">
+            {message && (
+              <div id="enl-confirm-message" className="enl-confirm-message">
+                {message}
+              </div>
+            )}
 
           {/* Optional Consequence / Details Callout */}
           {detailsList.length > 0 && (
@@ -181,15 +188,23 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
           {/* Optional Phrase Confirmation Input */}
           {confirmWord && (
             <div className="enl-confirm-input-section">
-              <label htmlFor="enl-confirm-input" className="enl-confirm-input-label">
-                To confirm, please type{' '}
-                <strong className="enl-confirm-input-code">{confirmWord}</strong> below:
-              </label>
+              {confirmInputLabel !== '' && (
+                <label htmlFor="enl-confirm-input" className="enl-confirm-input-label">
+                  {confirmInputLabel ? (
+                    confirmInputLabel
+                  ) : (
+                    <>
+                      To confirm, please type{' '}
+                      <strong className="enl-confirm-input-code">{confirmWord}</strong> below:
+                    </>
+                  )}
+                </label>
+              )}
               <input
                 id="enl-confirm-input"
                 type="text"
                 className="enl-confirm-input"
-                placeholder={confirmWord}
+                placeholder={confirmInputPlaceholder !== undefined ? confirmInputPlaceholder : confirmWord}
                 value={confirmInput}
                 disabled={isLoading}
                 autoFocus
@@ -200,6 +215,11 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
                   }
                 }}
               />
+              {confirmInputSubtext && (
+                <div className="text-xs text-gray-500 mt-2 text-center font-normal tracking-wide">
+                  {confirmInputSubtext}
+                </div>
+              )}
             </div>
           )}
 
@@ -211,6 +231,7 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Footer with Actions */}
         <div className="enl-confirm-footer">
@@ -242,6 +263,12 @@ export const ConfirmationContainer: React.FC<ConfirmationContainerProps> = ({
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') {
+    return dialogContent;
+  }
+
+  return createPortal(dialogContent, document.body);
 };
 
 export default ConfirmationContainer;

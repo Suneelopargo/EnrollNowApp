@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { Footer } from '../../../../shared/design-system/components/Footer';
+import { AuthFooterWave } from './AuthFooterWave';
 import { authApi } from '../../../../shared/api/authApi';
 import { getApiErrorMessage } from '../../../../shared/api-client';
 import { toast } from '../../../../shared/toaster';
@@ -84,7 +85,7 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
   };
 
   return (
-    <div className="enl-activation-page">
+    <div className="enl-activation-page enl-recovery-page">
       <div className="enl-activation-card">
         {/* Top White Brand Header */}
         <header className="enl-activation-header">
@@ -122,7 +123,18 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
                 autoComplete="email"
                 required
                 aria-invalid={Boolean(touched && validationError)}
+                aria-describedby={touched && validationError ? 'recover-email-error' : undefined}
               />
+              {touched && validationError && (
+                <div
+                  id="recover-email-error"
+                  className="mt-1 text-sm text-red-400"
+                  style={{ color: '#f87171' }}
+                  role="alert"
+                >
+                  {validationError}
+                </div>
+              )}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '12px' }}>
@@ -148,8 +160,12 @@ export const RecoverPasswordPage: React.FC<RecoverPasswordPageProps> = ({ onSucc
         </button>
       </div>
 
+      <div className="enl-recovery-wave-container">
+        <AuthFooterWave />
+      </div>
+
       {/* Footer Below Card */}
-      <Footer variant="auth-card" />
+      <Footer variant="auth" />
     </div>
   );
 };

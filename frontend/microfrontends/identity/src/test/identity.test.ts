@@ -68,7 +68,7 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     expect(loginContent.features.map((f) => f.title)).toEqual([
       'Recruit & Prescreen',
       'Schedule & Enroll',
-      'Manage Studies',
+      'Manage Studies & Registries',
       'Secure & Compliant',
     ]);
 
@@ -149,4 +149,72 @@ describe('Identity MFE Remote Entry & Code-Driven Login Components', () => {
     warningSpy.mockRestore();
   });
 
+  it('renders login form with disabled submit button when fields are empty', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const React = await import('react');
+    const html = renderToStaticMarkup(
+      React.createElement(IdentityModule, {
+        context: {
+          user: null,
+          token: null,
+          apiBaseUrl: 'http://localhost:8080',
+          correlationId: 'test-correlation-id',
+          navigate: vi.fn(),
+        },
+      })
+    );
+
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('Log In');
+    expect(html).toContain('Enter your email address');
+    expect(html).toContain('Enter your password');
+    expect(html).toContain('Authorized Use and Monitoring Notice');
+    expect(html).toContain(
+      'This application contains confidential information, including protected health information (PHI) and/or regulated electronic records.'
+    );
+    expect(html).toContain(
+      'By continuing, you acknowledge this notice and agree to use the application in accordance with applicable laws and organizational policies.'
+    );
+    expect(html).not.toContain('This system should only be accessed by authorized users.');
+  });
+
+  it('renders the login footer on password recovery without the login notice', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const React = await import('react');
+    const { MemoryRouter } = await import('react-router-dom');
+    const html = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(RecoverPasswordPage)
+      )
+    );
+
+    expect(html).toContain('enl-recovery-page');
+    expect(html).toContain('enl-recovery-wave-container');
+    expect(html).toContain('enl-login-strong-footer');
+    expect(html).toContain('© 2016 - 2027');
+    expect(html).toContain('Terms of Service');
+    expect(html).toContain('Support Center');
+    expect(html).not.toContain('Authorized Use and Monitoring Notice');
+  });
+
+  it('renders the login footer on password reset', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const React = await import('react');
+    const { MemoryRouter } = await import('react-router-dom');
+    const html = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(ResetPasswordPage)
+      )
+    );
+
+    expect(html).toContain('enl-reset-password-page');
+    expect(html).toContain('enl-reset-password-wave-container');
+    expect(html).toContain('enl-login-strong-footer');
+    expect(html).toContain('© 2016 - 2027');
+    expect(html).not.toContain('© 2016 - 2026');
+  });
 });

@@ -26,8 +26,7 @@ export const FloatingInfoCard: React.FC<FloatingInfoCardProps> = ({
     }
   };
 
-  const isChecklist = card.type === 'checklist';
-  const isEngage = card.id === 'engage';
+  const hasChecklist = Boolean(card.checkItems?.length);
 
   return (
     <div className={`enl-floating-info-card ${className}`}>
@@ -41,7 +40,7 @@ export const FloatingInfoCard: React.FC<FloatingInfoCardProps> = ({
       )}
 
       {/* Header Row */}
-      <div className={`enl-float-card-header ${isChecklist ? 'enl-float-card-header--checklist' : ''}`}>
+      <div className={`enl-float-card-header ${hasChecklist ? 'enl-float-card-header--checklist' : ''}`}>
         <div className={`enl-float-card-icon-box enl-float-card-icon-box--${card.stageNumber || 1}`}>
           {renderHeaderIcon()}
         </div>
@@ -51,7 +50,7 @@ export const FloatingInfoCard: React.FC<FloatingInfoCardProps> = ({
       </div>
 
       {/* Checklist Content */}
-      {isChecklist && card.checkItems && (
+      {hasChecklist && card.checkItems && (
         <div className="enl-float-checklist">
           {card.checkItems.map((item, idx) => (
             <div key={idx} className="enl-float-check-item">
@@ -64,13 +63,6 @@ export const FloatingInfoCard: React.FC<FloatingInfoCardProps> = ({
         </div>
       )}
 
-      {/* Skeleton / Bar Content */}
-      {!isChecklist && (
-        <div className="enl-float-skeleton">
-          <div className={`enl-skeleton-bar-long ${isEngage ? 'enl-skeleton-bar-long--wide' : ''}`} />
-          <div className={`enl-skeleton-bar-short ${isEngage ? 'enl-skeleton-bar-short--wide' : ''}`} />
-        </div>
-      )}
     </div>
   );
 };

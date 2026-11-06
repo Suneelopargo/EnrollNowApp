@@ -105,6 +105,48 @@ public class InvitationEmailService {
         sendEmail(recipientEmail, subject, body, accessToken);
     }
 
+    public void sendParticipantEmail(
+            List<String> to,
+            List<String> cc,
+            List<String> bcc,
+            String replyTo,
+            String subject,
+            String body,
+            boolean messageIsHtml,
+            List<MailAttachment> attachments) {
+        String accessToken = getGraphAccessToken();
+        Map<String, Object> message = new HashMap<>();
+        message.put("subject", subject);
+        message.put("body", Map.of(
+                "contentType", messageIsHtml ? "HTML" : "Text",
+                "content", body
+        ));
+        message.put("toRecipients", graphRecipients(to));
+        if (cc != null && !cc.isEmpty()) {
+            message.put("ccRecipients", graphRecipients(cc));
+        }
+        if (bcc != null && !bcc.isEmpty()) {
+            message.put("bccRecipients", graphRecipients(bcc));
+        }
+        if (replyTo != null && !replyTo.isBlank()) {
+            message.put("replyTo", graphRecipients(List.of(replyTo)));
+        }
+        if (attachments != null && !attachments.isEmpty()) {
+            List<Map<String, Object>> graphAttachments = attachments.stream()
+                    .map(attachment -> {
+                        Map<String, Object> graphAttachment = new HashMap<>();
+                        graphAttachment.put("@odata.type", "#microsoft.graph.fileAttachment");
+                        graphAttachment.put("name", attachment.fileName());
+                        graphAttachment.put("contentType", attachment.contentType());
+                        graphAttachment.put("contentBytes", attachment.contentBase64());
+                        return graphAttachment;
+                    })
+                    .toList();
+            message.put("attachments", graphAttachments);
+        }
+        sendGraphMessage(message, accessToken);
+    }
+
     private String buildEmailBody(
             String greeting,
             String introText,
@@ -162,19 +204,6 @@ public class InvitationEmailService {
             String subject,
             String body,
             String accessToken) {
-
-        Map<String, Object> emailAddress =
-                Map.of(
-                        "address",
-                        recipientEmail
-                );
-
-        Map<String, Object> recipient =
-                Map.of(
-                        "emailAddress",
-                        emailAddress
-                );
-
         Map<String, Object> logoAttachment =
                 new HashMap<>();
         logoAttachment.put("@odata.type", "#microsoft.graph.fileAttachment");
@@ -199,7 +228,7 @@ public class InvitationEmailService {
 
         message.put(
                 "toRecipients",
-                List.of(recipient)
+                graphRecipients(List.of(recipientEmail))
         );
 
         message.put(
@@ -207,12 +236,23 @@ public class InvitationEmailService {
                 List.of(logoAttachment)
         );
 
-        Map<String, Object> requestBody =
-                Map.of(
-                        "message", message,
-                        "saveToSentItems", true
-                );
+        sendGraphMessage(message, accessToken);
+    }
 
+    private List<Map<String, Object>> graphRecipients(List<String> addresses) {
+        return addresses.stream()
+                .map(address -> Map.<String, Object>of(
+                        "emailAddress",
+                        Map.of("address", address)
+                ))
+                .toList();
+    }
+
+    private void sendGraphMessage(Map<String, Object> message, String accessToken) {
+        Map<String, Object> requestBody = Map.of(
+                "message", message,
+                "saveToSentItems", true
+        );
         HttpHeaders headers =
                 new HttpHeaders();
 

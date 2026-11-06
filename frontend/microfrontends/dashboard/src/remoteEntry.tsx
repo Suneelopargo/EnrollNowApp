@@ -152,7 +152,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ context }) => 
         if (isCancelled) return;
         setDataMode(result.mode);
         setIsDemoMode(result.isDemoMode);
-        if (result.mode === 'coming_soon') {
+        if (result.mode === 'error') { setError(result.errorMessage || 'Failed to load dashboard data.'); setStats(null); setRecentStudies([]); setParticipants([]); } else if (false) {
           setStats(null);
           setRecentStudies([]);
           setParticipants([]);

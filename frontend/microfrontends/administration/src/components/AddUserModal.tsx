@@ -564,7 +564,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         type="button"
         className="btn site-admin-btn-resend site-admin-tooltip-btn"
         onClick={handleResendEnrollment}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isEditingSelf}
         data-tooltip="Resend Enroll Email"
         aria-label="Resend Enroll Email"
       >
@@ -576,7 +576,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
         type="button"
         className="btn site-admin-btn-reset-pw site-admin-tooltip-btn"
         onClick={handleResetPassword}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isEditingSelf}
         data-tooltip="Reset the user's password"
         aria-label="Reset the user's password"
       >
@@ -601,7 +601,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
           type="button"
           className="btn site-admin-btn-lock site-admin-tooltip-btn"
           onClick={handleLockAccount}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isEditingSelf}
           data-tooltip="Lock account"
           aria-label="Lock account"
         >
@@ -636,7 +636,7 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={isEditMode ? `Edit ${userToEdit?.name} User` : 'Add User'}
+      title={isEditMode ? `Edit user ${userToEdit?.name}` : 'Add User'}
       footer={modalFooter}
       className="site-admin-add-user-modal"
     >

@@ -1,6 +1,7 @@
 // frontend/shared/design-system/styles/_typography.scss - Typography Design Tokens & Styles
 // Font Families
-$font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+$font-family-base: 'Inter', Arial, sans-serif;
+$font-family-heading: 'General Sans', 'Inter', Arial, sans-serif;
 $font-family-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
 
 // Font Sizes
@@ -28,7 +29,7 @@ $line-height-relaxed: 1.625;
 
 // Typography Utility Classes
 .page-title {
-  font-family: $font-family-base;
+  font-family: $font-family-heading;
   font-size: $font-size-2xl;
   font-weight: $font-weight-bold;
   line-height: $line-height-tight;
@@ -45,7 +46,7 @@ $line-height-relaxed: 1.625;
 }
 
 .section-title {
-  font-family: $font-family-base;
+  font-family: $font-family-heading;
   font-size: $font-size-lg;
   font-weight: $font-weight-semibold;
   color: #0f172a;

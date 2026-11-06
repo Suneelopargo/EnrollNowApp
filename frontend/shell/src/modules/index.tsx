@@ -20,7 +20,7 @@ export function useMfeContext(moduleName: string): MfeContext {
       apiBaseUrl: getApiBaseUrl(),
       correlationId: telemetry.getCorrelationId(),
       navigate,
-      onEvent: (eventType: string, payload: any) => {
+      onEvent: (eventType: string, payload: Record<string, unknown>) => {
         telemetry.track({
           eventType: 'AUTH_STATE',
           remoteId: moduleName,
@@ -28,16 +28,8 @@ export function useMfeContext(moduleName: string): MfeContext {
         });
 
         if (eventType === 'LOGIN_SUCCESS') {
-          const authToken = payload?.token || getAccessToken();
-          let authUser = payload?.user;
-          if (!authUser && payload?.username) {
-            authUser = {
-              id: 1,
-              username: payload.username,
-              email: `${payload.username}@enrollnow.local`,
-              roles: ['ROLE_SUPER_ADMIN'],
-            };
-          }
+          const authToken = (payload?.token as string | undefined) || getAccessToken();
+          const authUser = payload?.user as MfeContext['user'];
           if (authUser && authToken) {
             setSession(authUser, authToken);
           }

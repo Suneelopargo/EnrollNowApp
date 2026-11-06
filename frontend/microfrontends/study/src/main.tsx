@@ -9,7 +9,7 @@ const mockContext = {
   user: {
     id: 'user-dev-001',
     username: 'studycoordinator',
-    email: 'coordinator@enrollnow.local',
+    email: 'coordinator@example.org',
     roles: ['ROLE_COORDINATOR', 'ROLE_STUDY_LEAD'],
     firstName: 'Elena',
     lastName: 'Rostova',
@@ -19,7 +19,7 @@ const mockContext = {
   basePath: '/',
   correlationId: 'dev-correlation-id',
   navigate: (path: string) => console.log('Navigate to:', path),
-  emitEvent: (event: any) => console.log('Emitted event:', event),
+  emitEvent: (event: unknown) => console.log('Emitted event:', event),
 };
 
 const rootEl = document.getElementById('root');

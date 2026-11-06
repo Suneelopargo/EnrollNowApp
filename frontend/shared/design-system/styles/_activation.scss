@@ -13,7 +13,7 @@
   background-color: #004b87;
   padding: 40px 16px;
   box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Inter', Arial, sans-serif;
 
   *, *::before, *::after {
     box-sizing: border-box;
@@ -78,8 +78,9 @@
 
 .enl-activation-welcome {
   margin: 0 0 4px 0;
-  font-size: 19px;
+  font-size: 26px;
   font-weight: 800;
+  font-family: 'General Sans', 'Inter', Arial, sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   color: #ffffff;
@@ -88,7 +89,7 @@
 
 .enl-activation-subtitle {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -130,6 +131,7 @@
   padding: 0 14px;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
+  font-family: 'Inter', Arial, sans-serif;
   font-size: 15px;
   color: #0f172a;
   background-color: #ffffff;
@@ -169,7 +171,7 @@
 }
 
 .enl-activation-overall-status {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 700;
   color: #ffffff;
   margin-bottom: 8px;
@@ -182,7 +184,7 @@
 
 .enl-activation-test-title {
   margin: 12px 0 6px 0;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: #ffffff;
   line-height: 1.3;
@@ -223,14 +225,14 @@
 }
 
 .enl-activation-crack-time {
-  font-size: 13px;
+  font-size: 14px;
   color: #ffffff;
   margin-bottom: 6px;
   line-height: 1.4;
 }
 
 .enl-activation-suggestions {
-  font-size: 13px;
+  font-size: 14px;
   color: #ffffff;
   margin-bottom: 10px;
   line-height: 1.4;
@@ -251,7 +253,7 @@
 }
 
 .enl-activation-strength-status {
-  font-size: 13px;
+  font-size: 14px;
   color: #ffffff;
   margin-bottom: 14px;
   line-height: 1.4;
@@ -263,7 +265,7 @@
 
 // Test #2: Password Requirements
 .enl-activation-reqs-intro {
-  font-size: 13px;
+  font-size: 14px;
   color: #ffffff;
   margin-bottom: 4px;
   line-height: 1.4;
@@ -273,7 +275,7 @@
   margin: 0;
   padding-left: 0;
   list-style-type: none;
-  font-size: 13px;
+  font-size: 14px;
   color: #ffffff;
   line-height: 1.5;
 
@@ -366,11 +368,11 @@
 // Set Password Submit Button
 .enl-activation-submit-btn {
   width: 100%;
-  height: 64px;
+  height: 44px;
   background-color: #ffcb05;
   color: #00274c;
   border: none;
-  font-size: 17px;
+  font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
   border-radius: 0 0 28px 28px;
@@ -423,5 +425,191 @@
   .enl-activation-footer-divider {
     margin: 0 4px;
     opacity: 0.7;
+  }
+}
+
+.enl-recovery-page,
+.enl-user-activation-page,
+.enl-reset-password-page {
+  min-height: 100vh;
+  padding-bottom: 56px;
+  background-color: #f2f4f6;
+
+  .enl-activation-card {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+.enl-user-activation-page .enl-activation-card {
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.enl-recovery-wave-container,
+.enl-user-activation-wave-container,
+.enl-reset-password-wave-container {
+  position: absolute;
+  left: 0;
+  bottom: 38px;
+  width: 100%;
+  height: clamp(120px, 15vh, 165px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .enl-recovery-page,
+  .enl-user-activation-page,
+  .enl-reset-password-page {
+    padding: 24px 12px 56px;
+  }
+
+  .enl-user-activation-page .enl-activation-welcome {
+    font-size: 23px;
+  }
+}
+
+@media (max-width: 900px) {
+  .enl-recovery-wave-container,
+  .enl-user-activation-wave-container,
+  .enl-reset-password-wave-container {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: 100%;
+    height: 46px;
+    margin-top: 10px;
+  }
+}
+
+.enl-user-activation-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 50px 46px;
+  justify-items: center;
+  align-items: center;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 12px 0;
+
+  .enl-activation-card {
+    align-self: center;
+    max-height: none;
+    overflow: visible;
+    margin: 0;
+  }
+
+  .enl-activation-header {
+    flex-shrink: 0;
+  }
+
+  .enl-activation-body {
+    flex-shrink: 0;
+  }
+
+  .enl-activation-submit-btn {
+    flex-shrink: 0;
+  }
+
+  .enl-user-activation-wave-container {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: calc(100% + 24px);
+    height: 50px;
+    margin: 0 0 0 -12px;
+    justify-self: stretch;
+    align-self: stretch;
+    z-index: 40;
+    pointer-events: none;
+  }
+
+  .enl-login-strong-footer {
+    position: relative;
+    inset: auto;
+    width: calc(100% + 24px);
+    height: 46px;
+    min-height: 46px;
+    margin: 0 0 0 -12px;
+    justify-self: stretch;
+    align-self: stretch;
+    z-index: 50;
+    padding: 0;
+  }
+}
+
+@media (max-height: 800px) {
+  .enl-user-activation-page {
+    .enl-activation-card {
+      max-width: min(440px, calc(100vw - 24px));
+      height: 100%;
+    }
+
+    .enl-activation-body {
+      flex: 1 0 auto;
+    }
+
+    .enl-activation-header {
+      padding: 10px 18px;
+
+      .enl-brand-container {
+        max-width: 260px;
+      }
+    }
+
+    .enl-activation-body {
+      padding: 12px 20px 8px;
+    }
+
+    .signin-title {
+      margin-bottom: 8px;
+    }
+
+    .enl-activation-input-group {
+      margin-bottom: 6px;
+    }
+
+    .enl-activation-meter-group {
+      margin-top: 4px;
+    }
+
+    .enl-activation-overall-status {
+      margin-bottom: 4px;
+    }
+
+    .enl-activation-test-block {
+      margin-bottom: 6px;
+    }
+
+    .enl-activation-test-title {
+      margin: 6px 0 3px;
+    }
+
+    .enl-activation-meter-container {
+      margin-bottom: 4px;
+    }
+
+    .enl-activation-meter-bg {
+      height: 8px;
+    }
+
+    .enl-activation-crack-time {
+      margin-bottom: 3px;
+    }
+
+    .enl-activation-strength-status {
+      margin-bottom: 6px;
+    }
+
+    .enl-activation-reqs-list {
+      line-height: 1.35;
+
+      li {
+        margin-bottom: 1px;
+      }
+    }
   }
 }

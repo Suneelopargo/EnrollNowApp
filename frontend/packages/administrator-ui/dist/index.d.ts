@@ -8,7 +8,7 @@ export interface AdminDashboard {
   inactiveUsers: number;
   activeLocations: number;
   totalRoles?: number;
-  recentActivities?: any[];
+  recentActivities?: Record<string, unknown>[];
 }
 
 export interface AdminUser {
@@ -133,7 +133,7 @@ export interface AdminLocationAccess {
 }
 
 export interface AdminAuditPage {
-  content: any[];
+  content: Record<string, unknown>[];
   totalElements: number;
   totalPages: number;
 }

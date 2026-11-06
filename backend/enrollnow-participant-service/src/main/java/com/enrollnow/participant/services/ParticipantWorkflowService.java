@@ -1,0 +1,1524 @@
+package com.enrollnow.participant.services;
+
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRequest;
+import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.identity.services.InvitationEmailService;
+import com.enrollnow.identity.services.MailAttachment;
+import com.enrollnow.participant.dtos.*;
+import com.enrollnow.participant.models.*;
+import com.enrollnow.participant.repositories.*;
+import com.enrollnow.study.models.Study;
+import com.enrollnow.study.repositories.StudyRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.OffsetDateTime;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+@Service
+public class ParticipantWorkflowService {
+
+    private static final Logger log = LoggerFactory.getLogger(ParticipantWorkflowService.class);
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final ParticipantRepository participantRepository;
+    private final ParticipantCommentRepository commentRepository;
+    private final CommunicationRepository communicationRepository;
+    private final CommunicationRecipientRepository recipientRepository;
+    private final ParticipantContactRepository contactRepository;
+    private final ParticipantAddressRepository addressRepository;
+    private final ConsentRecordRepository consentRecordRepository;
+    private final ConsentVersionRepository consentVersionRepository;
+    private final SurveyAssignmentRepository surveyAssignmentRepository;
+    private final SurveyDefinitionRepository surveyDefinitionRepository;
+    private final StudyRepository studyRepository;
+    private final AuditRecorder auditRecorder;
+    private final SmsGatewayService smsGatewayService;
+    private final InvitationEmailService invitationEmailService;
+
+    public ParticipantWorkflowService(
+            ParticipantRepository participantRepository,
+            ParticipantCommentRepository commentRepository,
+            CommunicationRepository communicationRepository,
+            CommunicationRecipientRepository recipientRepository,
+            ParticipantContactRepository contactRepository,
+            ParticipantAddressRepository addressRepository,
+            ConsentRecordRepository consentRecordRepository,
+            ConsentVersionRepository consentVersionRepository,
+            SurveyAssignmentRepository surveyAssignmentRepository,
+            SurveyDefinitionRepository surveyDefinitionRepository,
+            StudyRepository studyRepository,
+            @Autowired(required = false) AuditRecorder auditRecorder
+    ) {
+        this(participantRepository, commentRepository, communicationRepository, recipientRepository,
+                contactRepository, addressRepository, consentRecordRepository, consentVersionRepository,
+                surveyAssignmentRepository, surveyDefinitionRepository, studyRepository, auditRecorder, null, null);
+    }
+
+    public ParticipantWorkflowService(
+            ParticipantRepository participantRepository,
+            ParticipantCommentRepository commentRepository,
+            CommunicationRepository communicationRepository,
+            CommunicationRecipientRepository recipientRepository,
+            ParticipantContactRepository contactRepository,
+            ParticipantAddressRepository addressRepository,
+            ConsentRecordRepository consentRecordRepository,
+            ConsentVersionRepository consentVersionRepository,
+            SurveyAssignmentRepository surveyAssignmentRepository,
+            SurveyDefinitionRepository surveyDefinitionRepository,
+            StudyRepository studyRepository,
+            @Autowired(required = false) AuditRecorder auditRecorder,
+            @Autowired(required = false) SmsGatewayService smsGatewayService
+    ) {
+        this(participantRepository, commentRepository, communicationRepository, recipientRepository,
+                contactRepository, addressRepository, consentRecordRepository, consentVersionRepository,
+                surveyAssignmentRepository, surveyDefinitionRepository, studyRepository, auditRecorder,
+                smsGatewayService, null);
+    }
+
+    @Autowired
+    public ParticipantWorkflowService(
+            ParticipantRepository participantRepository,
+            ParticipantCommentRepository commentRepository,
+            CommunicationRepository communicationRepository,
+            CommunicationRecipientRepository recipientRepository,
+            ParticipantContactRepository contactRepository,
+            ParticipantAddressRepository addressRepository,
+            ConsentRecordRepository consentRecordRepository,
+            ConsentVersionRepository consentVersionRepository,
+            SurveyAssignmentRepository surveyAssignmentRepository,
+            SurveyDefinitionRepository surveyDefinitionRepository,
+            StudyRepository studyRepository,
+            @Autowired(required = false) AuditRecorder auditRecorder,
+            @Autowired(required = false) SmsGatewayService smsGatewayService,
+            InvitationEmailService invitationEmailService
+    ) {
+        this.participantRepository = participantRepository;
+        this.commentRepository = commentRepository;
+        this.communicationRepository = communicationRepository;
+        this.recipientRepository = recipientRepository;
+        this.contactRepository = contactRepository;
+        this.addressRepository = addressRepository;
+        this.consentRecordRepository = consentRecordRepository;
+        this.consentVersionRepository = consentVersionRepository;
+        this.surveyAssignmentRepository = surveyAssignmentRepository;
+        this.surveyDefinitionRepository = surveyDefinitionRepository;
+        this.studyRepository = studyRepository;
+        this.auditRecorder = auditRecorder;
+        this.smsGatewayService = smsGatewayService != null ? smsGatewayService : new SmsGatewayService("twilio", "", "", "", "US");
+        this.invitationEmailService = invitationEmailService;
+    }
+
+    // =========================================================================
+    // 1. PARTICIPANT COMMENTS
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public List<ParticipantCommentDto> getComments(UUID tenantId, UUID participantId) {
+        return getComments(tenantId, participantId, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParticipantCommentDto> getComments(UUID tenantId, UUID participantId, UUID userId, boolean canAccessAdmin) {
+        verifyParticipantExists(tenantId, participantId);
+        return commentRepository.findByTenantIdAndParticipantIdOrderByPinnedDescCreatedAtDesc(tenantId, participantId)
+                .stream()
+                .map(comment -> mapCommentToDto(comment, userId, canAccessAdmin))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ParticipantCommentDto createComment(UUID tenantId, UUID participantId, UUID userId, String userName, CreateCommentRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+
+        ParticipantComment comment = new ParticipantComment();
+        comment.setTenantId(tenantId);
+        comment.setParticipantId(participantId);
+        comment.setStudyId(resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier()));
+        comment.setText(request.getText().trim());
+        comment.setPinned(request.isPinned());
+        comment.setGlobal(request.isGlobal());
+        comment.setAuthorId(userId);
+        String finalAuthorName = (request.getAuthorName() != null && !request.getAuthorName().isBlank())
+                ? request.getAuthorName().trim()
+                : (userName != null && !userName.isBlank() ? userName.trim() : "Current User");
+        comment.setAuthorName(finalAuthorName);
+        comment.setCreatedBy(userId);
+        comment.setUpdatedBy(userId);
+        comment.setCreatedAt(OffsetDateTime.now());
+        comment.setUpdatedAt(OffsetDateTime.now());
+
+        ParticipantComment saved = commentRepository.save(comment);
+        recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_CREATED", "ParticipantComment", saved.getId(),
+                "Created comment for participant " + participantDisplayName(tenantId, participantId));
+
+        return mapCommentToDto(saved, userId, false);
+    }
+
+    @Transactional
+    public ParticipantCommentDto updateComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean canAccessAdmin, UpdateCommentRequest request) {
+        ParticipantComment comment = commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
+
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        if (!isAuthor) {
+            throw new AccessDeniedException("Only the author can edit this comment");
+        }
+
+        if (request.getText() != null) {
+            comment.setText(request.getText().trim());
+        }
+        if (request.getPinned() != null) {
+            comment.setPinned(request.getPinned());
+        }
+        comment.setUpdatedBy(userId);
+        comment.setUpdatedAt(OffsetDateTime.now());
+
+        ParticipantComment saved = commentRepository.save(comment);
+        recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_UPDATED", "ParticipantComment", saved.getId(),
+                "Updated comment for participant " + participantDisplayName(tenantId, participantId));
+
+        return mapCommentToDto(saved, userId, canAccessAdmin);
+    }
+
+    @Transactional
+    public ParticipantCommentDto pinComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean canAccessAdmin, boolean pinned) {
+        ParticipantComment comment = commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
+
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        if (!isAuthor && !canAccessAdmin) {
+            throw new AccessDeniedException("Only the author or an administrator can pin/unpin comments");
+        }
+
+        comment.setPinned(pinned);
+        comment.setUpdatedBy(userId);
+        comment.setUpdatedAt(OffsetDateTime.now());
+
+        ParticipantComment saved = commentRepository.save(comment);
+        return mapCommentToDto(saved, userId, canAccessAdmin);
+    }
+
+    @Transactional
+    public void deleteComment(UUID tenantId, UUID participantId, UUID commentId, UUID userId, boolean canAccessAdmin) {
+        ParticipantComment comment = commentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Comment not found"));
+
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        if (!isAuthor) {
+            throw new AccessDeniedException("Only the author can delete this comment");
+        }
+
+        commentRepository.delete(comment);
+        recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_DELETED", "ParticipantComment", commentId,
+                "Deleted comment for participant " + participantDisplayName(tenantId, participantId));
+    }
+
+    private ParticipantCommentDto mapCommentToDto(ParticipantComment comment, UUID userId, boolean canAccessAdmin) {
+        ParticipantCommentDto dto = new ParticipantCommentDto();
+        dto.setId(comment.getId());
+        dto.setParticipantId(comment.getParticipantId());
+        dto.setStudyId(comment.getStudyId());
+        dto.setStudyName(resolveStudyName(comment.getTenantId(), comment.getStudyId()));
+        dto.setText(comment.getText());
+        dto.setPinned(comment.isPinned());
+        dto.setGlobal(comment.isGlobal());
+        dto.setAuthorId(comment.getAuthorId());
+        dto.setAuthorName(comment.getAuthorName());
+        dto.setCreatedAt(comment.getCreatedAt());
+        dto.setUpdatedAt(comment.getUpdatedAt());
+        boolean isAuthor = comment.getAuthorId() != null && comment.getAuthorId().equals(userId);
+        dto.setEditable(isAuthor);
+        dto.setPinnable(isAuthor || canAccessAdmin);
+        return dto;
+    }
+
+    // =========================================================================
+    // 2. COMMUNICATIONS (EMAIL & SMS)
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public List<CommunicationDto> getEmails(UUID tenantId, UUID participantId) {
+        return getEmails(tenantId, participantId, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunicationDto> getEmails(UUID tenantId, UUID participantId, UUID userId, boolean canAccessAdmin) {
+        verifyParticipantExists(tenantId, participantId);
+        List<Communication> list = communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(
+                tenantId, participantId, "EMAIL");
+
+        return list.stream().map(comm -> mapCommunicationToDto(comm, userId, canAccessAdmin)).collect(Collectors.toList());
+    }
+
+    private String computeInitials(String fullName) {
+        if (fullName == null || fullName.isBlank()) {
+            return "SK";
+        }
+        String[] parts = fullName.trim().split("\\s+");
+        if (parts.length == 1) {
+            return parts[0].substring(0, Math.min(2, parts[0].length())).toUpperCase();
+        }
+        String first = parts[0].substring(0, 1).toUpperCase();
+        String last = parts[parts.length - 1].substring(0, 1).toUpperCase();
+        return first + last;
+    }
+
+    @Transactional
+    public CommunicationDto sendEmail(UUID tenantId, UUID participantId, UUID userId, String userName, SendEmailRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+
+        if (request.getTo() == null || request.getTo().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one recipient (To) is required");
+        }
+        if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subject is required");
+        }
+        if (request.getBody() == null || request.getBody().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message is required");
+        }
+
+        // Validate emails and uniqueness across to, cc, bcc, replyTo
+        List<String> allEmails = new ArrayList<>();
+        for (String to : request.getTo()) {
+            if (to == null || to.trim().isEmpty() || !EMAIL_PATTERN.matcher(to.trim()).matches()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + to);
+            }
+            allEmails.add(to.trim().toLowerCase());
+        }
+        if (request.getCc() != null) {
+            for (String cc : request.getCc()) {
+                if (cc != null && !cc.trim().isEmpty()) {
+                    if (!EMAIL_PATTERN.matcher(cc.trim()).matches()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + cc);
+                    }
+                    allEmails.add(cc.trim().toLowerCase());
+                }
+            }
+        }
+        if (request.getBcc() != null) {
+            for (String bcc : request.getBcc()) {
+                if (bcc != null && !bcc.trim().isEmpty()) {
+                    if (!EMAIL_PATTERN.matcher(bcc.trim()).matches()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + bcc);
+                    }
+                    allEmails.add(bcc.trim().toLowerCase());
+                }
+            }
+        }
+        if (request.getReplyTo() != null && !request.getReplyTo().trim().isEmpty()) {
+            if (!EMAIL_PATTERN.matcher(request.getReplyTo().trim()).matches()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is not valid: " + request.getReplyTo());
+            }
+            allEmails.add(request.getReplyTo().trim().toLowerCase());
+        }
+
+        long distinctCount = allEmails.stream().distinct().count();
+        if (distinctCount != allEmails.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each email address should be unique between to, cc, bcc, and reply to.");
+        }
+
+        UUID resolvedStudyId = resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier());
+        boolean isGlobal = request.isGlobal() || resolvedStudyId == null;
+
+        String senderName = (request.getSenderName() != null && !request.getSenderName().trim().isEmpty())
+                ? request.getSenderName().trim()
+                : (userName != null && !userName.trim().isEmpty() ? userName.trim() : "System");
+        String authorInitials = computeInitials(senderName);
+
+        if (invitationEmailService == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery is not configured");
+        }
+        List<MailAttachment> attachments = request.getAttachments().stream()
+                .map(attachment -> {
+                    if (attachment == null
+                            || attachment.getFileName() == null
+                            || attachment.getFileName().isBlank()
+                            || attachment.getFileContentBase64() == null
+                            || attachment.getFileContentBase64().isBlank()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email attachment content is required");
+                    }
+                    try {
+                        Base64.getDecoder().decode(attachment.getFileContentBase64());
+                    } catch (IllegalArgumentException e) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email attachment content is not valid base64");
+                    }
+                    String contentType = attachment.getFileContentType();
+                    return new MailAttachment(
+                            attachment.getFileName().trim(),
+                            contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType,
+                            attachment.getFileContentBase64()
+                    );
+                })
+                .toList();
+        invitationEmailService.sendParticipantEmail(
+                request.getTo().stream().map(String::trim).toList(),
+                request.getCc() == null ? List.of() : request.getCc().stream()
+                        .filter(address -> address != null && !address.isBlank()).map(String::trim).toList(),
+                request.getBcc() == null ? List.of() : request.getBcc().stream()
+                        .filter(address -> address != null && !address.isBlank()).map(String::trim).toList(),
+                request.getReplyTo() == null ? null : request.getReplyTo().trim(),
+                request.getSubject().trim(),
+                request.getBody().trim(),
+                request.isMessageIsHtml(),
+                attachments
+        );
+
+        Communication comm = new Communication();
+        comm.setTenantId(tenantId);
+        comm.setParticipantId(participantId);
+        comm.setStudyId(resolvedStudyId);
+        comm.setChannel("EMAIL");
+        comm.setDirection("OUTBOUND");
+        comm.setSubjectSnapshot(request.getSubject().trim());
+        comm.setBodySnapshot(request.getBody().trim());
+        comm.setStatus("SENT");
+        comm.setInitiatedByUserId(userId);
+        comm.setPinned(request.isPinned() || request.isSticky());
+        comm.setCreatedAt(OffsetDateTime.now());
+        comm.setSentAt(OffsetDateTime.now());
+        comm.setCompletedAt(OffsetDateTime.now());
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("replyTo", (request.getReplyTo() != null && !request.getReplyTo().trim().isEmpty()) ? request.getReplyTo().trim() : null);
+        metadata.put("senderName", senderName);
+        metadata.put("authorName", senderName);
+        metadata.put("authorInitials", authorInitials);
+        metadata.put("initiatorName", senderName);
+        metadata.put("design", request.getDesign());
+        metadata.put("messageIsHtml", request.isMessageIsHtml());
+        metadata.put("lastContact", request.isLastContact());
+        metadata.put("global", isGlobal);
+        metadata.put("notify", request.isNotify());
+        if (!attachments.isEmpty()) {
+            metadata.put("attachments", attachments.stream().map(MailAttachment::fileName).toList());
+        }
+
+        try {
+            comm.setMetadata(objectMapper.writeValueAsString(metadata));
+        } catch (Exception e) {
+            comm.setMetadata("{}");
+        }
+
+        // Add recipients
+        for (String to : request.getTo()) {
+            if (to != null && !to.isBlank()) {
+                CommunicationRecipient r = new CommunicationRecipient();
+                r.setTenantId(tenantId);
+                r.setParticipantId(participantId);
+                r.setRecipientType("TO");
+                r.setRecipientValue(to.trim());
+                comm.addRecipient(r);
+            }
+        }
+        if (request.getCc() != null) {
+            for (String cc : request.getCc()) {
+                if (cc != null && !cc.isBlank()) {
+                    CommunicationRecipient r = new CommunicationRecipient();
+                    r.setTenantId(tenantId);
+                    r.setParticipantId(participantId);
+                    r.setRecipientType("CC");
+                    r.setRecipientValue(cc.trim());
+                    comm.addRecipient(r);
+                }
+            }
+        }
+        if (request.getBcc() != null) {
+            for (String bcc : request.getBcc()) {
+                if (bcc != null && !bcc.isBlank()) {
+                    CommunicationRecipient r = new CommunicationRecipient();
+                    r.setTenantId(tenantId);
+                    r.setParticipantId(participantId);
+                    r.setRecipientType("BCC");
+                    r.setRecipientValue(bcc.trim());
+                    comm.addRecipient(r);
+                }
+            }
+        }
+
+        Communication saved = communicationRepository.save(comm);
+
+        if (request.isLastContact()) {
+            Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId).orElse(null);
+            if (p != null) {
+                p.setGlobalLastContactDate(OffsetDateTime.now());
+                participantRepository.save(p);
+            }
+        }
+
+        recordAudit(tenantId, userId, "EMAIL_SENT", "Communication", saved.getId(),
+                "Sent email to participant " + participantDisplayName(tenantId, participantId));
+
+        return mapCommunicationToDto(saved, userId, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunicationDto> getSms(UUID tenantId, UUID participantId) {
+        return getSms(tenantId, participantId, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CommunicationDto> getSms(UUID tenantId, UUID participantId, UUID userId, boolean canAccessAdmin) {
+        verifyParticipantExists(tenantId, participantId);
+        List<Communication> list = communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(
+                tenantId, participantId, "SMS");
+
+        return list.stream().map(comm -> mapCommunicationToDto(comm, userId, canAccessAdmin)).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public CommunicationDto sendSms(UUID tenantId, UUID participantId, UUID userId, String userName, SendSmsRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+
+        List<String> rawRecipients = new ArrayList<>();
+        if (request.getToPhones() != null && !request.getToPhones().isEmpty()) {
+            for (String p : request.getToPhones()) {
+                if (p != null && !p.isBlank() && !rawRecipients.contains(p.trim())) {
+                    rawRecipients.add(p.trim());
+                }
+            }
+        }
+        if (request.getToPhone() != null && !request.getToPhone().isBlank()) {
+            for (String part : request.getToPhone().split("[,;]")) {
+                if (!part.isBlank() && !rawRecipients.contains(part.trim())) {
+                    rawRecipients.add(part.trim());
+                }
+            }
+        }
+
+        if (rawRecipients.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Recipient phone number is required");
+        }
+        if (request.getBody() == null || request.getBody().trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SMS message body cannot be empty");
+        }
+        if (request.getBody().length() > SmsGatewayService.MAX_MESSAGE_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SMS message exceeds maximum length of " + SmsGatewayService.MAX_MESSAGE_LENGTH + " characters");
+        }
+
+        List<String> normalizedPhones = new ArrayList<>();
+        for (String raw : rawRecipients) {
+            try {
+                String norm = smsGatewayService.normalizePhoneNumber(raw);
+                if (!normalizedPhones.contains(norm)) {
+                    normalizedPhones.add(norm);
+                }
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number is not valid for region. Try changing the phone number.");
+            }
+        }
+        if (normalizedPhones.size() > 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only one recipient phone number is allowed");
+        }
+
+        // Duplicate SMS Protection:
+        // Check if an identical outbound SMS was dispatched to this participant & phone within the past 15 seconds.
+        OffsetDateTime recentCutoff = OffsetDateTime.now().minusSeconds(15);
+        List<Communication> recentSms = communicationRepository.findByTenantIdAndParticipantIdAndChannelOrderByPinnedDescCreatedAtDesc(
+                tenantId, participantId, "SMS"
+        );
+        for (Communication existing : recentSms) {
+            if ("OUTBOUND".equalsIgnoreCase(existing.getDirection())
+                    && existing.getCreatedAt() != null
+                    && existing.getCreatedAt().isAfter(recentCutoff)
+                    && request.getBody().trim().equals(existing.getBodySnapshot())) {
+                boolean recipientMatches = existing.getRecipients() != null && existing.getRecipients().stream()
+                        .anyMatch(r -> normalizedPhones.contains(r.getRecipientValue()));
+                if (recipientMatches) {
+                    log.info("Duplicate SMS submission detected for participant {} to {}; returning existing communication record {}",
+                            participantId, normalizedPhones, existing.getId());
+                    return mapCommunicationToDto(existing, userId, false);
+                }
+            }
+        }
+
+        Communication comm = new Communication();
+        comm.setTenantId(tenantId);
+        comm.setParticipantId(participantId);
+        comm.setStudyId(resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier()));
+        comm.setChannel("SMS");
+        comm.setDirection("OUTBOUND");
+        comm.setSubjectSnapshot("SMS to " + String.join(", ", normalizedPhones));
+        comm.setBodySnapshot(request.getBody().trim());
+        comm.setInitiatedByUserId(userId);
+        comm.setPinned(request.isPinned());
+        comm.setCreatedAt(OffsetDateTime.now());
+
+        // Dispatch via real SMS Gateway for each recipient
+        String lastExternalId = null;
+        String finalStatus = "SENT";
+        String gatewayProvider = smsGatewayService.getProvider();
+        StringBuilder metaJson = new StringBuilder("{\"gateway\":\"").append(gatewayProvider).append("\"");
+
+        for (String normPhone : normalizedPhones) {
+            SmsGatewayService.SmsDeliveryResult result = smsGatewayService.sendSms(normPhone, request.getBody().trim());
+            if (result.isSuccess()) {
+                lastExternalId = result.getMessageId();
+                if (!"FAILED".equals(finalStatus)) finalStatus = "SENT";
+            } else if (!result.isConfigured()) {
+                if (!"FAILED".equals(finalStatus)) finalStatus = "QUEUED";
+                log.info("SMS to {} queued for participant {}: gateway unconfigured ({})", normPhone, participantId, result.getError());
+            } else {
+                finalStatus = "FAILED";
+                log.warn("SMS to {} failed for participant {}: {}", normPhone, participantId, result.getError());
+            }
+
+            CommunicationRecipient r = new CommunicationRecipient();
+            r.setTenantId(tenantId);
+            r.setParticipantId(participantId);
+            r.setRecipientType("TO");
+            r.setRecipientValue(normPhone);
+            comm.addRecipient(r);
+        }
+
+        comm.setStatus(finalStatus);
+        if ("SENT".equals(finalStatus)) {
+            comm.setSentAt(OffsetDateTime.now());
+            comm.setCompletedAt(OffsetDateTime.now());
+            comm.setExternalMessageId(lastExternalId);
+            metaJson.append(",\"messageId\":\"").append(escapeJson(lastExternalId != null ? lastExternalId : "")).append("\"");
+        } else {
+            comm.setSentAt(null);
+            comm.setCompletedAt(null);
+        }
+        metaJson.append(",\"initiatorName\":\"").append(escapeJson(userName != null && !userName.isBlank() ? userName.trim() : "Current User")).append("\"}");
+        comm.setMetadata(metaJson.toString());
+
+        Communication saved = communicationRepository.save(comm);
+        recordAudit(tenantId, userId, "SMS_" + comm.getStatus(), "Communication", saved.getId(), "Dispatched SMS to " + String.join(", ", normalizedPhones) + " with status: " + comm.getStatus());
+
+        return mapCommunicationToDto(saved, userId, false);
+    }
+
+    @Transactional
+    public CommunicationDto pinCommunication(UUID tenantId, UUID participantId, UUID commId, UUID userId, boolean pinned) {
+        return pinCommunication(tenantId, participantId, commId, userId, false, pinned);
+    }
+
+    @Transactional
+    public CommunicationDto pinCommunication(UUID tenantId, UUID participantId, UUID commId, UUID userId, boolean canAccessAdmin, boolean pinned) {
+        Communication comm = communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Communication record not found"));
+
+        boolean isAuthor = comm.getInitiatedByUserId() != null && comm.getInitiatedByUserId().equals(userId);
+        if (!isAuthor && !canAccessAdmin) {
+            throw new AccessDeniedException("Only the author or an administrator can pin/unpin this communication");
+        }
+
+        comm.setPinned(pinned);
+        Communication saved = communicationRepository.save(comm);
+        return mapCommunicationToDto(saved, userId, canAccessAdmin);
+    }
+
+    @Transactional
+    public CommunicationDto updateEmailLog(UUID tenantId, UUID participantId, UUID commId, UUID userId, Map<String, Object> flags) {
+        return updateEmailLog(tenantId, participantId, commId, userId, false, flags);
+    }
+
+    @Transactional
+    public CommunicationDto updateEmailLog(UUID tenantId, UUID participantId, UUID commId, UUID userId, boolean canAccessAdmin, Map<String, Object> flags) {
+        Communication comm = communicationRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, commId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Communication record not found"));
+
+        if (flags == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email flags are required");
+        }
+        boolean isAuthor = comm.getInitiatedByUserId() != null && comm.getInitiatedByUserId().equals(userId);
+        boolean pinOnlyUpdate = !flags.isEmpty()
+                && flags.keySet().stream().allMatch(key -> "sticky".equals(key) || "pinned".equals(key));
+        if (!isAuthor && !(canAccessAdmin && pinOnlyUpdate)) {
+            throw new AccessDeniedException("Only the author can update email details; administrators may only pin or unpin");
+        }
+
+        if (flags.containsKey("sticky") || flags.containsKey("pinned")) {
+            boolean sticky = Boolean.TRUE.equals(flags.get("sticky")) || Boolean.TRUE.equals(flags.get("pinned"));
+            comm.setPinned(sticky);
+        }
+
+        Map<String, Object> metaMap = new LinkedHashMap<>();
+        if (comm.getMetadata() != null && !comm.getMetadata().isBlank()) {
+            try {
+                metaMap = objectMapper.readValue(comm.getMetadata(), new TypeReference<Map<String, Object>>() {});
+            } catch (Exception ignored) {}
+        }
+        if (flags.containsKey("global")) {
+            boolean isGlobal = Boolean.TRUE.equals(flags.get("global"));
+            metaMap.put("global", isGlobal);
+            if (isGlobal) {
+                comm.setStudyId(null);
+            }
+        }
+        if (flags.containsKey("lastContact")) {
+            boolean lastContact = Boolean.TRUE.equals(flags.get("lastContact"));
+            metaMap.put("lastContact", lastContact);
+            if (lastContact) {
+                Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId).orElse(null);
+                if (p != null) {
+                    p.setGlobalLastContactDate(OffsetDateTime.now());
+                    participantRepository.save(p);
+                }
+            }
+        }
+        if (flags.containsKey("notify")) {
+            metaMap.put("notify", Boolean.TRUE.equals(flags.get("notify")));
+        }
+        try {
+            comm.setMetadata(objectMapper.writeValueAsString(metaMap));
+        } catch (Exception ignored) {}
+
+        Communication saved = communicationRepository.save(comm);
+        return mapCommunicationToDto(saved, userId, canAccessAdmin);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getEmailRecipients(UUID tenantId, UUID participantId) {
+        Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found"));
+
+        Set<String> emails = new LinkedHashSet<>();
+        List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+        for (ParticipantContact c : contacts) {
+            if (c.isActive() && "EMAIL".equalsIgnoreCase(c.getContactType()) && c.getContactValue() != null && !c.getContactValue().isBlank()) {
+                emails.add(c.getContactValue().trim());
+            }
+        }
+        return new ArrayList<>(emails);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SmsRecipientDto> getSmsRecipients(UUID tenantId, UUID participantId) {
+        Participant p = participantRepository.findByTenantIdAndId(tenantId, participantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found"));
+
+        Map<String, SmsRecipientDto> phonesByNumber = new LinkedHashMap<>();
+        List<ParticipantContact> contacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+        for (ParticipantContact c : contacts) {
+            if (c.isActive() && ("PHONE".equalsIgnoreCase(c.getContactType()) || "SMS".equalsIgnoreCase(c.getContactType()))
+                    && c.getContactValue() != null && !c.getContactValue().isBlank()) {
+                String phoneNumber = c.getContactValue().trim();
+                SmsRecipientDto recipient = phonesByNumber.computeIfAbsent(
+                        phoneNumber,
+                        number -> new SmsRecipientDto(number, null)
+                );
+                if ((recipient.getContactName() == null || recipient.getContactName().isBlank())
+                        && c.getContactName() != null && !c.getContactName().isBlank()) {
+                    recipient.setContactName(c.getContactName().trim());
+                }
+            }
+        }
+        return new ArrayList<>(phonesByNumber.values());
+    }
+
+    private CommunicationDto mapCommunicationToDto(Communication comm) {
+        return mapCommunicationToDto(comm, null, false);
+    }
+
+    private CommunicationDto mapCommunicationToDto(Communication comm, UUID userId, boolean canAccessAdmin) {
+        CommunicationDto dto = new CommunicationDto();
+        dto.setId(comm.getId());
+        dto.setParticipantId(comm.getParticipantId());
+        dto.setStudyId(comm.getStudyId());
+        dto.setStudyName(resolveStudyName(comm.getTenantId(), comm.getStudyId()));
+        dto.setGlobal(comm.getStudyId() == null);
+        dto.setChannel(comm.getChannel());
+        dto.setDirection(comm.getDirection());
+        dto.setSubject(comm.getSubjectSnapshot());
+        dto.setBody(comm.getBodySnapshot());
+        dto.setStatus(comm.getStatus());
+        dto.setSentAt(comm.getSentAt());
+        dto.setCreatedAt(comm.getCreatedAt() != null ? comm.getCreatedAt() : OffsetDateTime.now());
+        dto.setPinned(comm.isPinned());
+        dto.setSticky(comm.isPinned());
+        dto.setPinnable((comm.getInitiatedByUserId() != null && comm.getInitiatedByUserId().equals(userId)) || canAccessAdmin);
+
+        if (comm.getMetadata() != null && !comm.getMetadata().isBlank()) {
+            try {
+                JsonNode root = objectMapper.readTree(comm.getMetadata());
+                if (root.has("replyTo") && !root.get("replyTo").isNull()) {
+                    dto.setReplyTo(root.get("replyTo").asText());
+                }
+                if (root.has("senderName") && !root.get("senderName").isNull()) {
+                    dto.setSenderName(root.get("senderName").asText());
+                } else if (root.has("initiatorName") && !root.get("initiatorName").isNull()) {
+                    dto.setSenderName(root.get("initiatorName").asText());
+                }
+                if (root.has("authorName") && !root.get("authorName").isNull()) {
+                    dto.setAuthorName(root.get("authorName").asText());
+                }
+                if (root.has("authorInitials") && !root.get("authorInitials").isNull()) {
+                    dto.setAuthorInitials(root.get("authorInitials").asText());
+                }
+                if (root.has("design") && !root.get("design").isNull()) {
+                    dto.setDesign(root.get("design").asText());
+                }
+                if (root.has("messageIsHtml")) {
+                    dto.setMessageIsHtml(root.get("messageIsHtml").asBoolean());
+                }
+                if (root.has("lastContact")) {
+                    dto.setLastContact(root.get("lastContact").asBoolean());
+                }
+                if (root.has("global")) {
+                    dto.setGlobal(root.get("global").asBoolean() || comm.getStudyId() == null);
+                }
+                if (root.has("attachments") && root.get("attachments").isArray()) {
+                    List<String> attList = new ArrayList<>();
+                    for (JsonNode n : root.get("attachments")) {
+                        if (n.isTextual()) {
+                            attList.add(n.asText());
+                        } else if (n.has("fileName") && !n.get("fileName").isNull()) {
+                            attList.add(n.get("fileName").asText());
+                        }
+                    }
+                    dto.setAttachments(attList);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (dto.getSenderName() == null) {
+            dto.setSenderName("System");
+        }
+        if (dto.getAuthorName() == null) {
+            dto.setAuthorName(dto.getSenderName());
+        }
+        if (dto.getAuthorInitials() == null) {
+            dto.setAuthorInitials(computeInitials(dto.getAuthorName()));
+        }
+
+        List<RecipientDto> rDtos = new ArrayList<>();
+        if (comm.getRecipients() != null) {
+            for (CommunicationRecipient r : comm.getRecipients()) {
+                rDtos.add(new RecipientDto(r.getId(), r.getRecipientType(), r.getRecipientName(), r.getRecipientValue()));
+            }
+        }
+        dto.setRecipients(rDtos);
+        return dto;
+    }
+
+    // =========================================================================
+    // 3. CONTACT MANAGEMENT (CONTACT PERSONS & ADDRESSES)
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public List<ParticipantContactDto> getContacts(UUID tenantId, UUID participantId) {
+        verifyParticipantExists(tenantId, participantId);
+        return contactRepository.findByTenantIdAndParticipantIdOrderByPrimaryContactDescCreatedAtDesc(tenantId, participantId)
+                .stream()
+                .map(this::mapContactToDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ParticipantContactDto createContact(UUID tenantId, UUID participantId, UUID userId, CreateContactPersonRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+        List<AuditEntitySnapshot> auditSnapshots = new ArrayList<>();
+        String contactType = request.getContactType() == null || request.getContactType().isBlank()
+                ? null
+                : request.getContactType().trim().toUpperCase();
+        String contactValue = request.getContactValue() == null || request.getContactValue().isBlank()
+                ? null
+                : request.getContactValue().trim();
+        if ((contactType == null) != (contactValue == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contact type and value must be provided together");
+        }
+
+        if (request.isPreferred()) {
+            List<ParticipantContact> existingContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+            for (ParticipantContact other : existingContacts) {
+                if (other.isPreferred()) {
+                    Map<String, Object> beforeData = contactAuditData(other);
+                    other.setPreferred(false);
+                    ParticipantContact updated = contactRepository.save(other);
+                    auditSnapshots.add(contactAuditSnapshot(updated, beforeData));
+                }
+            }
+        }
+
+        ParticipantContact contact = new ParticipantContact();
+        contact.setTenantId(tenantId);
+        contact.setParticipantId(participantId);
+        contact.setContactType(contactType);
+        contact.setContactValue(contactValue);
+        contact.setLabel(request.getLabel());
+        contact.setContactName(request.getContactName());
+        contact.setRelationship(request.getRelationship());
+        contact.setCanLeaveMessage(request.isCanLeaveMessage());
+        contact.setNotes(request.getNotes());
+        contact.setPrimaryContact(request.isPrimaryContact());
+        contact.setPreferred(request.isPreferred());
+        contact.setActive(request.isActive());
+        contact.setCreatedBy(userId);
+        contact.setUpdatedBy(userId);
+        contact.setCreatedAt(OffsetDateTime.now());
+        contact.setUpdatedAt(OffsetDateTime.now());
+
+        if (contact.isPrimaryContact() && contact.isActive() && contactType != null) {
+            auditSnapshots.addAll(clearOtherPrimaryContacts(tenantId, participantId, contact));
+        }
+
+        ParticipantContact saved = contactRepository.save(contact);
+        auditSnapshots.add(new AuditEntitySnapshot(
+                "ParticipantContact", saved.getId(), null, contactAuditData(saved)));
+        recordAuditChanges(tenantId, "PARTICIPANT_CONTACT_CREATED", "ParticipantContact", saved.getId(),
+                "Created contact for participant " + participantDisplayName(tenantId, participantId), auditSnapshots);
+
+        return mapContactToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantContactDto updateContact(UUID tenantId, UUID participantId, UUID contactId, UUID userId, UpdateContactPersonRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
+        Map<String, Object> beforeData = contactAuditData(contact);
+        List<AuditEntitySnapshot> auditSnapshots = new ArrayList<>();
+
+        if (request.getContactType() != null) {
+            contact.setContactType(request.getContactType().isBlank() ? null : request.getContactType().toUpperCase().trim());
+        }
+        if (request.getContactValue() != null) {
+            contact.setContactValue(request.getContactValue().isBlank() ? null : request.getContactValue().trim());
+        }
+        if (request.getLabel() != null) {
+            contact.setLabel(request.getLabel().trim());
+        }
+        if (request.getContactName() != null) {
+            contact.setContactName(request.getContactName().trim());
+        }
+        if (request.getRelationship() != null) {
+            contact.setRelationship(request.getRelationship().trim());
+        }
+        if (request.getCanLeaveMessage() != null) {
+            contact.setCanLeaveMessage(request.getCanLeaveMessage());
+        }
+        if (request.getNotes() != null) {
+            contact.setNotes(request.getNotes().trim());
+        }
+        if (request.getPrimaryContact() != null) {
+            contact.setPrimaryContact(request.getPrimaryContact());
+        }
+        if (request.getActive() != null) {
+            contact.setActive(request.getActive());
+            if (!request.getActive()) {
+                contact.setPreferred(false);
+            }
+        }
+        if (request.getIsPreferred() != null) {
+            boolean newPreferred = request.getIsPreferred();
+            contact.setPreferred(newPreferred);
+            if (newPreferred) {
+                contact.setActive(true);
+                List<ParticipantContact> allContacts = contactRepository.findByTenantIdAndParticipantId(tenantId, participantId);
+                for (ParticipantContact other : allContacts) {
+                    if (!other.getId().equals(contactId) && other.isPreferred()) {
+                        Map<String, Object> otherBeforeData = contactAuditData(other);
+                        other.setPreferred(false);
+                        ParticipantContact updated = contactRepository.save(other);
+                        auditSnapshots.add(contactAuditSnapshot(updated, otherBeforeData));
+                    }
+                }
+            }
+        }
+
+        if (contact.isPrimaryContact() && contact.isActive()
+                && contact.getContactType() != null && !contact.getContactType().isBlank()) {
+            contact.setPrimaryContact(false);
+            auditSnapshots.addAll(clearOtherPrimaryContacts(tenantId, participantId, contact));
+            contact.setPrimaryContact(true);
+        }
+
+        contact.setUpdatedBy(userId);
+        contact.setUpdatedAt(OffsetDateTime.now());
+        ParticipantContact saved = contactRepository.save(contact);
+        auditSnapshots.add(contactAuditSnapshot(saved, beforeData));
+        recordAuditChanges(tenantId, "PARTICIPANT_CONTACT_UPDATED", "ParticipantContact", saved.getId(),
+                "Updated contact for participant " + participantDisplayName(tenantId, participantId), auditSnapshots);
+
+        return mapContactToDto(saved);
+    }
+
+    private List<AuditEntitySnapshot> clearOtherPrimaryContacts(
+            UUID tenantId, UUID participantId, ParticipantContact selectedContact) {
+        boolean demotedAny = false;
+        List<AuditEntitySnapshot> auditSnapshots = new ArrayList<>();
+        for (ParticipantContact other : contactRepository.findByTenantIdAndParticipantId(tenantId, participantId)) {
+            if (other.getId() != null && other.getId().equals(selectedContact.getId())) continue;
+            if (!other.isActive() || !other.isPrimaryContact()
+                    || other.getContactType() == null
+                    || !other.getContactType().equalsIgnoreCase(selectedContact.getContactType())) {
+                continue;
+            }
+            Map<String, Object> beforeData = contactAuditData(other);
+            other.setPrimaryContact(false);
+            ParticipantContact updated = contactRepository.save(other);
+            auditSnapshots.add(contactAuditSnapshot(updated, beforeData));
+            demotedAny = true;
+        }
+        if (demotedAny) {
+            contactRepository.flush();
+        }
+        return auditSnapshots;
+    }
+
+    @Transactional
+    public ParticipantContactDto toggleContactActive(UUID tenantId, UUID participantId, UUID contactId, UUID userId, boolean active) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
+
+        Map<String, Object> beforeData = contactAuditData(contact);
+        contact.setActive(active);
+        if (!active) {
+            contact.setPreferred(false);
+        }
+        contact.setUpdatedBy(userId);
+        contact.setUpdatedAt(OffsetDateTime.now());
+        ParticipantContact saved = contactRepository.save(contact);
+        recordAuditChanges(tenantId, active ? "PARTICIPANT_CONTACT_RESTORED" : "PARTICIPANT_CONTACT_ARCHIVED",
+                "ParticipantContact", saved.getId(), (active ? "Restored" : "Archived") + " contact for participant "
+                        + participantDisplayName(tenantId, participantId),
+                List.of(contactAuditSnapshot(saved, beforeData)));
+
+        return mapContactToDto(saved);
+    }
+
+    @Transactional
+    public void deleteContact(UUID tenantId, UUID participantId, UUID contactId, UUID userId) {
+        ParticipantContact contact = contactRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, contactId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contact method not found"));
+
+        Map<String, Object> beforeData = contactAuditData(contact);
+        contactRepository.delete(contact);
+        recordAuditChanges(tenantId, "PARTICIPANT_CONTACT_DELETED", "ParticipantContact", contactId,
+                "Deleted contact for participant " + participantDisplayName(tenantId, participantId),
+                List.of(new AuditEntitySnapshot("ParticipantContact", contactId, beforeData, null)));
+    }
+
+    private ParticipantContactDto mapContactToDto(ParticipantContact c) {
+        ParticipantContactDto dto = new ParticipantContactDto();
+        dto.setId(c.getId());
+        dto.setParticipantId(c.getParticipantId());
+        dto.setContactType(c.getContactType() == null ? "" : c.getContactType());
+        dto.setContactValue(c.getContactValue() == null ? "" : c.getContactValue());
+        dto.setLabel(c.getLabel());
+        dto.setContactName(c.getContactName());
+        dto.setRelationship(c.getRelationship());
+        dto.setCanLeaveMessage(c.isCanLeaveMessage());
+        dto.setNotes(c.getNotes());
+        dto.setPrimaryContact(c.isPrimaryContact());
+        dto.setPreferred(c.isPreferred());
+        dto.setActive(c.isActive());
+        dto.setCreatedAt(c.getCreatedAt());
+        return dto;
+    }
+
+    private Map<String, Object> contactAuditData(ParticipantContact contact) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("contactType", contact.getContactType());
+        data.put("contactValue", contact.getContactValue());
+        data.put("label", contact.getLabel());
+        data.put("contactName", contact.getContactName());
+        data.put("relationship", contact.getRelationship());
+        data.put("canLeaveMessage", contact.isCanLeaveMessage());
+        data.put("primaryContact", contact.isPrimaryContact());
+        data.put("preferred", contact.isPreferred());
+        data.put("active", contact.isActive());
+        return data;
+    }
+
+    private AuditEntitySnapshot contactAuditSnapshot(ParticipantContact contact, Map<String, Object> beforeData) {
+        return new AuditEntitySnapshot(
+                "ParticipantContact", contact.getId(), beforeData, contactAuditData(contact));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ParticipantAddressDto> getAddresses(UUID tenantId, UUID participantId) {
+        verifyParticipantExists(tenantId, participantId);
+        return addressRepository.findByTenantIdAndParticipantIdOrderByPrimaryAddressDescCreatedAtDesc(tenantId, participantId)
+                .stream()
+                .map(this::mapAddressToDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ParticipantAddressDto createAddress(UUID tenantId, UUID participantId, UUID userId, CreateAddressRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+
+        ParticipantAddress address = new ParticipantAddress();
+        address.setTenantId(tenantId);
+        address.setParticipantId(participantId);
+        address.setAddressType(request.getAddressType() != null ? request.getAddressType().toUpperCase() : "HOME");
+        address.setAddressLine1(request.getAddressLine1());
+        address.setAddressLine2(request.getAddressLine2());
+        address.setCity(request.getCity());
+        address.setStateRegion(request.getStateRegion());
+        address.setPostalCode(request.getPostalCode());
+        address.setCountryCode(request.getCountryCode() != null ? request.getCountryCode() : "USA");
+        address.setPrimaryAddress(request.isPrimaryAddress());
+        address.setActive(request.isActive());
+        address.setCreatedBy(userId);
+        address.setUpdatedBy(userId);
+        address.setCreatedAt(OffsetDateTime.now());
+        address.setUpdatedAt(OffsetDateTime.now());
+
+        ParticipantAddress saved = addressRepository.save(address);
+        recordAuditChanges(tenantId, "PARTICIPANT_ADDRESS_CREATED", "ParticipantAddress", saved.getId(),
+                "Created address for participant " + participantDisplayName(tenantId, participantId),
+                List.of(new AuditEntitySnapshot("ParticipantAddress", saved.getId(), null, addressAuditData(saved))));
+
+        return mapAddressToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantAddressDto updateAddress(UUID tenantId, UUID participantId, UUID addressId, UUID userId, UpdateAddressRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+        Map<String, Object> beforeData = addressAuditData(address);
+
+        if (request.getAddressType() != null && !request.getAddressType().isBlank()) {
+            address.setAddressType(request.getAddressType().toUpperCase().trim());
+        }
+        if (request.getAddressLine1() != null) {
+            address.setAddressLine1(request.getAddressLine1().trim());
+        }
+        if (request.getAddressLine2() != null) {
+            address.setAddressLine2(request.getAddressLine2().trim());
+        }
+        if (request.getCity() != null) {
+            address.setCity(request.getCity().trim());
+        }
+        if (request.getStateRegion() != null) {
+            address.setStateRegion(request.getStateRegion().trim());
+        }
+        if (request.getPostalCode() != null) {
+            address.setPostalCode(request.getPostalCode().trim());
+        }
+        if (request.getCountryCode() != null) {
+            address.setCountryCode(request.getCountryCode().trim());
+        }
+        if (request.getPrimaryAddress() != null) {
+            address.setPrimaryAddress(request.getPrimaryAddress());
+        }
+        if (request.getActive() != null) {
+            address.setActive(request.getActive());
+        }
+
+        address.setUpdatedBy(userId);
+        address.setUpdatedAt(OffsetDateTime.now());
+        ParticipantAddress saved = addressRepository.save(address);
+        recordAuditChanges(tenantId, "PARTICIPANT_ADDRESS_UPDATED", "ParticipantAddress", saved.getId(),
+                "Updated address for participant " + participantDisplayName(tenantId, participantId),
+                List.of(new AuditEntitySnapshot("ParticipantAddress", saved.getId(), beforeData, addressAuditData(saved))));
+
+        return mapAddressToDto(saved);
+    }
+
+    @Transactional
+    public ParticipantAddressDto toggleAddressActive(UUID tenantId, UUID participantId, UUID addressId, UUID userId, boolean active) {
+        verifyParticipantExists(tenantId, participantId);
+        ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+
+        Map<String, Object> beforeData = addressAuditData(address);
+        address.setActive(active);
+        address.setUpdatedBy(userId);
+        address.setUpdatedAt(OffsetDateTime.now());
+        ParticipantAddress saved = addressRepository.save(address);
+        recordAuditChanges(tenantId, active ? "PARTICIPANT_ADDRESS_RESTORED" : "PARTICIPANT_ADDRESS_ARCHIVED",
+                "ParticipantAddress", saved.getId(), (active ? "Restored" : "Archived") + " address for participant "
+                        + participantDisplayName(tenantId, participantId),
+                List.of(new AuditEntitySnapshot("ParticipantAddress", saved.getId(), beforeData, addressAuditData(saved))));
+
+        return mapAddressToDto(saved);
+    }
+
+    @Transactional
+    public void deleteAddress(UUID tenantId, UUID participantId, UUID addressId, UUID userId) {
+        ParticipantAddress address = addressRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, addressId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+
+        Map<String, Object> beforeData = addressAuditData(address);
+        addressRepository.delete(address);
+        recordAuditChanges(tenantId, "PARTICIPANT_ADDRESS_DELETED", "ParticipantAddress", addressId,
+                "Deleted address for participant " + participantDisplayName(tenantId, participantId),
+                List.of(new AuditEntitySnapshot("ParticipantAddress", addressId, beforeData, null)));
+    }
+
+    private ParticipantAddressDto mapAddressToDto(ParticipantAddress a) {
+        ParticipantAddressDto dto = new ParticipantAddressDto();
+        dto.setId(a.getId());
+        dto.setParticipantId(a.getParticipantId());
+        dto.setAddressType(a.getAddressType());
+        dto.setAddressLine1(a.getAddressLine1());
+        dto.setAddressLine2(a.getAddressLine2());
+        dto.setCity(a.getCity());
+        dto.setStateRegion(a.getStateRegion());
+        dto.setPostalCode(a.getPostalCode());
+        dto.setCountryCode(a.getCountryCode());
+        dto.setPrimaryAddress(a.isPrimaryAddress());
+        dto.setActive(a.isActive());
+        dto.setCreatedAt(a.getCreatedAt());
+        return dto;
+    }
+
+    private Map<String, Object> addressAuditData(ParticipantAddress address) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("addressType", address.getAddressType());
+        data.put("addressLine1", address.getAddressLine1());
+        data.put("addressLine2", address.getAddressLine2());
+        data.put("city", address.getCity());
+        data.put("stateRegion", address.getStateRegion());
+        data.put("postalCode", address.getPostalCode());
+        data.put("countryCode", address.getCountryCode());
+        data.put("primaryAddress", address.isPrimaryAddress());
+        data.put("active", address.isActive());
+        return data;
+    }
+
+    // =========================================================================
+    // 4. CONSENT MANAGEMENT
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public List<ConsentDto> getConsents(UUID tenantId, UUID participantId) {
+        verifyParticipantExists(tenantId, participantId);
+        List<ConsentRecord> records = consentRecordRepository.findByTenantIdAndParticipantIdOrderByCreatedAtDesc(tenantId, participantId);
+        return records.stream().map(c -> {
+            ConsentDto dto = new ConsentDto();
+            dto.setId(c.getId());
+            dto.setParticipantId(c.getParticipantId());
+            dto.setStudyId(c.getStudyId());
+            dto.setConsentVersionId(c.getConsentVersionId());
+            dto.setStatus(c.getStatus());
+            dto.setConsentedAt(c.getConsentedAt());
+            dto.setConsentMethod(c.getConsentMethod());
+            dto.setWithdrawalReason(c.getWithdrawalReason());
+            dto.setCreatedAt(c.getCreatedAt());
+
+            // Study Name
+            studyRepository.findByTenantIdAndId(tenantId, c.getStudyId())
+                    .ifPresent(s -> dto.setStudyName(s.getName()));
+
+            // Consent Version Title
+            consentVersionRepository.findByTenantIdAndId(tenantId, c.getConsentVersionId())
+                    .ifPresent(v -> {
+                        dto.setConsentVersionTitle(v.getTitle());
+                        dto.setVersionNumber(v.getVersionNumber());
+                    });
+
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ConsentDto recordConsent(UUID tenantId, UUID participantId, UUID userId, String userName, RecordConsentRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+
+        ConsentRecord record = new ConsentRecord();
+        record.setTenantId(tenantId);
+        record.setParticipantId(participantId);
+        record.setStudyId(resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier()));
+        record.setConsentVersionId(request.getConsentVersionId());
+        record.setStatus(request.getStatus() != null ? request.getStatus().toUpperCase() : "CONSENTED");
+        record.setConsentedAt(request.getConsentDate() != null ? request.getConsentDate() : OffsetDateTime.now());
+        record.setConsentedByUserId(userId);
+        record.setConsentMethod(request.getConsentMethod() != null ? request.getConsentMethod() : "ELECTRONIC");
+        record.setWithdrawalReason(request.getWithdrawalReason());
+        record.setActive(true);
+        record.setCreatedBy(userId);
+        record.setUpdatedBy(userId);
+        record.setCreatedAt(OffsetDateTime.now());
+        record.setUpdatedAt(OffsetDateTime.now());
+
+        ConsentRecord saved = consentRecordRepository.save(record);
+        recordAudit(tenantId, userId, "CONSENT_RECORDED", "ConsentRecord", saved.getId(),
+                "Recorded consent status " + saved.getStatus() + " for participant "
+                        + participantDisplayName(tenantId, participantId));
+
+        ConsentDto dto = new ConsentDto();
+        dto.setId(saved.getId());
+        dto.setParticipantId(saved.getParticipantId());
+        dto.setStudyId(saved.getStudyId());
+        dto.setConsentVersionId(saved.getConsentVersionId());
+        dto.setStatus(saved.getStatus());
+        dto.setConsentedAt(saved.getConsentedAt());
+        dto.setConsentMethod(saved.getConsentMethod());
+        dto.setCreatedAt(saved.getCreatedAt());
+
+        studyRepository.findByTenantIdAndId(tenantId, saved.getStudyId())
+                .ifPresent(s -> dto.setStudyName(s.getName()));
+        consentVersionRepository.findByTenantIdAndId(tenantId, saved.getConsentVersionId())
+                .ifPresent(v -> {
+                    dto.setConsentVersionTitle(v.getTitle());
+                    dto.setVersionNumber(v.getVersionNumber());
+                });
+
+        return dto;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConsentOptionDto> getConsentOptions(UUID tenantId, UUID participantId) {
+        List<ConsentVersion> versions = consentVersionRepository.findByTenantIdAndActiveTrue(tenantId);
+        return versions.stream().map(v -> {
+            String studyName = studyRepository.findByTenantIdAndId(tenantId, v.getStudyId())
+                    .map(Study::getName)
+                    .orElse("General Registry");
+            return new ConsentOptionDto(v.getStudyId(), studyName, v.getId(), v.getTitle(), v.getVersionNumber());
+        }).collect(Collectors.toList());
+    }
+
+    // =========================================================================
+    // 5. FORMS & SURVEY ASSIGNMENTS
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public List<SurveyAssignmentDto> getSurveyAssignments(UUID tenantId, UUID participantId) {
+        verifyParticipantExists(tenantId, participantId);
+        List<SurveyAssignment> assignments = surveyAssignmentRepository.findByTenantIdAndParticipantIdOrderByAssignedAtDesc(tenantId, participantId);
+
+        return assignments.stream().map(a -> {
+            SurveyAssignmentDto dto = new SurveyAssignmentDto();
+            dto.setId(a.getId());
+            dto.setParticipantId(a.getParticipantId());
+            dto.setStudyId(a.getStudyId());
+            dto.setSurveyVersionId(a.getSurveyVersionId());
+            dto.setStatus(a.getStatus());
+            dto.setAssignedAt(a.getAssignedAt());
+            dto.setDueAt(a.getDueAt());
+            dto.setCompletedAt(a.getCompletedAt());
+
+            if (a.getStudyId() != null) {
+                studyRepository.findByTenantIdAndId(tenantId, a.getStudyId())
+                        .ifPresent(s -> dto.setStudyName(s.getName()));
+            }
+
+            // Survey details
+            surveyDefinitionRepository.findByTenantIdAndId(tenantId, a.getSurveyVersionId())
+                    .ifPresent(def -> {
+                        dto.setSurveyCode(def.getCode());
+                        dto.setSurveyName(def.getName());
+                    });
+
+            if (dto.getSurveyName() == null) {
+                dto.setSurveyName("Intake Screening Form");
+                dto.setSurveyCode("FORM-001");
+            }
+
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public SurveyAssignmentDto assignSurvey(UUID tenantId, UUID participantId, UUID userId, AssignSurveyRequest request) {
+        verifyParticipantExists(tenantId, participantId);
+
+        SurveyAssignment assignment = new SurveyAssignment();
+        assignment.setTenantId(tenantId);
+        assignment.setParticipantId(participantId);
+        assignment.setStudyId(resolveStudyId(tenantId, request.getStudyId(), request.getStudyIdentifier()));
+        assignment.setSurveyVersionId(request.getSurveyDefinitionId());
+        assignment.setStatus("ASSIGNED");
+        assignment.setAssignedByUserId(userId);
+        assignment.setAssignedAt(OffsetDateTime.now());
+        assignment.setDueAt(request.getDueAt());
+        assignment.setActive(true);
+        assignment.setCreatedAt(OffsetDateTime.now());
+
+        SurveyAssignment saved = surveyAssignmentRepository.save(assignment);
+        recordAudit(tenantId, userId, "SURVEY_ASSIGNED", "SurveyAssignment", saved.getId(),
+                "Assigned survey to participant " + participantDisplayName(tenantId, participantId));
+
+        SurveyAssignmentDto dto = new SurveyAssignmentDto();
+        dto.setId(saved.getId());
+        dto.setParticipantId(saved.getParticipantId());
+        dto.setStudyId(saved.getStudyId());
+        dto.setSurveyVersionId(saved.getSurveyVersionId());
+        dto.setStatus(saved.getStatus());
+        dto.setAssignedAt(saved.getAssignedAt());
+        dto.setDueAt(saved.getDueAt());
+
+        surveyDefinitionRepository.findByTenantIdAndId(tenantId, saved.getSurveyVersionId())
+                .ifPresent(def -> {
+                    dto.setSurveyCode(def.getCode());
+                    dto.setSurveyName(def.getName());
+                });
+        if (dto.getSurveyName() == null) {
+            dto.setSurveyName("General Intake Assessment");
+        }
+
+        return dto;
+    }
+
+    @Transactional
+    public SurveyAssignmentDto updateSurveyStatus(UUID tenantId, UUID participantId, UUID assignmentId, String status) {
+        SurveyAssignment assignment = surveyAssignmentRepository.findByTenantIdAndParticipantIdAndId(tenantId, participantId, assignmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey assignment not found"));
+
+        assignment.setStatus(status.toUpperCase());
+        if ("COMPLETED".equalsIgnoreCase(status)) {
+            assignment.setCompletedAt(OffsetDateTime.now());
+        }
+        SurveyAssignment saved = surveyAssignmentRepository.save(assignment);
+
+        SurveyAssignmentDto dto = new SurveyAssignmentDto();
+        dto.setId(saved.getId());
+        dto.setParticipantId(saved.getParticipantId());
+        dto.setStudyId(saved.getStudyId());
+        dto.setStatus(saved.getStatus());
+        dto.setAssignedAt(saved.getAssignedAt());
+        dto.setCompletedAt(saved.getCompletedAt());
+        return dto;
+    }
+
+    @Transactional(readOnly = true)
+    public List<SurveyOptionDto> getAvailableSurveys(UUID tenantId, UUID participantId) {
+        List<SurveyDefinition> list = surveyDefinitionRepository.findByTenantIdAndActiveTrue(tenantId);
+        return list.stream()
+                .map(def -> new SurveyOptionDto(def.getId(), def.getCode(), def.getName(), def.getDescription()))
+                .collect(Collectors.toList());
+    }
+
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
+
+    @Transactional
+    public boolean updateSmsStatusByExternalMessageId(String externalMessageId, String status) {
+        if (externalMessageId == null || externalMessageId.isBlank()) return false;
+        Optional<Communication> opt = communicationRepository.findByExternalMessageId(externalMessageId.trim());
+        if (opt.isEmpty()) {
+            log.warn("Webhook received for unknown externalMessageId: {}", externalMessageId);
+            return false;
+        }
+
+        Communication comm = opt.get();
+        if (!"SMS".equalsIgnoreCase(comm.getChannel())) {
+            log.warn("Webhook attempted to update non-SMS communication: {}", comm.getId());
+            return false;
+        }
+
+        String currentStatus = comm.getStatus() != null ? comm.getStatus().toUpperCase() : "";
+        String newStatus = status != null ? status.toUpperCase() : "DELIVERED";
+
+        boolean isCurrentTerminal = "DELIVERED".equals(currentStatus) || "FAILED".equals(currentStatus) || "UNDELIVERED".equals(currentStatus);
+        boolean isNewTerminal = "DELIVERED".equals(newStatus) || "FAILED".equals(newStatus) || "UNDELIVERED".equals(newStatus);
+
+        if (isCurrentTerminal && !isNewTerminal) {
+            log.info("Ignoring out-of-order status update for {} from {} to {}", externalMessageId, currentStatus, newStatus);
+            return true;
+        }
+
+        comm.setStatus(newStatus);
+        if (isNewTerminal && comm.getCompletedAt() == null) {
+            comm.setCompletedAt(OffsetDateTime.now());
+        }
+        communicationRepository.save(comm);
+        return true;
+    }
+
+    public boolean validateTwilioWebhookSignature(String signatureHeader, String requestUrl, Map<String, String> postParams) {
+        return smsGatewayService.validateTwilioSignature(signatureHeader, requestUrl, postParams);
+    }
+
+    private String resolveStudyName(UUID tenantId, UUID studyId) {
+        if (studyId == null) {
+            return null;
+        }
+        return studyRepository.findByTenantIdAndId(tenantId, studyId)
+                .map(Study::getName)
+                .orElse(null);
+    }
+
+    private String escapeJson(String str) {
+        if (str == null) return "";
+        return str.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
+    private UUID resolveStudyId(UUID tenantId, UUID studyId, String studyIdentifier) {
+        if (studyId != null) {
+            return studyRepository.findByTenantIdAndId(tenantId, studyId)
+                    .map(Study::getId)
+                    .orElse(studyId);
+        }
+        if (studyIdentifier != null && !studyIdentifier.isBlank()) {
+            try {
+                UUID parsed = UUID.fromString(studyIdentifier.trim());
+                return studyRepository.findByTenantIdAndId(tenantId, parsed)
+                        .map(Study::getId)
+                        .orElse(parsed);
+            } catch (IllegalArgumentException ignored) {
+                return studyRepository.findByTenantIdAndNameIgnoreCase(tenantId, studyIdentifier.trim())
+                        .or(() -> studyRepository.findByTenantIdAndStudyCode(tenantId, studyIdentifier.trim()))
+                        .map(Study::getId)
+                        .orElse(null);
+            }
+        }
+        return null;
+    }
+
+    private void verifyParticipantExists(UUID tenantId, UUID participantId) {
+        if (participantRepository.findByTenantIdAndId(tenantId, participantId).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found: " + participantId);
+        }
+    }
+
+    private String participantDisplayName(UUID tenantId, UUID participantId) {
+        return ParticipantAuditDescription.participantDisplayName(participantRepository, tenantId, participantId);
+    }
+
+    private void recordAudit(UUID tenantId, UUID userId, String action, String entityType, UUID entityId, String description) {
+        if (auditRecorder == null) return;
+        try {
+            auditRecorder.record(new AuditEventCommand(
+                    tenantId,
+                    userId,
+                    entityType,
+                    entityId,
+                    action,
+                    description,
+                    "APPLICATION",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            ));
+        } catch (Exception ex) {
+            log.warn("Failed to record audit event for {}: {}", action, ex.getMessage());
+        }
+    }
+
+    private void recordAuditChanges(
+            UUID tenantId,
+            String action,
+            String entityType,
+            UUID entityId,
+            String description,
+            List<AuditEntitySnapshot> entities) {
+        if (auditRecorder == null) {
+            throw new IllegalStateException("Audit recorder is required to record participant data changes");
+        }
+        auditRecorder.record(new AuditRequest(
+                tenantId, entityType, entityId, action, description, "APPLICATION", entities));
+    }
+}

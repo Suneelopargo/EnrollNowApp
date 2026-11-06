@@ -22,6 +22,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.verify;
+import com.enrollnow.common.audit.AuditRecorder;
+
 @ExtendWith(MockitoExtension.class)
 class UserServiceAssignRoleTest {
 
@@ -48,6 +52,9 @@ class UserServiceAssignRoleTest {
 
     @InjectMocks
     private UserService userService;
+    
+    @Mock
+    private AuditRecorder auditRecorder;
 
     @Test
     @DisplayName("assignRole reuses and updates existing active site assignment to prevent unique constraint violation")
@@ -74,6 +81,8 @@ class UserServiceAssignRoleTest {
         newRole.setActive(true);
 
         when(roleRepository.findByCode("SITE_ADMIN")).thenReturn(Optional.of(newRole));
+        when(roleRepository.findById(oldRole.getId()))
+        .thenReturn(Optional.of(oldRole));
 
         Site site = new Site();
         site.setId(siteId);
@@ -106,6 +115,82 @@ class UserServiceAssignRoleTest {
         // Verify saveAndFlush was called on the existing assignment and NO insert save was made
         verify(userRoleAssignmentRepository).saveAndFlush(existingAssignment);
         verify(userRoleAssignmentRepository, never()).save(argThat(ura -> ura != existingAssignment));
+         
+    
+    }
+    
+    @Test
+    @DisplayName("assignRole adds new site permission to supplied audit operation")
+    void shouldCreateNewSitePermissionAssignment() {
+
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID siteId = UUID.randomUUID();
+
+        User user = new User();
+        user.setId(userId);
+        user.setTenantId(tenantId);
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("SITE_ADMIN");
+        role.setScopeType("SITE");
+        role.setActive(true);
+
+        Site site = new Site();
+        site.setId(siteId);
+        site.setTenantId(tenantId);
+
+        when(userRepository.findByTenantIdAndId(tenantId, userId))
+                .thenReturn(Optional.of(user));
+
+        when(roleRepository.findByCode("SITE_ADMIN"))
+                .thenReturn(Optional.of(role));
+
+        when(siteRepository.findById(siteId))
+                .thenReturn(Optional.of(site));
+
+        when(userRoleAssignmentRepository
+                .findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
+                        tenantId,
+                        userId,
+                        siteId
+                ))
+                .thenReturn(List.of());
+
+        when(userRoleAssignmentRepository.save(any(UserRoleAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AssignRoleRequest request =
+                new AssignRoleRequest(
+                        "SITE_ADMIN",
+                        "SITE",
+                        siteId
+                );
+
+        
+
+        UserRoleAssignment result =
+                userService.assignRole(
+                        tenantId,
+                        userId,
+                        request
+                        
+                );
+
+        assertNotNull(result);
+        assertEquals(userId, result.getUserId());
+        assertEquals(siteId, result.getSiteId());
+        assertEquals(role.getId(), result.getRoleId());
+        assertTrue(result.isActive());
+
+        verify(userRoleAssignmentRepository)
+                .save(any(UserRoleAssignment.class));
+      
+
+       
+
+        
     }
 
     @Test
@@ -150,5 +235,51 @@ class UserServiceAssignRoleTest {
         assertSame(existingAssignment, result);
         verify(userRoleAssignmentRepository, never()).saveAndFlush(any());
         verify(userRoleAssignmentRepository, never()).save(any());
+    }
+    
+    @Test
+    void shouldRemoveSitePermission() {
+
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID siteId = UUID.randomUUID();
+
+        User user = new User();
+        user.setId(userId);
+        user.setTenantId(tenantId);
+
+        UserRoleAssignment assignment =
+                new UserRoleAssignment();
+
+        assignment.setId(UUID.randomUUID());
+        assignment.setTenantId(tenantId);
+        assignment.setUserId(userId);
+        assignment.setSiteId(siteId);
+        assignment.setRoleId(UUID.randomUUID());
+        assignment.setActive(true);
+
+        when(userRepository.findByTenantIdAndId(
+                tenantId,
+                userId
+        )).thenReturn(Optional.of(user));
+
+        when(userRoleAssignmentRepository
+                .findByTenantIdAndUserIdAndSiteIdAndActiveTrue(
+                        tenantId,
+                        userId,
+                        siteId
+                ))
+                .thenReturn(List.of(assignment));
+
+        userService.removeSiteRole(
+                tenantId,
+                userId,
+                siteId
+        );
+
+        assertFalse(assignment.isActive());
+
+        verify(userRoleAssignmentRepository)
+                .save(assignment);
     }
 }

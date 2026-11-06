@@ -43,7 +43,8 @@
 
 .form-input[aria-invalid='true'],
 .form-select[aria-invalid='true'],
-.form-textarea[aria-invalid='true'] {
+.form-textarea[aria-invalid='true'],
+textarea[aria-invalid='true'] {
   border-color: $color-danger;
 
   &::placeholder {

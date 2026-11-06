@@ -1,106 +1,290 @@
-// frontend/microfrontends/study/src/remoteEntry.tsx - Study MFE Remote Entry
-import React, { useState, useEffect, useRef } from 'react';
+// frontend/microfrontends/study/src/remoteEntry.tsx - Study MFE Remote Entry & Multi-Tab Navigation
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MfeContext } from '../../../shared/contracts';
-import { Plus, Upload, X } from 'lucide-react';
+import { Plus, ShieldAlert, AlertTriangle, ArrowLeftRight, ChevronDown, Check } from 'lucide-react';
 import { dashboardApi } from '../../../shared/api/dashboardApi';
-import { participantApi } from '../../../shared/api/participantApi';
-import { studyApi } from '../../../shared/api/studyApi';
-import { useFocusTrap } from '../../../shared/accessibility/useFocusTrap';
+import { participantApi, Participant } from '../../../shared/api/participantApi';
+import { studyApi, Study, StudyNavigationPermissions, StudyApiRequestConfig } from '../../../shared/api/studyApi';
+import { AddStudyModal } from '../../../shared/design-system/components/AddStudyModal';
+import {
+  StudyNavigation,
+  StudyTabId,
+  RecruitmentSubTabId,
+  isStudyTabAuthorized,
+} from './components/StudyNavigation';
+import { StudyDashboardTab } from './components/StudyDashboardTab';
+import { StudyTabPlaceholder } from './components/StudyTabPlaceholder';
+import { StudyUnauthorizedTab } from './components/StudyUnauthorizedTab';
+import { StudySettingsWorkspace } from './components/StudySettingsWorkspace';
+import { StudyDirectory } from './components/StudyDirectory';
 
 export interface StudyModuleProps {
-  context: MfeContext;
+  context?: MfeContext;
 }
 
 export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
-  const [studies, setStudies] = useState<any[]>([]);
-  const [participants, setParticipants] = useState<any[]>([]);
+  const [studies, setStudies] = useState<Study[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAddStudy, setShowAddStudy] = useState(false);
-  const [isSavingStudy, setIsSavingStudy] = useState(false);
-  const [studyFormError, setStudyFormError] = useState<string | null>(null);
-  const [studyForm, setStudyForm] = useState({ shortName: '', templateId: '' });
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const addStudyDialogRef = useFocusTrap<HTMLElement>({
-    active: showAddStudy,
-    onEscape: () => setShowAddStudy(false),
-  });
+  const [isStudySwitcherOpen, setIsStudySwitcherOpen] = useState(false);
+  const studySwitcherRef = useRef<HTMLDivElement>(null);
+
+  // Study-specific permissions & navigation state
+  const [permissions, setPermissions] = useState<StudyNavigationPermissions | null>(null);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
+
   const location = useLocation();
   const navigate = useNavigate();
-  const selectedStudyId = new URLSearchParams(location.search).get('studyId');
+
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const selectedStudyId = searchParams.get('studyId');
+
+  // Resolve active tab and subTab from URL search params (or path)
+  const activeTab: StudyTabId = useMemo(() => {
+    const tab = searchParams.get('tab') as StudyTabId;
+    if (
+      tab &&
+      [
+        'dashboard',
+        'tasks',
+        'recruitment',
+        'calendar',
+        'potential_participants',
+        'enrolled_participants',
+        'study_settings',
+      ].includes(tab)
+    ) {
+      return tab;
+    }
+    return 'dashboard';
+  }, [searchParams]);
+
+  const activeSubTab: RecruitmentSubTabId | undefined = useMemo(() => {
+    const subTab = searchParams.get('subTab') as RecruitmentSubTabId;
+    if (subTab && ['sources', 'strategies'].includes(subTab)) {
+      return subTab;
+    }
+    return undefined;
+  }, [searchParams]);
 
   useEffect(() => {
     if (new URLSearchParams(location.search).get('action') === 'add') {
-      setStudyFormError(null);
       setShowAddStudy(true);
       navigate('/studies', { replace: true });
     }
   }, [location.search, navigate]);
 
+  // Click-outside listener for Change Study switcher dropdown
   useEffect(() => {
-    const fetchStudies = async () => {
-      setLoading(true);
-      try {
-        const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
-          studyApi.getStudies(),
-          dashboardApi.getOverview({ skipToast: true } as any),
-          participantApi.getParticipants({ skipToast: true } as any),
-        ]);
-        const registryStudies = studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value)
-          ? studiesRes.value
-          : [];
-        const overviewStudies = overviewRes.status === 'fulfilled'
-          ? overviewRes.value?.recentStudies || []
-          : [];
-        const getStudyIdentifiers = (study: any) => [study.id, study.studyId, study.protocolId, study.protocolNumber]
-          .filter((value) => value !== undefined && value !== null).map(String);
-        const sourceStudies = registryStudies.length > 0 ? registryStudies : overviewStudies;
-        const mergedStudies = sourceStudies.map((study: any) => {
-          const ids = getStudyIdentifiers(study);
-          const overviewStudy = overviewStudies.find((item: any) => getStudyIdentifiers(item).some((id: string) => ids.includes(id)));
-          return {
-            ...overviewStudy,
-            ...study,
-            enrolled: study.enrolled ?? study.enrolledParticipants ?? overviewStudy?.enrolled ?? overviewStudy?.enrolledParticipants ?? 0,
-            targetEnrollment: study.targetEnrollment ?? study.targetParticipants ?? overviewStudy?.targetEnrollment ?? 0,
-          };
-        });
-        setStudies(mergedStudies);
-        if (participantsRes.status === 'fulfilled' && Array.isArray(participantsRes.value)) {
-          setParticipants(participantsRes.value);
-        }
-      } catch {
-        // Keep the study selection screen available when an endpoint is unavailable.
-      } finally {
-        setLoading(false);
+    if (!isStudySwitcherOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (studySwitcherRef.current && !studySwitcherRef.current.contains(e.target as Node)) {
+        setIsStudySwitcherOpen(false);
       }
     };
-    fetchStudies();
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isStudySwitcherOpen]);
+
+  const fetchStudies = useCallback(async (isSilent = false) => {
+    if (!isSilent) {
+      setLoading(true);
+    }
+    try {
+      const reqConfig: StudyApiRequestConfig = isSilent
+        ? { skipToast: true, skipLoader: true, headers: { 'x-skip-loader': 'true' } }
+        : { skipToast: true };
+      const [studiesRes, overviewRes, participantsRes] = await Promise.allSettled([
+        studyApi.getStudies(reqConfig),
+        dashboardApi.getOverview(reqConfig),
+        participantApi.getParticipants(reqConfig),
+      ]);
+      const registryStudies: Study[] =
+        studiesRes.status === 'fulfilled' && Array.isArray(studiesRes.value) ? studiesRes.value : [];
+      const overviewStudies: Array<Record<string, unknown>> =
+        overviewRes.status === 'fulfilled' && Array.isArray(overviewRes.value?.recentStudies)
+          ? (overviewRes.value.recentStudies as Array<Record<string, unknown>>)
+          : [];
+      const getStudyIdentifiers = (study: Record<string, unknown>) =>
+        [study.id, study.studyId, study.protocolId, study.protocolNumber, study.studyCode]
+          .filter((value) => value !== undefined && value !== null)
+          .map(String);
+      // Authoritative study list comes strictly from studyApi.getStudies() (/api/v1/studies).
+      // Overview studies only enrich matching study records and never fabricate studies when registryStudies is empty.
+      const sourceStudies = registryStudies;
+      const mergedStudies: Study[] = sourceStudies.map((study) => {
+        const ids = getStudyIdentifiers(study);
+        const overviewStudy = overviewStudies.find((item) =>
+          getStudyIdentifiers(item).some((id: string) => ids.includes(id))
+        );
+        const rawEnrolled =
+          study.enrolled ??
+          study.enrolledParticipants ??
+          (typeof overviewStudy?.enrolled === 'number' ? overviewStudy.enrolled : undefined) ??
+          (typeof overviewStudy?.enrolledParticipants === 'number' ? overviewStudy.enrolledParticipants : undefined) ??
+          null;
+        const rawTarget =
+          study.targetEnrollment ??
+          study.sampleSize ??
+          study.targetParticipants ??
+          (typeof overviewStudy?.targetEnrollment === 'number' ? overviewStudy.targetEnrollment : undefined) ??
+          (typeof overviewStudy?.sampleSize === 'number' ? overviewStudy.sampleSize : undefined) ??
+          null;
+        return {
+          ...overviewStudy,
+          ...study,
+          title: String(study.title || study.name || overviewStudy?.title || overviewStudy?.name || 'Untitled Study'),
+          name: String(study.name || study.title || overviewStudy?.name || overviewStudy?.title || 'Untitled Study'),
+          enrolled: typeof rawEnrolled === 'number' ? rawEnrolled : null,
+          targetEnrollment: typeof rawTarget === 'number' ? rawTarget : null,
+        };
+      });
+      setStudies(mergedStudies);
+      if (participantsRes.status === 'fulfilled' && Array.isArray(participantsRes.value)) {
+        setParticipants(participantsRes.value);
+      }
+    } catch {
+      // Keep the study selection screen available when an endpoint is unavailable.
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const data = studies;
-  const tableData = data.map((study) => ({
-    ...study,
-    protocolId: study.protocolId ?? study.protocolNumber ?? study.id,
-    targetParticipants: study.targetParticipants ?? study.targetEnrollment ?? study.target ?? 0,
-    enrolledParticipants: study.enrolledParticipants ?? study.enrolled ?? 0,
-    siteCount: study.siteCount ?? 0,
-  }));
-  const selectedStudy = selectedStudyId
-    ? tableData.find((study) => [study.id, study.studyId, study.protocolId, study.protocolNumber]
-        .some((id) => id !== undefined && String(id) === selectedStudyId))
-    : undefined;
+  useEffect(() => {
+    fetchStudies();
+  }, [fetchStudies]);
 
-  const selectedStudyIds = selectedStudy ? [selectedStudy.id, selectedStudy.studyId, selectedStudy.protocolId, selectedStudy.protocolNumber]
-    .filter((value) => value !== undefined && value !== null).map(String) : [];
-  const matchingParticipants = participants.filter((participant) => [participant.studyId, participant.study?.id, participant.study?.studyId]
-    .filter((value) => value !== undefined && value !== null).some((value) => selectedStudyIds.includes(String(value)))
+  // Load study-specific permissions dynamically whenever selectedStudyId changes
+  useEffect(() => {
+    // 1. Immediately clear any previously held permissions and errors to prevent cross-study leaks
+    setPermissions(null);
+    setPermissionsError(null);
+    setIsAccessDenied(false);
+
+    if (!selectedStudyId) {
+      setPermissionsLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setPermissionsLoading(true);
+
+    const loadStudyPermissions = async () => {
+      try {
+        const tenantId = context?.user?.tenantId;
+        const res = await studyApi.getStudyPermissions(selectedStudyId, tenantId);
+
+        if (!isCancelled) {
+          setPermissions(res);
+          setIsAccessDenied(false);
+          setPermissionsError(null);
+        }
+      } catch (err: unknown) {
+        if (!isCancelled) {
+          setPermissions(null);
+          const errObj = err as { status?: number; response?: { status?: number } };
+          const status = errObj?.status || errObj?.response?.status;
+          if (status === 403) {
+            setIsAccessDenied(true);
+            setPermissionsError(
+              `Access denied: You do not have permission to access study ${selectedStudyId}.`
+            );
+          } else if (status === 404) {
+            setPermissionsError(`Study ${selectedStudyId} could not be found.`);
+          } else {
+            setPermissionsError(
+              `Failed to load permissions for study ${selectedStudyId}. Access cannot be verified.`
+            );
+          }
+        }
+      } finally {
+        if (!isCancelled) {
+          setPermissionsLoading(false);
+        }
+      }
+    };
+
+    void loadStudyPermissions();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedStudyId, context?.user?.tenantId]);
+
+  const data = studies;
+  const tableData = useMemo(
+    () =>
+      data.map((study) => ({
+        ...study,
+        protocolId: String(study.protocolId ?? study.protocolNumber ?? study.studyCode ?? study.id ?? ''),
+        targetParticipants:
+          study.targetParticipants ?? study.targetEnrollment ?? study.sampleSize ?? null,
+        enrolledParticipants: study.enrolledParticipants ?? study.enrolled ?? null,
+        siteCount: study.siteCount ?? null,
+      })),
+    [data]
   );
-  const weeklyRecruitment = (() => {
+
+  const selectedStudy = useMemo(() => {
+    if (!selectedStudyId) return undefined;
+    return tableData.find((study) =>
+      [study.id, study.studyId, study.protocolId, study.protocolNumber, study.studyCode].some(
+        (id) => id !== undefined && String(id) === selectedStudyId
+      )
+    );
+  }, [tableData, selectedStudyId]);
+
+  // Handle switching tabs while strictly preserving selected study
+  const handleSelectTab = useCallback(
+    (tabId: StudyTabId, subTab?: RecruitmentSubTabId) => {
+      if (!selectedStudyId) return;
+
+      const params = new URLSearchParams(location.search);
+      params.set('studyId', selectedStudyId);
+      params.set('tab', tabId);
+      if (subTab) {
+        params.set('subTab', subTab);
+      } else {
+        params.delete('subTab');
+      }
+
+      navigate(`${location.pathname}?${params.toString()}`);
+    },
+    [selectedStudyId, location.search, location.pathname, navigate]
+  );
+
+  const selectedStudyIds = selectedStudy
+    ? [
+        selectedStudy.id,
+        selectedStudy.studyId,
+        selectedStudy.protocolId,
+        selectedStudy.protocolNumber,
+        selectedStudy.studyCode,
+      ]
+        .filter((value) => value !== undefined && value !== null)
+        .map(String)
+    : [];
+
+  const matchingParticipants = participants.filter((participant) =>
+    [participant.studyId, participant.study?.id, participant.study?.studyId]
+      .filter((value) => value !== undefined && value !== null)
+      .some((value) => selectedStudyIds.includes(String(value)))
+  );
+
+  const weeklyRecruitment = useMemo(() => {
     const weekly = new Map<string, number>();
     matchingParticipants
-      .filter((participant) => ['ENROLLED', 'ACTIVE', 'COMPLETED'].includes(String(participant.status || '').toUpperCase()) && participant.enrolledAt)
+      .filter(
+        (participant) =>
+          ['ENROLLED', 'ACTIVE', 'COMPLETED'].includes(String(participant.status || '').toUpperCase()) &&
+          participant.enrolledAt
+      )
       .forEach((participant) => {
+        if (!participant.enrolledAt) return;
         const date = new Date(participant.enrolledAt);
         if (Number.isNaN(date.getTime())) return;
         const weekStart = new Date(date);
@@ -111,215 +295,260 @@ export const StudyModule: React.FC<StudyModuleProps> = ({ context }) => {
       });
     return Array.from(weekly, ([week, count]) => ({
       week,
-      label: new Date(`${week}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      label: new Date(`${week}T00:00:00`).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+      }),
       count,
     })).sort((a, b) => a.week.localeCompare(b.week));
-  })();
-  const recruitedCount = Math.max(0, Number(selectedStudy?.enrolled ?? selectedStudy?.enrolledParticipants) || 0);
-  const targetCount = Math.max(0, Number(selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants) || 0);
-  const recruitmentProgress = targetCount > 0 ? Math.min(100, Math.round((recruitedCount / targetCount) * 100)) : 0;
+  }, [matchingParticipants]);
+
+  const activeEnrolledCount = matchingParticipants.filter((participant) =>
+    ['ENROLLED', 'ACTIVE', 'COMPLETED'].includes(String(participant.status || '').toUpperCase())
+  ).length;
+
+  const recruitedCount =
+    activeEnrolledCount > 0
+      ? activeEnrolledCount
+      : Math.max(0, Number(selectedStudy?.enrolled ?? selectedStudy?.enrolledParticipants) || 0);
+
+  const rawTargetCount =
+    selectedStudy?.targetEnrollment ?? selectedStudy?.targetParticipants ?? selectedStudy?.sampleSize;
+  const targetCount: number | null =
+    typeof rawTargetCount === 'number' && !Number.isNaN(rawTargetCount) && rawTargetCount > 0
+      ? rawTargetCount
+      : null;
+
+  const recruitmentProgress: number | null =
+    targetCount !== null && targetCount > 0
+      ? Math.min(100, Math.round((recruitedCount / targetCount) * 100))
+      : null;
   const weeklyMaximum = Math.max(1, ...weeklyRecruitment.map((entry) => entry.count));
 
-  const handleCreateStudy = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setIsSavingStudy(true);
-    setStudyFormError(null);
-    const template = tableData.find((study) => String(study.id ?? study.studyId ?? study.protocolId) === studyForm.templateId);
-    const payload = {
-      title: studyForm.shortName.trim(),
-      shortName: studyForm.shortName.trim(),
-      phase: template?.phase || 'Phase I',
-      therapeuticArea: template?.therapeuticArea || '',
-      targetEnrollment: Number(template?.targetEnrollment ?? template?.targetParticipants ?? 100),
-      status: 'ACTIVE',
-    };
-    try {
-      const created = (await studyApi.createStudy(payload)) || payload;
-      setStudies((current) => [{
-        ...created,
-        protocolId: created.protocolId ?? created.protocolNumber ?? created.id ?? `ST-${Date.now()}`,
-        targetParticipants: created.targetParticipants ?? created.targetEnrollment ?? payload.targetEnrollment,
-        enrolledParticipants: created.enrolledParticipants ?? created.enrolled ?? 0,
-        siteCount: created.siteCount ?? 0,
-      }, ...current]);
-      setShowAddStudy(false);
-      setStudyForm({ shortName: '', templateId: '' });
-      navigate(`/studies?studyId=${encodeURIComponent(String(created.id ?? created.studyId ?? created.protocolNumber))}`);
-    } catch {
-      setStudyFormError('Unable to add the study. Please try again.');
-    } finally {
-      setIsSavingStudy(false);
-    }
-  };
+  // Resolved title and protocol
+  const studyTitle =
+    permissions?.studyName || selectedStudy?.title || selectedStudy?.name || 'Study Workspace';
+  const studyCode =
+    permissions?.studyCode ||
+    selectedStudy?.protocolNumber ||
+    selectedStudy?.protocolId ||
+    selectedStudy?.studyCode ||
+    selectedStudy?.id ||
+    selectedStudyId ||
+    '';
+  const studyRole = permissions?.studyRole || selectedStudy?.studyRole || 'Study Member';
+  const isArchived = Boolean(permissions?.archived || selectedStudy?.archived);
 
-  const handleImportStudy = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    setStudyFormError(null);
-    try {
-      const imported = JSON.parse(await file.text());
-      const name = String(imported.shortName ?? imported.title ?? '').trim().slice(0, 15);
-      if (!name) throw new Error('The selected file does not contain a study name.');
-      setIsSavingStudy(true);
-      const payload = {
-        title: name,
-        shortName: name,
-        phase: imported.phase || 'Phase I',
-        therapeuticArea: imported.therapeuticArea || '',
-        targetEnrollment: Math.max(1, Number(imported.targetEnrollment ?? imported.targetParticipants) || 100),
-        status: 'ACTIVE',
-      };
-      const created = (await studyApi.createStudy(payload)) || payload;
-      setStudies((current) => [{
-        ...created,
-        protocolId: created.protocolId ?? created.protocolNumber ?? created.id ?? `ST-${Date.now()}`,
-        targetEnrollment: created.targetEnrollment ?? payload.targetEnrollment,
-        enrolled: created.enrolled ?? 0,
-      }, ...current]);
-      setShowAddStudy(false);
-      setStudyForm({ shortName: '', templateId: '' });
-      navigate(`/studies?studyId=${encodeURIComponent(String(created.id ?? created.studyId ?? created.protocolNumber))}`);
-    } catch {
-      setStudyFormError('Import a valid study JSON file with a short study name.');
-    } finally {
-      setIsSavingStudy(false);
+  // Check if current active tab is authorized
+  const isAuthorizedForCurrentTab = useMemo(() => {
+    if (!permissions) {
+      return activeTab === 'dashboard';
     }
-  };
+    return isStudyTabAuthorized(activeTab, permissions);
+  }, [activeTab, permissions]);
 
   return (
     <div className="study-workspace">
-      {loading && !selectedStudy ? (
-        <div className="study-selection-empty" role="status">Loading study details…</div>
-      ) : selectedStudy ? (
+      {/* 1. Loading State */}
+      {(loading || permissionsLoading) && !selectedStudy && !permissions ? (
+        <div className="study-selection-empty" role="status">
+          <div className="study-loading-indicator">Loading study details…</div>
+        </div>
+      ) : isAccessDenied ? (
+        /* 2. Unauthorized / Access Denied State for Inaccessible Study */
+        <section className="study-access-denied-panel" role="alert">
+          <div className="study-access-denied-panel__icon">
+            <ShieldAlert size={28} />
+          </div>
+          <h2>Study Access Denied</h2>
+          <p>{permissionsError || 'You do not have authorization to access this study.'}</p>
+          <button
+            type="button"
+            className="study-access-denied-panel__btn"
+            onClick={() => navigate('/studies')}
+          >
+            Return to Studies
+          </button>
+        </section>
+      ) : permissionsError ? (
+        /* 3. Study Not Found or Permission Resolution Error State */
+        <section className="study-selection-empty" aria-live="polite">
+          <div className="study-selection-empty__icon">
+            <AlertTriangle size={24} />
+          </div>
+          <h1>{permissionsError.includes('not be found') ? 'Study Not Found' : 'Unable to Authorize Study'}</h1>
+          <p>{permissionsError}</p>
+        </section>
+      ) : permissionsLoading ? (
+        <div className="study-selection-empty" role="status">
+          <div className="study-loading-indicator">Loading study permissions…</div>
+        </div>
+      ) : selectedStudy || permissions ? (
+        /* 4. Active Selected Study Workspace */
         <section className="study-dashboard" aria-labelledby="study-dashboard-title">
+          {/* Header Context Banner with Navigation Side-by-Side */}
           <header className="study-dashboard__header">
-            <div>
-              <p>STUDY DASHBOARD</p>
-              <h1 id="study-dashboard-title">{selectedStudy.title}</h1>
-              <span>{selectedStudy.protocolNumber || selectedStudy.protocolId || selectedStudy.id} · {selectedStudy.phase || 'Study phase unavailable'}</span>
-            </div>
-          </header>
+            <div className="study-dashboard__title-wrap">
+              <h1 id="study-dashboard-title">{studyTitle}</h1>
+              {isArchived && (
+                <div className="study-archived-badge" role="status">
+                  Archived Study
+                </div>
+              )}
 
-          <section className="study-recruitment-panel" aria-labelledby="study-recruitment-title">
-            <div className="study-recruitment-panel__heading">
-              <div>
-                <h2 id="study-recruitment-title">Recruitment Progress</h2>
-                <p>{targetCount.toLocaleString()} participant recruitment target</p>
-              </div>
-              <strong>{recruitmentProgress}%</strong>
-            </div>
-            <div className="study-recruitment-scale" role="img" aria-label={`${recruitedCount} of ${targetCount} participants recruited, ${recruitmentProgress}% of target`}>
-              <div className="study-recruitment-scale__track">
-                <progress className="study-recruitment-scale__fill" value={recruitmentProgress} max={100} aria-hidden="true" />
-              </div>
-              <div className="study-recruitment-scale__ticks">
-                {[0, 25, 50, 75, 100].map((tick) => <span key={tick}>{tick}%</span>)}
-              </div>
-            </div>
-          </section>
-
-          <section className="study-metrics-grid" aria-label="Study recruitment metrics">
-            <article className="study-metric study-metric--recruited">
-              <span>Total number of participants recruited</span>
-              <strong>{recruitedCount.toLocaleString()}</strong>
-              <small>{Math.max(0, targetCount - recruitedCount).toLocaleString()} left to recruit</small>
-            </article>
-            <article className="study-metric study-metric--target">
-              <span>On Target Performance</span>
-              <strong>{recruitmentProgress}%</strong>
-              <small>{recruitedCount.toLocaleString()} of {targetCount.toLocaleString()} participants</small>
-            </article>
-            <article className="study-metric study-metric--weekly">
-              <span>Average recruited per active week</span>
-              <strong>{weeklyRecruitment.length
-                ? Math.round(weeklyRecruitment.reduce((sum, week) => sum + week.count, 0) / weeklyRecruitment.length).toLocaleString()
-                : '—'}</strong>
-              <small>{weeklyRecruitment.length ? 'From available participant records' : 'Weekly recruitment data unavailable'}</small>
-            </article>
-          </section>
-
-          <section className="study-weekly-panel" aria-labelledby="study-weekly-title">
-            <div className="study-weekly-panel__heading">
-              <div>
-                <h2 id="study-weekly-title">Weekly Recruitment</h2>
-                <p>Enrolled participant records by week</p>
-              </div>
-            </div>
-            <div className="study-weekly-chart">
-              <div className="study-weekly-chart__y-label">Participants</div>
-              <div className="study-weekly-chart__plot">
-                <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Weekly participant recruitment bar chart">
-                  {[0, 25, 50, 75, 100].map((tick) => {
-                    const y = 85 - tick * 0.75;
-                    return <line key={tick} x1="4" x2="98" y1={y} y2={y} className="study-weekly-chart__gridline" />;
-                  })}
-                  {weeklyRecruitment.map((week, index) => {
-                    const step = 90 / Math.max(weeklyRecruitment.length, 1);
-                    const barWidth = Math.min(8, step * 0.55);
-                    const barHeight = Math.max(3, (week.count / weeklyMaximum) * 66);
-                    const x = 5 + index * step + (step - barWidth) / 2;
-                    return <rect key={week.week} x={x} y={85 - barHeight} width={barWidth} height={barHeight} rx="1.5" className="study-weekly-chart__bar"><title>{week.label}: {week.count} participants</title></rect>;
-                  })}
-                </svg>
-                {weeklyRecruitment.length === 0 && <div className="study-weekly-chart__empty">No weekly recruitment records are available for this study yet.</div>}
-                {weeklyRecruitment.length > 0 && (
-                  <div className="study-weekly-chart__labels">
-                    {weeklyRecruitment.map((week) => <span key={week.week}>{week.label}</span>)}
+              {/* Quick Study Switcher / Change Study Option */}
+              <div className="study-switcher-wrap" ref={studySwitcherRef}>
+                <button
+                  type="button"
+                  className="study-switcher-btn"
+                  onClick={() => setIsStudySwitcherOpen((prev) => !prev)}
+                  aria-expanded={isStudySwitcherOpen}
+                  aria-haspopup="menu"
+                  title="Switch or change study"
+                >
+                  <ArrowLeftRight size={13} />
+                  <span>Change Study</span>
+                  <ChevronDown
+                    size={13}
+                    className={`study-switcher-chevron ${isStudySwitcherOpen ? 'is-open' : ''}`}
+                  />
+                </button>
+                {isStudySwitcherOpen && (
+                  <div className="study-switcher-dropdown" role="menu">
+                    <div className="study-switcher-header">
+                      <span>Assigned Studies</span>
+                      <button
+                        type="button"
+                        className="study-switcher-add-btn"
+                        onClick={() => {
+                          setIsStudySwitcherOpen(false);
+                          setShowAddStudy(true);
+                        }}
+                      >
+                        <Plus size={13} />
+                        <span>Add Study</span>
+                      </button>
+                    </div>
+                    <div className="study-switcher-list">
+                      {tableData.map((s) => {
+                        const isCurrent = String(s.id) === String(selectedStudy?.id ?? selectedStudyId);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            className={`study-switcher-item ${isCurrent ? 'is-active' : ''}`}
+                            onClick={() => {
+                              setIsStudySwitcherOpen(false);
+                              navigate(`/studies?studyId=${encodeURIComponent(String(s.id))}&tab=${activeTab}`);
+                            }}
+                          >
+                            <div className="study-switcher-item-main">
+                              <span className="study-switcher-item-name">{s.title || s.name}</span>
+                              <span className="study-switcher-item-code">{s.protocolId || s.studyCode || ''}</span>
+                            </div>
+                            {isCurrent && <Check size={14} className="study-switcher-item-check" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="study-switcher-footer">
+                      <button
+                        type="button"
+                        className="study-switcher-all-btn"
+                        onClick={() => {
+                          setIsStudySwitcherOpen(false);
+                          navigate('/studies');
+                        }}
+                      >
+                        <span>View All Assigned Studies</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
-          </section>
+
+            {/* Study Navigation Tabs Strip Side-by-Side */}
+            {permissions && (
+              <StudyNavigation
+                permissions={permissions}
+                activeTab={activeTab}
+                activeSubTab={activeSubTab}
+                onSelectTab={handleSelectTab}
+                isParticipantUser={Boolean(context?.user?.roles?.includes('PARTICIPANT'))}
+              />
+            )}
+          </header>
+
+          {/* Archived Study Warning */}
+          {isArchived && (
+            <div className="study-archived-banner" role="alert">
+              This study is archived. All records are in read-only preservation mode.
+            </div>
+          )}
+
+          {/* Tab Content Display */}
+          <div className="study-tab-content-container">
+            {!isAuthorizedForCurrentTab ? (
+              <StudyUnauthorizedTab
+                tabId={activeTab}
+                studyName={studyTitle}
+                onGoToDashboard={() => handleSelectTab('dashboard')}
+              />
+            ) : activeTab === 'dashboard' ? (
+              <StudyDashboardTab
+                selectedStudy={selectedStudy}
+                targetCount={targetCount}
+                recruitedCount={recruitedCount}
+                recruitmentProgress={recruitmentProgress}
+                weeklyRecruitment={weeklyRecruitment}
+                weeklyMaximum={weeklyMaximum}
+              />
+            ) : activeTab === 'study_settings' ? (
+              <StudySettingsWorkspace
+                studyId={String(selectedStudy?.id ?? selectedStudyId ?? '')}
+                studyName={studyTitle}
+                isArchived={isArchived}
+                canManageSettings={Boolean(
+                  permissions?.permissions?.includes('STUDY_SETTINGS_MANAGE') ||
+                  permissions?.studyPermission === 'STUDY_ADMIN' ||
+                  context?.user?.roles?.includes('SITE_ADMIN')
+                )}
+                onStudyUpdated={() => {
+                  fetchStudies(true);
+                }}
+              />
+            ) : (
+              <StudyTabPlaceholder
+                tabId={activeTab}
+                subTab={activeSubTab}
+                studyName={studyTitle}
+              />
+            )}
+          </div>
         </section>
       ) : (
-        <section className="study-selection-empty" aria-live="polite">
-          <div className="study-selection-empty__icon"><Plus size={22} /></div>
-          <h1>{selectedStudyId ? 'Study not found' : 'Select a study to continue'}</h1>
-          <p>{selectedStudyId
-            ? 'Choose another study from Select Study in the top navigation.'
-            : 'Use Select Study in the top navigation to open its recruitment dashboard, or choose Add Study to create a study.'}</p>
-        </section>
+        /* 5. Assigned Studies Directory / Selection */
+        <StudyDirectory
+          studies={tableData}
+          loading={loading}
+          onSelectStudy={(studyId, tab) => {
+            navigate(`/studies?studyId=${encodeURIComponent(studyId)}&tab=${tab || 'dashboard'}`);
+          }}
+          onAddStudy={() => setShowAddStudy(true)}
+          onRefresh={() => fetchStudies()}
+        />
       )}
 
-      {showAddStudy && (
-        <div className="study-form-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setShowAddStudy(false);
-        }}>
-          <section ref={addStudyDialogRef} className="study-form-dialog" role="dialog" aria-modal="true" aria-labelledby="add-study-title">
-            <div className="study-form-dialog__heading">
-              <h2 id="add-study-title">Add Study</h2>
-              <button type="button" className="study-form-dialog__close" onClick={() => setShowAddStudy(false)} aria-label="Close add study form"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleCreateStudy}>
-              <label>
-                <span>Short Study Name</span>
-                <input required maxLength={15} placeholder="max length 15 characters" value={studyForm.shortName} onChange={(event) => setStudyForm((current) => ({ ...current, shortName: event.target.value }))} />
-              </label>
-              <label>
-                <span>Copy From Existing Study</span>
-                <select value={studyForm.templateId} onChange={(event) => setStudyForm((current) => ({ ...current, templateId: event.target.value }))}>
-                  <option value="">Select a template (optional)</option>
-                  {tableData.map((study) => {
-                    const id = study.id ?? study.studyId ?? study.protocolId;
-                    return <option key={id} value={String(id)}>{study.title}</option>;
-                  })}
-                </select>
-              </label>
-              {studyFormError && <p className="study-form-dialog__error" role="alert">{studyFormError}</p>}
-              <div className="study-form-dialog__actions">
-                <button type="submit" className="btn btn-primary" disabled={isSavingStudy}>
-                  <Plus size={15} /> {isSavingStudy ? 'Submitting…' : 'Submit'}
-                </button>
-                <button type="button" className="study-form-dialog__import" onClick={() => importInputRef.current?.click()} disabled={isSavingStudy}>
-                  <Upload size={15} /> Import Study
-                </button>
-                <input ref={importInputRef} className="study-form-dialog__file-input" type="file" accept="application/json,.json" aria-label="Import study JSON file" onChange={handleImportStudy} />
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
+      <AddStudyModal
+        isOpen={showAddStudy}
+        onClose={() => setShowAddStudy(false)}
+        studies={tableData}
+        onStudyCreated={(newId) => {
+          fetchStudies();
+          navigate(`/studies?studyId=${encodeURIComponent(newId)}&tab=dashboard`);
+        }}
+      />
     </div>
   );
 };

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import FilterCard from './FilterCard';
-import { CustomFilterRule, SavedSearch } from '../types/participant';
+import { CustomFilterRule, FilterOptionItem, SavedSearch } from '../types/participant';
 
 interface LeftFilterPanelProps {
   searchTerm: string;
@@ -22,6 +22,7 @@ interface LeftFilterPanelProps {
   savedSearches?: SavedSearch[];
   onSelectSavedSearch?: (search: SavedSearch) => void;
   onDeleteRequest?: (search: SavedSearch) => void;
+  studyOptions?: FilterOptionItem[];
 }
 
 export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
@@ -39,6 +40,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
   savedSearches = [],
   onSelectSavedSearch,
   onDeleteRequest,
+  studyOptions,
 }) => {
   return (
     <aside
@@ -61,7 +63,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
             type="button"
             aria-pressed={contactFilter === 'all'}
             onClick={() => setContactFilter('all')}
-            className={`segmented-btn ${contactFilter === 'all' ? 'active' : ''}`}
+            className={`segmented-btn custom-tooltip-btn ${contactFilter === 'all' ? 'active' : ''}`}
+            data-tooltip="Show all contact statuses"
           >
             Show Everyone
           </button>
@@ -69,7 +72,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
             type="button"
             aria-pressed={contactFilter === 'yes'}
             onClick={() => setContactFilter('yes')}
-            className={`segmented-btn ${contactFilter === 'yes' ? 'active' : ''}`}
+            className={`segmented-btn custom-tooltip-btn ${contactFilter === 'yes' ? 'active' : ''}`}
+            data-tooltip="Filter by contactable participants"
           >
             Yes
           </button>
@@ -77,7 +81,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
             type="button"
             aria-pressed={contactFilter === 'no'}
             onClick={() => setContactFilter('no')}
-            className={`segmented-btn ${contactFilter === 'no' ? 'active' : ''}`}
+            className={`segmented-btn custom-tooltip-btn ${contactFilter === 'no' ? 'active' : ''}`}
+            data-tooltip="Filter by non-contactable participants"
           >
             No
           </button>
@@ -101,7 +106,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
             type="button"
             aria-pressed={availableFilter === 'all'}
             onClick={() => setAvailableFilter('all')}
-            className={`segmented-btn ${availableFilter === 'all' ? 'active' : ''}`}
+            className={`segmented-btn custom-tooltip-btn ${availableFilter === 'all' ? 'active' : ''}`}
+            data-tooltip="Show all availability statuses"
           >
             Show Everyone
           </button>
@@ -109,7 +115,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
             type="button"
             aria-pressed={availableFilter === 'yes'}
             onClick={() => setAvailableFilter('yes')}
-            className={`segmented-btn ${availableFilter === 'yes' ? 'active' : ''}`}
+            className={`segmented-btn custom-tooltip-btn ${availableFilter === 'yes' ? 'active' : ''}`}
+            data-tooltip="Filter by available participants"
           >
             Yes
           </button>
@@ -117,7 +124,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
             type="button"
             aria-pressed={availableFilter === 'no'}
             onClick={() => setAvailableFilter('no')}
-            className={`segmented-btn ${availableFilter === 'no' ? 'active' : ''}`}
+            className={`segmented-btn custom-tooltip-btn ${availableFilter === 'no' ? 'active' : ''}`}
+            data-tooltip="Filter by unavailable participants"
           >
             No
           </button>
@@ -134,6 +142,7 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
               index={index}
               onUpdate={onUpdateFilter}
               onRemove={onRemoveFilter}
+              studyOptions={studyOptions}
             />
           ))}
         </div>
@@ -146,21 +155,24 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
         <button
           type="button"
           onClick={onAddFilter}
-          className="btn-add-filter"
+          className="btn-add-filter custom-tooltip-btn"
+          data-tooltip="Add Filter"
         >
           Add Filter
         </button>
         <button
           type="button"
           onClick={onClearFilters}
-          className="btn-clear-filters"
+          className="btn-clear-filters custom-tooltip-btn"
+          data-tooltip="Clear Filters"
         >
           Clear Filters
         </button>
         <button
           type="button"
           onClick={onSaveFilter}
-          className="btn-save-filter"
+          className="btn-save-filter custom-tooltip-btn"
+          data-tooltip="Save Filter"
         >
           Save Filter
         </button>
@@ -170,7 +182,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
       <button
         type="button"
         onClick={onSearch}
-        className="btn-search-main"
+        className="btn-search-main custom-tooltip-btn"
+        data-tooltip="Search Participants"
       >
         Search
       </button>
@@ -194,8 +207,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => onSelectSavedSearch?.(search)}
-                  className="saved-search-apply"
-                  title={`Click to apply search "${search.name}"`}
+                  className="saved-search-apply custom-tooltip-btn"
+                  data-tooltip={`Apply saved search "${search.name}"`}
                 >
                   {search.name}
                 </button>
@@ -205,8 +218,8 @@ export const LeftFilterPanel: React.FC<LeftFilterPanelProps> = ({
                     e.stopPropagation();
                     onDeleteRequest?.(search);
                   }}
-                  className="btn-delete-saved"
-                  title="Delete saved search"
+                  className="btn-delete-saved custom-tooltip-btn tooltip-align-right"
+                  data-tooltip="Delete saved search"
                   aria-label={`Delete saved search ${search.name}`}
                 >
                   <Trash2 className="w-4 h-4 stroke-[2.5]" aria-hidden="true" />

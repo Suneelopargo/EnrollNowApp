@@ -22,8 +22,31 @@ public interface StudyRepository extends JpaRepository<Study, UUID> {
 
     List<Study> findByTenantIdAndArchivedFalse(UUID tenantId);
 
+    List<Study> findByTenantIdAndArchivedTrue(UUID tenantId);
+
     boolean existsByTenantIdAndStudyCode(
             UUID tenantId,
             String studyCode
+    );
+
+    boolean existsByTenantIdAndNameIgnoreCase(
+            UUID tenantId,
+            String name
+    );
+
+    Optional<Study> findByTenantIdAndNameIgnoreCase(
+            UUID tenantId,
+            String name
+    );
+
+    boolean existsByTenantIdAndPrefixIgnoreCase(
+            UUID tenantId,
+            String prefix
+    );
+
+    boolean existsByTenantIdAndPrefixIgnoreCaseAndIdNot(
+            UUID tenantId,
+            String prefix,
+            UUID id
     );
 }

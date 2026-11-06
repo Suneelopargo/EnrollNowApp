@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { SiteAdminUser, UserStatus } from '../types/admin';
 import { toSitePermissionLabel } from '../../../../shared/api/administrationApi';
+import { getStoredAuthUser } from '../../../../shared/api-client';
 
 // ---------------------------------------------------------------------------
 // Custom Cell Renderers (CSS classes only - NO inline styles!)
@@ -140,15 +141,23 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
   };
 
   const isUserActive = user.status === 'Active';
+  const storedUser = getStoredAuthUser<any>();
+  const isSelf = Boolean(
+    storedUser &&
+      ((storedUser.id && String(storedUser.id) === String(user.id)) ||
+        (storedUser.email &&
+          user.email &&
+          String(storedUser.email).trim().toLowerCase() === user.email.trim().toLowerCase())),
+  );
 
   return (
     <div className="participant-grid__row-actions">
       <button
         type="button"
-        className="participant-grid__row-action"
+        className="participant-grid__row-action site-admin-tooltip-btn"
         onClick={handleEdit}
         onKeyDown={handleKeyDown}
-        title="Edit user details"
+        data-tooltip="Edit user details"
         aria-label={`Edit ${user.name}`}
       >
         <Pencil size={15} aria-hidden="true" />
@@ -160,10 +169,11 @@ const UserActionsCellRenderer: React.FC<ICellRendererParams<SiteAdminUser>> = (p
           isUserActive
             ? 'participant-grid__row-action--warning'
             : 'participant-grid__row-action--success'
-        }`}
+        } site-admin-tooltip-btn`}
         onClick={handleToggleStatus}
         onKeyDown={handleKeyDown}
-        title={isUserActive ? 'Lock user' : 'Unlock user'}
+        disabled={isSelf}
+        data-tooltip={isUserActive ? 'Lock user' : 'Unlock user'}
         aria-label={isUserActive ? `Lock ${user.name}` : `Unlock ${user.name}`}
       >
         {isUserActive ? (
@@ -542,7 +552,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
           </div>
 
           {/* Global Data Grid Search */}
-          <div className="data-grid-toolbar__search">
+          <div className="data-grid-toolbar__search search-field-with-clear">
             <input
               type="text"
               placeholder="Search users..."
@@ -554,7 +564,7 @@ export const UsersGrid: React.FC<UsersGridProps> = ({
             {searchTerm && (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="search-field-clear-button"
                 onClick={handleClearSearch}
                 title="Clear search"
                 aria-label="Clear search query"

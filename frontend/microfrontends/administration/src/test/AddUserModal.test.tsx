@@ -80,6 +80,7 @@ describe('AddUserModal Study Role & Warning Toast Parity', () => {
       />
     );
 
+    expect(html).toContain('Edit user Dr. Jane Smith');
     // In edit mode with Cardiology 101 assigned and null permission, the select must default to RA
     expect(html).toContain('Cardiology 101');
     expect(html).toContain('value="RA" selected=""');

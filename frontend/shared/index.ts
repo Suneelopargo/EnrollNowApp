@@ -10,6 +10,7 @@ export * from './confirmation';
 export * from './loader';
 export * from './auth/authErrorMapper';
 export * from './design-system/components';
+export * from './design-system/tooltip';
 export * from './design-system/validation';
 export * from './accessibility';
 export * from './supportLinks';

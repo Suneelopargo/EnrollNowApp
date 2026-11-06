@@ -21,7 +21,7 @@ export interface TabWorkspaceContextType {
   isRefreshing: boolean;
   refreshingTabId: string | null;
   openTabByRoute: (route: string) => void;
-  activateTab: (tabId: string, options?: { refresh?: boolean }) => void;
+  activateTab: (tabId: string, options?: { refresh?: boolean; search?: string }) => void;
   closeTab: (tabId: string) => void;
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
@@ -246,7 +246,7 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Activate tab: opens the tab if not already in openTabs, sets it active, navigates, and refreshes
   const activateTab = useCallback(
-    (tabId: string, options?: { refresh?: boolean }) => {
+    (tabId: string, options?: { refresh?: boolean; search?: string }) => {
       const def = findDefinition(tabId);
       if (def && !isTabAuthorizedForUser(def.id, user)) {
         navigate('/unauthorized', { replace: true });
@@ -273,15 +273,19 @@ export const TabWorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const switching = target.id !== activeTabId;
       setActiveTabId(target.id);
 
-      if (location.pathname !== target.route) {
-        navigate(target.route);
+      const targetRoute = options?.search ? target.route + options.search : target.route;
+      if (
+        location.pathname !== target.route ||
+        (options?.search !== undefined && location.search !== options.search)
+      ) {
+        navigate(targetRoute);
       }
 
       if (switching || options?.refresh) {
         refreshTab(target.id);
       }
     },
-    [openTabs, activeTabId, location.pathname, navigate, refreshTab, user]
+    [openTabs, activeTabId, location.pathname, location.search, navigate, refreshTab, user]
   );
 
   // Open or switch tab by route

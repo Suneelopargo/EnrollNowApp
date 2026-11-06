@@ -10,12 +10,12 @@ import {
   EyeOff,
   ArrowRight,
   AlertCircle,
-  ShieldCheck,
 } from 'lucide-react';
 import { authApi } from '../../../shared/api/authApi';
 import { toast } from '../../../shared/toaster';
 import { Footer } from '../../../shared/design-system/components/Footer';
 import { AuthErrorNotification, mapAuthError } from '../../../shared/auth/authErrorMapper';
+import { validators, validateField } from '../../../shared/design-system/validation';
 import '../../../shared/design-system/styles/index.scss';
 
 // Reusable Code-Driven Marketing & Brand Components
@@ -26,6 +26,8 @@ import { FeatureHighlights } from './components/FeatureHighlights';
 import { FeatureHighlightCard } from './components/FeatureHighlightCard';
 import { FloatingInfoCard } from './components/FloatingInfoCard';
 import { LoginStatistics } from './components/LoginStatistics';
+import { AuthFooterWave } from './components/AuthFooterWave';
+import { AuthComplianceNotice } from './components/AuthComplianceNotice';
 import { loginContent, defaultStatistics } from './data/loginContent';
 
 import { ActivateAccountPage } from './components/ActivateAccountPage';
@@ -59,9 +61,17 @@ export interface IdentityModuleProps {
 export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recoveryAlert, setRecoveryAlert] = useState<AuthErrorNotification | null>(null);
+
+  const emailValidationError = validateField(username.trim(), [
+    validators.required('Email Address'),
+    validators.email('Email Address'),
+  ]);
+  const isFormValid = !emailValidationError && password.length > 0;
 
   useEffect(() => {
     let warningMsg: string | null = null;
@@ -91,14 +101,23 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    let hasError = false;
+    if (emailValidationError) {
+      setUsernameTouched(true);
+      hasError = true;
+    }
+    if (!password) {
+      setPasswordError('Password is required');
+      hasError = true;
+    }
+
+    if (hasError || !isFormValid) {
+      return;
+    }
+
     // Exact entered credentials — NO hardcoded test fallback
     const loginUser = username.trim();
     const loginPass = password;
-
-    if (!loginUser || !loginPass) {
-      toast.warning('Please enter your email and password.');
-      return;
-    }
 
     setLoading(true);
     setRecoveryAlert(null);
@@ -154,54 +173,6 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
     <div className="enl-auth-page">
       <div className="enl-canvas-wrapper">
         <div className="enl-canvas">
-          {/* Ambient Glowing Background Elements */}
-          <div className="enl-ambient-glow-yellow" />
-          <div className="enl-ambient-glow-blue" />
-
-          {/* Top Dot Grid Pattern Accent */}
-          <svg
-            className="enl-dot-grid-top"
-            width="120"
-            height="70"
-            viewBox="0 0 120 70"
-            fill="none"
-            aria-hidden="true"
-          >
-            <pattern
-              id="enl-dots-top"
-              x="0"
-              y="0"
-              width="16"
-              height="16"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="3" cy="3" r="1.5" fill="#93c5fd" opacity="0.75" />
-            </pattern>
-            <rect width="120" height="70" fill="url(#enl-dots-top)" />
-          </svg>
-
-          {/* Bottom-Right Dot Grid Pattern Accent */}
-          <svg
-            className="enl-dot-grid-bottom"
-            width="100"
-            height="70"
-            viewBox="0 0 100 70"
-            fill="none"
-            aria-hidden="true"
-          >
-            <pattern
-              id="enl-dots-bottom"
-              x="0"
-              y="0"
-              width="16"
-              height="16"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="3" cy="3" r="1.5" fill="#93c5fd" opacity="0.75" />
-            </pattern>
-            <rect width="100" height="70" fill="url(#enl-dots-bottom)" />
-          </svg>
-
           {/* Three-Region Grid Layout (Column 1: Marketing, Column 2: Showcase, Column 3: Login) */}
           <div className="enl-three-region-layout">
             <LoginMarketingPanel />
@@ -260,16 +231,29 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                     <Mail size={16} className="enl-field-icon" />
                     <input
                       id="email-input"
-                      type="text"
-                      className="enl-field-input"
+                      type="email"
+                      className={`enl-field-input${usernameTouched && emailValidationError ? ' is-invalid' : ''}`}
                       placeholder="Enter your email address"
                       value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      onChange={(e) => {
+                        setUsername(e.target.value);
+                        setUsernameTouched(true);
+                      }}
+                      onBlur={() => {
+                        setUsernameTouched(true);
+                      }}
                       autoComplete="username"
                       required
                       aria-required="true"
+                      aria-invalid={usernameTouched && Boolean(emailValidationError)}
+                      aria-describedby={usernameTouched && emailValidationError ? 'email-input-error' : undefined}
                     />
                   </div>
+                  {usernameTouched && emailValidationError && (
+                    <div id="email-input-error" className="enl-field-error" role="alert">
+                      {emailValidationError}
+                    </div>
+                  )}
                 </div>
 
                 {/* Password */}
@@ -285,10 +269,20 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       className="enl-field-input"
                       placeholder="Enter your password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      onBlur={() => {
+                        if (!password) {
+                          setPasswordError('Password is required');
+                        }
+                      }}
                       autoComplete="current-password"
                       required
                       aria-required="true"
+                      aria-invalid={!!passwordError}
+                      aria-describedby={passwordError ? 'password-input-error' : undefined}
                     />
                     <button
                       type="button"
@@ -300,6 +294,11 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                       {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                     </button>
                   </div>
+                  {passwordError && (
+                    <div id="password-input-error" className="enl-field-error" role="alert">
+                      {passwordError}
+                    </div>
+                  )}
                 </div>
 
                 {/* Options Row */}
@@ -325,7 +324,8 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 <button
                   type="submit"
                   className="enl-login-btn"
-                  disabled={loading}
+                  disabled={loading || !isFormValid}
+                  aria-disabled={loading || !isFormValid}
                 >
                   {loading ? (
                     <span>Signing in...</span>
@@ -340,21 +340,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
                 {/* Divider */}
                 <div className="enl-card-divider" />
 
-                {/* Compliance & Activity Monitoring Warning Notice */}
-                <div className="enl-compliance-notice">
-                  <div className="enl-compliance-header">
-                    <ShieldCheck size={14} className="enl-compliance-icon" />
-                    <span className="enl-compliance-title">Authorized Access & System Monitoring</span>
-                  </div>
-                  <p className="enl-compliance-text">
-                    This system should only be accessed by authorized users. Individuals
-                    using this system are subject to having their activities on this system
-                    monitored and recorded by system administrators. If this monitoring
-                    reveals possible criminal activity or policy violation, system
-                    administrators may terminate your access privileges and may provide
-                    the evidence to law enforcement or other officials.
-                  </p>
-                </div>
+                <AuthComplianceNotice />
               </form>
             </div>
           </section>
@@ -364,34 +350,7 @@ export const IdentityModule: React.FC<IdentityModuleProps> = ({ context }) => {
         {/* 4. BOTTOM OCEAN WAVE WITH DYNAMIC STATISTICS                    */}
         {/* =============================================================== */}
         <div className="enl-wave-container">
-          <svg
-            className="enl-wave-svg"
-            viewBox="0 0 1440 180"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <defs>
-              <linearGradient id="enl-wave-front" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#0284c7" />
-                <stop offset="35%" stopColor="#0369a1" />
-                <stop offset="70%" stopColor="#0284c7" />
-                <stop offset="100%" stopColor="#0ea5e9" />
-              </linearGradient>
-              <linearGradient id="enl-wave-back" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-                <stop offset="50%" stopColor="#7dd3fc" stopOpacity="0.55" />
-                <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.35" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M 0 50 C 260 85, 480 25, 780 70 C 1050 110, 1260 55, 1440 115 L 1440 180 L 0 180 Z"
-              fill="url(#enl-wave-back)"
-            />
-            <path
-              d="M 0 60 C 300 110, 600 35, 900 80 C 1140 115, 1280 75, 1440 140 L 1440 180 L 0 180 Z"
-              fill="url(#enl-wave-front)"
-            />
-          </svg>
+          <AuthFooterWave />
           <div className="enl-wave-stats-wrapper">
             <LoginStatistics statistics={defaultStatistics} />
           </div>

@@ -1,6 +1,8 @@
 package com.enrollnow.study.models;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -22,6 +24,7 @@ public class StudyRequirement {
     @Column(name = "sample_size")
     private Integer sampleSize;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "configuration", nullable = false, columnDefinition = "jsonb")
     private String configuration = "{}";
 

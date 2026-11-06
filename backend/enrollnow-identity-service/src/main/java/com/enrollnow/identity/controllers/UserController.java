@@ -8,6 +8,7 @@ import com.enrollnow.identity.dtos.UserSummaryResponse;
 import com.enrollnow.identity.models.UserRoleAssignment;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.identity.services.SitePermissionService;
+import com.enrollnow.identity.services.UserApplicationService;
 import com.enrollnow.identity.services.UserInvitationService;
 import com.enrollnow.identity.services.UserService;
 import jakarta.validation.Valid;
@@ -26,24 +27,34 @@ public class UserController {
     private final UserInvitationService userInvitationService;
     private final SitePermissionService sitePermissionService;
     private final SiteAuthorizationService siteAuthorizationService;
+    private final UserApplicationService userApplicationService;
 
     public UserController(
             UserService userService,
-            UserInvitationService userInvitationService) {
-        this(userService, userInvitationService, null, null);
+            UserInvitationService userInvitationService
+    ) {
+        this(
+                userService,
+                userInvitationService,
+                null,
+                null,
+                null
+        );
     }
 
     @Autowired
-    public UserController(
+      public UserController(
             UserService userService,
             UserInvitationService userInvitationService,
             SitePermissionService sitePermissionService,
-            SiteAuthorizationService siteAuthorizationService) {
-
+            SiteAuthorizationService siteAuthorizationService,
+            UserApplicationService userApplicationService
+    ) {
         this.userService = userService;
         this.userInvitationService = userInvitationService;
         this.sitePermissionService = sitePermissionService;
         this.siteAuthorizationService = siteAuthorizationService;
+        this.userApplicationService = userApplicationService;
     }
 
     public ResponseEntity<UserSummaryResponse> getUser(
@@ -93,7 +104,10 @@ public class UserController {
         }
 
         UserSummaryResponse createdUser =
-                userService.createUser(tenantId, request);
+                userApplicationService.createUser(
+                        tenantId,
+                        request
+                );
 
         return ResponseEntity
                 .status(201)
@@ -121,7 +135,7 @@ public class UserController {
         if (siteAuthorizationService != null) {
             siteAuthorizationService.requireUserManageAccess(tenantId, null);
         }
-        return userService.updateUser(
+        return userApplicationService.updateUser(
                 tenantId,
                 userId,
                 request
@@ -136,7 +150,10 @@ public class UserController {
         if (siteAuthorizationService != null) {
             siteAuthorizationService.requireUserManageAccess(tenantId, null);
         }
-        return userService.deactivateUser(tenantId, userId);
+        return userApplicationService.deactivateUser(
+                tenantId,
+                userId
+        );
     }
 
     @PutMapping("/{userId}/activate")
@@ -147,7 +164,10 @@ public class UserController {
         if (siteAuthorizationService != null) {
             siteAuthorizationService.requireUserManageAccess(tenantId, null);
         }
-        return userService.activateUser(tenantId, userId);
+        return userApplicationService.activateUser(
+                tenantId,
+                userId
+        );
     }
 
     @PostMapping("/{userId}/roles")

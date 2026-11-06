@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SurveyListItem } from '../types/survey';
 import { surveyApi } from '../api/surveyApi';
 import { requestConfirmation } from '../../../../shared/confirmation';
+import { AddEditSurveyModal } from '../components/AddEditSurveyModal';
 import {
   Search,
   Plus,
@@ -33,6 +34,8 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
+  const [surveyToEdit, setSurveyToEdit] = useState<SurveyListItem | null>(null);
 
   const loadSurveys = () => {
     setIsLoading(true);
@@ -129,7 +132,7 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
 
         <button
           type="button"
-          onClick={onCreateSurvey}
+          onClick={() => { setSurveyToEdit(null); setIsSurveyModalOpen(true); }}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
         >
           <Plus size={16} />
@@ -279,7 +282,7 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => onEditSurvey(survey.id)}
+                          onClick={() => { setSurveyToEdit(survey); setIsSurveyModalOpen(true); }}
                           title="Edit Survey"
                           aria-label={`Edit ${survey.title}`}
                           className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
@@ -317,6 +320,19 @@ export const SurveyListView: React.FC<SurveyListViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Add / Edit Survey Modal */}
+      <AddEditSurveyModal
+        isOpen={isSurveyModalOpen}
+        onClose={() => {
+          setIsSurveyModalOpen(false);
+          setSurveyToEdit(null);
+        }}
+        surveyToEdit={surveyToEdit}
+        onSurveySaved={() => {
+          loadSurveys();
+        }}
+      />
     </div>
   );
 };

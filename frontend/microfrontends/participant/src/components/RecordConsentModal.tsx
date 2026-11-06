@@ -1,0 +1,663 @@
+// frontend/microfrontends/participant/src/components/RecordConsentModal.tsx - Add/Edit Participant Consent Modal
+import React, { useState, useEffect, useCallback } from 'react';
+import { Check, Loader2, Paperclip, X, FileText, AlertCircle } from 'lucide-react';
+import { Modal } from '../../../../shared/design-system/components/Modal';
+import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
+import {
+  participantApi,
+  ConsentLogItem,
+  CreateConsentLogPayload,
+  UpdateConsentLogPayload,
+  ConsentTypeOption,
+} from '../../../../shared/api/participantApi';
+
+export const MAX_CONSENT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_CONSENT_FILE_EXTENSIONS = new Set([
+  'pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tif', 'tiff', 'webp',
+]);
+
+export const isAllowedConsentAttachment = (file: Pick<File, 'name'>): boolean => {
+  const extension = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+  if (!file.name.includes('.')) return false;
+  return Boolean(extension && ALLOWED_CONSENT_FILE_EXTENSIONS.has(extension));
+};
+
+const CONSENT_ATTACHMENT_FORMAT_ERROR =
+  'Only PDF, Word documents (.doc, .docx), and image files are allowed.';
+
+export interface RecordConsentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  participantId: string;
+  participantName: string;
+  studyId?: string;
+  tenantId?: string;
+  siteId?: string;
+  logToEdit?: ConsentLogItem | null;
+  onConsentSaved?: (savedLog: ConsentLogItem) => void;
+  onConsentRecorded?: (savedLog: ConsentLogItem) => void;
+}
+
+export const RecordConsentModal: React.FC<RecordConsentModalProps> = ({
+  isOpen,
+  onClose,
+  participantId,
+  participantName,
+  studyId,
+  tenantId,
+  siteId,
+  logToEdit,
+  onConsentSaved,
+  onConsentRecorded,
+}) => {
+  const isEditMode = Boolean(logToEdit?.id);
+
+  const formatDateTimeLocal = (date: Date): string => {
+    const pad = (n: number) => (n < 10 ? '0' + n : n);
+    const yyyy = date.getFullYear();
+    const MM = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+  };
+
+  const formatDateLocal = (date: Date): string => {
+    const pad = (n: number) => (n < 10 ? '0' + n : n);
+    const yyyy = date.getFullYear();
+    const MM = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    return `${yyyy}-${MM}-${dd}`;
+  };
+
+  // Form Fields
+  const [consentTitle, setConsentTitle] = useState<string>('');
+  const [consentDate, setConsentDate] = useState<string>('');
+  const [consentType, setConsentType] = useState<string>('');
+  const [customConsentType, setCustomConsentType] = useState<string>('');
+  const [isCreatingCustomType, setIsCreatingCustomType] = useState<boolean>(false);
+  const [version, setVersion] = useState<string>('');
+  const [consentedBy, setConsentedBy] = useState<string>('');
+  const [expiration, setExpiration] = useState<string>('');
+  const [comments, setComments] = useState<string>('');
+
+  // Attachment
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeExistingAttachment, setRemoveExistingAttachment] = useState<boolean>(false);
+  const [existingFileName, setExistingFileName] = useState<string | null>(null);
+
+  // Checkboxes
+  const [lastContact, setLastContact] = useState<boolean>(false);
+  const [sticky, setSticky] = useState<boolean>(false);
+  const [notify, setNotify] = useState<boolean>(false);
+  const [global, setGlobal] = useState<boolean>(true);
+
+  // Options & States
+  const [consentTypeOptions, setConsentTypeOptions] = useState<ConsentTypeOption[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const initializeForm = useCallback(() => {
+    setErrors({});
+    setIsCreatingCustomType(false);
+    setCustomConsentType('');
+    setSelectedFile(null);
+    setRemoveExistingAttachment(false);
+
+    if (logToEdit) {
+      setConsentTitle(logToEdit.consentTitle || '');
+      setConsentType(logToEdit.consentType || '');
+      setVersion(logToEdit.version || '');
+      setConsentedBy(logToEdit.consentedBy || '');
+      setComments(logToEdit.comments || '');
+      setSticky(Boolean(logToEdit.sticky));
+      setNotify(Boolean(logToEdit.notify));
+      setGlobal(Boolean(logToEdit.global));
+      setLastContact(Boolean(logToEdit.lastContact));
+      setExistingFileName(logToEdit.fileName || (logToEdit.fileAttached ? 'Attached Document' : null));
+
+      if (logToEdit.consentDate) {
+        try {
+          setConsentDate(formatDateTimeLocal(new Date(logToEdit.consentDate)));
+        } catch {
+          setConsentDate(formatDateTimeLocal(new Date()));
+        }
+      } else {
+        setConsentDate(formatDateTimeLocal(new Date()));
+      }
+
+      if (logToEdit.expiration) {
+        try {
+          setExpiration(formatDateLocal(new Date(logToEdit.expiration)));
+        } catch {
+          setExpiration('');
+        }
+      } else {
+        setExpiration('');
+      }
+    } else {
+      setConsentTitle('');
+      setConsentDate(formatDateTimeLocal(new Date()));
+      setConsentType('');
+      setVersion('');
+      setConsentedBy('');
+      setExpiration('');
+      setComments('');
+      setSticky(false);
+      setNotify(false);
+      setGlobal(true);
+      setLastContact(false);
+      setExistingFileName(null);
+    }
+  }, [logToEdit]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    setIsLoadingOptions(true);
+
+    participantApi
+      .getConsentTypeOptions({ studyId, tenantId })
+      .then((opts) => {
+        if (!isMounted) return;
+        setConsentTypeOptions(opts);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        toast.error(getApiErrorMessage(err, 'Failed to load consent type options.'));
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingOptions(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, studyId, tenantId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      initializeForm();
+    }
+  }, [isOpen, initializeForm]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!isAllowedConsentAttachment(file)) {
+        setErrors((current) => ({
+          ...current,
+          attachment: CONSENT_ATTACHMENT_FORMAT_ERROR,
+        }));
+        e.target.value = '';
+        return;
+      }
+      if (file.size > MAX_CONSENT_SIZE_BYTES) {
+        setErrors((current) => ({
+          ...current,
+          attachment: `Maximum size of a consent attachment is ${Math.round(MAX_CONSENT_SIZE_BYTES / (1024 * 1024))} megabytes`,
+        }));
+        e.target.value = '';
+        return;
+      }
+      setErrors((current) => {
+        const remainingErrors = { ...current };
+        delete remainingErrors.attachment;
+        return remainingErrors;
+      });
+      setSelectedFile(file);
+      setRemoveExistingAttachment(false);
+    }
+  };
+
+  const handleClearSelectedFile = () => {
+    setSelectedFile(null);
+    clearFieldError('attachment');
+  };
+
+  const handleRemoveExistingAttachment = () => {
+    setRemoveExistingAttachment(true);
+    clearFieldError('attachment');
+  };
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+
+    if (!consentTitle.trim()) {
+      errs.consentTitle = 'Consent Title is required';
+    }
+
+    if (!consentDate) {
+      errs.consentDate = 'Consent Date/Time is required';
+    }
+
+    const effectiveType = isCreatingCustomType ? customConsentType.trim() : consentType.trim();
+    if (!effectiveType) {
+      errs.consentType = 'Consent Type is required';
+    }
+
+    if (errors.attachment) {
+      errs.attachment = errors.attachment;
+    }
+
+    if (expiration && consentDate) {
+      const expD = new Date(expiration);
+      const conD = new Date(consentDate);
+      if (expD < conD) {
+        errs.expiration = 'Expiration date cannot be prior to Consent Date';
+      }
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const clearFieldError = (field: string) => {
+    setErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      delete next.form;
+      return next;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    const effectiveType = isCreatingCustomType ? customConsentType.trim() : consentType.trim();
+    const isoConsentDate = new Date(consentDate).toISOString();
+    const isoExpiration = expiration ? new Date(expiration).toISOString() : undefined;
+
+    setErrors({});
+    setIsSaving(true);
+    try {
+      if (isEditMode && logToEdit?.id) {
+        const payload: UpdateConsentLogPayload = {
+          consentDate: isoConsentDate,
+          consentType: effectiveType,
+          consentTitle: consentTitle.trim(),
+          consentedBy: consentedBy.trim() || undefined,
+          version: version.trim() || undefined,
+          expiration: isoExpiration,
+          comments: comments.trim() || undefined,
+          sticky,
+          notify,
+          global,
+          lastContact,
+          removeAttachment: removeExistingAttachment,
+        };
+
+        const updated = await participantApi.updateConsentLog(
+          participantId,
+          logToEdit.id,
+          payload,
+          selectedFile,
+          { tenantId, siteId }
+        );
+
+        toast.success('Success! Consent log updated.');
+        onConsentSaved?.(updated);
+        onConsentRecorded?.(updated);
+        onClose();
+      } else {
+        const payload: CreateConsentLogPayload = {
+          studyId: studyId?.trim() || undefined,
+          consentDate: isoConsentDate,
+          consentType: effectiveType,
+          consentTitle: consentTitle.trim(),
+          consentedBy: consentedBy.trim() || undefined,
+          version: version.trim() || undefined,
+          expiration: isoExpiration,
+          comments: comments.trim() || undefined,
+          sticky,
+          notify,
+          global,
+          lastContact,
+        };
+
+        const created = await participantApi.createConsentLog(
+          participantId,
+          payload,
+          selectedFile,
+          { tenantId, siteId }
+        );
+
+        toast.success('Success! Consent log added.');
+        onConsentSaved?.(created);
+        onConsentRecorded?.(created);
+        onClose();
+      }
+    } catch (err: any) {
+      const msg = getApiErrorMessage(err, 'Failed to save consent log.');
+      toast.error(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditMode ? 'Edit Participant Consent' : 'Add Participant Consent — Record Consent Decision'}
+      size="default"
+      className="consent-record-modal"
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-secondary"
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="addParticipantConsentForm"
+            className="btn btn-primary flex items-center gap-1.5"
+            disabled={isSaving || isLoadingOptions}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> {isEditMode ? 'Updating...' : 'Saving...'}
+              </>
+            ) : (
+              <>
+                <Check size={16} /> {isEditMode ? 'Update' : 'Save'}
+              </>
+            )}
+          </button>
+        </div>
+      }
+    >
+      <form
+        id="addParticipantConsentForm"
+        onSubmit={handleSubmit}
+        className="form consent-record-form text-sm"
+        noValidate
+      >
+        {/* 1. Consent Title */}
+        <div className="form-group consent-form-row" data-error={Boolean(errors.consentTitle)}>
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-title-field">
+            Consent Title <span className="text-red-500">*</span>
+          </label>
+          <div className="consent-form-control">
+            <input
+              id="consent-title-field"
+              type="text"
+              value={consentTitle}
+              onChange={(e) => {
+                setConsentTitle(e.target.value);
+                clearFieldError('consentTitle');
+              }}
+              placeholder="Consent Title"
+              className={`form-input ${errors.consentTitle ? 'border-red-500 placeholder:text-red-500' : ''}`}
+              aria-invalid={Boolean(errors.consentTitle)}
+              required
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* 2. Consent Date/Time */}
+        <div className="form-group consent-form-row" data-error={Boolean(errors.consentDate)}>
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-date-field">
+            Consent Date <span className="text-red-500">*</span>
+          </label>
+          <div className="consent-form-control">
+            <input
+              id="consent-date-field"
+              type="datetime-local"
+              value={consentDate}
+              onChange={(e) => {
+                setConsentDate(e.target.value);
+                clearFieldError('consentDate');
+                clearFieldError('expiration');
+              }}
+              className={`form-input ${errors.consentDate ? 'border-red-500' : ''}`}
+              aria-invalid={Boolean(errors.consentDate)}
+              required
+            />
+            {errors.consentDate && (
+              <span className="text-xs text-red-500 block mt-1" role="alert">
+                {errors.consentDate}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 3. Consent Type */}
+        <div className="form-group consent-form-row" data-error={Boolean(errors.consentType)}>
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-type-field">
+            Consent Type <span className="text-red-500">*</span>
+          </label>
+          <div className="consent-form-control consent-type-control">
+            <div className="consent-type-input">
+              {isCreatingCustomType ? (
+                <input
+                  id="consent-type-custom"
+                  type="text"
+                  value={customConsentType}
+                  onChange={(e) => {
+                    setCustomConsentType(e.target.value);
+                    clearFieldError('consentType');
+                  }}
+                  placeholder="Consent Type"
+                  className={`form-input ${errors.consentType ? 'border-red-500 placeholder:text-red-500' : ''}`}
+                  aria-invalid={Boolean(errors.consentType)}
+                />
+              ) : (
+                <select
+                  id="consent-type-field"
+                  value={consentType}
+                  onChange={(e) => {
+                    setConsentType(e.target.value);
+                    clearFieldError('consentType');
+                  }}
+                  className={`form-select ${errors.consentType ? 'border-red-500' : ''}`}
+                  aria-invalid={Boolean(errors.consentType)}
+                >
+                  <option value="">Select...</option>
+                  {consentTypeOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="mb-1 flex justify-end">
+              <button
+                type="button"
+                className="consent-custom-type-toggle"
+                onClick={() => {
+                  setIsCreatingCustomType(!isCreatingCustomType);
+                  if (!isCreatingCustomType) setCustomConsentType('');
+                  clearFieldError('consentType');
+                }}
+              >
+                {isCreatingCustomType ? 'Select from list' : '+ Add custom type'}
+              </button>
+            </div>
+            {errors.consentType && !isCreatingCustomType && (
+              <span className="consent-form-error text-xs text-red-500" role="alert">
+                {errors.consentType}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 4. Version */}
+        <div className="form-group consent-form-row">
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-version-field">
+            Version
+          </label>
+          <div className="consent-form-control">
+            <input
+              id="consent-version-field"
+              type="text"
+              value={version}
+              onChange={(e) => setVersion(e.target.value)}
+              placeholder="e.g. 1.0, 2026-A"
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        {/* 5. Consented By */}
+        <div className="form-group consent-form-row">
+          <label className="form-label font-semibold text-gray-700" htmlFor="consented-by-field">
+            Consented By
+          </label>
+          <div className="consent-form-control">
+            <input
+              id="consented-by-field"
+              type="text"
+              value={consentedBy}
+              onChange={(e) => setConsentedBy(e.target.value)}
+              placeholder="Consented by whom..."
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        {/* 6. Expiration */}
+        <div className="form-group consent-form-row" data-error={Boolean(errors.expiration)}>
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-expiration-field">
+            Expiration
+          </label>
+          <div className="consent-form-control">
+            <input
+              id="consent-expiration-field"
+              type="date"
+              value={expiration}
+              min={consentDate ? consentDate.slice(0, 10) : undefined}
+              onChange={(e) => {
+                setExpiration(e.target.value);
+                clearFieldError('expiration');
+              }}
+              className={`form-input ${errors.expiration ? 'border-red-500' : ''}`}
+              aria-invalid={Boolean(errors.expiration)}
+            />
+            {errors.expiration && (
+              <span className="text-xs text-red-500 block mt-1" role="alert">
+                {errors.expiration}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 7. Attachment */}
+        <div className="form-group consent-form-row">
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-file-upload">
+            Attachment <span className="text-gray-400 font-normal">(Max 5 MB)</span>
+          </label>
+
+          <div className="consent-form-control consent-attachment-control">
+            {isEditMode && existingFileName && !removeExistingAttachment && (
+              <div className="flex items-center justify-between p-2 rounded-md bg-gray-50 border border-gray-200 mb-2">
+                <span className="flex items-center gap-1.5 text-gray-700 truncate">
+                  <FileText size={14} className="text-blue-600 shrink-0" />
+                  <span className="truncate">{existingFileName}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemoveExistingAttachment}
+                  className="text-red-500 hover:text-red-700 text-xs flex items-center gap-1 p-1"
+                  title="Remove attachment"
+                >
+                  <X size={13} /> Remove
+                </button>
+              </div>
+            )}
+
+            {selectedFile ? (
+              <div className="flex items-center justify-between p-2 rounded-md bg-blue-50 border border-blue-200">
+                <span className="flex items-center gap-1.5 text-blue-900 truncate">
+                  <Paperclip size={14} className="text-blue-600 shrink-0" />
+                  <span className="truncate">{selectedFile.name}</span>
+                  <span className="text-blue-500 text-[10px]">
+                    ({Math.round(selectedFile.size / 1024)} KB)
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearSelectedFile}
+                  className="text-gray-400 hover:text-red-500 p-1"
+                  title="Clear selection"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="consent-file-upload"
+                  className="btn btn-secondary btn-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Paperclip size={14} />
+                  {isEditMode && existingFileName && !removeExistingAttachment ? 'Replace Attachment' : 'Choose File'}
+                </label>
+                <input
+                  id="consent-file-upload"
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.bmp,.tif,.tiff,.webp"
+                />
+                <span className="text-gray-400 text-[11px]">PDF, Word, or image</span>
+              </div>
+            )}
+            {errors.attachment && (
+              <span className="mt-1 block text-xs text-red-500" role="alert">{errors.attachment}</span>
+            )}
+          </div>
+        </div>
+
+        {/* 8. Comments */}
+        <div className="form-group consent-form-row">
+          <label className="form-label font-semibold text-gray-700" htmlFor="consent-comments-field">
+            Comments
+          </label>
+          <div className="consent-form-control">
+            <textarea
+              id="consent-comments-field"
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              rows={3}
+              placeholder="Consent log comments..."
+              className="form-textarea"
+            />
+          </div>
+        </div>
+
+        {/* 9. Mark Consent As Checkboxes */}
+        <div className="consent-form-options">
+          <label className="form-label font-semibold text-gray-700">
+            Mark Consent As
+          </label>
+          <div className="consent-form-option-control">
+            <label className="consent-pin-option">
+              <input
+                type="checkbox"
+                checked={sticky}
+                onChange={(e) => setSticky(e.target.checked)}
+                className="form-checkbox h-4 w-4 text-blue-600 rounded-sm"
+              />
+              <span>Pin Consent</span>
+            </label>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+export default RecordConsentModal;

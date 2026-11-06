@@ -3,8 +3,10 @@ package com.enrollnow.common.web;
 import com.enrollnow.common.core.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -60,5 +62,17 @@ class GlobalExceptionHandlerTest {
         assertEquals(400, res.getBody().getStatus());
         assertEquals("BAD_REQUEST", res.getBody().getCode());
         assertEquals("Invalid input", res.getBody().getMessage());
+    }
+
+    @Test
+    void handleHttpMessageNotReadable_returns400() {
+        HttpMessageNotReadableException ex = new HttpMessageNotReadableException("JSON parse error", (HttpInputMessage) null);
+        ResponseEntity<ApiResponse<Void>> res = handler.handleHttpMessageNotReadableException(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, res.getStatusCode());
+        assertNotNull(res.getBody());
+        assertFalse(res.getBody().isSuccess());
+        assertEquals(400, res.getBody().getStatus());
+        assertEquals("BAD_REQUEST", res.getBody().getCode());
     }
 }

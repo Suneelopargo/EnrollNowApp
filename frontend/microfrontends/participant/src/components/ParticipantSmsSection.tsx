@@ -1,0 +1,289 @@
+// frontend/microfrontends/participant/src/components/ParticipantSmsSection.tsx - Legacy Ripple Grid Style Text Messages
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Loader2, Pin, Search, X } from 'lucide-react';
+import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
+import { participantApi, CommunicationItem } from '../../../../shared/api/participantApi';
+import { AuthUser } from '../../../../shared/contracts';
+import { DataGrid, type ColDef, type ICellRendererParams } from '../../../../shared/design-system/components/DataGrid';
+import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
+import { ComposeSmsModal } from './ComposeSmsModal';
+
+export interface ParticipantSmsSectionProps {
+  participantId: string;
+  participantName: string;
+  studyId?: string;
+  tenantId?: string;
+  siteId?: string;
+  currentUser?: AuthUser | null;
+}
+
+export const getSmsSenderName = (message: CommunicationItem): string =>
+  message.senderName?.trim() || message.authorName?.trim() || 'System';
+
+export const ParticipantSmsSection: React.FC<ParticipantSmsSectionProps> = ({
+  participantId,
+  participantName,
+  studyId,
+  tenantId,
+  siteId,
+}) => {
+  const [messages, setMessages] = useState<CommunicationItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [togglingPinId, setTogglingPinId] = useState<string | null>(null);
+  const [isComposeOpen, setIsComposeOpen] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchMessages = useCallback(async () => {
+    if (!participantId) return;
+    setIsLoading(true);
+    try {
+      const data = await participantApi.getSms(participantId, { tenantId, siteId });
+      setMessages(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      const msg = getApiErrorMessage(err, 'Failed to load text message history');
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [participantId, tenantId, siteId]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  const handleTogglePin = async (msg: CommunicationItem) => {
+    setTogglingPinId(msg.id);
+    const newPinned = !msg.pinned;
+    try {
+      await participantApi.pinSms(participantId, msg.id, newPinned, { tenantId, siteId });
+      toast.success(newPinned ? 'Text message pinned' : 'Text message unpinned');
+      await fetchMessages();
+    } catch (err: any) {
+      const errorMsg = getApiErrorMessage(err, 'Failed to update pin status');
+      toast.error(errorMsg);
+    } finally {
+      setTogglingPinId(null);
+    }
+  };
+
+  const getRecipientString = (msg: CommunicationItem) => {
+    if (msg.recipients && msg.recipients.length > 0) {
+      return msg.recipients.map((r) => r.recipientValue).join(', ');
+    }
+    return msg.subject ? msg.subject.replace(/^SMS to\s*/i, '') : '—';
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return (
+        d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ', ' +
+        d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+      );
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const sortedMessages = useMemo(() => {
+    const list = [...messages];
+    // Separate pinned vs unpinned: pinned always on top
+    return list.sort((a, b) => {
+      if (a.pinned !== b.pinned) {
+        return a.pinned ? -1 : 1;
+      }
+      const timeA = new Date(a.sentAt || 0).getTime();
+      const timeB = new Date(b.sentAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [messages]);
+
+  const columnDefs = useMemo<ColDef<CommunicationItem>[]>(() => [
+    {
+      colId: 'sentAt',
+      headerName: 'Date',
+      minWidth: 290,
+      flex: 1,
+      filter: false,
+      floatingFilter: false,
+      valueGetter: (params) => params.data?.sentAt || params.data?.createdAt || '',
+      getQuickFilterText: (params) => {
+        const message = params.data;
+        if (!message) return '';
+        return `${formatDate(message.sentAt || message.createdAt)} ${message.global ? 'Global Registry' : ''}`;
+      },
+      comparator: (a, b) => new Date(a || 0).getTime() - new Date(b || 0).getTime(),
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const message = params.data;
+        if (!message || message.pinnable !== true) return null;
+        return (
+          <div className="flex items-center gap-2 whitespace-nowrap py-1">
+            <span className="shrink-0 text-xs text-gray-800">
+              {formatDate(message.sentAt || message.createdAt)}
+            </span>
+            {message.global && (
+              <span
+                title="Global (Registry)"
+                style={{
+                  display: 'inline-block',
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  backgroundColor: '#0284c7',
+                  borderRadius: '9999px',
+                  lineHeight: 1.4,
+                  flexShrink: 0,
+                }}
+              >
+                Global (Registry)
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      colId: 'from',
+      headerName: 'From',
+      minWidth: 150,
+      valueGetter: (params) => params.data ? getSmsSenderName(params.data) : '',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      colId: 'to',
+      headerName: 'To',
+      minWidth: 170,
+      valueGetter: (params) => params.data ? getRecipientString(params.data) : '',
+      tooltipValueGetter: (params) => params.value,
+    },
+    {
+      field: 'body',
+      headerName: 'Message',
+      minWidth: 220,
+      flex: 1,
+      tooltipValueGetter: (params) => params.value,
+      cellStyle: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+    },
+    {
+      colId: 'pin',
+      headerName: 'Pin',
+      width: 76,
+      minWidth: 76,
+      maxWidth: 76,
+      sortable: false,
+      filter: false,
+      floatingFilter: false,
+      cellRenderer: (params: ICellRendererParams<CommunicationItem>) => {
+        const message = params.data;
+        if (!message) return null;
+        const isUpdating = togglingPinId === message.id;
+        const label = message.pinned ? 'Unpin text' : 'Pin text';
+        return (
+          <TooltipButton
+            label={label}
+            disabled={isUpdating}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleTogglePin(message);
+            }}
+            className="flex h-full w-full items-center justify-center disabled:cursor-not-allowed"
+            style={{ color: message.pinned ? '#b45309' : '#94a3b8' }}
+          >
+            {isUpdating ? <Loader2 size={15} className="animate-spin" /> : (
+              <Pin size={15} fill={message.pinned ? 'currentColor' : 'none'} />
+            )}
+          </TooltipButton>
+        );
+      },
+    },
+  ], [togglingPinId, handleTogglePin]);
+
+  const defaultColDef = useMemo<ColDef<CommunicationItem>>(() => ({
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+  }), []);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <label className="relative block min-w-0 flex-1 search-field-with-clear">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search text messages..."
+            aria-label="Search text messages"
+            className="w-full min-h-[46px] rounded-md border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear text message search"
+              className="search-field-clear-button"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </label>
+        <TooltipButton
+          label="Add Text"
+          id="add-text-log-modal-button"
+          onClick={() => setIsComposeOpen(true)}
+          className="btn btn-primary flex min-h-[46px] shrink-0 items-center gap-1.5 px-4 text-sm"
+        >
+          <Plus size={15} /> Add Text
+        </TooltipButton>
+      </div>
+
+      {/* Loading state */}
+      {isLoading && messages.length === 0 && (
+        <div className="p-8 text-center text-gray-500 flex flex-col items-center justify-center gap-2">
+          <Loader2 size={24} className="animate-spin text-blue-600" />
+          <span className="text-xs">Loading text messages...</span>
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="space-y-3">
+          <DataGrid<CommunicationItem>
+            wrapperClassName="participant-email-grid"
+            rowData={sortedMessages}
+            columnDefs={columnDefs}
+            defaultColDef={defaultColDef}
+            quickFilterText={searchTerm}
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[5, 10, 20, 50]}
+            rowHeight={48}
+            headerHeight={42}
+            animateRows
+            suppressCellFocus
+            overlayNoRowsTemplate="<span class='text-slate-500'>No text messages match your search.</span>"
+          />
+        </div>
+      )}
+
+      {/* Compose / Add Text Modal */}
+      <ComposeSmsModal
+        isOpen={isComposeOpen}
+        onClose={() => setIsComposeOpen(false)}
+        participantId={participantId}
+        participantName={participantName}
+        studyId={studyId}
+        tenantId={tenantId}
+        siteId={siteId}
+        onSmsSent={() => fetchMessages()}
+      />
+    </div>
+  );
+};
+
+export default ParticipantSmsSection;

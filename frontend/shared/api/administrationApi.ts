@@ -41,6 +41,125 @@ export interface RoleResponse {
   active: boolean;
 }
 
+export interface AuditEventRecord {
+  id: string;
+
+  actorUserId?: string | null;
+  actorDisplayName?: string | null;
+
+  entityType: string;
+  entityId?: string | null;
+  entityDisplayName?: string | null;
+
+  action: string;
+  description?: string | null;
+  source?: string | null;
+
+  occurredAt?: string | null;
+  createdAt?: string | null;
+
+  beforeData?: Record<string, unknown> | null;
+  afterData?: Record<string, unknown> | null;
+}
+
+export interface AuditFieldChange {
+  id: string;
+  auditEventId: string;
+
+  entityType: string;
+  entityId: string;
+  entityDisplayName?: string | null;
+
+  fieldName: string;
+  previousValue: unknown;
+  newValue: unknown;
+
+  changedAt: string;
+}
+
+export interface AuditEventDetail extends AuditEventRecord {
+  changes: AuditFieldChange[];
+}
+
+export interface AuditFieldChange {
+  id: string;
+  auditEventId: string;
+  entityType: string;
+  entityId: string;
+  fieldName: string;
+  previousValue: unknown;
+  newValue: unknown;
+  changedAt: string;
+}
+
+export interface AuditEventDetail extends AuditEventRecord {
+  changes: AuditFieldChange[];
+}
+
+export interface AuditLogPage {
+  content: AuditEventRecord[];
+  totalElements: number;
+  totalPages: number;
+  number?: number;
+  size?: number;
+}
+
+export interface NormalizedPage<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number?: number;
+  size?: number;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const readPageNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+export const normalizePageResponse = <T>(response: unknown): NormalizedPage<T> => {
+  let payload = response;
+  while (isRecord(payload) && !Array.isArray(payload.content) && 'data' in payload) {
+    payload = payload.data;
+  }
+
+  if (Array.isArray(payload)) {
+    return {
+      content: payload as T[],
+      totalElements: payload.length,
+      totalPages: payload.length > 0 ? 1 : 0,
+    };
+  }
+
+  const page = isRecord(payload) ? payload : {};
+  const pageMetadata = isRecord(page.page) ? page.page : {};
+  const content = Array.isArray(page.content) ? page.content as T[] : [];
+
+  return {
+    content,
+    totalElements:
+      readPageNumber(page.totalElements) ??
+      readPageNumber(pageMetadata.totalElements) ??
+      content.length,
+    totalPages:
+      readPageNumber(page.totalPages) ??
+      readPageNumber(pageMetadata.totalPages) ??
+      (content.length > 0 ? 1 : 0),
+    number: readPageNumber(page.number) ?? readPageNumber(pageMetadata.number),
+    size: readPageNumber(page.size) ?? readPageNumber(pageMetadata.size),
+  };
+};
+
+export interface AuditLogQuery {
+  fromDate?: string;
+  toDate?: string;
+  action?: string;
+  search?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface CreateUserPayload {
   firstName: string;
   lastName: string;
@@ -49,11 +168,37 @@ export interface CreateUserPayload {
   email: string;
 }
 
+export interface CreateUserWithAccessPayload {
+  user: CreateUserPayload;
+  siteAccess?: {
+    siteId: string;
+    sitePermission: string;
+  };
+  studies?: Array<{
+    studyId: string;
+    studyRole: string;
+    studyPermission: string;
+  }>;
+}
+
 export interface UpdateUserPayload {
   firstName: string;
   lastName: string;
   title?: string;
   timezone?: string;
+}
+
+export interface UpdateUserAccessPayload {
+  user?: UpdateUserPayload;
+  siteAccess?: {
+    siteId: string;
+    sitePermission: string;
+  };
+  studies?: Array<{
+    studyId: string;
+    studyRole?: string;
+    studyPermission: string;
+  }>;
 }
 
 export interface AssignRolePayload {
@@ -235,6 +380,22 @@ export const administrationApi = {
   },
 
   /**
+   * POST /api/v1/tenants/{tenantId}/users/with-access
+   * Creates a user and assigns the requested site and study access in one operation.
+   */
+  async createUserWithAccess(
+    payload: CreateUserWithAccessPayload,
+    tenantId?: string
+  ): Promise<UserSummaryResponse> {
+    const tid = resolveTenantId(tenantId);
+    const res = await apiClient.post<UserSummaryResponse>(
+      `/api/v1/tenants/${tid}/users/with-access`,
+      payload
+    );
+    return res.data;
+  },
+
+  /**
    * PUT /api/v1/tenants/{tenantId}/users/{userId}
    * Updates user mutable fields (firstName, lastName, title, timezone).
    * Note: Email is intentionally immutable through this endpoint.
@@ -248,6 +409,19 @@ export const administrationApi = {
       timezone: payload.timezone !== undefined ? payload.timezone.trim() : 'America/New_York',
     });
     return res.data;
+  },
+
+  /**
+   * PUT /api/v1/tenants/{tenantId}/users/{userId}/access
+   * Updates a user profile and the requested site/study access in one operation.
+   */
+  async updateUserAccess(
+    userId: string | number,
+    payload: UpdateUserAccessPayload,
+    tenantId?: string
+  ): Promise<void> {
+    const tid = resolveTenantId(tenantId);
+    await apiClient.put<void>(`/api/v1/tenants/${tid}/users/${userId}/access`, payload);
   },
 
   /**
@@ -415,14 +589,26 @@ export const administrationApi = {
     return Array.isArray(res.data) ? res.data : (res.data as any)?.data || [];
   },
 
-  async getAuditLogs(query?: Record<string, any>): Promise<any[]> {
-    try {
-      const res = await apiClient.get('/api/v1/administrator/audit-logs', { params: query });
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+  async getAuditLogs(query?: AuditLogQuery): Promise<AuditLogPage> {
+    const params: Record<string, string | number> = {};
+    if (query?.fromDate) params.fromDate = query.fromDate;
+    if (query?.toDate) params.toDate = query.toDate;
+    if (query?.action) params.action = query.action;
+    if (query?.search) params.search = query.search;
+    if (query?.page !== undefined) params.page = query.page;
+    if (query?.size !== undefined) params.size = query.size;
+
+    const res = await apiClient.get<unknown>('/api/v1/administrator/audit-logs', { params });
+    return normalizePageResponse<AuditEventRecord>(res.data);
   },
+
+  async getAuditEventDetail(auditEventId: string): Promise<AuditEventDetail> {
+    const res = await apiClient.get<AuditEventDetail | { data: AuditEventDetail }>(
+      `/api/v1/administrator/audit-logs/${encodeURIComponent(auditEventId)}`
+    );
+    return 'data' in res.data ? res.data.data : res.data;
+  },
+
 };
 
 export default administrationApi;

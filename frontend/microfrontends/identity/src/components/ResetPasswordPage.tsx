@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { Footer } from '../../../../shared/design-system/components/Footer';
+import { AuthFooterWave } from './AuthFooterWave';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { usePasswordValidation } from './usePasswordValidation';
 import { PasswordValidationPanel } from './PasswordValidationPanel';
 
@@ -109,11 +111,11 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
         navigate('/login');
       }, 2000);
     } catch (err: any) {
+      const msg = getApiErrorMessage(
+        err,
+        'Unable to reset password. The link may have expired or already been used.'
+      );
       const errData = err?.response?.data;
-      const msg =
-        errData?.message ||
-        err?.message ||
-        'Unable to reset password. The link may have expired or already been used.';
 
       const isWarning =
         errData?.error === 'TOKEN_EXPIRED' ||
@@ -140,7 +142,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
   const isButtonDisabled = loading || Boolean(successMessage) || !isFormValid;
 
   return (
-    <div className="enl-activation-page">
+    <div className="enl-activation-page enl-reset-password-page">
       <div className="enl-activation-card">
         {/* Top White Brand Card */}
         <div className="enl-activation-header">
@@ -241,8 +243,12 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({ onSuccess 
         </button>
       </div>
 
+      <div className="enl-reset-password-wave-container">
+        <AuthFooterWave />
+      </div>
+
       {/* Footer Below Card */}
-      <Footer variant="auth-card" />
+      <Footer variant="auth" />
     </div>
   );
 };

@@ -230,5 +230,27 @@ describe('EnrollNow Administrator MFE Integration', () => {
       expect(auditPage.content.length).toBe(1);
       expect(auditPage.content[0].action).toBe('CREATE_USER');
     });
+
+    it('normalizes Spring PagedModel pagination metadata', async () => {
+      vi.mocked(apiClient.get).mockResolvedValueOnce({
+        data: {
+          data: {
+            content: [{ id: 'audit-2', action: 'UPDATE_USER' }],
+            page: { size: 10, number: 1, totalElements: 11, totalPages: 2 },
+          },
+        },
+      });
+
+      const api = new EnrollNowAdministratorApi(mockContext);
+      const auditPage = await api.getAuditLogs({ page: 1, size: 10 });
+
+      expect(auditPage).toEqual({
+        content: [{ id: 'audit-2', action: 'UPDATE_USER' }],
+        totalElements: 11,
+        totalPages: 2,
+        number: 1,
+        size: 10,
+      });
+    });
   });
 });

@@ -22,6 +22,28 @@
             <artifactId>enrollnow-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.enrollnow</groupId>
+            <artifactId>enrollnow-identity-service</artifactId>
+            <version>${enrollnow.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.enrollnow</groupId>
+            <artifactId>enrollnow-study-service</artifactId>
+            <version>${enrollnow.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -33,5 +55,4 @@
         </dependency>
     </dependencies>
 
-   
 </project>

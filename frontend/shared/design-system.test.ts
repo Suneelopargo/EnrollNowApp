@@ -243,9 +243,26 @@ describe('Design System SCSS Components', () => {
 
   describe('Footer Component Variants (App Shell, Auth, Auth Card)', () => {
     it('renders app-shell, auth, and auth-card variants with contentinfo landmark', () => {
-      const shellFooter = Footer({ variant: 'app-shell' }) as React.ReactElement<any>;
+      const shellFooterFragment = Footer({ variant: 'app-shell' }) as React.ReactElement<any>;
+      const shellChildren = React.Children.toArray(shellFooterFragment.props.children);
+      const shellFooter = shellChildren.find(
+        (child): child is React.ReactElement<any> =>
+          React.isValidElement(child) && child.type === 'footer'
+      );
+      const shellWave = shellChildren.find(
+        (child): child is React.ReactElement<{ className?: string }> =>
+          React.isValidElement<{ className?: string }>(child) &&
+          child.props.className === 'app-shell-footer-wave'
+      );
+      expect(shellWave).toBeDefined();
+      expect(shellFooter).toBeDefined();
+      if (!shellFooter) {
+        throw new Error('App-shell footer was not rendered.');
+      }
       expect(shellFooter.props.role).toBe('contentinfo');
       expect(shellFooter.props.className).toContain('app-footer');
+      expect(shellFooter.props.className).toContain('enl-login-strong-footer');
+      expect(shellFooter.props.className).toContain('app-shell-footer');
 
       const authFooter = Footer({ variant: 'auth' }) as React.ReactElement<any>;
       expect(authFooter.props.role).toBe('contentinfo');

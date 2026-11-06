@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { EnrollNowBrand } from './EnrollNowBrand';
 import { Footer } from '../../../../shared/design-system/components/Footer';
+import { AuthFooterWave } from './AuthFooterWave';
 import { authApi } from '../../../../shared/api/authApi';
 import { toast } from '../../../../shared/toaster';
+import { getApiErrorMessage } from '../../../../shared/api-client';
 import { usePasswordValidation } from './usePasswordValidation';
 import { PasswordValidationPanel } from './PasswordValidationPanel';
 
@@ -150,12 +152,11 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
         navigate('/login', { replace: true });
       }, 2000);
     } catch (err: any) {
-      const errData = err.response?.data;
-      const serverMessage =
-        errData?.message ||
-        errData?.error ||
-        err.message ||
-        'Unable to activate account. The link may have expired or already been used.';
+      const serverMessage = getApiErrorMessage(
+        err,
+        'Unable to activate account. The link may have expired or already been used.'
+      );
+      const errData = err?.response?.data;
 
       const isAlreadyEnrolled =
         errData?.error === 'ALREADY_ENROLLED' ||
@@ -192,7 +193,7 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
   const isButtonDisabled = loading || Boolean(successMessage) || !isFormValid;
 
   return (
-    <div className="enl-activation-page">
+    <div className="enl-activation-page enl-user-activation-page">
       <div className="enl-activation-card">
         {/* Top Header Card with Brand Logo */}
         <div className="enl-activation-header">
@@ -290,8 +291,12 @@ export const ActivateAccountPage: React.FC<ActivateAccountPageProps> = ({ onSucc
         </button>
       </div>
 
+      <div className="enl-user-activation-wave-container">
+        <AuthFooterWave />
+      </div>
+
       {/* Footer Below Card */}
-      <Footer variant="auth-card" />
+      <Footer variant="auth" />
     </div>
   );
 };

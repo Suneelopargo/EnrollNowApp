@@ -359,5 +359,28 @@ class SitePermissionAndAuthorizationTest {
                 AccessDeniedException.class,
                 () -> siteAuthorizationService.requireSiteRoleRemovalAuthorization(tenantId, userId, siteA)
         );
+
+        // 8. Authenticated caller without tenantId claim fails closed even when targetTenantId is supplied
+        authenticateAs(userId, null);
+        assertThrows(
+                AccessDeniedException.class,
+                () -> siteAuthorizationService.requireTenantMatch(tenantId)
+        );
+        assertThrows(
+                AccessDeniedException.class,
+                () -> siteAuthorizationService.requireTenantMatch(null)
+        );
+        assertThrows(
+                AccessDeniedException.class,
+                () -> siteAuthorizationService.requireRegistryAccess(tenantId, siteA)
+        );
+        assertThrows(
+                AccessDeniedException.class,
+                () -> siteAuthorizationService.requireStudyCreateAccess(tenantId)
+        );
+        assertThrows(
+                AccessDeniedException.class,
+                () -> siteAuthorizationService.requireStudyManageAccess(tenantId)
+        );
     }
 }

@@ -22,8 +22,9 @@ export interface DashboardDataResult {
  */
 export function isDashboardDemoMode(): boolean {
   try {
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_DASHBOARD_DEMO_MODE) {
-      const val = String((import.meta as any).env.VITE_DASHBOARD_DEMO_MODE).trim().toLowerCase();
+    const metaEnv = typeof import.meta !== 'undefined' ? (import.meta as unknown as { env?: Record<string, unknown> }).env : undefined;
+    if (metaEnv?.VITE_DASHBOARD_DEMO_MODE) {
+      const val = String(metaEnv.VITE_DASHBOARD_DEMO_MODE).trim().toLowerCase();
       return val === 'true' || val === '1';
     }
   } catch {
@@ -41,9 +42,9 @@ export function isDashboardDemoMode(): boolean {
 
   const globalScope =
     typeof window !== 'undefined'
-      ? (window as any)
+      ? (window as unknown as { __ENROLLNOW_DASHBOARD_DEMO_MODE__?: boolean })
       : typeof globalThis !== 'undefined'
-      ? (globalThis as any)
+      ? (globalThis as unknown as { __ENROLLNOW_DASHBOARD_DEMO_MODE__?: boolean })
       : undefined;
 
   if (globalScope?.__ENROLLNOW_DASHBOARD_DEMO_MODE__ !== undefined) {
@@ -117,14 +118,12 @@ export async function loadDashboardData(): Promise<DashboardDataResult> {
 
     const overviewData = res.data?.data || res.data;
     if (!overviewData) {
-      const rawStudies = Array.isArray(demoData.studies) ? demoData.studies : [];
-      const normalizedStudies = rawStudies.map(normalizeStudy);
       return {
         mode: 'live',
         isDemoMode: false,
-        stats: demoData.overview,
-        studies: normalizedStudies,
-        participants: Array.isArray(demoData.participants) ? demoData.participants : [],
+        stats: null,
+        studies: [],
+        participants: [],
       };
     }
 
@@ -199,15 +198,17 @@ export async function loadDashboardData(): Promise<DashboardDataResult> {
       };
     }
 
-    // Gracefully fall back to demonstration dataset without displaying error messages
-    const rawStudies = Array.isArray(demoData.studies) ? demoData.studies : [];
-    const normalizedStudies = rawStudies.map(normalizeStudy);
+    const errorMessage =
+      err?.response?.data?.message ||
+      err?.message ||
+      'Unable to load dashboard data from the server.';
     return {
-      mode: 'live',
+      mode: 'error',
       isDemoMode: false,
-      stats: demoData.overview,
-      studies: normalizedStudies,
-      participants: Array.isArray(demoData.participants) ? demoData.participants : [],
+      stats: null,
+      studies: [],
+      participants: [],
+      errorMessage,
     };
   }
 }

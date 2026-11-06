@@ -1,6 +1,10 @@
 package com.enrollnow.identity.services;
 
 import com.enrollnow.common.security.SecurityTokenHelper;
+import com.enrollnow.common.audit.AuditEntitySnapshot;
+import com.enrollnow.common.audit.AuditRequest;
+
+import java.util.Map;
 import com.enrollnow.identity.dtos.ForceResetResultDto;
 import com.enrollnow.identity.dtos.PasswordPolicyDto;
 import com.enrollnow.identity.dtos.SecuritySettingsDto;
@@ -12,7 +16,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.enrollnow.common.audit.AuditEventCommand;
+import com.enrollnow.common.audit.AuditRecorder;
+
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,7 +49,8 @@ public class SecuritySettingsService {
     private UserSessionService userSessionService;
     private UserActionTokenRepository userActionTokenRepository;
     private InvitationEmailService invitationEmailService;
-    private AuditEventRepository auditEventRepository;
+   // private AuditEventRepository auditEventRepository;
+    private AuditRecorder auditRecorder;
 
     public SecuritySettingsService(
             SecuritySettingsRepository securitySettingsRepository,
@@ -60,7 +69,7 @@ public class SecuritySettingsService {
             @Autowired(required = false) UserSessionService userSessionService,
             @Autowired(required = false) UserActionTokenRepository userActionTokenRepository,
             @Autowired(required = false) InvitationEmailService invitationEmailService,
-            @Autowired(required = false) AuditEventRepository auditEventRepository) {
+            @Autowired(required = false) AuditRecorder auditRecorder) {
         this.securitySettingsRepository = securitySettingsRepository;
         this.siteAuthorizationService = siteAuthorizationService;
         this.userRepository = userRepository;
@@ -69,7 +78,7 @@ public class SecuritySettingsService {
         this.userSessionService = userSessionService;
         this.userActionTokenRepository = userActionTokenRepository;
         this.invitationEmailService = invitationEmailService;
-        this.auditEventRepository = auditEventRepository;
+        this.auditRecorder = auditRecorder;
     }
 
     @Autowired(required = false)
@@ -103,8 +112,8 @@ public class SecuritySettingsService {
     }
 
     @Autowired(required = false)
-    public void setAuditEventRepository(AuditEventRepository auditEventRepository) {
-        this.auditEventRepository = auditEventRepository;
+    public void setAuditRecorder(AuditRecorder auditRecorder) {
+        this.auditRecorder = auditRecorder;
     }
 
     @Transactional
@@ -167,6 +176,8 @@ public class SecuritySettingsService {
 
         SecuritySettings settings = securitySettingsRepository.findByTenantId(tenantId)
                 .orElseGet(() -> createDefaultSettings(tenantId, null));
+        Map<String, Object> beforeData =
+                securitySettingsAuditSnapshot(settings);
 
         UUID callerUserId = siteAuthorizationService.getAuthenticatedCaller()
                 .map(SiteAuthorizationService.CallerIdentity::userId)
@@ -210,6 +221,29 @@ public class SecuritySettingsService {
         settings.setUpdatedBy(callerUserId);
 
         SecuritySettings saved = securitySettingsRepository.save(settings);
+        Map<String, Object> afterData =
+                securitySettingsAuditSnapshot(saved);
+        if (auditRecorder != null) {
+
+            auditRecorder.record(
+                    new AuditRequest(
+                            tenantId,
+                            "SECURITY_SETTINGS",
+                            tenantId,
+                            "SECURITY_SETTINGS_UPDATED",
+                            "Security settings updated",
+                            "API",
+                            List.of(
+                                    new AuditEntitySnapshot(
+                                            "SECURITY_SETTINGS",
+                                            tenantId,
+                                            beforeData,
+                                            afterData
+                                    )
+                            )
+                    )
+            );
+        }
         return toDto(saved);
     }
 
@@ -300,20 +334,26 @@ public class SecuritySettingsService {
         }
 
         // Record audit event
-        if (auditEventRepository != null) {
-            try {
-                AuditEvent audit = new AuditEvent();
-                audit.setTenantId(tenantId);
-                audit.setActorUserId(callerUserId);
-                audit.setEntityType("SECURITY_SETTINGS");
-                audit.setEntityId(tenantId);
-                audit.setAction("FORCE_RESET_ALL_PASSWORDS");
-                audit.setDescription("Administrator forced password reset for " + eligibleUsers.size() + " users in tenant");
-                audit.setSource("APPLICATION");
-                auditEventRepository.save(audit);
-            } catch (Exception ex) {
-                log.warn("Failed to record audit event for force reset: {}", ex.getMessage());
-            }
+     // Record audit event in the same business transaction.
+        if (auditRecorder != null) {
+            auditRecorder.record(
+                    new AuditEventCommand(
+                            tenantId,
+                            null,
+                            "SECURITY_SETTINGS",
+                            tenantId,
+                            "FORCE_RESET_ALL_PASSWORDS",
+                            "Administrator forced password reset for "
+                                    + eligibleUsers.size()
+                                    + " users in tenant",
+                            "APPLICATION",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null
+                    )
+            );
         }
 
         String msg = "Successfully forced password reset for " + eligibleUsers.size() + " users.";
@@ -409,5 +449,69 @@ public class SecuritySettingsService {
         dto.setUpdatedAt(entity.getUpdatedAt());
         dto.setUpdatedBy(entity.getUpdatedBy());
         return dto;
+    }
+    
+    private Map<String, Object> securitySettingsAuditSnapshot(
+            SecuritySettings settings
+    ) {
+
+        Map<String, Object> snapshot = new HashMap<>();
+
+        snapshot.put(
+                "maxFailedLoginAttempts",
+                settings.getMaxFailedLoginAttempts()
+        );
+
+        snapshot.put(
+                "preventConcurrentSessions",
+                settings.isPreventConcurrentSessions()
+        );
+
+        snapshot.put(
+                "inactivityLogoutMinutes",
+                settings.getInactivityLogoutMinutes()
+        );
+
+        snapshot.put(
+                "inactivityLockDays",
+                settings.getInactivityLockDays()
+        );
+
+        snapshot.put(
+                "passwordExpiryDays",
+                settings.getPasswordExpiryDays()
+        );
+
+        snapshot.put(
+                "passwordHistoryCount",
+                settings.getPasswordHistoryCount()
+        );
+
+        snapshot.put(
+                "minimumPasswordLength",
+                settings.getMinimumPasswordLength()
+        );
+
+        snapshot.put(
+                "minimumPasswordStrength",
+                settings.getMinimumPasswordStrength()
+        );
+
+        snapshot.put(
+                "requireDigit",
+                settings.isRequireDigit()
+        );
+
+        snapshot.put(
+                "requireSymbol",
+                settings.isRequireSymbol()
+        );
+
+        snapshot.put(
+                "requireMixedCase",
+                settings.isRequireMixedCase()
+        );
+
+        return snapshot;
     }
 }

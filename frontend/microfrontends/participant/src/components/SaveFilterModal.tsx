@@ -1,5 +1,5 @@
 // frontend/microfrontends/participant/src/components/SaveFilterModal.tsx - Save Filter Modal Dialog
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { AccessibleField } from '../../../../shared/accessibility/AccessibleField';
@@ -15,6 +15,22 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
   const [filterName, setFilterName] = useState('');
   const [error, setError] = useState('');
 
+  const handleReset = useCallback(() => {
+    setFilterName('');
+    setError('');
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      handleReset();
+    }
+  }, [isOpen, handleReset]);
+
+  const handleClose = useCallback(() => {
+    handleReset();
+    onClose();
+  }, [handleReset, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -28,14 +44,7 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
       return;
     }
     onSave(filterName.trim());
-    setFilterName('');
-    setError('');
-    onClose();
-  };
-
-  const handleClose = () => {
-    setFilterName('');
-    setError('');
+    handleReset();
     onClose();
   };
 
@@ -69,7 +78,6 @@ export const SaveFilterModal: React.FC<SaveFilterModalProps> = ({ isOpen, onClos
                 setFilterName(e.target.value);
                 if (error) setError('');
               }}
-              autoFocus
               className="form-input"
             />
           )}

@@ -1,0 +1,276 @@
+package com.enrollnow.audit.services;
+
+import java.time.LocalDate;
+import com.enrollnow.common.audit.AuditEntityDisplayResolver;
+import org.springframework.beans.factory.annotation.Autowired;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.enrollnow.audit.dtos.AuditEventDetailResponse;
+import com.enrollnow.audit.dtos.AuditEventResponse;
+import com.enrollnow.audit.dtos.EntityChangeHistoryResponse;
+import com.enrollnow.common.audit.AuditEventDescriptionResolver;
+import com.enrollnow.audit.models.AuditEvent;
+import com.enrollnow.audit.models.EntityChangeHistory;
+import com.enrollnow.audit.repositories.AuditEventRepository;
+import com.enrollnow.audit.repositories.EntityChangeHistoryRepository;
+
+import jakarta.persistence.criteria.Predicate;
+
+@Service
+public class AuditQueryService {
+
+    private final AuditEventRepository auditEventRepository;
+    private final EntityChangeHistoryRepository entityChangeHistoryRepository;
+    private List<AuditEntityDisplayResolver> entityDisplayResolvers =
+            List.of();
+    private List<AuditEventDescriptionResolver> descriptionResolvers = List.of();
+
+    public AuditQueryService(
+            AuditEventRepository auditEventRepository,
+            EntityChangeHistoryRepository entityChangeHistoryRepository) {
+        this.auditEventRepository = auditEventRepository;
+        this.entityChangeHistoryRepository = entityChangeHistoryRepository;
+    }
+    
+    @Autowired(required = false)
+    public void setEntityDisplayResolvers(
+            List<AuditEntityDisplayResolver> entityDisplayResolvers
+    ) {
+        this.entityDisplayResolvers =
+                entityDisplayResolvers != null
+                        ? entityDisplayResolvers
+                        : List.of();
+    }
+
+    @Autowired(required = false)
+    public void setDescriptionResolvers(List<AuditEventDescriptionResolver> descriptionResolvers) {
+        this.descriptionResolvers = descriptionResolvers != null ? descriptionResolvers : List.of();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditEventResponse> getEvents(
+            UUID tenantId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            String action,
+            String search,
+            Pageable pageable) {
+        Specification<AuditEvent> specification = (root, query, builder) -> {
+            Predicate tenant = builder.equal(root.get("tenantId"), tenantId);
+            Predicate filters = tenant;
+            if (fromDate != null) {
+                OffsetDateTime start = fromDate.atStartOfDay().atOffset(ZoneOffset.UTC);
+                filters = builder.and(filters, builder.greaterThanOrEqualTo(root.get("occurredAt"), start));
+            }
+            if (toDate != null) {
+                OffsetDateTime endExclusive = toDate.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+                filters = builder.and(filters, builder.lessThan(root.get("occurredAt"), endExclusive));
+            }
+            if (action != null && !action.isBlank()) {
+                filters = builder.and(filters, builder.equal(
+                        builder.lower(root.get("action")), action.trim().toLowerCase()));
+            }
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase() + "%";
+                Predicate searchable = builder.or(
+                        builder.like(builder.lower(root.get("action")), pattern),
+                        builder.like(builder.lower(root.get("entityType")), pattern),
+                        builder.like(builder.lower(root.get("description")), pattern));
+                try {
+                    searchable = builder.or(searchable,
+                            builder.equal(root.get("actorUserId"), UUID.fromString(search.trim())));
+                } catch (IllegalArgumentException ignored) {
+                    // Search text is not an actor UUID; the text fields still apply.
+                }
+                filters = builder.and(filters, searchable);
+            }
+            return filters;
+        };
+
+        return auditEventRepository
+                .findAll(specification, pageable)
+                .map(event ->
+                        toEventResponse(
+                                tenantId,
+                                event
+                        )
+                );
+    }
+
+
+    private AuditEventResponse toEventResponse(
+            UUID tenantId,
+            AuditEvent event
+    ) {
+
+        String actorDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        "USER",
+                        event.getActorUserId()
+                );
+
+        String entityDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        event.getEntityType(),
+                        event.getEntityId()
+                );
+
+        return new AuditEventResponse(
+                event.getId(),
+
+                event.getActorUserId(),
+                actorDisplayName,
+
+                event.getEntityType(),
+                event.getEntityId(),
+                entityDisplayName,
+
+                event.getAction(),
+                resolveDescription(tenantId, event.getDescription()),
+                event.getSource(),
+                event.getCorrelationId(),
+                event.getRequestId(),
+                event.getBeforeData(),
+                event.getAfterData(),
+                event.getOccurredAt(),
+                event.getCreatedAt()
+        );
+    }
+
+    private EntityChangeHistoryResponse toChangeResponse(
+            UUID tenantId,
+            EntityChangeHistory change
+    ) {
+
+        return new EntityChangeHistoryResponse(
+                change.getId(),
+                change.getAuditEventId(),
+                change.getEntityType(),
+                change.getEntityId(),
+
+                resolveDisplayName(
+                        tenantId,
+                        change.getEntityType(),
+                        change.getEntityId()
+                ),
+
+                change.getFieldName(),
+                change.getPreviousValue(),
+                change.getNewValue(),
+                change.getChangedAt()
+        );
+    }
+    
+    @Transactional(readOnly = true)
+    public AuditEventDetailResponse getEventDetail(
+            UUID tenantId,
+            UUID auditEventId
+    ) {
+
+        AuditEvent event =
+                auditEventRepository
+                        .findById(auditEventId)
+                        .filter(e -> tenantId.equals(e.getTenantId()))
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Audit event not found"
+                                )
+                        );
+
+        List<EntityChangeHistoryResponse> changes =
+                entityChangeHistoryRepository
+                        .findByTenantIdAndAuditEventIdOrderByChangedAtAsc(
+                                tenantId,
+                                auditEventId
+                        )
+                        .stream()
+                        .map(change ->
+                        toChangeResponse(
+                                tenantId,
+                                change
+                        )
+                )
+                        .toList();
+        String actorDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        "USER",
+                        event.getActorUserId()
+                );
+
+        String entityDisplayName =
+                resolveDisplayName(
+                        tenantId,
+                        event.getEntityType(),
+                        event.getEntityId()
+                );
+        return new AuditEventDetailResponse(
+                event.getId(),
+                event.getActorUserId(),
+                actorDisplayName,
+
+                event.getEntityType(),
+                event.getEntityId(),
+                entityDisplayName,
+
+                event.getAction(),
+                resolveDescription(tenantId, event.getDescription()),
+                event.getSource(),
+                event.getCorrelationId(),
+                event.getRequestId(),
+                event.getBeforeData(),
+                event.getAfterData(),
+                changes,
+                event.getOccurredAt(),
+                event.getCreatedAt()
+        );
+    }
+    
+    private String resolveDisplayName(
+            UUID tenantId,
+            String entityType,
+            UUID entityId
+    ) {
+
+        if (entityType == null || entityId == null) {
+            return null;
+        }
+
+        return entityDisplayResolvers
+                .stream()
+                .filter(resolver ->
+                        resolver.supports(entityType)
+                )
+                .findFirst()
+                .map(resolver ->
+                        resolver.resolve(
+                                tenantId,
+                                entityId
+                        )
+                )
+                .orElse(null);
+    }
+
+    private String resolveDescription(UUID tenantId, String description) {
+        return descriptionResolvers.stream()
+                .map(resolver -> resolver.resolveDescription(tenantId, description))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(description);
+    }
+}

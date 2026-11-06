@@ -14,31 +14,34 @@ export interface OrganizationModuleProps {
 }
 
 export const OrganizationModule: React.FC<OrganizationModuleProps> = ({ context }) => {
-  const [sites, setSites] = useState<any[]>([]);
+  const [sites, setSites] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSites = async () => {
       setLoading(true);
+      setError(null);
       try {
         const data = await organizationApi.getSites();
-        if (Array.isArray(data) && data.length > 0) {
-          setSites(data);
-        }
-      } catch {
-        // Fallback default site data
+        setSites(Array.isArray(data) ? (data as unknown as Array<Record<string, unknown>>) : []);
+      } catch (err: unknown) {
+        const msg =
+          err && typeof err === 'object' && 'message' in err && typeof (err as { message?: unknown }).message === 'string'
+            ? (err as { message: string }).message
+            : 'Unable to load research sites.';
+        setError(msg);
+        setSites([]);
       } finally {
         setLoading(false);
       }
     };
     fetchSites();
-  }, []);
+  }, [context.apiBaseUrl]);
 
-  const data = sites.length > 0 ? sites : [
-    { siteCode: 'SITE-001', name: 'Main Clinical Research Center', city: 'Boston', state: 'MA', country: 'USA', phone: '+1 617-555-0199', activeStudies: 4, status: 'ACTIVE' },
-    { siteCode: 'SITE-002', name: 'West Coast Oncology Pavilion', city: 'San Francisco', state: 'CA', country: 'USA', phone: '+1 415-555-0144', activeStudies: 2, status: 'ACTIVE' },
-    { siteCode: 'SITE-003', name: 'Midwest Heart & Vascular Institute', city: 'Chicago', state: 'IL', country: 'USA', phone: '+1 312-555-0182', activeStudies: 3, status: 'ACTIVE' },
-  ];
+  const data = sites;
+  const activeSitesCount = data.filter((s) => String(s.status || '').toUpperCase() === 'ACTIVE').length;
+  const totalAssignedStudies = data.reduce((sum, s) => sum + (Number(s.activeStudies ?? s.studyCount) || 0), 0);
 
   return (
     <div>
@@ -54,10 +57,16 @@ export const OrganizationModule: React.FC<OrganizationModuleProps> = ({ context 
       />
 
       <div className="kpi-grid">
-        <StatCard label="Network Organizations" value="1" subtext="EnrollNow Research Network" icon={Network} variant="info" />
-        <StatCard label="Active Research Sites" value="3" subtext="Across 3 regional hubs" icon={Building} variant="success" />
-        <StatCard label="Participating Coordinators" value="17" subtext="Multi-site assigned" icon={MapPin} variant="cyan" />
+        <StatCard label="Registered Research Sites" value={loading ? '—' : String(data.length)} subtext="EnrollNow Research Network" icon={Network} variant="info" />
+        <StatCard label="Active Research Sites" value={loading ? '—' : String(activeSitesCount)} subtext="Active clinical facilities" icon={Building} variant="success" />
+        <StatCard label="Assigned Study Protocols" value={loading ? '—' : String(totalAssignedStudies)} subtext="Across registered sites" icon={MapPin} variant="cyan" />
       </div>
+
+      {error && (
+        <div className="study-alert study-alert--danger" role="alert">
+          <span>{error}</span>
+        </div>
+      )}
 
       <Card
         title="Research Facility Directory"
@@ -65,14 +74,14 @@ export const OrganizationModule: React.FC<OrganizationModuleProps> = ({ context 
       >
         <DataTable
           data={data}
-          keyExtractor={(s) => s.siteCode}
+          keyExtractor={(s) => String(s.siteCode ?? s.id ?? '')}
           columns={[
-            { key: 'siteCode', header: 'Site Code', render: (s) => <strong>{s.siteCode}</strong> },
+            { key: 'siteCode', header: 'Site Code', render: (s) => <strong>{String(s.siteCode ?? s.id ?? '—')}</strong> },
             { key: 'name', header: 'Facility Name' },
-            { key: 'location', header: 'Geographic Location', render: (s) => `${s.city}, ${s.state} (${s.country})` },
+            { key: 'location', header: 'Geographic Location', render: (s) => s.city ? `${s.city}, ${s.state || ''} (${s.country || ''})` : String(s.location || '—') },
             { key: 'phone', header: 'Contact Phone' },
-            { key: 'activeStudies', header: 'Assigned Studies', render: (s) => `${s.activeStudies} active protocols` },
-            { key: 'status', header: 'Operational Status', render: (s) => <StatusBadge status={s.status} /> },
+            { key: 'activeStudies', header: 'Assigned Studies', render: (s) => `${Number(s.activeStudies ?? s.studyCount ?? 0)} active protocols` },
+            { key: 'status', header: 'Operational Status', render: (s) => <StatusBadge status={String(s.status || 'ACTIVE')} /> },
           ]}
         />
       </Card>

@@ -2,4 +2,5 @@ uploads/
 docs/*
 !docs/engineering/
 !docs/qa/
+!docs/migration/
 !docs/*.md

@@ -15,7 +15,8 @@
         "jspdf-autotable": "^5.0.8",
         "lucide-react": "^1.16.0",
         "react": "^19.0.0",
-        "react-dom": "^19.0.0"
+        "react-dom": "^19.0.0",
+        "react-email-editor": "^1.7.8"
     },
     "devDependencies": {
         "@types/react": "^19.0.0",

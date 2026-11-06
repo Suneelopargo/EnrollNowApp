@@ -214,4 +214,32 @@ describe('authApi Service Contract', () => {
       expect(eventSpy).toHaveBeenCalled();
     });
   });
+
+  describe('server session revocation', () => {
+    it('revokes the current token on the backend before local auth data is cleared', async () => {
+      localStorage.setItem('enrollnow_token', 'token-to-revoke');
+      localStorage.setItem('enrollnow_tenant_id', 'tenant-123');
+      const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({ data: null } as any);
+
+      await authApi.revokeCurrentSession('INACTIVITY_TIMEOUT');
+
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/v1/tenants/tenant-123/auth/logout?reason=INACTIVITY_TIMEOUT',
+        undefined,
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer token-to-revoke' },
+          skipToast: true,
+        })
+      );
+      postSpy.mockRestore();
+    });
+
+    it('treats an already-invalid backend session as revoked', async () => {
+      localStorage.setItem('enrollnow_token', 'expired-token');
+      const postSpy = vi.spyOn(apiClient, 'post').mockRejectedValueOnce({ response: { status: 401 } });
+
+      await expect(authApi.revokeCurrentSession()).resolves.toBeUndefined();
+      postSpy.mockRestore();
+    });
+  });
 });
