@@ -68,14 +68,14 @@ class AuthControllerTest {
         loginResponse.setAccessToken("jwt-token-123");
         loginResponse.setTokenType("Bearer");
 
-        when(loginService.authenticate(tenantId, req)).thenReturn(loginResponse);
+        when(loginService.authenticate(tenantId, req, null, null)).thenReturn(loginResponse);
 
-        ResponseEntity<LoginResponse> response = authController.login(tenantId, req);
+        ResponseEntity<LoginResponse> response = authController.login(tenantId, req, null);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("jwt-token-123", response.getBody().getAccessToken());
-        verify(loginService).authenticate(tenantId, req);
+        verify(loginService).authenticate(tenantId, req, null, null);
     }
 
     @Test

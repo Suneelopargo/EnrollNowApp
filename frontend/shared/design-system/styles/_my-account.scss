@@ -1,0 +1,558 @@
+// frontend/shared/design-system/styles/_my-account.scss - My Account module styles
+@use 'variables' as *;
+@use 'mixins' as *;
+@use 'typography' as *;
+
+.account-page-container {
+  padding: 1.5rem 2rem;
+  background-color: #ffffff;
+  min-height: calc(100vh - 120px);
+  font-family: $font-family-base;
+}
+
+.account-loading-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.account-error-container {
+  max-width: 600px;
+  margin: 2rem auto;
+}
+
+.account-layout-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+
+  @media (max-width: 992px) {
+    flex-direction: column;
+    gap: 2rem;
+  }
+}
+
+/* Left Sidebar */
+.account-layout-sidebar-col {
+  width: 250px;
+  flex-shrink: 0;
+  padding-right: 1.5rem;
+  border-right: 3px solid #2b6cb0; /* Visual vertical accent divider from legacy Ripple */
+  text-align: center;
+
+  @media (max-width: 992px) {
+    width: 100%;
+    border-right: none;
+    border-bottom: 3px solid #2b6cb0;
+    padding-right: 0;
+    padding-bottom: 2rem;
+  }
+}
+
+.account-sidebar {
+  display: flex;
+  flex-direction: column;
+  background-color: transparent;
+}
+
+.account-profile-photo-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.account-avatar-wrapper {
+  width: 175px;
+  height: 175px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  background-color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.account-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: #94a3b8;
+  background-color: #f1f5f9;
+}
+
+.account-photo-select-btn {
+  width: 175px;
+  margin-top: 0.75rem;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  font-family: $font-family-base;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+  }
+}
+
+.account-sidebar-section {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.account-sidebar-created-section {
+  margin-bottom: 1.5rem;
+}
+
+.account-sidebar-header {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.25rem 0;
+  text-align: center;
+  text-transform: none;
+  font-family: $font-family-base;
+}
+
+.account-created-date {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #334155;
+  text-align: center;
+}
+
+.account-sidebar-muted {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Recent Logins List & Hover Tooltip */
+.account-recent-logins-section {
+  text-align: center;
+}
+
+.account-recent-logins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+}
+
+.account-login-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+
+  td {
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+    line-height: 1.35;
+  }
+
+  .account-login-label {
+    width: 48px;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  .account-login-val {
+    color: #0f172a;
+    vertical-align: top;
+    word-break: break-word;
+  }
+
+  /* Alternating row styling matching Ripple legacy */
+  .account-login-row-time {
+    background-color: #ededed;
+  }
+
+  .account-login-row-addr {
+    background-color: #ffffff;
+  }
+
+  .account-login-row-agent {
+    background-color: #ededed;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    .account-agent-cell {
+      position: relative;
+    }
+
+    .account-agent-placeholder {
+      display: block;
+      font-style: italic;
+      color: #334155;
+    }
+
+    .account-agent-full {
+      display: none;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      color: #0f172a;
+      word-break: break-word;
+    }
+
+    /* On hover / focus: replace placeholder with full user agent details */
+    &:hover,
+    &.is-active-hover {
+      background-color: #e2e8f0;
+
+      .account-agent-placeholder {
+        display: none;
+      }
+
+      .account-agent-full {
+        display: block;
+      }
+    }
+  }
+}
+
+/* Right Content Column */
+.account-layout-content-col {
+  flex: 1;
+  min-width: 0;
+  padding-left: 2rem;
+
+  @media (max-width: 992px) {
+    padding-left: 0;
+  }
+}
+
+.account-content-header {
+  margin-bottom: 1.25rem;
+}
+
+.account-main-title {
+  font-family: $font-family-heading;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.account-section-heading-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.account-section-heading {
+  font-family: $font-family-heading;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.account-prev-login-text {
+  font-family: $font-family-base;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #475569;
+}
+
+.account-personal-details-section {
+  margin-bottom: 2rem;
+}
+
+.account-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  max-width: 600px;
+}
+
+.account-form-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  min-height: 36px;
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+}
+
+.account-form-label-col {
+  width: 170px;
+  flex-shrink: 0;
+  padding-top: 0.4rem;
+}
+
+.account-form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+  margin: 0;
+}
+
+.account-label-multiline {
+  line-height: 1.3;
+}
+
+.account-badge-verified {
+  display: inline-block;
+  background-color: #1f5fd0;
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+.account-badge-unverified {
+  display: inline-block;
+  background-color: #d97706;
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+.account-form-field-col {
+  flex: 1;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.account-input {
+  width: 100%;
+  height: 34px;
+  padding: 0.35rem 0.625rem;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background-color: #ffffff;
+  color: #0f172a;
+  font-family: $font-family-base;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+
+  &:focus {
+    border-color: #1f5fd0;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(31, 95, 208, 0.15);
+  }
+}
+
+.account-select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.account-email-readonly-field {
+  width: 100%;
+  height: 34px;
+  padding: 0.35rem 0.625rem;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background-color: #ffffff;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  font-family: $font-family-base;
+}
+
+.account-btn-blue {
+  background-color: #1f5fd0;
+  color: #ffffff;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.4rem 0.875rem;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background-color 0.15s ease;
+  font-family: $font-family-base;
+
+  &:hover {
+    background-color: #174eb0;
+  }
+}
+
+.account-checkbox-row {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+}
+
+.account-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #1f5fd0;
+  margin: 0;
+}
+
+.account-password-expiring-alert {
+  color: #dc2626;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.account-digest-tool-row {
+  margin-top: 0.5rem;
+}
+
+/* Studies, Roles, and Email Notifications Section */
+.account-study-settings-section {
+  margin-top: 2rem;
+}
+
+.account-study-heading {
+  font-family: $font-family-heading;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 1rem 0;
+}
+
+.account-study-aggrid-wrapper {
+  width: 100%;
+  margin-top: 0.5rem;
+
+  .enl-ag-grid.ag-theme-quartz {
+    height: auto;
+    min-height: 200px;
+    max-height: 600px;
+
+    .account-study-name-cell {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .ag-cell {
+      display: flex;
+      align-items: center;
+    }
+  }
+}
+
+.account-study-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.account-study-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: $font-family-base;
+  font-size: 0.8125rem;
+
+  thead th {
+    background-color: transparent !important;
+    color: #334155 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    border-top: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    padding: 0.625rem 0.75rem !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+  }
+
+  .account-study-col-name {
+    width: 25%;
+    text-align: left;
+  }
+
+  .account-study-col-role {
+    width: 15%;
+    text-align: center;
+  }
+
+  .account-study-col-check {
+    width: 11%;
+    text-align: center;
+  }
+
+  tbody tr {
+    background-color: #ffffff;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.1s ease;
+
+    &.account-study-row-alt,
+    &:nth-child(even) {
+      background-color: #f0f2f5;
+    }
+
+    &:hover {
+      background-color: #e2e8f0;
+    }
+  }
+
+  .account-study-name-cell {
+    padding: 0.625rem 0.75rem;
+    font-weight: 500;
+    color: #0f172a;
+    text-align: left;
+  }
+
+  .account-study-role-cell {
+    padding: 0.625rem 0.75rem;
+    color: #334155;
+    text-align: center;
+    font-weight: 400;
+  }
+
+  .account-study-check-cell {
+    padding: 0.625rem 0.75rem;
+    text-align: center;
+  }
+}
+
+.account-empty-studies-card {
+  padding: 2rem;
+  text-align: center;
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+}
+
+.account-empty-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}

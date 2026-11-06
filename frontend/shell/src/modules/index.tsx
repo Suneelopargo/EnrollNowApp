@@ -57,6 +57,11 @@ const LazyResetPassword = React.lazy(() =>
     default: m.ResetPasswordPage,
   }))
 );
+const LazyMyAccount = React.lazy(() =>
+  import('../../../microfrontends/identity/src/remoteEntry').then((m) => ({
+    default: m.MyAccountPage,
+  }))
+);
 const LazyAdministration = React.lazy(() => import('../../../microfrontends/administration/src/remoteEntry'));
 const LazyDashboard = React.lazy(() => import('../../../microfrontends/dashboard/src/remoteEntry'));
 const LazyOrganization = React.lazy(() => import('../../../microfrontends/organization/src/remoteEntry'));
@@ -108,6 +113,16 @@ export const ResetPasswordModule: React.FC = () => {
     <ErrorBoundary fallbackTitle="Password Reset Error" remoteId="identity">
       <Suspense fallback={<LoadingSpinner message="Loading Password Reset..." />}>
         <LazyResetPassword />
+      </Suspense>
+    </ErrorBoundary>
+  );
+};
+
+export const MyAccountModule: React.FC = () => {
+  return (
+    <ErrorBoundary fallbackTitle="My Account Error" remoteId="identity">
+      <Suspense fallback={<LoadingSpinner message="Loading My Account..." />}>
+        <LazyMyAccount />
       </Suspense>
     </ErrorBoundary>
   );

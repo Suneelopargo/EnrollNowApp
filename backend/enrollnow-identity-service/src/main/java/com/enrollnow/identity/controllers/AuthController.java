@@ -51,11 +51,28 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
             @PathVariable UUID tenantId,
-            @Valid @RequestBody LoginRequest request) {
+            @Valid @RequestBody LoginRequest request,
+            jakarta.servlet.http.HttpServletRequest servletRequest) {
+
+        String ipAddress = resolveClientIp(servletRequest);
+        String userAgent = servletRequest != null ? servletRequest.getHeader("User-Agent") : null;
 
         return ResponseEntity.ok(
-                loginService.authenticate(tenantId, request)
+                loginService.authenticate(tenantId, request, ipAddress, userAgent)
         );
+    }
+
+    private String resolveClientIp(jakarta.servlet.http.HttpServletRequest request) {
+        if (request == null) return null;
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @GetMapping("/password-policy")

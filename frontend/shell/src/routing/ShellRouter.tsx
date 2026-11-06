@@ -111,6 +111,8 @@ export const ShellRouter: React.FC = () => {
         <Route path="/documents/*" element={protectedWorkspaceElement} />
         <Route path="/organization" element={protectedWorkspaceElement} />
         <Route path="/organization/*" element={protectedWorkspaceElement} />
+        <Route path="/account" element={protectedWorkspaceElement} />
+        <Route path="/account/*" element={protectedWorkspaceElement} />
         <Route path="/admin" element={protectedAdminWorkspaceElement} />
         <Route path="/admin/*" element={protectedAdminWorkspaceElement} />
 

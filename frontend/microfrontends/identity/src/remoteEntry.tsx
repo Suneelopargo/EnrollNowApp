@@ -33,6 +33,7 @@ import { loginContent, defaultStatistics } from './data/loginContent';
 import { ActivateAccountPage } from './components/ActivateAccountPage';
 import { RecoverPasswordPage } from './components/RecoverPasswordPage';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
+import { MyAccountPage } from './components/MyAccount/MyAccountPage';
 
 // Export components for consumers and unit testing
 export {
@@ -48,6 +49,7 @@ export {
   ActivateAccountPage,
   RecoverPasswordPage,
   ResetPasswordPage,
+  MyAccountPage,
 };
 
 export interface IdentityModuleProps {

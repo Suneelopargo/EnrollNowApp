@@ -16,6 +16,7 @@ import {
   DocumentModule,
   OrganizationModule,
   AdministrationModule,
+  MyAccountModule,
 } from '../modules';
 
 export const WorkspaceScreenHost: React.FC = () => {
@@ -42,6 +43,8 @@ export const WorkspaceScreenHost: React.FC = () => {
         return <DocumentModule key={`documents-${refreshCount}`} />;
       case 'organization':
         return <OrganizationModule key={`organization-${refreshCount}`} />;
+      case 'account':
+        return <MyAccountModule key={`account-${refreshCount}`} />;
       case 'admin':
         return <AdministrationModule key={`admin-${refreshCount}`} />;
       default:

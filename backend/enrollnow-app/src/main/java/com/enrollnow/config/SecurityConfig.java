@@ -52,7 +52,9 @@ public class SecurityConfig {
                     "/api/v1/tenants/*/auth/password-policy",
                     "/api/v1/auth/password-policy",
                     "/api/v1/tenants/*/security-settings/password-policy",
-                    "/api/v1/security-settings/password-policy"
+                    "/api/v1/security-settings/password-policy",
+                    "/api/v1/tenants/*/account/email/verify",
+                    "/api/v1/tenants/*/account/profile-photo/content"
                 ).permitAll()
 
                 /*

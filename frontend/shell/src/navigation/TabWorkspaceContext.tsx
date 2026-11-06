@@ -39,6 +39,7 @@ export const ROUTE_TAB_DEFINITIONS: Record<string, Omit<WorkspaceTab, 'refreshCo
   '/documents': { id: 'documents', title: 'Documents', route: '/documents', icon: 'FileText', closable: true },
   '/organization': { id: 'organization', title: 'Sites & Network', route: '/organization', icon: 'Building', closable: true },
   '/admin': { id: 'admin', title: 'Site Admin', route: '/admin', icon: 'Settings', closable: true },
+  '/account': { id: 'account', title: 'My Account', route: '/account', icon: 'User', closable: true },
 };
 
 export const DEFAULT_HOME_TAB: WorkspaceTab = {

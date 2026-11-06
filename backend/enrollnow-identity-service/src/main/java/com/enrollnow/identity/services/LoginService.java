@@ -13,6 +13,8 @@ import com.enrollnow.identity.models.UserSecurityState;
 import com.enrollnow.identity.repositories.SecuritySettingsRepository;
 import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
+import com.enrollnow.identity.models.UserLoginActivity;
+import com.enrollnow.identity.repositories.UserLoginActivityRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +39,12 @@ public class LoginService {
     private final JwtTokenService jwtTokenService;
     private final UserSessionService userSessionService;
     private final SitePermissionService sitePermissionService;
+    private UserLoginActivityRepository userLoginActivityRepository;
+
+    @Autowired(required = false)
+    public void setUserLoginActivityRepository(UserLoginActivityRepository userLoginActivityRepository) {
+        this.userLoginActivityRepository = userLoginActivityRepository;
+    }
 
     public LoginService(
             UserEmailRepository userEmailRepository,
@@ -83,6 +91,15 @@ public class LoginService {
     public LoginResponse authenticate(
             UUID tenantId,
             LoginRequest request) {
+        return authenticate(tenantId, request, null, null);
+    }
+
+    @Transactional(noRollbackFor = InvalidCredentialsException.class)
+    public LoginResponse authenticate(
+            UUID tenantId,
+            LoginRequest request,
+            String ipAddress,
+            String userAgent) {
 
         String normalizedEmail =
                 request.getEmail()
@@ -187,6 +204,7 @@ public class LoginService {
                     securityState.setLockReason("INACTIVITY_LOCK");
                     user.setStatus("LOCKED");
                     userRepository.save(user);
+
                     userSecurityStateRepository.save(securityState);
                     throw new AccountLockedException(
                             "ACCOUNT_LOCKED_INACTIVITY",
@@ -206,6 +224,7 @@ public class LoginService {
                     securityState.setLockReason("PASSWORD_EXPIRED");
                     user.setStatus("LOCKED");
                     userRepository.save(user);
+
                     userSecurityStateRepository.save(securityState);
                     throw new AccountLockedException(
                             "PASSWORD_EXPIRED",
@@ -241,6 +260,16 @@ public class LoginService {
 
         user.setLastLoginAt(now);
         userRepository.save(user);
+
+        if (userLoginActivityRepository != null) {
+            UserLoginActivity activity = new UserLoginActivity();
+            activity.setTenantId(user.getTenantId());
+            activity.setUserId(user.getId());
+            activity.setLoginAt(now);
+            activity.setIpAddress(ipAddress);
+            activity.setUserAgent(userAgent);
+            userLoginActivityRepository.save(activity);
+        }
 
         LoginResponse response = new LoginResponse();
 
@@ -317,6 +346,7 @@ public class LoginService {
 
             user.setStatus("LOCKED");
             userRepository.save(user);
+
         }
 
         userSecurityStateRepository.save(securityState);

@@ -8,7 +8,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import EmailEditor from 'react-email-editor';
-import type { Design, EditorRef, HtmlExport } from 'react-email-editor';
+import type { EditorRef } from 'react-email-editor';
+type Design = any;
+type HtmlExport = any;
 import { Modal } from '../../../../shared/design-system/components/Modal';
 import { TooltipButton } from '../../../../shared/design-system/components/TooltipButton';
 import { toast } from '../../../../shared/toaster';
@@ -173,7 +175,7 @@ const EmailRecipientInput: React.FC<EmailRecipientInputProps> = ({
 export const isEmailDesignEmpty = (design: Design): boolean => {
   const rows = Array.isArray(design.body?.rows) ? design.body.rows : [];
 
-  return !rows.some((row) => {
+  return !rows.some((row: any) => {
     if (!row || typeof row !== 'object') return false;
     const columns = (row as Record<string, unknown>).columns;
     if (!Array.isArray(columns)) return false;
