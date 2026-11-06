@@ -36,6 +36,8 @@ public interface UserEmailRepository extends JpaRepository<UserEmail, UUID> {
             UUID userId
     );
 
+    Optional<UserEmail> findByTenantIdAndUserIdAndEmailIgnoreCase(UUID tenantId, UUID userId, String email);
+
     boolean existsByTenantIdAndEmailIgnoreCase(
             UUID tenantId,
             String email

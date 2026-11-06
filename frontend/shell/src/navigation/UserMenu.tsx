@@ -83,11 +83,11 @@ export const UserMenu: React.FC = () => {
             className="user-dropdown-item"
             onClick={() => {
               setIsOpen(false);
-              activateTab('dashboard');
+              activateTab('account');
             }}
           >
             <User size={16} aria-hidden="true" />
-            <span>My Overview</span>
+            <span>My Account</span>
           </button>
 
           {isAdministrator && (

@@ -12,3 +12,4 @@ export * from './documentApi';
 export * from './administrationApi';
 export * from './securitySettingsApi';
 export * from './generalSettingsApi';
+export * from './accountApi';

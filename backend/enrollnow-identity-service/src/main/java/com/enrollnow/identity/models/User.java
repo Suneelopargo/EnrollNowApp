@@ -38,6 +38,15 @@ public class User {
     @Column(name = "timezone", length = 100)
     private String timezone;
 
+    @Column(name = "phone_number", length = 50)
+    private String phoneNumber;
+
+    @Column(name = "profile_photo_url", columnDefinition = "TEXT")
+    private String profilePhotoUrl;
+
+    @Column(name = "ignore_timezone_mismatch", nullable = false)
+    private boolean ignoreTimezoneMismatch = false;
+
     @Column(name = "status", nullable = false, length = 30)
     private String status = "ACTIVE";
 
@@ -130,6 +139,30 @@ public class User {
 
     public void setTimezone(String timezone) {
         this.timezone = timezone;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String getProfilePhotoUrl() {
+        return profilePhotoUrl;
+    }
+
+    public void setProfilePhotoUrl(String profilePhotoUrl) {
+        this.profilePhotoUrl = profilePhotoUrl;
+    }
+
+    public boolean isIgnoreTimezoneMismatch() {
+        return ignoreTimezoneMismatch;
+    }
+
+    public void setIgnoreTimezoneMismatch(boolean ignoreTimezoneMismatch) {
+        this.ignoreTimezoneMismatch = ignoreTimezoneMismatch;
     }
 
     public String getStatus() {

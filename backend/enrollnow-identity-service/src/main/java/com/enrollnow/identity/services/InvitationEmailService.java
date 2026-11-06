@@ -105,6 +105,40 @@ public class InvitationEmailService {
         sendEmail(recipientEmail, subject, body, accessToken);
     }
 
+    public void sendEmailVerification(
+            String recipientEmail,
+            String recipientName,
+            String tenantIdValue,
+            String rawToken) {
+
+        String verificationUrl =
+                UriComponentsBuilder
+                        .fromUriString(passwordResetBaseUrl.replace("reset-password", "verify-email"))
+                        .queryParam("tenantId", tenantIdValue)
+                        .queryParam("token", rawToken)
+                        .build()
+                        .toUriString();
+
+        String subject = "EnrollNow - Verify Your Email Address";
+
+        String body =
+                buildEmailBody(
+                        "Hello " + recipientName + ",",
+                        "You requested to update your email address on EnrollNow. Please click the button below to verify your new email address.",
+                        "Verify Email",
+                        verificationUrl,
+                        "If you did not request this change, please ignore this email or contact your Site Administrator."
+                );
+
+        try {
+            String accessToken = getGraphAccessToken();
+            sendEmail(recipientEmail, subject, body, accessToken);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(InvitationEmailService.class)
+                    .warn("Could not send email verification via Graph: {}", e.getMessage());
+        }
+    }
+
     public void sendParticipantEmail(
             List<String> to,
             List<String> cc,
