@@ -14,6 +14,7 @@ export interface ToastOptions {
   dismissible?: boolean;
   sticky?: boolean;
   critical?: boolean;
+  dismissOthers?: boolean;
   action?: ToastAction;
 }
 
