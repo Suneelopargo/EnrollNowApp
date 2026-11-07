@@ -8,6 +8,7 @@ import com.enrollnow.identity.repositories.UserEmailRepository;
 import com.enrollnow.identity.repositories.UserRepository;
 import com.enrollnow.identity.repositories.UserSecurityStateRepository;
 import com.enrollnow.identity.repositories.UserStudyNotificationPreferenceRepository;
+import com.enrollnow.notification.exceptions.NotificationDeliveryException;
 import com.enrollnow.notification.models.OutboxEventEntity;
 import com.enrollnow.notification.templates.NotificationHtmlRenderer;
 import com.enrollnow.notification.templates.NotificationTemplateCatalog;
@@ -295,6 +296,8 @@ public class NotificationDispatcher {
             Map<String, String> details,
             String templateId) {
 
+        List<String> failedRecipients = new ArrayList<>();
+
         for (UUID userId : targetUserIds) {
             // Exclude the user who performed the action (matches legacy: userId !== Meteor.userId())
             if (actorUserId != null && actorUserId.equals(userId)) {
@@ -342,7 +345,7 @@ public class NotificationDispatcher {
                     rootUrl
             );
 
-            emailDeliveryService.sendEmail(
+            boolean sent = emailDeliveryService.sendEmail(
                     tenantId,
                     studyId,
                     participantId,
@@ -351,6 +354,14 @@ public class NotificationDispatcher {
                     htmlBody,
                     templateId
             );
+
+            if (!sent) {
+                failedRecipients.add(recipientEmail);
+            }
+        }
+
+        if (!failedRecipients.isEmpty()) {
+            throw new NotificationDeliveryException("Failed to deliver notification email to: " + String.join(", ", failedRecipients));
         }
     }
 

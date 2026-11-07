@@ -2,6 +2,7 @@ package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.events.OutboxEventPublisher;
 import com.enrollnow.identity.dtos.UserEffectivePermissionsResponse;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.repositories.UserRepository;
@@ -61,6 +62,9 @@ public class ParticipantConsentLogService {
     @Autowired(required = false)
     private ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private OutboxEventPublisher outboxPublisher;
+
     @Autowired
     private TenantOptionRepository tenantOptionRepository;
 
@@ -95,6 +99,10 @@ public class ParticipantConsentLogService {
 
     public void setObjectMapper(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+    }
+
+    public void setOutboxPublisher(OutboxEventPublisher outboxPublisher) {
+        this.outboxPublisher = outboxPublisher;
     }
 
     public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
@@ -266,6 +274,22 @@ public class ParticipantConsentLogService {
                 .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
+        if (outboxPublisher != null) {
+            try {
+                String authorName = (callerUserId != null && usersMap.containsKey(callerUserId))
+                        ? (usersMap.get(callerUserId).getFirstName() + " " + usersMap.get(callerUserId).getLastName()).trim()
+                        : "Team Member";
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("studyId", savedLog.getStudyId() != null ? savedLog.getStudyId().toString() : null);
+                payload.put("participantId", participantId.toString());
+                payload.put("actorUserId", callerUserId != null ? callerUserId.toString() : null);
+                payload.put("consentAuthor", authorName.isBlank() ? "Team Member" : authorName);
+                payload.put("consentTitle", savedLog.getConsentTitle());
+                outboxPublisher.publish(tenantId, "PARTICIPANT_CONSENT_LOG", savedLog.getId(), "PARTICIPANT_CONSENT_ADDED", payload, callerUserId);
+            } catch (Exception ex) {
+                log.warn("Failed to publish outbox event for consent log {}: {}", savedLog.getId(), ex.getMessage());
+            }
+        }
         return toDto(savedLog, studiesMap, usersMap, callerUserId, isUserAdminOrManager);
     }
 

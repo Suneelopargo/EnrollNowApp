@@ -69,6 +69,7 @@ class NotificationDispatcherTest {
                 htmlRenderer,
                 objectMapper
         );
+        lenient().when(emailDeliveryService.sendEmail(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
     }
 
     @Test
@@ -243,5 +244,46 @@ class NotificationDispatcherTest {
         dispatcher.dispatch(event);
 
         verifyNoInteractions(emailDeliveryService);
+    }
+
+    @Test
+    void testDeliveryFailure_ThrowsNotificationDeliveryException() throws Exception {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setName("Vaccine Trial");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        User recipient = new User();
+        recipient.setId(recipientUserId);
+        recipient.setFirstName("Alice");
+        recipient.setLastName("Wonder");
+        when(userRepository.findByTenantIdAndId(tenantId, recipientUserId)).thenReturn(Optional.of(recipient));
+
+        UserEmail email = new UserEmail();
+        email.setEmail("alice@example.com");
+        email.setPrimaryEmail(true);
+        when(userEmailRepository.findByTenantIdAndUserIdAndPrimaryEmailTrue(tenantId, recipientUserId)).thenReturn(Optional.of(email));
+
+        UserStudyNotificationPreference pref = new UserStudyNotificationPreference();
+        pref.setTaskEmails(true);
+        when(preferenceRepository.findByTenantIdAndUserIdAndStudyId(tenantId, recipientUserId, studyId)).thenReturn(Optional.of(pref));
+        when(userSecurityStateRepository.findByTenantIdAndUserId(tenantId, recipientUserId)).thenReturn(Optional.of(new UserSecurityState()));
+
+        when(emailDeliveryService.sendEmail(any(), any(), any(), any(), any(), any(), any())).thenReturn(false);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("studyId", studyId.toString());
+        payload.put("assignedTo", List.of(recipientUserId.toString()));
+        payload.put("title", "Review EEG Log");
+
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setTenantId(tenantId);
+        event.setEventType(NotificationTemplateCatalog.EVENT_TYPE_TASK_CREATED);
+        event.setPayload(objectMapper.writeValueAsString(payload));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.enrollnow.notification.exceptions.NotificationDeliveryException.class,
+                () -> dispatcher.dispatch(event)
+        );
     }
 }

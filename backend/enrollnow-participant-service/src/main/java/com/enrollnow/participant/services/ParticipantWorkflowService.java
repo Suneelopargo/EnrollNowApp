@@ -4,6 +4,7 @@ import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditEntitySnapshot;
 import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.events.OutboxEventPublisher;
 import com.enrollnow.identity.services.InvitationEmailService;
 import com.enrollnow.identity.services.MailAttachment;
 import com.enrollnow.participant.dtos.*;
@@ -50,6 +51,13 @@ public class ParticipantWorkflowService {
     private final AuditRecorder auditRecorder;
     private final SmsGatewayService smsGatewayService;
     private final InvitationEmailService invitationEmailService;
+
+    @Autowired(required = false)
+    private OutboxEventPublisher outboxPublisher;
+
+    public void setOutboxPublisher(OutboxEventPublisher outboxPublisher) {
+        this.outboxPublisher = outboxPublisher;
+    }
 
     public ParticipantWorkflowService(
             ParticipantRepository participantRepository,
@@ -166,6 +174,20 @@ public class ParticipantWorkflowService {
         ParticipantComment saved = commentRepository.save(comment);
         recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_CREATED", "ParticipantComment", saved.getId(),
                 "Created comment for participant " + participantDisplayName(tenantId, participantId));
+
+        if (outboxPublisher != null) {
+            try {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
+                payload.put("participantId", participantId.toString());
+                payload.put("actorUserId", userId != null ? userId.toString() : null);
+                payload.put("commentAuthor", finalAuthorName);
+                payload.put("commentText", saved.getText());
+                outboxPublisher.publish(tenantId, "PARTICIPANT", participantId, "PARTICIPANT_COMMENT_ADDED", payload, userId);
+            } catch (Exception ex) {
+                log.warn("Failed to publish outbox event for comment {}: {}", saved.getId(), ex.getMessage());
+            }
+        }
 
         return mapCommentToDto(saved, userId, false);
     }
@@ -1381,6 +1403,21 @@ public class ParticipantWorkflowService {
         dto.setStatus(saved.getStatus());
         dto.setAssignedAt(saved.getAssignedAt());
         dto.setCompletedAt(saved.getCompletedAt());
+        if ("COMPLETED".equalsIgnoreCase(status) && outboxPublisher != null) {
+            try {
+                String surveyName = surveyDefinitionRepository.findByTenantIdAndId(tenantId, saved.getSurveyVersionId())
+                        .map(SurveyDefinition::getName)
+                        .orElse("Survey Assessment");
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
+                payload.put("participantId", participantId.toString());
+                payload.put("actorUserId", null);
+                payload.put("surveyName", surveyName);
+                outboxPublisher.publish(tenantId, "SURVEY_SUBMISSION", saved.getId(), "SURVEY_SUBMISSION_COMPLETED", payload, null);
+            } catch (Exception ex) {
+                log.warn("Failed to publish survey completion outbox event: {}", ex.getMessage());
+            }
+        }
         return dto;
     }
 

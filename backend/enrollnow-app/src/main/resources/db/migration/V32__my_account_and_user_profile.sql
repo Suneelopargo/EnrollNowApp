@@ -267,3 +267,12 @@ CREATE INDEX IF NOT EXISTS idx_qrtz_ft_j_g ON enrollnow.qrtz_fired_triggers(sche
 CREATE INDEX IF NOT EXISTS idx_qrtz_ft_jg ON enrollnow.qrtz_fired_triggers(sched_name,job_group);
 CREATE INDEX IF NOT EXISTS idx_qrtz_ft_t_g ON enrollnow.qrtz_fired_triggers(sched_name,trigger_name,trigger_group);
 CREATE INDEX IF NOT EXISTS idx_qrtz_ft_tg ON enrollnow.qrtz_fired_triggers(sched_name,trigger_group);
+
+-- ============================================================
+-- 6. OUTBOX OPTIMIZATION INDEXES FOR CONCURRENT PROCESSING & RECOVERY
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS ix_outbox_events_status_locked
+    ON enrollnow.outbox_events (status, locked_at)
+    WHERE status = 'PROCESSING';
+

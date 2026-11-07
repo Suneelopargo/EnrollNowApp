@@ -40,4 +40,6 @@ public interface CalendarEventEntityRepository extends JpaRepository<CalendarEve
             @Param("studyId") UUID studyId,
             @Param("horizon") Instant horizon
     );
+
+    java.util.Optional<CalendarEventEntity> findByTenantIdAndId(UUID tenantId, UUID id);
 }

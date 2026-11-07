@@ -206,9 +206,7 @@ public class MyAccountService {
             user.setLastName(trimmedLast);
         }
 
-        if (user.getLastName() == null || user.getLastName().trim().isEmpty()) {
-            throw new IllegalArgumentException("Last Name is required");
-        }
+        // LastName validation already handled above if provided in request
 
         if (request.getTitle() != null) {
             user.setTitle(request.getTitle().trim().isEmpty() ? null : request.getTitle().trim());

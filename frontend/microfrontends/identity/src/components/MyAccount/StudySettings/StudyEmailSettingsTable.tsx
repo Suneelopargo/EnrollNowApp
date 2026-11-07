@@ -126,7 +126,7 @@ export const StudyEmailSettingsTable: React.FC<StudyEmailSettingsTableProps> = (
         setLocalPrefs(authoritativeList);
         onPreferencesUpdated(authoritativeList);
         toast.clear();
-        toast.success(`Updated ${FIELD_LABELS[field]} preference`);
+        toast.success(`Updated ${FIELD_LABELS[field]} preference`, { dismissOthers: true });
       } catch (err: any) {
         // Rollback on failure
         setLocalPrefs(previous);
@@ -155,7 +155,7 @@ export const StudyEmailSettingsTable: React.FC<StudyEmailSettingsTableProps> = (
         );
         onPreferencesUpdated(updatedList);
         toast.clear();
-        toast.success(`Updated all studies for ${FIELD_LABELS[field]}`);
+        toast.success(`Updated all studies for ${FIELD_LABELS[field]}`, { dismissOthers: true });
       } catch (err: any) {
         setLocalPrefs(previous);
         toast.clear();

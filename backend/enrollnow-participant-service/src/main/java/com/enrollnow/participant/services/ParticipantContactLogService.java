@@ -2,6 +2,7 @@ package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditEventCommand;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.events.OutboxEventPublisher;
 import com.enrollnow.identity.models.User;
 import com.enrollnow.identity.models.UserEmail;
 import com.enrollnow.identity.repositories.UserEmailRepository;
@@ -59,6 +60,9 @@ public class ParticipantContactLogService {
     @Autowired
     private TenantOptionRepository tenantOptionRepository;
 
+    @Autowired(required = false)
+    private OutboxEventPublisher outboxPublisher;
+
     public ParticipantContactLogService(
             ParticipantContactLogRepository contactLogRepository,
             ContactOutcomeRepository outcomeRepository,
@@ -89,7 +93,7 @@ public class ParticipantContactLogService {
     }
 
     public void setObjectMapper(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper; } public void setOutboxPublisher(OutboxEventPublisher outboxPublisher) { this.outboxPublisher = outboxPublisher;
     }
 
     public void setTenantOptionRepository(TenantOptionRepository tenantOptionRepository) {
@@ -332,6 +336,18 @@ public class ParticipantContactLogService {
                 .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
+        if (outboxPublisher != null) {
+            try {
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("studyId", savedLog.getStudyId() != null ? savedLog.getStudyId().toString() : null);
+                payload.put("participantId", participantId.toString());
+                payload.put("actorUserId", callerUserId != null ? callerUserId.toString() : null);
+                payload.put("contactOutcome", savedLog.getOutcome() != null ? savedLog.getOutcome() : savedLog.getContactType());
+                outboxPublisher.publish(tenantId, "PARTICIPANT_CONTACT_LOG", savedLog.getId(), "PARTICIPANT_CONTACT_LOG_ADDED", payload, callerUserId);
+            } catch (Exception ex) {
+                log.warn("Failed to publish outbox event for contact log {}: {}", savedLog.getId(), ex.getMessage());
+            }
+        }
         return toDto(savedLog, studiesMap, usersMap, callerUserId, isUserAdminOrManager);
     }
 

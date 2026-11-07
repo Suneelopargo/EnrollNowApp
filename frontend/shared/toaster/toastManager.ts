@@ -36,6 +36,13 @@ class ToastManager {
           this.addToast(detail.type, detail.message, detail.options, false);
         }
       });
+
+      window.addEventListener('enrollnow_toast_clear', (event: any) => {
+        const detail = event.detail;
+        if (detail && detail.sourceId !== this.instanceId) {
+          this.clear(false);
+        }
+      });
     }
   }
 
@@ -64,6 +71,10 @@ class ToastManager {
     options: ToastOptions = {},
     dispatchGlobally = true
   ): string {
+    if (options.dismissOthers) {
+      this.clear(dispatchGlobally);
+    }
+
     // 1. Deduplication: Prevent rapid identical duplicate notifications within 1500ms
     const existingDuplicate = this.toasts.find(
       (t) => t.type === type && t.message === message && Date.now() - t.timestamp < 1500
@@ -220,11 +231,18 @@ class ToastManager {
     }
   }
 
-  public clear(): void {
+  public clear(dispatchGlobally = true): void {
     this.timers.forEach((entry) => clearTimeout(entry.timeoutId));
     this.timers.clear();
     this.toasts = [];
     this.notify();
+    if (dispatchGlobally && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('enrollnow_toast_clear', {
+          detail: { sourceId: this.instanceId },
+        })
+      );
+    }
   }
 
   public getToasts(): ToastItem[] {

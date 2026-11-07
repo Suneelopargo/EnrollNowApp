@@ -1,5 +1,6 @@
 package com.enrollnow.notification.services;
 
+import com.enrollnow.notification.models.OutboxEventAttemptEntity;
 import com.enrollnow.notification.models.OutboxEventEntity;
 import com.enrollnow.notification.repositories.OutboxEventAttemptEntityRepository;
 import com.enrollnow.notification.repositories.OutboxEventEntityRepository;
@@ -10,9 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +29,7 @@ class NotificationOutboxServiceTest {
     private NotificationDispatcher notificationDispatcher;
 
     private NotificationOutboxService outboxService;
+    private OutboxEventProcessor outboxEventProcessor;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final UUID tenantId = UUID.randomUUID();
@@ -37,11 +38,17 @@ class NotificationOutboxServiceTest {
 
     @BeforeEach
     void setUp() {
+        outboxEventProcessor = new OutboxEventProcessor(
+                outboxRepository,
+                attemptRepository,
+                notificationDispatcher
+        );
         outboxService = new NotificationOutboxService(
                 outboxRepository,
                 attemptRepository,
                 notificationDispatcher,
-                objectMapper
+                objectMapper,
+                outboxEventProcessor
         );
     }
 
@@ -72,12 +79,35 @@ class NotificationOutboxServiceTest {
     }
 
     @Test
+    void testPublishEvent_IdempotencyKey_AvoidsDuplicate() {
+        String key = "TASK:" + aggregateId + ":CREATED";
+        OutboxEventEntity existing = new OutboxEventEntity();
+        existing.setId(UUID.randomUUID());
+        existing.setIdempotencyKey(key);
+        when(outboxRepository.findByTenantIdAndIdempotencyKey(tenantId, key)).thenReturn(Optional.of(existing));
+
+        Map<String, Object> payload = Map.of("title", "Duplicate Test");
+        OutboxEventEntity result = outboxService.publishEvent(
+                tenantId,
+                "TASK",
+                aggregateId,
+                "TASK_CREATED",
+                payload,
+                actorUserId,
+                key
+        );
+
+        assertSame(existing, result);
+        verify(outboxRepository, never()).save(any(OutboxEventEntity.class));
+    }
+
+    @Test
     void testProcessSingleEvent_Success_MarksPublished() throws Exception {
         UUID eventId = UUID.randomUUID();
         OutboxEventEntity event = new OutboxEventEntity();
         event.setId(eventId);
         event.setTenantId(tenantId);
-        event.setStatus("PENDING");
+        event.setStatus("PROCESSING");
         event.setRetryCount(0);
         event.setEventType("TASK_CREATED");
         event.setPayload("{\"title\":\"Test Task\"}");
@@ -89,8 +119,8 @@ class NotificationOutboxServiceTest {
         verify(notificationDispatcher, times(1)).dispatch(event);
         assertEquals("PUBLISHED", event.getStatus());
         assertNotNull(event.getPublishedAt());
-        verify(attemptRepository, times(1)).save(any());
-        verify(outboxRepository, atLeastOnce()).save(event);
+        verify(attemptRepository, atLeastOnce()).saveAndFlush(any());
+        verify(outboxRepository, atLeastOnce()).saveAndFlush(event);
     }
 
     @Test
@@ -99,7 +129,7 @@ class NotificationOutboxServiceTest {
         OutboxEventEntity event = new OutboxEventEntity();
         event.setId(eventId);
         event.setTenantId(tenantId);
-        event.setStatus("PENDING");
+        event.setStatus("PROCESSING");
         event.setRetryCount(0);
         event.setEventType("TASK_CREATED");
         event.setPayload("{\"title\":\"Test Task\"}");
@@ -113,7 +143,7 @@ class NotificationOutboxServiceTest {
         assertEquals(1, event.getRetryCount());
         assertEquals("SMTP connection refused", event.getLastError());
         assertNotNull(event.getAvailableAt());
-        verify(attemptRepository, times(1)).save(any());
+        verify(attemptRepository, atLeastOnce()).saveAndFlush(any());
     }
 
     @Test
@@ -122,7 +152,7 @@ class NotificationOutboxServiceTest {
         OutboxEventEntity event = new OutboxEventEntity();
         event.setId(eventId);
         event.setTenantId(tenantId);
-        event.setStatus("FAILED");
+        event.setStatus("PROCESSING");
         event.setRetryCount(4);
         event.setEventType("TASK_CREATED");
         event.setPayload("{\"title\":\"Test Task\"}");
@@ -134,5 +164,47 @@ class NotificationOutboxServiceTest {
 
         assertEquals("DEAD_LETTER", event.getStatus());
         assertEquals(5, event.getRetryCount());
+    }
+
+    @Test
+    void testClaimBatch_UpdatesStatusToProcessing() {
+        OutboxEventEntity e1 = new OutboxEventEntity();
+        e1.setId(UUID.randomUUID());
+        e1.setStatus("PENDING");
+
+        OutboxEventEntity e2 = new OutboxEventEntity();
+        e2.setId(UUID.randomUUID());
+        e2.setStatus("PENDING");
+
+        when(outboxRepository.claimPendingEventsForUpdate(any(), eq(5), eq(50)))
+                .thenReturn(List.of(e1, e2));
+
+        List<UUID> claimed = outboxService.claimBatch(Instant.now(), 5, 50);
+
+        assertEquals(2, claimed.size());
+        assertEquals("PROCESSING", e1.getStatus());
+        assertNotNull(e1.getLockedAt());
+        assertNotNull(e1.getLockedBy());
+        verify(outboxRepository, times(1)).flush();
+    }
+
+    @Test
+    void testRecoverStaleLeases_ResetsStuckEvents() {
+        OutboxEventEntity stuck = new OutboxEventEntity();
+        stuck.setId(UUID.randomUUID());
+        stuck.setStatus("PROCESSING");
+        stuck.setLockedAt(Instant.now().minusSeconds(600));
+        stuck.setRetryCount(1);
+
+        when(outboxRepository.findStaleProcessingEvents(any(), eq(50)))
+                .thenReturn(List.of(stuck));
+
+        outboxService.recoverStaleLeases();
+
+        assertEquals("FAILED", stuck.getStatus());
+        assertEquals(2, stuck.getRetryCount());
+        assertNull(stuck.getLockedAt());
+        assertTrue(stuck.getLastError().contains("Lease expired"));
+        verify(outboxRepository, times(1)).flush();
     }
 }

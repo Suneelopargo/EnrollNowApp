@@ -2,6 +2,7 @@ package com.enrollnow.participant.services;
 
 import com.enrollnow.common.audit.AuditEntitySnapshot;
 import com.enrollnow.common.audit.AuditRecorder;
+import com.enrollnow.common.events.OutboxEventPublisher;
 import com.enrollnow.common.audit.AuditRequest;
 import com.enrollnow.identity.services.SiteAuthorizationService;
 import com.enrollnow.participant.dtos.*;
@@ -84,6 +85,13 @@ public class ParticipantRegistryService {
 
     public void setSiteAuthorizationService(SiteAuthorizationService siteAuthorizationService) {
         this.siteAuthorizationService = siteAuthorizationService;
+    }
+
+    @Autowired(required = false)
+    private OutboxEventPublisher outboxPublisher;
+
+    public void setOutboxPublisher(OutboxEventPublisher outboxPublisher) {
+        this.outboxPublisher = outboxPublisher;
     }
 
     public ParticipantRegistryService(
@@ -1117,6 +1125,25 @@ public class ParticipantRegistryService {
                         });
                 candidate.setStatus(status);
                 candidate.setStatusReason(request.getNotes());
+                candidate.setActive(true);
+                candidate.setUpdatedAt(OffsetDateTime.now());
+                candidate.setUpdatedBy(userId);
+                candidateRepository.save(candidate);
+            }
+            if (outboxPublisher != null) {
+                try {
+                    Map<String, Object> payload = new LinkedHashMap<>();
+                    payload.put("studyId", effectiveStudyId.toString());
+                    payload.put("participantId", pId.toString());
+                    payload.put("actorUserId", userId != null ? userId.toString() : null);
+                    payload.put("newStatus", status);
+                    outboxPublisher.publish(tenantId, "PARTICIPANT", pId, "PARTICIPANT_STATUS_CHANGED", payload, userId);
+                } catch (Exception ex) {
+                    log.warn("Failed to publish status change outbox event: {}", ex.getMessage());
+                }
+            }
+            if (false) {
+                StudyCandidate candidate = null;
                 candidate.setActive(true);
                 candidate.setUpdatedAt(OffsetDateTime.now());
                 candidate.setUpdatedBy(userId);
