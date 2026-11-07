@@ -54,6 +54,7 @@ class NotificationOutboxServiceTest {
                 outboxEventProcessor,
                 outboxEventClaimService
         );
+        lenient().when(outboxRepository.isLeaseValid(any(), any())).thenReturn(true);
     }
 
     @Test

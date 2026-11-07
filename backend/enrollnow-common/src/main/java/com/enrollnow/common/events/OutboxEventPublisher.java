@@ -30,4 +30,14 @@ public interface OutboxEventPublisher {
             UUID actorUserId,
             String idempotencyKey
     );
+
+    OutboxEventPublisher NO_OP = new OutboxEventPublisher() {
+        @Override
+        public void publish(UUID tenantId, String aggregateType, UUID aggregateId, String eventType, Object payload, UUID actorUserId) {
+        }
+
+        @Override
+        public void publish(UUID tenantId, String aggregateType, UUID aggregateId, String eventType, Object payload, UUID actorUserId, String idempotencyKey) {
+        }
+    };
 }

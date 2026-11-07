@@ -62,8 +62,8 @@ public class ParticipantConsentLogService {
     @Autowired(required = false)
     private ObjectMapper objectMapper;
 
-    @Autowired(required = false)
-    private OutboxEventPublisher outboxPublisher;
+    @Autowired
+    private OutboxEventPublisher outboxPublisher = OutboxEventPublisher.NO_OP;
 
     @Autowired
     private TenantOptionRepository tenantOptionRepository;
@@ -274,7 +274,7 @@ public class ParticipantConsentLogService {
                 .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
-        if (outboxPublisher != null) {
+        {
             String authorName = (callerUserId != null && usersMap.containsKey(callerUserId))
                     ? (usersMap.get(callerUserId).getFirstName() + " " + usersMap.get(callerUserId).getLastName()).trim()
                     : "Team Member";

@@ -60,8 +60,8 @@ public class ParticipantContactLogService {
     @Autowired
     private TenantOptionRepository tenantOptionRepository;
 
-    @Autowired(required = false)
-    private OutboxEventPublisher outboxPublisher;
+    @Autowired
+    private OutboxEventPublisher outboxPublisher = OutboxEventPublisher.NO_OP;
 
     public ParticipantContactLogService(
             ParticipantContactLogRepository contactLogRepository,
@@ -336,7 +336,7 @@ public class ParticipantContactLogService {
                 .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
-        if (outboxPublisher != null) {
+        {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("studyId", savedLog.getStudyId() != null ? savedLog.getStudyId().toString() : null);
             payload.put("participantId", participantId.toString());

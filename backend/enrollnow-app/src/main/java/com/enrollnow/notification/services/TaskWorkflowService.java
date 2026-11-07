@@ -216,4 +216,65 @@ public class TaskWorkflowService {
                 actorUserId
         );
     }
+
+    @Transactional
+    public TaskEntity assignTask(UUID tenantId, UUID taskId, List<UUID> assignedUserIds, UUID actorUserId) {
+        TaskEntity task = taskRepository.findByTenantIdAndId(tenantId, taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+
+        List<String> assignedUserIdStrings = new ArrayList<>();
+        if (assignedUserIds != null) {
+            List<UUID> currentAssigned = assignmentRepository.findUserIdsAssignedToTask(tenantId, taskId);
+            for (UUID userId : assignedUserIds) {
+                if (!currentAssigned.contains(userId)) {
+                    TaskAssignmentEntity assignment = new TaskAssignmentEntity();
+                    assignment.setTenantId(tenantId);
+                    assignment.setTaskId(task.getId());
+                    assignment.setUserId(userId);
+                    assignment.setCreatedAt(Instant.now());
+                    assignmentRepository.save(assignment);
+                }
+                assignedUserIdStrings.add(userId.toString());
+            }
+        }
+
+        task.setStatus("Assigned");
+        task.setUpdatedAt(Instant.now());
+        task.setUpdatedBy(actorUserId);
+        TaskEntity saved = taskRepository.save(task);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("studyId", task.getStudyId() != null ? task.getStudyId().toString() : null);
+        payload.put("participantId", task.getParticipantId() != null ? task.getParticipantId().toString() : null);
+        payload.put("taskTitle", task.getTitle());
+        payload.put("actorUserId", actorUserId != null ? actorUserId.toString() : null);
+        payload.put("assignedUserIds", assignedUserIdStrings);
+        if (task.getDueAt() != null) {
+            payload.put("dueDate", task.getDueAt().toString());
+        }
+
+        outboxPublisher.publish(
+                tenantId,
+                "TASK",
+                task.getId(),
+                NotificationTemplateCatalog.EVENT_TYPE_TASK_CREATED,
+                payload,
+                actorUserId
+        );
+
+        log.info("Assigned task {} to users {} and published outbox event", task.getId(), assignedUserIdStrings);
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public TaskEntity getTask(UUID tenantId, UUID taskId) {
+        return taskRepository.findByTenantIdAndId(tenantId, taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+    }
+
+    @Transactional(readOnly = true)
+    public CalendarEventEntity getCalendarEvent(UUID tenantId, UUID eventId) {
+        return calendarEventRepository.findByTenantIdAndId(tenantId, eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));
+    }
 }

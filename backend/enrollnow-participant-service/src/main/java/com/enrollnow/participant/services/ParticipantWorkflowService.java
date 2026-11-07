@@ -52,8 +52,8 @@ public class ParticipantWorkflowService {
     private final SmsGatewayService smsGatewayService;
     private final InvitationEmailService invitationEmailService;
 
-    @Autowired(required = false)
-    private OutboxEventPublisher outboxPublisher;
+    @Autowired
+    private OutboxEventPublisher outboxPublisher = OutboxEventPublisher.NO_OP;
 
     public void setOutboxPublisher(OutboxEventPublisher outboxPublisher) {
         this.outboxPublisher = outboxPublisher;
@@ -175,7 +175,7 @@ public class ParticipantWorkflowService {
         recordAudit(tenantId, userId, "PARTICIPANT_COMMENT_CREATED", "ParticipantComment", saved.getId(),
                 "Created comment for participant " + participantDisplayName(tenantId, participantId));
 
-        if (outboxPublisher != null) {
+        {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
             payload.put("participantId", participantId.toString());
@@ -1399,7 +1399,7 @@ public class ParticipantWorkflowService {
         dto.setStatus(saved.getStatus());
         dto.setAssignedAt(saved.getAssignedAt());
         dto.setCompletedAt(saved.getCompletedAt());
-        if ("COMPLETED".equalsIgnoreCase(status) && outboxPublisher != null) {
+        if ("COMPLETED".equalsIgnoreCase(status)) {
             String surveyName = surveyDefinitionRepository.findByTenantIdAndId(tenantId, saved.getSurveyVersionId())
                     .map(SurveyDefinition::getName)
                     .orElse("Survey Assessment");

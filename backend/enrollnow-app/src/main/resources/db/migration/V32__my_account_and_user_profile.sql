@@ -276,3 +276,27 @@ CREATE INDEX IF NOT EXISTS ix_outbox_events_status_locked
     ON enrollnow.outbox_events (status, locked_at)
     WHERE status = 'PROCESSING';
 
+-- ============================================================
+-- 7. OUTBOX EVENT RECIPIENTS (CRASH-RESILIENT DELIVERY TRACKING)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS enrollnow.outbox_event_recipients (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id               UUID NOT NULL,
+    outbox_event_id         UUID NOT NULL REFERENCES enrollnow.outbox_events(id) ON DELETE CASCADE,
+    recipient_email         VARCHAR(255) NOT NULL,
+    status                  VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    delivered_at            TIMESTAMPTZ,
+    last_error              TEXT,
+    attempt_count           INTEGER NOT NULL DEFAULT 1,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uk_outbox_event_recipient_delivery
+        UNIQUE (tenant_id, outbox_event_id, recipient_email)
+);
+
+CREATE INDEX IF NOT EXISTS ix_outbox_event_recipients_event
+    ON enrollnow.outbox_event_recipients (tenant_id, outbox_event_id, status);
+
+

@@ -40,6 +40,7 @@ public class NotificationDispatcher {
     private final NotificationEmailDeliveryService emailDeliveryService;
     private final NotificationHtmlRenderer htmlRenderer;
     private final ObjectMapper objectMapper;
+    private final OutboxRecipientDeliveryTracker recipientDeliveryTracker;
 
     @Value("${app.frontend.activation-url:http://localhost:3000}")
     private String rootUrl;
@@ -54,7 +55,8 @@ public class NotificationDispatcher {
             StudyMemberRepository studyMemberRepository,
             NotificationEmailDeliveryService emailDeliveryService,
             NotificationHtmlRenderer htmlRenderer,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            @Autowired(required = false) OutboxRecipientDeliveryTracker recipientDeliveryTracker) {
         this.userRepository = userRepository;
         this.userEmailRepository = userEmailRepository;
         this.userSecurityStateRepository = userSecurityStateRepository;
@@ -64,6 +66,21 @@ public class NotificationDispatcher {
         this.emailDeliveryService = emailDeliveryService;
         this.htmlRenderer = htmlRenderer;
         this.objectMapper = objectMapper;
+        this.recipientDeliveryTracker = recipientDeliveryTracker;
+    }
+
+    public NotificationDispatcher(
+            UserRepository userRepository,
+            UserEmailRepository userEmailRepository,
+            UserSecurityStateRepository userSecurityStateRepository,
+            UserStudyNotificationPreferenceRepository preferenceRepository,
+            StudyRepository studyRepository,
+            StudyMemberRepository studyMemberRepository,
+            NotificationEmailDeliveryService emailDeliveryService,
+            NotificationHtmlRenderer htmlRenderer,
+            ObjectMapper objectMapper) {
+        this(userRepository, userEmailRepository, userSecurityStateRepository, preferenceRepository,
+                studyRepository, studyMemberRepository, emailDeliveryService, htmlRenderer, objectMapper, null);
     }
 
     public void dispatch(OutboxEventEntity event) throws Exception {
@@ -344,8 +361,11 @@ public class NotificationDispatcher {
                 continue;
             }
 
-            // Partial delivery / idempotency check: skip recipients who already received the email
-            if (alreadyDelivered.contains(recipientEmail)) {
+            // Persistent recipient delivery tracking: skip recipients already marked SENT in PostgreSQL
+            boolean persistentlyDelivered = recipientDeliveryTracker != null && event != null && event.getId() != null
+                    && recipientDeliveryTracker.isRecipientDelivered(tenantId, event.getId(), recipientEmail);
+
+            if (persistentlyDelivered || alreadyDelivered.contains(recipientEmail)) {
                 log.info("Recipient {} already received email for event {}, skipping duplicate delivery",
                         recipientEmail, event != null ? event.getId() : "null");
                 continue;
@@ -378,14 +398,20 @@ public class NotificationDispatcher {
             );
 
             if (sent) {
+                if (recipientDeliveryTracker != null && event != null && event.getId() != null) {
+                    recipientDeliveryTracker.recordDeliverySuccess(tenantId, event.getId(), recipientEmail);
+                }
                 alreadyDelivered.add(recipientEmail);
                 updatedDelivered = true;
             } else {
+                if (recipientDeliveryTracker != null && event != null && event.getId() != null) {
+                    recipientDeliveryTracker.recordDeliveryFailure(tenantId, event.getId(), recipientEmail, "Provider rejected delivery");
+                }
                 failedRecipients.add(recipientEmail);
             }
         }
 
-        // Persist delivered recipient list back into outbox event metadata so retries do not resend
+        // Persist delivered recipient list back into outbox event metadata as fallback
         if (updatedDelivered && event != null) {
             saveDeliveredRecipientsToMetadata(event, alreadyDelivered);
         }

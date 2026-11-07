@@ -4,6 +4,7 @@ import com.enrollnow.notification.models.OutboxEventAttemptEntity;
 import com.enrollnow.notification.models.OutboxEventEntity;
 import com.enrollnow.notification.repositories.OutboxEventAttemptEntityRepository;
 import com.enrollnow.notification.repositories.OutboxEventEntityRepository;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +16,8 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class OutboxEventProcessor {
@@ -23,11 +25,13 @@ public class OutboxEventProcessor {
     private static final Logger log = LoggerFactory.getLogger(OutboxEventProcessor.class);
     public static final int MAX_RETRIES = 5;
     private static final long BASE_DELAY_SECONDS = 30L;
+    private static final long HEARTBEAT_INTERVAL_SECONDS = 15L;
 
     private final OutboxEventEntityRepository outboxRepository;
     private final OutboxEventAttemptEntityRepository attemptRepository;
     private final NotificationDispatcher notificationDispatcher;
     private final OutboxEventClaimService claimService;
+    private final ScheduledExecutorService heartbeatExecutor;
 
     @Autowired
     public OutboxEventProcessor(
@@ -39,6 +43,11 @@ public class OutboxEventProcessor {
         this.attemptRepository = attemptRepository;
         this.notificationDispatcher = notificationDispatcher;
         this.claimService = claimService;
+        this.heartbeatExecutor = Executors.newScheduledThreadPool(2, r -> {
+            Thread t = new Thread(r, "outbox-heartbeat-worker");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public OutboxEventProcessor(
@@ -46,6 +55,14 @@ public class OutboxEventProcessor {
             OutboxEventAttemptEntityRepository attemptRepository,
             NotificationDispatcher notificationDispatcher) {
         this(outboxRepository, attemptRepository, notificationDispatcher, null);
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        try {
+            heartbeatExecutor.shutdownNow();
+        } catch (Exception ignored) {
+        }
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -78,13 +95,42 @@ public class OutboxEventProcessor {
         attempt.setProcessor(workerId);
         attempt.setStartedAt(Instant.now());
 
+        AtomicBoolean leaseLost = new AtomicBoolean(false);
+        ScheduledFuture<?> heartbeatTask = null;
+
+        // Start recurring heartbeat lease extension for long-running operations
+        if (claimService != null) {
+            heartbeatTask = heartbeatExecutor.scheduleAtFixedRate(() -> {
+                try {
+                    boolean renewed = claimService.extendLease(eventId, workerId);
+                    if (!renewed) {
+                        log.warn("Lease renewal failed for event {} by worker {}. Lease lost.", eventId, workerId);
+                        leaseLost.set(true);
+                    }
+                } catch (Exception ex) {
+                    log.error("Error during lease renewal heartbeat for event {}: {}", eventId, ex.getMessage());
+                    leaseLost.set(true);
+                }
+            }, HEARTBEAT_INTERVAL_SECONDS, HEARTBEAT_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        }
+
         try {
-            // Heartbeat lease touch if claimService is available
-            if (claimService != null) {
-                claimService.extendLease(eventId, workerId);
+            if (leaseLost.get()) {
+                throw new IllegalStateException("Worker ownership lost before dispatch for event: " + eventId);
             }
 
             notificationDispatcher.dispatch(event);
+
+            if (leaseLost.get()) {
+                throw new IllegalStateException("Worker ownership lost during dispatch for event: " + eventId);
+            }
+
+            // Verify lease ownership in database before final completion
+            boolean isStillOwner = claimService == null || claimService.isLeaseValid(eventId, workerId);
+            if (!isStillOwner) {
+                log.warn("Worker {} lost ownership of event {} before committing PUBLISHED status.", workerId, eventId);
+                return;
+            }
 
             event.setStatus("PUBLISHED");
             event.setPublishedAt(Instant.now());
@@ -126,9 +172,15 @@ public class OutboxEventProcessor {
             attempt.setCompletedAt(Instant.now());
             attempt.setErrorMessage(ex.getMessage());
         } finally {
+            if (heartbeatTask != null) {
+                heartbeatTask.cancel(true);
+            }
             try {
-                attemptRepository.saveAndFlush(attempt);
-                outboxRepository.saveAndFlush(event);
+                // Only persist attempt and event state if lease was not stolen by another worker
+                if (!leaseLost.get() || !"PROCESSING".equals(event.getStatus())) {
+                    attemptRepository.saveAndFlush(attempt);
+                    outboxRepository.saveAndFlush(event);
+                }
             } catch (Exception persistenceEx) {
                 log.error("Failed to persist outbox event attempt/state: {}", persistenceEx.getMessage(), persistenceEx);
             }

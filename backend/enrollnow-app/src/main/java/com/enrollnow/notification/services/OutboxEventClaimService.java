@@ -104,9 +104,21 @@ public class OutboxEventClaimService {
     /**
      * Heartbeat extension to prolong the lease of an actively processing event so stale recovery
      * will not reclaim it during long-running dispatch tasks.
+     * Uses atomic UPDATE to renew locked_at without holding long-lived row locks.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean extendLease(UUID eventId, String workerId) {
+        try {
+            int updated = outboxRepository.renewLease(eventId, workerId, Instant.now());
+            if (updated > 0) {
+                log.debug("Heartbeat extended lease for event {} by worker {}", eventId, workerId);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("Could not execute renewLease query for event {}: {}", eventId, e.getMessage());
+        }
+
+        // Fallback check
         Optional<OutboxEventEntity> opt = outboxRepository.findById(eventId);
         if (opt.isPresent()) {
             OutboxEventEntity event = opt.get();
@@ -118,5 +130,20 @@ public class OutboxEventClaimService {
             }
         }
         return false;
+    }
+
+    /**
+     * Validates that the event is still in PROCESSING status and owned by the specified worker.
+     */
+    @Transactional(readOnly = true)
+    public boolean isLeaseValid(UUID eventId, String workerId) {
+        try {
+            return outboxRepository.isLeaseValid(eventId, workerId);
+        } catch (Exception e) {
+            Optional<OutboxEventEntity> opt = outboxRepository.findById(eventId);
+            return opt.isPresent()
+                    && "PROCESSING".equals(opt.get().getStatus())
+                    && workerId.equals(opt.get().getLockedBy());
+        }
     }
 }

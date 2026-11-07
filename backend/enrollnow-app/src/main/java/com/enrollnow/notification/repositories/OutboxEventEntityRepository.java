@@ -54,4 +54,12 @@ public interface OutboxEventEntityRepository extends JpaRepository<OutboxEventEn
     Optional<OutboxEventEntity> findByTenantIdAndId(UUID tenantId, UUID id);
 
     Optional<OutboxEventEntity> findByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE OutboxEventEntity e SET e.lockedAt = :now WHERE e.id = :eventId AND e.status = 'PROCESSING' AND e.lockedBy = :workerId")
+    int renewLease(@Param("eventId") UUID eventId, @Param("workerId") String workerId, @Param("now") Instant now);
+
+    @Query("SELECT CASE WHEN COUNT(e) > 0 THEN true ELSE false END FROM OutboxEventEntity e " +
+           "WHERE e.id = :eventId AND e.status = 'PROCESSING' AND e.lockedBy = :workerId")
+    boolean isLeaseValid(@Param("eventId") UUID eventId, @Param("workerId") String workerId);
 }

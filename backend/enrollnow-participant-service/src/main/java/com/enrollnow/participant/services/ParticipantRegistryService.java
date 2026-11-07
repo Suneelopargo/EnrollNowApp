@@ -87,8 +87,8 @@ public class ParticipantRegistryService {
         this.siteAuthorizationService = siteAuthorizationService;
     }
 
-    @Autowired(required = false)
-    private OutboxEventPublisher outboxPublisher;
+    @Autowired
+    private OutboxEventPublisher outboxPublisher = OutboxEventPublisher.NO_OP;
 
     public void setOutboxPublisher(OutboxEventPublisher outboxPublisher) {
         this.outboxPublisher = outboxPublisher;
@@ -1130,7 +1130,7 @@ public class ParticipantRegistryService {
                 candidate.setUpdatedBy(userId);
                 candidateRepository.save(candidate);
             }
-            if (outboxPublisher != null) {
+            {
                 Map<String, Object> payload = new LinkedHashMap<>();
                 payload.put("studyId", effectiveStudyId.toString());
                 payload.put("participantId", pId.toString());
