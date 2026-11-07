@@ -46,6 +46,7 @@ public class MyAccountService {
     private final InvitationEmailService invitationEmailService;
     private final AuditRecorder auditRecorder;
     private final StudyAccessResolver studyAccessResolver;
+    private final DailyDigestTriggerService dailyDigestTriggerService;
 
     @Value("${app.environment:development}")
     private String environment = "development";
@@ -61,6 +62,34 @@ public class MyAccountService {
         this.uploadDir = uploadDir;
     }
 
+    public MyAccountService(
+            UserRepository userRepository,
+            UserEmailRepository userEmailRepository,
+            UserActionTokenRepository userActionTokenRepository,
+            UserSecurityStateRepository userSecurityStateRepository,
+            SecuritySettingsRepository securitySettingsRepository,
+            UserLoginActivityRepository userLoginActivityRepository,
+            PasswordPolicyValidator passwordPolicyValidator,
+            PasswordEncoder passwordEncoder,
+            InvitationEmailService invitationEmailService,
+            AuditRecorder auditRecorder,
+            StudyAccessResolver studyAccessResolver) {
+        this(
+                userRepository,
+                userEmailRepository,
+                userActionTokenRepository,
+                userSecurityStateRepository,
+                securitySettingsRepository,
+                userLoginActivityRepository,
+                passwordPolicyValidator,
+                passwordEncoder,
+                invitationEmailService,
+                auditRecorder,
+                studyAccessResolver,
+                null
+        );
+    }
+
     @Autowired
     public MyAccountService(
             UserRepository userRepository,
@@ -73,7 +102,8 @@ public class MyAccountService {
             PasswordEncoder passwordEncoder,
             InvitationEmailService invitationEmailService,
             @Autowired(required = false) AuditRecorder auditRecorder,
-            @Autowired(required = false) StudyAccessResolver studyAccessResolver) {
+            @Autowired(required = false) StudyAccessResolver studyAccessResolver,
+            @Autowired(required = false) DailyDigestTriggerService dailyDigestTriggerService) {
         this.userRepository = userRepository;
         this.userEmailRepository = userEmailRepository;
         this.userActionTokenRepository = userActionTokenRepository;
@@ -85,6 +115,7 @@ public class MyAccountService {
         this.invitationEmailService = invitationEmailService;
         this.auditRecorder = auditRecorder;
         this.studyAccessResolver = studyAccessResolver;
+        this.dailyDigestTriggerService = dailyDigestTriggerService;
     }
 
     @Transactional(readOnly = true)
@@ -607,7 +638,11 @@ public class MyAccountService {
             throw new AccessDeniedException("Daily digest manual trigger is only allowed in development or staging environments");
         }
 
-        log.info("Triggered immediate daily digest email for tenant {} and user {}", tenantId, userId);
+        if (dailyDigestTriggerService != null) {
+            dailyDigestTriggerService.triggerDailyDigest(tenantId, userId);
+        } else {
+            log.info("Triggered immediate daily digest email for tenant {} and user {}", tenantId, userId);
+        }
     }
 
     private Map<String, Object> snapshotUser(User user) {

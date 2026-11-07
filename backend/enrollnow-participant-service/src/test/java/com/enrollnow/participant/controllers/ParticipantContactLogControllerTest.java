@@ -143,10 +143,10 @@ class ParticipantContactLogControllerTest {
         when(siteAuthorizationService.getAuthenticatedCaller())
                 .thenReturn(Optional.of(new SiteAuthorizationService.CallerIdentity(userId, tenantId)));
 
-        when(contactLogService.getContactOutcomes(tenantId))
+        when(contactLogService.getContactOutcomes(eq(tenantId), any()))
                 .thenReturn(List.of(new ContactOutcomeDto(UUID.randomUUID(), "Left Voicemail", true)));
 
-        ResponseEntity<List<ContactOutcomeDto>> response = controller.getContactOutcomes(null);
+        ResponseEntity<List<ContactOutcomeDto>> response = controller.getContactOutcomes(null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).hasSize(1);
