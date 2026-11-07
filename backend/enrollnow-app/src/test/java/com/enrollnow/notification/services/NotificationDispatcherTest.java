@@ -46,6 +46,8 @@ class NotificationDispatcherTest {
     private StudyMemberRepository studyMemberRepository;
     @Mock
     private NotificationEmailDeliveryService emailDeliveryService;
+    @Mock
+    private OutboxRecipientDeliveryTracker recipientDeliveryTracker;
 
     private NotificationDispatcher dispatcher;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -67,7 +69,8 @@ class NotificationDispatcherTest {
                 studyMemberRepository,
                 emailDeliveryService,
                 htmlRenderer,
-                objectMapper
+                objectMapper,
+                recipientDeliveryTracker
         );
         lenient().when(emailDeliveryService.sendEmail(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
     }

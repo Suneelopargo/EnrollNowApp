@@ -34,5 +34,7 @@ public interface TaskEntityRepository extends JpaRepository<TaskEntity, UUID> {
 
     List<TaskEntity> findByTenantIdAndStudyIdAndActiveTrue(UUID tenantId, UUID studyId);
 
+    List<TaskEntity> findByTenantIdAndActiveTrue(UUID tenantId);
+
     java.util.Optional<TaskEntity> findByTenantIdAndId(UUID tenantId, UUID id);
 }

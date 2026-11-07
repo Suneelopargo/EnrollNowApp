@@ -98,6 +98,7 @@ public class OutboxEventClaimService {
             outboxRepository.flush();
         } catch (Exception e) {
             log.error("Failed during stale outbox lease recovery: {}", e.getMessage(), e);
+            throw e;
         }
     }
 

@@ -273,6 +273,46 @@ public class TaskWorkflowService {
     }
 
     @Transactional(readOnly = true)
+    public List<com.enrollnow.notification.dto.TaskResponseDto> getTasks(UUID tenantId, UUID studyId) {
+        List<TaskEntity> tasks = studyId != null
+                ? taskRepository.findByTenantIdAndStudyIdAndActiveTrue(tenantId, studyId)
+                : taskRepository.findByTenantIdAndActiveTrue(tenantId);
+        return tasks.stream().map(this::toResponseDto).toList();
+    }
+
+    public com.enrollnow.notification.dto.TaskResponseDto toResponseDto(TaskEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        com.enrollnow.notification.dto.TaskResponseDto dto = new com.enrollnow.notification.dto.TaskResponseDto();
+        dto.setId(entity.getId());
+        dto.setTaskId(entity.getId());
+        dto.setTenantId(entity.getTenantId());
+        dto.setStudyId(entity.getStudyId());
+        dto.setParticipantId(entity.getParticipantId());
+        dto.setTitle(entity.getTitle());
+        dto.setDescription(entity.getDescription());
+        dto.setTaskType(entity.getTaskType());
+        dto.setCategory(entity.getTaskType());
+        dto.setPriority(entity.getPriority());
+        dto.setStatus(entity.getStatus());
+        dto.setDueAt(entity.getDueAt());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setUpdatedAt(entity.getUpdatedAt());
+
+        try {
+            List<UUID> assigned = assignmentRepository.findUserIdsAssignedToTask(entity.getTenantId(), entity.getId());
+            dto.setAssignedUserIds(assigned);
+            if (assigned != null && !assigned.isEmpty()) {
+                dto.setAssignee(assigned.get(0).toString());
+            }
+        } catch (Exception ignored) {
+        }
+
+        return dto;
+    }
+
+    @Transactional(readOnly = true)
     public CalendarEventEntity getCalendarEvent(UUID tenantId, UUID eventId) {
         return calendarEventRepository.findByTenantIdAndId(tenantId, eventId)
                 .orElseThrow(() -> new IllegalArgumentException("Calendar event not found: " + eventId));

@@ -15,7 +15,9 @@ public class CreateTaskRequest {
 
     private String description;
     private String type;
+    private String category;
     private Instant dueAt;
+    private String dueDate;
     private List<UUID> assignedUserIds;
 
     public CreateTaskRequest() {
@@ -64,19 +66,44 @@ public class CreateTaskRequest {
     }
 
     public String getType() {
-        return type;
+        return type != null ? type : category;
     }
 
     public void setType(String type) {
         this.type = type;
     }
 
+    public String getCategory() {
+        return category != null ? category : type;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
     public Instant getDueAt() {
-        return dueAt;
+        if (dueAt != null) {
+            return dueAt;
+        }
+        if (dueDate != null && !dueDate.isBlank()) {
+            try {
+                return Instant.parse(dueDate);
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
     }
 
     public void setDueAt(Instant dueAt) {
         this.dueAt = dueAt;
+    }
+
+    public String getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(String dueDate) {
+        this.dueDate = dueDate;
     }
 
     public List<UUID> getAssignedUserIds() {

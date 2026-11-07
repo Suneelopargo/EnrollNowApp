@@ -2,11 +2,10 @@ package com.enrollnow.notification.services;
 
 import com.enrollnow.notification.models.OutboxEventRecipientEntity;
 import com.enrollnow.notification.repositories.OutboxEventRecipientEntityRepository;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,42 +26,10 @@ public class OutboxRecipientDeliveryTracker {
     private static final Logger log = LoggerFactory.getLogger(OutboxRecipientDeliveryTracker.class);
 
     private final OutboxEventRecipientEntityRepository repository;
-    private final JdbcTemplate jdbcTemplate;
 
     @Autowired
-    public OutboxRecipientDeliveryTracker(
-            OutboxEventRecipientEntityRepository repository,
-            @Autowired(required = false) JdbcTemplate jdbcTemplate) {
+    public OutboxRecipientDeliveryTracker(OutboxEventRecipientEntityRepository repository) {
         this.repository = repository;
-        this.jdbcTemplate = jdbcTemplate;
-    }
-
-    @PostConstruct
-    public void ensureTableExists() {
-        if (jdbcTemplate != null) {
-            try {
-                jdbcTemplate.execute("""
-                    CREATE TABLE IF NOT EXISTS enrollnow.outbox_event_recipients (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        tenant_id UUID NOT NULL,
-                        outbox_event_id UUID NOT NULL REFERENCES enrollnow.outbox_events(id) ON DELETE CASCADE,
-                        recipient_email VARCHAR(255) NOT NULL,
-                        status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
-                        delivered_at TIMESTAMPTZ,
-                        last_error TEXT,
-                        attempt_count INTEGER NOT NULL DEFAULT 1,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                        CONSTRAINT uk_outbox_event_recipient_delivery UNIQUE (tenant_id, outbox_event_id, recipient_email)
-                    );
-                    CREATE INDEX IF NOT EXISTS ix_outbox_event_recipients_event
-                        ON enrollnow.outbox_event_recipients (tenant_id, outbox_event_id, status);
-                """);
-                log.info("Ensured enrollnow.outbox_event_recipients table and index exist.");
-            } catch (Exception ex) {
-                log.debug("Auto DDL check for outbox_event_recipients: {}", ex.getMessage());
-            }
-        }
     }
 
     /**
@@ -79,8 +46,9 @@ public class OutboxRecipientDeliveryTracker {
     }
 
     /**
-     * Records successful provider acceptance in an independent transaction.
-     * Committed immediately before subsequent recipients or outbox completion are processed.
+     * Records successful provider acceptance in an independent committed transaction.
+     * Propagates exceptions on database failure to ensure events are not falsely marked PUBLISHED.
+     * Safely handles concurrent insertion conflicts via re-query and state verification.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordDeliverySuccess(UUID tenantId, UUID outboxEventId, String recipientEmail) {
@@ -105,14 +73,34 @@ public class OutboxRecipientDeliveryTracker {
             entity.setUpdatedAt(Instant.now());
             repository.saveAndFlush(entity);
             log.info("Persisted persistent delivery SUCCESS for recipient {} [event: {}]", recipientEmail, outboxEventId);
+        } catch (DataIntegrityViolationException dive) {
+            log.warn("Concurrent insert conflict on delivery success for recipient {} on event {}. Re-fetching existing record.",
+                    recipientEmail, outboxEventId);
+            try {
+                OutboxEventRecipientEntity existing = repository
+                        .findByTenantIdAndOutboxEventIdAndRecipientEmail(tenantId, outboxEventId, recipientEmail)
+                        .orElseThrow(() -> new IllegalStateException("Failed to locate existing recipient record on conflict", dive));
+                if (!"SENT".equalsIgnoreCase(existing.getStatus())) {
+                    existing.setStatus("SENT");
+                    existing.setDeliveredAt(Instant.now());
+                    existing.setLastError(null);
+                    existing.setUpdatedAt(Instant.now());
+                    repository.saveAndFlush(existing);
+                }
+            } catch (Exception reEx) {
+                log.error("Failed to recover from concurrent insert conflict for recipient {}: {}", recipientEmail, reEx.getMessage(), reEx);
+                throw reEx;
+            }
         } catch (Exception e) {
             log.error("Failed persisting delivery success for recipient {}: {}", recipientEmail, e.getMessage(), e);
+            throw e;
         }
     }
 
     /**
-     * Records provider delivery failure in an independent transaction.
-     * Keeps the recipient eligible for future retry while maintaining an audit trail of errors.
+     * Records provider delivery failure in an independent committed transaction.
+     * Propagates exceptions on database failure so failure is observable and retryable.
+     * Safely handles concurrent insertion conflicts via re-query and state update.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordDeliveryFailure(UUID tenantId, UUID outboxEventId, String recipientEmail, String errorMessage) {
@@ -137,8 +125,25 @@ public class OutboxRecipientDeliveryTracker {
             entity.setUpdatedAt(Instant.now());
             repository.saveAndFlush(entity);
             log.warn("Persisted persistent delivery FAILURE for recipient {} [event: {}]: {}", recipientEmail, outboxEventId, errorMessage);
+        } catch (DataIntegrityViolationException dive) {
+            log.warn("Concurrent insert conflict on delivery failure for recipient {} on event {}. Re-fetching existing record.",
+                    recipientEmail, outboxEventId);
+            try {
+                OutboxEventRecipientEntity existing = repository
+                        .findByTenantIdAndOutboxEventIdAndRecipientEmail(tenantId, outboxEventId, recipientEmail)
+                        .orElseThrow(() -> new IllegalStateException("Failed to locate existing recipient record on failure conflict", dive));
+                existing.setStatus("FAILED");
+                existing.setLastError(errorMessage);
+                existing.setAttemptCount(existing.getAttemptCount() + 1);
+                existing.setUpdatedAt(Instant.now());
+                repository.saveAndFlush(existing);
+            } catch (Exception reEx) {
+                log.error("Failed to recover from concurrent insert conflict on failure for recipient {}: {}", recipientEmail, reEx.getMessage(), reEx);
+                throw reEx;
+            }
         } catch (Exception e) {
             log.error("Failed persisting delivery failure for recipient {}: {}", recipientEmail, e.getMessage(), e);
+            throw e;
         }
     }
 }

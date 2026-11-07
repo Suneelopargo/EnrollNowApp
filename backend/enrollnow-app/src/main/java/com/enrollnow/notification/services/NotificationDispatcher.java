@@ -56,7 +56,7 @@ public class NotificationDispatcher {
             NotificationEmailDeliveryService emailDeliveryService,
             NotificationHtmlRenderer htmlRenderer,
             ObjectMapper objectMapper,
-            @Autowired(required = false) OutboxRecipientDeliveryTracker recipientDeliveryTracker) {
+            OutboxRecipientDeliveryTracker recipientDeliveryTracker) {
         this.userRepository = userRepository;
         this.userEmailRepository = userEmailRepository;
         this.userSecurityStateRepository = userSecurityStateRepository;
@@ -66,21 +66,7 @@ public class NotificationDispatcher {
         this.emailDeliveryService = emailDeliveryService;
         this.htmlRenderer = htmlRenderer;
         this.objectMapper = objectMapper;
-        this.recipientDeliveryTracker = recipientDeliveryTracker;
-    }
-
-    public NotificationDispatcher(
-            UserRepository userRepository,
-            UserEmailRepository userEmailRepository,
-            UserSecurityStateRepository userSecurityStateRepository,
-            UserStudyNotificationPreferenceRepository preferenceRepository,
-            StudyRepository studyRepository,
-            StudyMemberRepository studyMemberRepository,
-            NotificationEmailDeliveryService emailDeliveryService,
-            NotificationHtmlRenderer htmlRenderer,
-            ObjectMapper objectMapper) {
-        this(userRepository, userEmailRepository, userSecurityStateRepository, preferenceRepository,
-                studyRepository, studyMemberRepository, emailDeliveryService, htmlRenderer, objectMapper, null);
+        this.recipientDeliveryTracker = Objects.requireNonNull(recipientDeliveryTracker, "recipientDeliveryTracker must not be null");
     }
 
     public void dispatch(OutboxEventEntity event) throws Exception {
@@ -362,7 +348,7 @@ public class NotificationDispatcher {
             }
 
             // Persistent recipient delivery tracking: skip recipients already marked SENT in PostgreSQL
-            boolean persistentlyDelivered = recipientDeliveryTracker != null && event != null && event.getId() != null
+            boolean persistentlyDelivered = event != null && event.getId() != null
                     && recipientDeliveryTracker.isRecipientDelivered(tenantId, event.getId(), recipientEmail);
 
             if (persistentlyDelivered || alreadyDelivered.contains(recipientEmail)) {
@@ -398,13 +384,13 @@ public class NotificationDispatcher {
             );
 
             if (sent) {
-                if (recipientDeliveryTracker != null && event != null && event.getId() != null) {
+                if (event != null && event.getId() != null) {
                     recipientDeliveryTracker.recordDeliverySuccess(tenantId, event.getId(), recipientEmail);
                 }
                 alreadyDelivered.add(recipientEmail);
                 updatedDelivered = true;
             } else {
-                if (recipientDeliveryTracker != null && event != null && event.getId() != null) {
+                if (event != null && event.getId() != null) {
                     recipientDeliveryTracker.recordDeliveryFailure(tenantId, event.getId(), recipientEmail, "Provider rejected delivery");
                 }
                 failedRecipients.add(recipientEmail);
