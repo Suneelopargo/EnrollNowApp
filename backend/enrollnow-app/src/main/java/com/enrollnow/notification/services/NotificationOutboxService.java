@@ -30,6 +30,7 @@ public class NotificationOutboxService implements OutboxEventPublisher {
     private final NotificationDispatcher notificationDispatcher;
     private final ObjectMapper objectMapper;
     private final OutboxEventProcessor outboxEventProcessor;
+    private final OutboxEventClaimService outboxEventClaimService;
     private final String instanceId = UUID.randomUUID().toString();
 
     @Autowired
@@ -38,12 +39,24 @@ public class NotificationOutboxService implements OutboxEventPublisher {
             OutboxEventAttemptEntityRepository attemptRepository,
             NotificationDispatcher notificationDispatcher,
             ObjectMapper objectMapper,
-            OutboxEventProcessor outboxEventProcessor) {
+            OutboxEventProcessor outboxEventProcessor,
+            OutboxEventClaimService outboxEventClaimService) {
         this.outboxRepository = outboxRepository;
         this.attemptRepository = attemptRepository;
         this.notificationDispatcher = notificationDispatcher;
         this.objectMapper = objectMapper;
         this.outboxEventProcessor = outboxEventProcessor;
+        this.outboxEventClaimService = outboxEventClaimService;
+    }
+
+    public NotificationOutboxService(
+            OutboxEventEntityRepository outboxRepository,
+            OutboxEventAttemptEntityRepository attemptRepository,
+            NotificationDispatcher notificationDispatcher,
+            ObjectMapper objectMapper,
+            OutboxEventProcessor outboxEventProcessor) {
+        this(outboxRepository, attemptRepository, notificationDispatcher, objectMapper,
+                outboxEventProcessor, new OutboxEventClaimService(outboxRepository));
     }
 
     public NotificationOutboxService(
@@ -52,7 +65,12 @@ public class NotificationOutboxService implements OutboxEventPublisher {
             NotificationDispatcher notificationDispatcher,
             ObjectMapper objectMapper) {
         this(outboxRepository, attemptRepository, notificationDispatcher, objectMapper,
-                new OutboxEventProcessor(outboxRepository, attemptRepository, notificationDispatcher));
+                new OutboxEventProcessor(outboxRepository, attemptRepository, notificationDispatcher),
+                new OutboxEventClaimService(outboxRepository));
+    }
+
+    public String getInstanceId() {
+        return instanceId;
     }
 
     @Override
@@ -155,57 +173,18 @@ public class NotificationOutboxService implements OutboxEventPublisher {
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /**
+     * Delegates to OutboxEventClaimService to ensure Spring proxy enforces REQUIRES_NEW transaction.
+     */
     public List<UUID> claimBatch(Instant now, int maxRetries, int batchSize) {
-        List<OutboxEventEntity> pendingEvents = outboxRepository.claimPendingEventsForUpdate(now, maxRetries, batchSize);
-        if (pendingEvents == null || pendingEvents.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<UUID> claimedIds = new ArrayList<>();
-        Instant lockTimestamp = Instant.now();
-        for (OutboxEventEntity event : pendingEvents) {
-            event.setStatus("PROCESSING");
-            event.setLockedAt(lockTimestamp);
-            event.setLockedBy(instanceId);
-            outboxRepository.save(event);
-            claimedIds.add(event.getId());
-        }
-        outboxRepository.flush();
-        return claimedIds;
+        return outboxEventClaimService.claimBatch(now, maxRetries, batchSize, instanceId);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /**
+     * Delegates to OutboxEventClaimService to ensure Spring proxy enforces REQUIRES_NEW transaction.
+     */
     public void recoverStaleLeases() {
-        try {
-            Instant leaseThreshold = Instant.now().minus(STALE_LEASE_DURATION);
-            List<OutboxEventEntity> staleEvents = outboxRepository.findStaleProcessingEvents(leaseThreshold, BATCH_SIZE);
-            if (staleEvents == null || staleEvents.isEmpty()) {
-                return;
-            }
-
-            log.warn("Detected {} stale PROCESSING outbox events locked before {}", staleEvents.size(), leaseThreshold);
-            for (OutboxEventEntity event : staleEvents) {
-                int retries = event.getRetryCount() + 1;
-                event.setRetryCount(retries);
-                event.setLockedAt(null);
-                event.setLockedBy(null);
-                event.setLastError("Lease expired: worker node timed out or restarted");
-
-                if (retries >= MAX_RETRIES) {
-                    event.setStatus("DEAD_LETTER");
-                    log.warn("Stale event {} exceeded max retries, moved to DEAD_LETTER", event.getId());
-                } else {
-                    event.setStatus("FAILED");
-                    event.setAvailableAt(Instant.now().plusSeconds(30));
-                    log.info("Reset stale event {} to FAILED for retry", event.getId());
-                }
-                outboxRepository.save(event);
-            }
-            outboxRepository.flush();
-        } catch (Exception e) {
-            log.error("Failed during stale outbox lease recovery: {}", e.getMessage(), e);
-        }
+        outboxEventClaimService.recoverStaleLeases(STALE_LEASE_DURATION, BATCH_SIZE, MAX_RETRIES);
     }
 
     public void processSingleEvent(UUID eventId) {

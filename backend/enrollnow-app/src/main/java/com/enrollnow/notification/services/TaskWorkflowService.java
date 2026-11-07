@@ -87,6 +87,9 @@ public class TaskWorkflowService {
         payload.put("taskTitle", title);
         payload.put("actorUserId", actorUserId != null ? actorUserId.toString() : null);
         payload.put("assignedUserIds", assignedUserIdStrings);
+        if (dueAt != null) {
+            payload.put("dueDate", dueAt.toString());
+        }
 
         String idempotencyKey = "TASK:" + savedTask.getId() + ":CREATED";
         outboxPublisher.publish(

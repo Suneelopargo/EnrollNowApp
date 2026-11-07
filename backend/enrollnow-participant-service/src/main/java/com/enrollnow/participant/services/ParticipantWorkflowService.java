@@ -176,17 +176,13 @@ public class ParticipantWorkflowService {
                 "Created comment for participant " + participantDisplayName(tenantId, participantId));
 
         if (outboxPublisher != null) {
-            try {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
-                payload.put("participantId", participantId.toString());
-                payload.put("actorUserId", userId != null ? userId.toString() : null);
-                payload.put("commentAuthor", finalAuthorName);
-                payload.put("commentText", saved.getText());
-                outboxPublisher.publish(tenantId, "PARTICIPANT", participantId, "PARTICIPANT_COMMENT_ADDED", payload, userId);
-            } catch (Exception ex) {
-                log.warn("Failed to publish outbox event for comment {}: {}", saved.getId(), ex.getMessage());
-            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
+            payload.put("participantId", participantId.toString());
+            payload.put("actorUserId", userId != null ? userId.toString() : null);
+            payload.put("commentAuthor", finalAuthorName);
+            payload.put("commentText", saved.getText());
+            outboxPublisher.publish(tenantId, "PARTICIPANT", participantId, "PARTICIPANT_COMMENT_ADDED", payload, userId);
         }
 
         return mapCommentToDto(saved, userId, false);
@@ -1404,19 +1400,15 @@ public class ParticipantWorkflowService {
         dto.setAssignedAt(saved.getAssignedAt());
         dto.setCompletedAt(saved.getCompletedAt());
         if ("COMPLETED".equalsIgnoreCase(status) && outboxPublisher != null) {
-            try {
-                String surveyName = surveyDefinitionRepository.findByTenantIdAndId(tenantId, saved.getSurveyVersionId())
-                        .map(SurveyDefinition::getName)
-                        .orElse("Survey Assessment");
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
-                payload.put("participantId", participantId.toString());
-                payload.put("actorUserId", null);
-                payload.put("surveyName", surveyName);
-                outboxPublisher.publish(tenantId, "SURVEY_SUBMISSION", saved.getId(), "SURVEY_SUBMISSION_COMPLETED", payload, null);
-            } catch (Exception ex) {
-                log.warn("Failed to publish survey completion outbox event: {}", ex.getMessage());
-            }
+            String surveyName = surveyDefinitionRepository.findByTenantIdAndId(tenantId, saved.getSurveyVersionId())
+                    .map(SurveyDefinition::getName)
+                    .orElse("Survey Assessment");
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("studyId", saved.getStudyId() != null ? saved.getStudyId().toString() : null);
+            payload.put("participantId", participantId.toString());
+            payload.put("actorUserId", null);
+            payload.put("surveyName", surveyName);
+            outboxPublisher.publish(tenantId, "SURVEY_SUBMISSION", saved.getId(), "SURVEY_SUBMISSION_COMPLETED", payload, null);
         }
         return dto;
     }

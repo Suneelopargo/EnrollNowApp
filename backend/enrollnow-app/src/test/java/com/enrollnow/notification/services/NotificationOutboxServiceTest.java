@@ -30,6 +30,7 @@ class NotificationOutboxServiceTest {
 
     private NotificationOutboxService outboxService;
     private OutboxEventProcessor outboxEventProcessor;
+    private OutboxEventClaimService outboxEventClaimService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final UUID tenantId = UUID.randomUUID();
@@ -38,17 +39,20 @@ class NotificationOutboxServiceTest {
 
     @BeforeEach
     void setUp() {
+        outboxEventClaimService = new OutboxEventClaimService(outboxRepository);
         outboxEventProcessor = new OutboxEventProcessor(
                 outboxRepository,
                 attemptRepository,
-                notificationDispatcher
+                notificationDispatcher,
+                outboxEventClaimService
         );
         outboxService = new NotificationOutboxService(
                 outboxRepository,
                 attemptRepository,
                 notificationDispatcher,
                 objectMapper,
-                outboxEventProcessor
+                outboxEventProcessor,
+                outboxEventClaimService
         );
     }
 
@@ -108,6 +112,7 @@ class NotificationOutboxServiceTest {
         event.setId(eventId);
         event.setTenantId(tenantId);
         event.setStatus("PROCESSING");
+        event.setLockedBy(outboxService.getInstanceId());
         event.setRetryCount(0);
         event.setEventType("TASK_CREATED");
         event.setPayload("{\"title\":\"Test Task\"}");
@@ -119,8 +124,31 @@ class NotificationOutboxServiceTest {
         verify(notificationDispatcher, times(1)).dispatch(event);
         assertEquals("PUBLISHED", event.getStatus());
         assertNotNull(event.getPublishedAt());
+        assertNull(event.getLockedBy());
         verify(attemptRepository, atLeastOnce()).saveAndFlush(any());
         verify(outboxRepository, atLeastOnce()).saveAndFlush(event);
+    }
+
+    @Test
+    void testProcessSingleEvent_LeaseOwnershipValidation_AbortsIfWorkerMismatch() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setId(eventId);
+        event.setTenantId(tenantId);
+        event.setStatus("PROCESSING");
+        event.setLockedBy("different-worker-node");
+        event.setRetryCount(0);
+        event.setEventType("TASK_CREATED");
+        event.setPayload("{\"title\":\"Test Task\"}");
+
+        when(outboxRepository.findById(eventId)).thenReturn(Optional.of(event));
+
+        outboxService.processSingleEvent(eventId);
+
+        // Should abort immediately without dispatching
+        verify(notificationDispatcher, never()).dispatch(any());
+        assertEquals("PROCESSING", event.getStatus());
+        assertEquals("different-worker-node", event.getLockedBy());
     }
 
     @Test
@@ -130,6 +158,7 @@ class NotificationOutboxServiceTest {
         event.setId(eventId);
         event.setTenantId(tenantId);
         event.setStatus("PROCESSING");
+        event.setLockedBy(outboxService.getInstanceId());
         event.setRetryCount(0);
         event.setEventType("TASK_CREATED");
         event.setPayload("{\"title\":\"Test Task\"}");
@@ -142,8 +171,32 @@ class NotificationOutboxServiceTest {
         assertEquals("FAILED", event.getStatus());
         assertEquals(1, event.getRetryCount());
         assertEquals("SMTP connection refused", event.getLastError());
+        assertNull(event.getLockedBy());
         assertNotNull(event.getAvailableAt());
         verify(attemptRepository, atLeastOnce()).saveAndFlush(any());
+    }
+
+    @Test
+    void testProcessSingleEvent_NonRetryableException_ImmediateDeadLetter() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setId(eventId);
+        event.setTenantId(tenantId);
+        event.setStatus("PROCESSING");
+        event.setLockedBy(outboxService.getInstanceId());
+        event.setRetryCount(0);
+        event.setEventType("UNKNOWN_EVENT_TYPE");
+        event.setPayload("{}");
+
+        when(outboxRepository.findById(eventId)).thenReturn(Optional.of(event));
+        doThrow(new IllegalArgumentException("Unsupported notification outbox event type: UNKNOWN_EVENT_TYPE"))
+                .when(notificationDispatcher).dispatch(event);
+
+        outboxService.processSingleEvent(eventId);
+
+        assertEquals("DEAD_LETTER", event.getStatus());
+        assertEquals(1, event.getRetryCount());
+        assertTrue(event.getLastError().contains("Unsupported notification outbox event type"));
     }
 
     @Test
@@ -153,6 +206,7 @@ class NotificationOutboxServiceTest {
         event.setId(eventId);
         event.setTenantId(tenantId);
         event.setStatus("PROCESSING");
+        event.setLockedBy(outboxService.getInstanceId());
         event.setRetryCount(4);
         event.setEventType("TASK_CREATED");
         event.setPayload("{\"title\":\"Test Task\"}");

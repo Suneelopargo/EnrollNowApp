@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -26,15 +27,25 @@ public class OutboxEventProcessor {
     private final OutboxEventEntityRepository outboxRepository;
     private final OutboxEventAttemptEntityRepository attemptRepository;
     private final NotificationDispatcher notificationDispatcher;
+    private final OutboxEventClaimService claimService;
 
     @Autowired
     public OutboxEventProcessor(
             OutboxEventEntityRepository outboxRepository,
             OutboxEventAttemptEntityRepository attemptRepository,
-            NotificationDispatcher notificationDispatcher) {
+            NotificationDispatcher notificationDispatcher,
+            @Autowired(required = false) OutboxEventClaimService claimService) {
         this.outboxRepository = outboxRepository;
         this.attemptRepository = attemptRepository;
         this.notificationDispatcher = notificationDispatcher;
+        this.claimService = claimService;
+    }
+
+    public OutboxEventProcessor(
+            OutboxEventEntityRepository outboxRepository,
+            OutboxEventAttemptEntityRepository attemptRepository,
+            NotificationDispatcher notificationDispatcher) {
+        this(outboxRepository, attemptRepository, notificationDispatcher, null);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -51,6 +62,13 @@ public class OutboxEventProcessor {
             return;
         }
 
+        // Safe lease ownership validation: verify the event is still PROCESSING and belongs to this worker
+        if (!"PROCESSING".equals(event.getStatus()) || !Objects.equals(workerId, event.getLockedBy())) {
+            log.warn("Outbox event {} is not in PROCESSING state or does not belong to worker {} (status: {}, lockedBy: {}). Aborting to prevent duplicate execution.",
+                    eventId, workerId, event.getStatus(), event.getLockedBy());
+            return;
+        }
+
         int currentAttempt = event.getRetryCount() + 1;
 
         OutboxEventAttemptEntity attempt = new OutboxEventAttemptEntity();
@@ -61,11 +79,18 @@ public class OutboxEventProcessor {
         attempt.setStartedAt(Instant.now());
 
         try {
+            // Heartbeat lease touch if claimService is available
+            if (claimService != null) {
+                claimService.extendLease(eventId, workerId);
+            }
+
             notificationDispatcher.dispatch(event);
 
             event.setStatus("PUBLISHED");
             event.setPublishedAt(Instant.now());
             event.setLastError(null);
+            event.setLockedAt(null);
+            event.setLockedBy(null);
 
             attempt.setStatus("SUCCESS");
             attempt.setCompletedAt(Instant.now());
@@ -75,14 +100,18 @@ public class OutboxEventProcessor {
             log.error("Failed processing outbox event id {} [type: {}]: {}",
                     event.getId(), event.getEventType(), ex.getMessage(), ex);
 
+            boolean isNonRetryable = (ex instanceof IllegalArgumentException) || (ex instanceof UnsupportedOperationException);
+
             int retries = event.getRetryCount() + 1;
             event.setRetryCount(retries);
             event.setFailedAt(Instant.now());
             event.setLastError(ex.getMessage());
+            event.setLockedAt(null);
+            event.setLockedBy(null);
 
-            if (retries >= MAX_RETRIES) {
+            if (isNonRetryable || retries >= MAX_RETRIES) {
                 event.setStatus("DEAD_LETTER");
-                log.warn("Outbox event {} exceeded max retries ({}), moved to DEAD_LETTER", eventId, MAX_RETRIES);
+                log.warn("Outbox event {} marked DEAD_LETTER: {}", eventId, ex.getMessage());
             } else {
                 event.setStatus("FAILED");
                 long delaySeconds = BASE_DELAY_SECONDS * (1L << Math.min(retries - 1, 8));

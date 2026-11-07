@@ -286,4 +286,105 @@ class NotificationDispatcherTest {
                 () -> dispatcher.dispatch(event)
         );
     }
+
+    @Test
+    void testDispatch_UnknownEventType_ThrowsIllegalArgumentException() {
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setTenantId(tenantId);
+        event.setEventType("NON_EXISTENT_RIPPLE_EVENT");
+        event.setPayload("{}");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> dispatcher.dispatch(event)
+        );
+    }
+
+    @Test
+    void testTaskCreated_AssignedUserIdsContract_NotifiesOnlyAssignedUsers() throws Exception {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setName("Vaccine Trial");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        User recipient = new User();
+        recipient.setId(recipientUserId);
+        recipient.setFirstName("Alice");
+        recipient.setLastName("Wonder");
+        when(userRepository.findByTenantIdAndId(tenantId, recipientUserId)).thenReturn(Optional.of(recipient));
+
+        UserEmail email = new UserEmail();
+        email.setEmail("alice@example.com");
+        when(userEmailRepository.findByTenantIdAndUserIdAndPrimaryEmailTrue(tenantId, recipientUserId)).thenReturn(Optional.of(email));
+        when(userSecurityStateRepository.findByTenantIdAndUserId(tenantId, recipientUserId)).thenReturn(Optional.of(new UserSecurityState()));
+
+        UserStudyNotificationPreference pref = new UserStudyNotificationPreference();
+        pref.setTaskEmails(true);
+        when(preferenceRepository.findByTenantIdAndUserIdAndStudyId(tenantId, recipientUserId, studyId)).thenReturn(Optional.of(pref));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("studyId", studyId.toString());
+        payload.put("actorUserId", actorUserId.toString());
+        payload.put("assignedUserIds", List.of(recipientUserId.toString()));
+        payload.put("taskTitle", "Review EEG Log");
+
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setTenantId(tenantId);
+        event.setEventType(NotificationTemplateCatalog.EVENT_TYPE_TASK_CREATED);
+        event.setPayload(objectMapper.writeValueAsString(payload));
+
+        dispatcher.dispatch(event);
+
+        verify(emailDeliveryService, times(1)).sendEmail(
+                eq(tenantId),
+                eq(studyId),
+                isNull(),
+                eq("alice@example.com"),
+                contains("Review EEG Log"),
+                any(),
+                eq(NotificationTemplateCatalog.TASK_CREATED_TEMPLATE_ID)
+        );
+        // Verify studyMemberRepository was NEVER called because explicit assignedUserIds was provided
+        verify(studyMemberRepository, never()).findByTenantIdAndIdStudyId(any(), any());
+    }
+
+    @Test
+    void testPartialDeliveryIdempotency_SkipsAlreadyDeliveredRecipients() throws Exception {
+        Study study = new Study();
+        study.setId(studyId);
+        study.setName("Vaccine Trial");
+        when(studyRepository.findByTenantIdAndId(tenantId, studyId)).thenReturn(Optional.of(study));
+
+        User recipient = new User();
+        recipient.setId(recipientUserId);
+        recipient.setFirstName("Alice");
+        recipient.setLastName("Wonder");
+        when(userRepository.findByTenantIdAndId(tenantId, recipientUserId)).thenReturn(Optional.of(recipient));
+
+        UserEmail email = new UserEmail();
+        email.setEmail("alice@example.com");
+        when(userEmailRepository.findByTenantIdAndUserIdAndPrimaryEmailTrue(tenantId, recipientUserId)).thenReturn(Optional.of(email));
+        when(userSecurityStateRepository.findByTenantIdAndUserId(tenantId, recipientUserId)).thenReturn(Optional.of(new UserSecurityState()));
+
+        UserStudyNotificationPreference pref = new UserStudyNotificationPreference();
+        pref.setTaskEmails(true);
+        when(preferenceRepository.findByTenantIdAndUserIdAndStudyId(tenantId, recipientUserId, studyId)).thenReturn(Optional.of(pref));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("studyId", studyId.toString());
+        payload.put("assignedUserIds", List.of(recipientUserId.toString()));
+        payload.put("taskTitle", "Idempotent Task");
+
+        OutboxEventEntity event = new OutboxEventEntity();
+        event.setTenantId(tenantId);
+        event.setEventType(NotificationTemplateCatalog.EVENT_TYPE_TASK_CREATED);
+        event.setPayload(objectMapper.writeValueAsString(payload));
+        // Simulate previous partial attempt that already delivered to alice@example.com
+        event.setMetadata("{\"deliveredRecipients\":[\"alice@example.com\"]}");
+
+        dispatcher.dispatch(event);
+
+        // emailDeliveryService must NOT be called for alice@example.com
+        verify(emailDeliveryService, never()).sendEmail(any(), any(), any(), eq("alice@example.com"), any(), any(), any());
+    }
 }

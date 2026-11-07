@@ -94,7 +94,7 @@ public class NotificationDispatcher {
             case NotificationTemplateCatalog.EVENT_TYPE_TASK_COMMENT_ADDED:
             case NotificationTemplateCatalog.EVENT_TYPE_TASK_STATUS_CHANGED:
             case NotificationTemplateCatalog.EVENT_TYPE_TASK_DUE_DATE_CHANGED:
-                handleTaskNotification(tenantId, studyId, studyName, actorUserId, participantId, eventType, payload);
+                handleTaskNotification(tenantId, studyId, studyName, actorUserId, participantId, eventType, payload, event);
                 break;
 
             case NotificationTemplateCatalog.EVENT_TYPE_PARTICIPANT_COMMENT_ADDED:
@@ -103,16 +103,16 @@ public class NotificationDispatcher {
             case NotificationTemplateCatalog.EVENT_TYPE_PARTICIPANT_STICKY_NOTE_ADDED:
             case NotificationTemplateCatalog.EVENT_TYPE_PARTICIPANT_CONTACT_LOG_ADDED:
             case NotificationTemplateCatalog.EVENT_TYPE_EVENT_STATUS_CHANGED:
-                handleParticipantNotification(tenantId, studyId, studyName, actorUserId, participantId, eventType, payload);
+                handleParticipantNotification(tenantId, studyId, studyName, actorUserId, participantId, eventType, payload, event);
                 break;
 
             case NotificationTemplateCatalog.EVENT_TYPE_SURVEY_SUBMISSION_COMPLETED:
-                handleSurveySubmissionNotification(tenantId, studyId, studyName, actorUserId, participantId, payload);
+                handleSurveySubmissionNotification(tenantId, studyId, studyName, actorUserId, participantId, payload, event);
                 break;
 
             default:
-                log.warn("Unrecognized notification outbox event type: {}", eventType);
-                break;
+                log.error("Unsupported notification outbox event type: {}", eventType);
+                throw new IllegalArgumentException("Unsupported notification outbox event type: " + eventType);
         }
     }
 
@@ -123,15 +123,22 @@ public class NotificationDispatcher {
             UUID actorUserId,
             UUID participantId,
             String eventType,
-            Map<String, Object> payload) {
+            Map<String, Object> payload,
+            OutboxEventEntity event) {
 
-        List<UUID> targetUserIds = extractTargetUserIds(payload, "assignedTo");
-        if (targetUserIds.isEmpty() && studyId != null) {
+        List<UUID> targetUserIds;
+        if (payload.containsKey("assignedUserIds")) {
+            targetUserIds = extractTargetUserIds(payload, "assignedUserIds");
+        } else if (payload.containsKey("assignedTo")) {
+            targetUserIds = extractTargetUserIds(payload, "assignedTo");
+        } else if (studyId != null) {
             targetUserIds = studyMemberRepository.findByTenantIdAndIdStudyId(tenantId, studyId)
                     .stream().filter(StudyMember::isActive).map(m -> m.getId().getUserId()).toList();
+        } else {
+            targetUserIds = Collections.emptyList();
         }
 
-        String taskTitle = String.valueOf(payload.getOrDefault("title", payload.getOrDefault("taskName", "Task")));
+        String taskTitle = String.valueOf(payload.getOrDefault("taskTitle", payload.getOrDefault("title", payload.getOrDefault("taskName", "Task"))));
         String templateId;
         String subject;
         String message;
@@ -173,7 +180,8 @@ public class NotificationDispatcher {
                 subject,
                 message,
                 details,
-                templateId
+                templateId,
+                event
         );
     }
 
@@ -184,7 +192,8 @@ public class NotificationDispatcher {
             UUID actorUserId,
             UUID participantId,
             String eventType,
-            Map<String, Object> payload) {
+            Map<String, Object> payload,
+            OutboxEventEntity event) {
 
         if (studyId == null) {
             return;
@@ -243,7 +252,8 @@ public class NotificationDispatcher {
                 subject,
                 message,
                 details,
-                templateId
+                templateId,
+                event
         );
     }
 
@@ -253,7 +263,8 @@ public class NotificationDispatcher {
             String studyName,
             UUID actorUserId,
             UUID participantId,
-            Map<String, Object> payload) {
+            Map<String, Object> payload,
+            OutboxEventEntity event) {
 
         if (studyId == null) {
             return;
@@ -262,13 +273,13 @@ public class NotificationDispatcher {
         List<UUID> studyMembers = studyMemberRepository.findByTenantIdAndIdStudyId(tenantId, studyId)
                 .stream().filter(StudyMember::isActive).map(m -> m.getId().getUserId()).toList();
 
-        String surveyName = String.valueOf(payload.getOrDefault("surveyName", "Survey"));
-        String subject = "Survey Completed: " + surveyName + " - " + studyName;
-        String message = "A participant has completed the survey '" + surveyName + "'.";
+        String surveyTitle = String.valueOf(payload.getOrDefault("surveyName", payload.getOrDefault("surveyTitle", "Survey")));
+        String subject = "Survey Submission Received: " + surveyTitle;
+        String message = "A participant has completed and submitted a survey for " + studyName + ".";
 
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Study", studyName);
-        details.put("Survey", surveyName);
+        details.put("Survey", surveyTitle);
 
         notifyEligibleUsers(
                 tenantId,
@@ -280,7 +291,8 @@ public class NotificationDispatcher {
                 subject,
                 message,
                 details,
-                NotificationTemplateCatalog.SURVEY_SUBMISSION_CONFIRM_TEMPLATE_ID
+                NotificationTemplateCatalog.SURVEY_SUBMISSION_CONFIRM_TEMPLATE_ID,
+                event
         );
     }
 
@@ -294,9 +306,12 @@ public class NotificationDispatcher {
             String subject,
             String message,
             Map<String, String> details,
-            String templateId) {
+            String templateId,
+            OutboxEventEntity event) {
 
+        Set<String> alreadyDelivered = extractDeliveredRecipients(event);
         List<String> failedRecipients = new ArrayList<>();
+        boolean updatedDelivered = false;
 
         for (UUID userId : targetUserIds) {
             // Exclude the user who performed the action (matches legacy: userId !== Meteor.userId())
@@ -329,6 +344,13 @@ public class NotificationDispatcher {
                 continue;
             }
 
+            // Partial delivery / idempotency check: skip recipients who already received the email
+            if (alreadyDelivered.contains(recipientEmail)) {
+                log.info("Recipient {} already received email for event {}, skipping duplicate delivery",
+                        recipientEmail, event != null ? event.getId() : "null");
+                continue;
+            }
+
             String recipientName = (user.getFirstName() != null ? user.getFirstName() : "") + " " +
                     (user.getLastName() != null ? user.getLastName() : "").trim();
             if (recipientName.isBlank()) {
@@ -355,13 +377,58 @@ public class NotificationDispatcher {
                     templateId
             );
 
-            if (!sent) {
+            if (sent) {
+                alreadyDelivered.add(recipientEmail);
+                updatedDelivered = true;
+            } else {
                 failedRecipients.add(recipientEmail);
             }
         }
 
+        // Persist delivered recipient list back into outbox event metadata so retries do not resend
+        if (updatedDelivered && event != null) {
+            saveDeliveredRecipientsToMetadata(event, alreadyDelivered);
+        }
+
         if (!failedRecipients.isEmpty()) {
             throw new NotificationDeliveryException("Failed to deliver notification email to: " + String.join(", ", failedRecipients));
+        }
+    }
+
+    private Set<String> extractDeliveredRecipients(OutboxEventEntity event) {
+        if (event == null || event.getMetadata() == null || event.getMetadata().isBlank()) {
+            return new HashSet<>();
+        }
+        try {
+            Map<String, Object> meta = objectMapper.readValue(event.getMetadata(), new TypeReference<Map<String, Object>>() {});
+            Object delivered = meta.get("deliveredRecipients");
+            if (delivered instanceof List<?> list) {
+                Set<String> set = new HashSet<>();
+                for (Object item : list) {
+                    if (item != null) {
+                        set.add(String.valueOf(item));
+                    }
+                }
+                return set;
+            }
+        } catch (Exception ex) {
+            log.warn("Could not parse deliveredRecipients from outbox event metadata: {}", ex.getMessage());
+        }
+        return new HashSet<>();
+    }
+
+    private void saveDeliveredRecipientsToMetadata(OutboxEventEntity event, Set<String> delivered) {
+        try {
+            Map<String, Object> meta;
+            if (event.getMetadata() != null && !event.getMetadata().isBlank()) {
+                meta = objectMapper.readValue(event.getMetadata(), new TypeReference<Map<String, Object>>() {});
+            } else {
+                meta = new HashMap<>();
+            }
+            meta.put("deliveredRecipients", new ArrayList<>(delivered));
+            event.setMetadata(objectMapper.writeValueAsString(meta));
+        } catch (Exception ex) {
+            log.warn("Could not serialize deliveredRecipients to outbox event metadata: {}", ex.getMessage());
         }
     }
 

@@ -1131,16 +1131,12 @@ public class ParticipantRegistryService {
                 candidateRepository.save(candidate);
             }
             if (outboxPublisher != null) {
-                try {
-                    Map<String, Object> payload = new LinkedHashMap<>();
-                    payload.put("studyId", effectiveStudyId.toString());
-                    payload.put("participantId", pId.toString());
-                    payload.put("actorUserId", userId != null ? userId.toString() : null);
-                    payload.put("newStatus", status);
-                    outboxPublisher.publish(tenantId, "PARTICIPANT", pId, "PARTICIPANT_STATUS_CHANGED", payload, userId);
-                } catch (Exception ex) {
-                    log.warn("Failed to publish status change outbox event: {}", ex.getMessage());
-                }
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("studyId", effectiveStudyId.toString());
+                payload.put("participantId", pId.toString());
+                payload.put("actorUserId", userId != null ? userId.toString() : null);
+                payload.put("newStatus", status);
+                outboxPublisher.publish(tenantId, "PARTICIPANT", pId, "PARTICIPANT_STATUS_CHANGED", payload, userId);
             }
             if (false) {
                 StudyCandidate candidate = null;

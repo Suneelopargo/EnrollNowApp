@@ -337,16 +337,12 @@ public class ParticipantContactLogService {
 
         boolean isUserAdminOrManager = checkUserIsAdminOrManager(tenantId, callerUserId);
         if (outboxPublisher != null) {
-            try {
-                Map<String, Object> payload = new LinkedHashMap<>();
-                payload.put("studyId", savedLog.getStudyId() != null ? savedLog.getStudyId().toString() : null);
-                payload.put("participantId", participantId.toString());
-                payload.put("actorUserId", callerUserId != null ? callerUserId.toString() : null);
-                payload.put("contactOutcome", savedLog.getOutcome() != null ? savedLog.getOutcome() : savedLog.getContactType());
-                outboxPublisher.publish(tenantId, "PARTICIPANT_CONTACT_LOG", savedLog.getId(), "PARTICIPANT_CONTACT_LOG_ADDED", payload, callerUserId);
-            } catch (Exception ex) {
-                log.warn("Failed to publish outbox event for contact log {}: {}", savedLog.getId(), ex.getMessage());
-            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("studyId", savedLog.getStudyId() != null ? savedLog.getStudyId().toString() : null);
+            payload.put("participantId", participantId.toString());
+            payload.put("actorUserId", callerUserId != null ? callerUserId.toString() : null);
+            payload.put("contactOutcome", savedLog.getOutcome() != null ? savedLog.getOutcome() : savedLog.getContactType());
+            outboxPublisher.publish(tenantId, "PARTICIPANT_CONTACT_LOG", savedLog.getId(), "PARTICIPANT_CONTACT_LOG_ADDED", payload, callerUserId);
         }
         return toDto(savedLog, studiesMap, usersMap, callerUserId, isUserAdminOrManager);
     }

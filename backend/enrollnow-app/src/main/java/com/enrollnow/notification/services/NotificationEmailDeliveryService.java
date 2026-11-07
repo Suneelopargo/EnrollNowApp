@@ -70,8 +70,13 @@ public class NotificationEmailDeliveryService {
                 communication.setDirection("OUTBOUND");
                 communication.setSubjectSnapshot(subject);
                 communication.setBodySnapshot(htmlBody);
-                communication.setStatus(delivered ? "SENT" : "FAILED");
-                communication.setSentAt(OffsetDateTime.now());
+                if (delivered) {
+                    communication.setStatus("SENT");
+                    communication.setSentAt(OffsetDateTime.now());
+                } else {
+                    communication.setStatus("FAILED");
+                    communication.setSentAt(null);
+                }
 
                 CommunicationRecipient recipient = new CommunicationRecipient();
                 recipient.setTenantId(tenantId);
@@ -83,7 +88,7 @@ public class NotificationEmailDeliveryService {
 
                 communicationRepository.save(communication);
             } catch (Exception ex) {
-                log.warn("Could not persist communication log: {}", ex.getMessage());
+                log.error("Could not persist communication log: {}", ex.getMessage(), ex);
             }
         }
 
